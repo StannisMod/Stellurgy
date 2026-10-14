@@ -1257,6 +1257,7 @@ private String hud() throws Exception {
         // got the chance, which is the silent direction.
         // Overshoot lengthens the exposure — the strict direction — and the premise gate below
         // catches the one thing a longer span can do wrong, an arrival.
+        // SERVER-ONLY: the void's countdown runs on the server tick; the reads are the server's transit status and deck capture.
         GameTicks.advance(serverClient(), GameTicks.server(),
                 VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
         // The PREMISE, gated before the subject is read: this leg is about a man standing in a

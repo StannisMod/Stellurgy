@@ -42,7 +42,7 @@ public class InterstellarLegDistanceTest {
      * constants.</p>
      */
     private static final long BASELINE_SPEED =
-            JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER, DriveTuning.PLACEHOLDER_SHIP_MASS,
+            JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER, DriveTuning.BASELINE_SHIP_MASS,
                     DriveTier.baseline());
 
     private static GalacticCoord cell(long sx, long sy, long sz) {
@@ -88,7 +88,7 @@ public class InterstellarLegDistanceTest {
         StringBuilder report = new StringBuilder();
         report.append("\n=== interstellar leg, baseline drive (power ")
                 .append(DriveTuning.BASELINE_DRIVE_POWER).append(", mass ")
-                .append(DriveTuning.PLACEHOLDER_SHIP_MASS).append(") = ")
+                .append(DriveTuning.BASELINE_SHIP_MASS).append(") = ")
                 .append(BASELINE_SPEED).append(" blocks/tick ===\n");
         report.append("cell edge ").append(GalacticCoord.CELL).append(" blocks, minSpacing ")
                 .append(cfg.minSpacing).append(" cells, density ").append(cfg.density)

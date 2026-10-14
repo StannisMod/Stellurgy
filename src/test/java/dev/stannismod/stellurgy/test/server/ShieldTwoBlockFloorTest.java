@@ -153,6 +153,108 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
                 emittersAmong(DIM, overworldEmitter, netherEmitter));
     }
 
+    /**
+     * A charged emitter standing in the shipyard that no ship claims projects nothing and spends
+     * nothing; the same emitter, charged the same way at ordinary coordinates, does both.
+     *
+     * <p>A ship's chunks come into memory before its ship object exists, and a shipyard chunk can be
+     * pulled in by anything that loads a region; in that window an emitter's position is a shipyard
+     * address, millions of blocks from where its ship is. A shell centred there protects a place no
+     * player can be, and drawing on the coil for it spends the ship's energy on nothing. The shipyard
+     * emitter stands at block X {@value #SHIPYARD_X}: inside the reserved region (chunk X from
+     * {@code ShipChunkAllocator.CHUNK_X_START - MAX_CHUNK_RADIUS}) and some 1 600 chunks short of where
+     * the allocator centres any ship's claim, so no ship can name it.</p>
+     *
+     * <p>Two verdicts, each beside its control: coverage of a point inside the emitter's own radius,
+     * read through {@code shield zone} over the emitters that are projecting; and the coil's stored
+     * energy across a {@link #MAINTENANCE_WINDOW_TICKS}-tick window, in which a projecting emitter pays
+     * its maintenance.</p>
+     *
+     * <p>Silent about the race itself — a real ship whose chunks are loading while its ship object
+     * does not exist yet. This builds the same STATE by a different road: an emitter at a shipyard
+     * address that no ship will ever claim.</p>
+     *
+     * <p>One inversion per verdict, 2026-10-07, after a healthy run:</p>
+     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code return
+     * VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}
+     * answering the world frame whatever the position, this fails at "an emitter in the shipyard that no
+     * ship claims projected a shell over its shipyard address".</p>
+     * <p>red-witnessed: with {@code TileEntityFieldGenerator#update} at {@code if
+     * (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at "an emitter in the
+     * shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but
+     * was:&lt;10453&gt;".</p>
+     */
+    @Test
+    public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {
+        FixtureSite here = site();
+        here.requireClear(this::exec, 0, 1, "the control emitter's block");
+        int y = here.y + 1, z = here.z;
+        int controlX = here.x;
+        Reply held = Reply.of(exec("stellurgytest chunk forceload " + DIM + " " + (SHIPYARD_X >> 4) + " " + (z >> 4)));
+        requireArranged("the shipyard chunk could not be held loaded: " + held, held.ok());
+        placeAt(DIM, "affs:field_generator", controlX, y, z);
+        placeAt(DIM, "affs:field_generator", SHIPYARD_X, y, z);
+        charge(controlX, y, z);
+        charge(SHIPYARD_X, y, z);
+
+        ShieldTile control = ShieldTile.at(cmd -> exec(cmd), DIM, controlX, y, z).require(ShieldTile.EMITTER,
+                "the control emitter");
+        requireArranged("the control emitter must be powered by the charge: " + control.raw(), control.powered());
+        // Inside the emitter's own sphere, straight above it: the point its shell covers if it has one.
+        int inside = Math.max(1, control.radius() / 2);
+        requireArranged("the control emitter must cover a point inside its own radius, or a refusal at the"
+                + " shipyard below proves nothing", covered(controlX, y + inside, z));
+        assertTrue("an emitter in the shipyard that no ship claims projected a shell over its shipyard"
+                + " address", !covered(SHIPYARD_X, y + inside, z));
+
+        long controlBefore = stored(controlX, y, z);
+        long shipyardBefore = stored(SHIPYARD_X, y, z);
+        // WINDOW: two reads of each coil with the world advanced between; the verdicts name both reads.
+        GameTicks.advance(client(), GameTicks.server(), MAINTENANCE_WINDOW_TICKS);
+        long controlAfter = stored(controlX, y, z);
+        long shipyardAfter = stored(SHIPYARD_X, y, z);
+        requireArranged("the control emitter must pay maintenance over the window, or an unchanged coil at"
+                        + " the shipyard proves nothing: " + controlBefore + " -> " + controlAfter,
+                controlAfter < controlBefore);
+        assertEquals("an emitter in the shipyard that no ship claims spent its coil on a shell over nothing",
+                shipyardBefore, shipyardAfter);
+    }
+
+    /** Block X of the shipyard emitter: chunk 1 198 500, inside the reserved region and clear of every claim. */
+    private static final int SHIPYARD_X = 1_198_500 * 16;
+
+    /**
+     * Shield energy handed to each coil. Enough to power the emitter and to outlast the window's
+     * maintenance, which is what the read-back below establishes rather than assumes.
+     */
+    private static final int CHARGE = 100_000;
+
+    /**
+     * The coil window, game ticks: a projecting emitter pays maintenance every tick it is powered, so
+     * one tick is enough and the rest is margin for a coarser read.
+     */
+    private static final int MAINTENANCE_WINDOW_TICKS = 40;
+
+    private void charge(int x, int y, int z) throws Exception {
+        Reply charged = Reply.of(exec("stellurgytest shield charge " + DIM + " " + x + " " + y + " " + z + " "
+                + CHARGE));
+        requireArranged("the emitter at " + x + "," + y + "," + z + " could not be charged: " + charged,
+                charged.ok() && charged.integer("stored") > 0);
+    }
+
+    private boolean covered(int x, int y, int z) throws Exception {
+        Reply zone = Reply.of(exec("stellurgytest shield zone " + DIM + " " + x + " " + y + " " + z));
+        requireArranged("the zone probe did not answer for " + x + "," + y + "," + z + ": " + zone,
+                zone.has("covered"));
+        return zone.bool("covered");
+    }
+
+    private long stored(int x, int y, int z) throws Exception {
+        Reply read = Reply.of(exec("stellurgytest shield read " + DIM + " " + x + " " + y + " " + z));
+        requireArranged("no emitter answered at " + x + "," + y + "," + z + ": " + read, read.has("shieldStored"));
+        return (long) read.number("shieldStored");
+    }
+
     /** The nether: a second world that every server loads, for a question about "this world only". */
     private static final int NETHER = -1;
 

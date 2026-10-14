@@ -28,6 +28,7 @@ import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import valkyrienwarfare.api.TransformType;
 
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 
 /**
  * The Valkyrien Skies-facing side of the integration. Every reference to an
@@ -72,7 +73,35 @@ final class VSBridge {
      * runtime behaviour can only be exercised with VS actually installed, not in a
      * headless test.</p>
      */
-    static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name) {
+    /** How a tier-2 craft's blocks are found — one answer, because the refusal question below must ask
+     *  exactly what the queued spawn will do. A method, not a field: nothing here is state. */
+    private static BlockFinder.BlockFinderType tier2BlockSearch() {
+        return BlockFinder.BlockFinderType.FIND_ALL_BLOCKS;
+    }
+
+    /**
+     * Would the substrate drop the tier-2 craft whose flight computer is at {@code afcPos}, inside
+     * {@code footprint}, if it were queued now? {@code null} when it would build it. The same search and
+     * the same rule as the spawn drain, run on the world as it stands.
+     */
+    static VSIntegration.AssemblyRefusal assemblyRefusal(World world, BlockPos afcPos,
+                                                        net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
+        WorldServerShipManager.SpawnRefusal refusal = ValkyrienUtils.getServerShipManager(world)
+                .refusalFor(afcPos, tier2BlockSearch(), footprint);
+        if (refusal == null) {
+            return null;
+        }
+        // TOO_LARGE is the only refusal this search can produce: the substrate's bedrock refusal is raised
+        // only by its FIND_ALLOWED_BLOCKS detector, and FIND_ALL_BLOCKS takes every block but air and fluid.
+        if (refusal == WorldServerShipManager.SpawnRefusal.TOO_LARGE) {
+            return VSIntegration.AssemblyRefusal.TOO_LARGE;
+        }
+        throw new IllegalStateException("a spawn refusal the tier-2 search cannot produce: " + refusal);
+    }
+
+    static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
+                                  ShipLifecycleEvent.Cause cause,
+                                  net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         // ONE SHIP, ONE IDENTITY, and this signature is the last place it could have been broken.
         // There used to be three overloads here: one with no identity at all, one with an identity
         // and no durable name, and one with both as separate values. The first two ASSEMBLED A
@@ -83,6 +112,11 @@ final class VSBridge {
         //
         // So: ONE form, and the name is REQUIRED. Refused rather than defaulted, because a default
         // here is precisely the silent divergence the rule exists to abolish.
+        //
+        // `cause` is not an identity and is not defaulted either: it is WHY the craft is appearing,
+        // and only the caller knows it. A paste and a new build arrive here as the same blocks
+        // through the same call, and the ship-was-named announcement must still tell a consumer
+        // whether to mint a durable record for a new vessel or reattach to the one it already had.
         if (name == null) {
             logger.error("[SPACE] refusing to assemble a tier-2 ship at {}: no durable name was"
                     + " given, and a nameless craft takes a substrate-minted id that nothing else"
@@ -109,7 +143,7 @@ final class VSBridge {
         // flight computer was duplicated, which the facade re-mints for before it gets here.
         ship.setStellurgyDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS);
+        manager.queueShipSpawn(ship, afcPos, tier2BlockSearch(), cause, footprint);
         logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
                 ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();
@@ -150,7 +184,8 @@ final class VSBridge {
         int blocks = existing == null || existing.getBlockPositions() == null
                 ? -1 : existing.getBlockPositions().size();
         if (blocks == 0) {
-            ValkyrienUtils.getQueryableData(world).removeShip(wanted);
+            // Through the manager, which announces the removal: this record's registration ends here.
+            ValkyrienUtils.getServerShipManager(world).deregisterBlocklessRemnant(wanted);
             logger.info("[SPACE] adopted this ship's own blockless remnant in dim {} ({} '{}',{} still "
                             + "loaded) - the arriving ship keeps its identity",
                     world.provider.getDimension(), wanted, existing.getName(),
@@ -180,12 +215,92 @@ final class VSBridge {
     }
 
     /**
+     * The same identity lookup, for the one collaborator inside this package that needs the physics
+     * record itself rather than a copy of some field from it: {@link ShipInertiaWriter}. Package-
+     * private on purpose — a physics-engine type must not travel further than this package, which is
+     * the whole point of keeping the boundary here.
+     */
+    static ShipData shipDataByUuid(World world, UUID uuid) {
+        return world == null ? null : shipByUuid(world, uuid);
+    }
+
+    /**
+     * The physics record of the ship NAMED by {@code uuid}, as
+     * {@code [mass, comX, comY, comZ]} in the ship's own frame, or {@code null} when this world holds
+     * no such ship.
+     *
+     * <p>Exists so a test can see the number the mass model wrote. Without it the substitution of Stellurgy's
+     * per-block table for the engine's flat one is invisible to every tier: the whole server suite went
+     * green before and after that change, because nothing in it ever asked a ship what it weighed.</p>
+     */
+    static double[] shipInertiaById(World world, String shipId) {
+        if (world == null || shipId == null) {
+            return null;
+        }
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(shipId);
+        } catch (IllegalArgumentException notAUuid) {
+            return null;
+        }
+        ShipData ship = shipByUuid(world, uuid);
+        if (ship == null) {
+            return null;
+        }
+        return new double[] {
+                ship.getInertiaData().getGameTickMass(),
+                ship.getInertiaData().getGameTickCenterOfMass().x(),
+                ship.getInertiaData().getGameTickCenterOfMass().y(),
+                ship.getInertiaData().getGameTickCenterOfMass().z()
+        };
+    }
+
+    /**
      * The subspace shipyard box of the ship NAMED by {@code uuid}, or {@code null} when this world
      * holds no such ship. The identity-keyed twin of {@link #shipyardBoundsAt}: same box, but it
      * cannot answer for a neighbour's craft.
      */
     static AxisAlignedBB shipyardBoundsOf(World world, UUID uuid) {
         return claimBounds(shipByUuid(world, uuid));
+    }
+
+    /**
+     * The subspace position of the flight computer aboard the LOADED ship named by {@code uuid}, or
+     * {@code null} when this world has no such ship loaded or it carries none.
+     *
+     * <p>Read from the physics engine's own set of the ship's force controllers, which is the set its
+     * physics tick drives: the flight computer is one of them, registered as its tile is set into the
+     * ship's chunks — before the ship is announced as assembled or loaded — and replaced, not
+     * duplicated, when a chunk reload rebuilds it. So "which computer flies this ship" and "which
+     * computer this answers" are one fact. An unloaded ship has no such set and gets {@code null}: the
+     * question is about a craft the physics is running.</p>
+     *
+     * <p>Where a hull carries more than one computer, the lowest position by x, then y, then z — the
+     * order the shipyard scan this replaced visited them in.</p>
+     */
+    static BlockPos flightComputerOfLoadedShip(World world, UUID uuid) {
+        if (world == null || world.isRemote || uuid == null) {
+            return null;
+        }
+        PhysicsObject physo = ValkyrienUtils.getServerShipManager(world).getPhysObjectFromUUID(uuid);
+        if (physo == null) {
+            return null;
+        }
+        BlockPos first = null;
+        for (org.valkyrienskies.mod.common.physics.IPhysicsBlockController controller
+                : physo.getPhysicsControllersInShip()) {
+            if (!(controller instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)
+                    || ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) controller).isInvalid()) {
+                continue;
+            }
+            BlockPos at = controller.getNodePos();
+            if (first == null || at.getX() < first.getX()
+                    || (at.getX() == first.getX() && (at.getY() < first.getY()
+                    || (at.getY() == first.getY() && at.getZ() < first.getZ())))) {
+                first = at;
+            }
+        }
+        return first;
     }
 
     /**
@@ -467,36 +582,6 @@ final class VSBridge {
         int blocks = existing == null || existing.getBlockPositions() == null
                 ? -1 : existing.getBlockPositions().size();
         return blocks != 0;
-    }
-
-    /**
-     * Every ship in {@code world} that is LOADED and past its settling delay, as
-     * {@code substrate uuid -> Stellurgy durable id} (the durable id may be null for a craft that has never
-     * been given one).
-     *
-     * <p>Two of the three conjuncts {@link #shipPhysicsGatesById} reports, and the third is left out
-     * deliberately. {@code isPhysicsReady} is the substrate's own initial-ticks delay — it withholds
-     * physics briefly after a load so a freshly placed hull does not fall through the floor — and the
-     * chunk cache is what its resolver needs. Both describe a ship becoming ready to be flown.
-     * {@code isPhysicsEnabled} does not: it is an operational state somebody switches on, so a parked
-     * craft that nobody has commanded is fully loaded with it false. Including it would make this
-     * answer "is anyone flying this", and a caller waiting to BEGIN flying would wait for a state its
-     * own next action causes.</p>
-     *
-     * <p>Applied to the ships we already hold rather than re-looked-up one at a time — this runs on
-     * the server tick, and a lookup per ship per tick would be the expensive part of an otherwise
-     * cheap check. Both ids come straight off the ship's own record, so this asks the substrate
-     * nothing it does not already have in hand, and no substrate type escapes this class.</p>
-     */
-    static Map<String, UUID> shipsReadyForPhysics(World world) {
-        Map<String, UUID> out = new LinkedHashMap<>();
-        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
-            if (physo.isPhysicsReady() && physo.getCachedSurroundingChunks() != null) {
-                ShipData data = physo.getShipData();
-                out.put(data.getUuid().toString(), data.getStellurgyDurableId());
-            }
-        }
-        return out;
     }
 
     static int loadedShipCount(World world) {
@@ -851,6 +936,24 @@ final class VSBridge {
      * here has to ask whether the ship is loaded, in use, or streaming: those are exactly the
      * distinctions the collector already makes, and it now makes them for unloaded ships too.</p>
      */
+    /**
+     * Tell {@code world}'s ship manager that a crossing is about to cut {@code uuid} out of it into
+     * {@code destinationDim}, so the removal that follows is announced as a departure. A null id
+     * names no craft, and nothing is declared for it.
+     */
+    static void declareDeparture(World world, UUID uuid, int destinationDim) {
+        if (uuid != null) {
+            ValkyrienUtils.getServerShipManager(world).declareDeparture(uuid, destinationDim);
+        }
+    }
+
+    /** The declared departure did not happen; see {@link #declareDeparture}. */
+    static void abandonDeparture(World world, UUID uuid) {
+        if (uuid != null) {
+            ValkyrienUtils.getServerShipManager(world).abandonDeparture(uuid);
+        }
+    }
+
     static boolean releaseShipIfNothingLoaded(World world, UUID uuid) {
         if (uuid == null) {
             return false;

@@ -152,9 +152,11 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
      * BOTH of production's two defences broken
      * — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no
      * longer dropping the removed tile from the ship's controller set, AND
-     * {@code TileAdvancedFlightComputer#invalidate} at {@code commandedVelocity = null} no longer clearing the
-     * command channels — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
-     * green, each defence sufficing on its own — 2026-09-28.</p>
+     * {@code TileAdvancedFlightComputer#invalidate} at {@code flightCommand = null} no longer clearing the
+     * command — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
+     * green, each defence sufficing on its own — 2026-09-28 (witnessed on the three-field form,
+     * {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one
+     * object, the same line of {@code invalidate}, not re-run).</p>
      */
     @Test
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {

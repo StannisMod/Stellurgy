@@ -41,16 +41,25 @@ import static org.junit.Assert.assertTrue;
  * controller arming on the sphere for a craft its cube predicate calls "inside", the carry cutting and
  * pasting it into another slot world, and the ledger naming where it arrived.</p>
  *
- * <p><b>What this does NOT cover: the trigger wiring inside {@code TileAdvancedFlightComputer}.</b>
- * The carry is driven through {@code space seam-carry}, the controller's own entry point handed the
- * live pose, because the computer is not ticking by the time the craft is moved. Measured 2026-09-29,
- * both halves: the tick loop's census of the craft's slot world read {@code tickables:0} for the whole
- * 600-tick window after the move, and on an earlier run a craft jumped straight to a far cell of the
- * zone WAS carried by its own computer — twice, within a second of arriving — so the computer ticks
- * for a moment after a paste and then leaves the list. A headless slot world has no player to keep
- * the chunk ticking. That moment is also why every arrival here is on the side of the sphere it
- * STARTS from: a craft that arrived already across it would be carried by that tick, racing the
- * test.</p>
+ * <p><b>Every CARRY here is the craft's own.</b> The craft is moved across the sphere and the test
+ * waits for its flight computer's tick to ask the controller and be granted the carry
+ * ({@code carry_requested}, recorded where {@code CellCrossingController#requestCarry} returns, with
+ * the pose it was decided on), then for the arrival production announces. So the trigger wiring inside
+ * {@code TileAdvancedFlightComputer} is covered too. This class used to drive the carry itself through
+ * {@code space seam-carry} on the premise that the computer had stopped ticking by the time the craft
+ * was moved; that premise was false — every server world here ticks
+ * ({@code MixinWorldServerAlwaysTicks}). Measured 2026-10-04: where the physics engine froze the craft
+ * after each probe teleport ("Ship tried moving too fast"), no self-carry was seen before the test's
+ * own; where it did not freeze, the computer carried the craft on the tick after the move, before the
+ * test's read of it, and all three scenarios went red in their arrangement. Which of the two the
+ * engine does is not this class's subject, so the class no longer depends on it.</p>
+ *
+ * <p>A "STAYS" verdict is still a READING — the controller's decision asked through
+ * {@code space seam-carry}, which answers {@code wouldCarry} — because a carry that does not happen
+ * publishes nothing to wait on. The craft's ledger row is checked first, so a computer that wrongly
+ * carried it away is named at the verdict and not as a missing hull. Every arrival is on the side of
+ * the sphere it STARTS from, so a wrong decision meets a control rather than the computer's tick in
+ * the moment after a paste.</p>
  *
  * <p><b>The moon is Luna</b>, the one the default world ships beside the overworld, found through
  * the registry as the MOON whose zone is the launch planet's own cell — never by a literal key.</p>
@@ -112,8 +121,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * itself (measured, see the class note). Arrived at the control's own spot, a controller that
      * wrongly carried a craft that deep would do it on that tick, and the test would go red in its
      * arrangement instead of at the control. A tenth of the radius is outside the moon's descent
-     * shell and inside a sphere a quarter of the real one; the move to {@link #INSIDE_AT} happens
-     * once the computer has stopped ticking.</p>
+     * shell and inside a sphere a quarter of the real one. The move to {@link #INSIDE_AT} is checked
+     * against the ledger before the control is asked, so a computer that wrongly carries the craft
+     * from there is named as such.</p>
      */
     private static final double ARRIVE_AT = 0.1d;
 
@@ -163,6 +173,22 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     /**
      * OUT: a craft deep inside Luna's zone is moved just outside the sphere and carried into Earth's
      * lattice — named by Luna's own cell there, at the offset it had — and is then judged to stay.
+     *
+     * <p>red-witnessed: 2026-10-04, on the form where the craft's own computer carries it, after two
+     * healthy runs of the class (3/3 each). With {@code CellSeam#hasLeftZone} at
+     * {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the first carry,
+     * "production does not agree the craft has left the moon's sphere (264996 blocks out against a
+     * radius of 264731): its flight computer was granted no carry, and the controller asked directly
+     * answers {"started":false,"wouldCarry":false …}". With {@code TileAdvancedFlightComputer#update}
+     * at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} never asking, it
+     * fails at the same carry with the controller answering {@code "wouldCarry":true} — the trigger,
+     * told apart from the decision. With {@code CellSeam#hasEnteredZone} at
+     * {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry back in,
+     * "…has entered the moon's sphere (132365 blocks out …) … {"wouldCarry":false …}".</p>
+     *
+     * <p>The records below were taken 2026-09-29 on the earlier form, which drove the carry itself
+     * through {@code space seam-carry}; the code they name is unchanged, the failure texts they quote
+     * are that form's.</p>
      *
      * <p>red-witnessed: 2026-09-29, four inversions, one production line each, each restored, with the
      * method run healthy in the same arrangement first (and twice since).
@@ -247,6 +273,20 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      *
      * <p>The other code path of the same seam: outward re-addresses against the GRANDPARENT, inward
      * against a child the controller has just found, so the one cannot vouch for the other.</p>
+     *
+     * <p>red-witnessed: 2026-10-04, on the form where the craft's own computer carries it, after two
+     * healthy runs of the class. With {@code CellSeam#hasEnteredZone} at
+     * {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry in,
+     * "production does not agree the craft has entered the moon's sphere (132365 blocks out against a
+     * radius of 264731): its flight computer was granted no carry, and the controller asked directly
+     * answers {"started":false,"wouldCarry":false …}". With {@code TileAdvancedFlightComputer#update} at
+     * {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} never asking, the
+     * same carry fails with the controller answering {@code "wouldCarry":true}. With
+     * {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}, it
+     * fails at the carry back out, "…has left the moon's sphere (264996 blocks out …) …
+     * {"wouldCarry":false …}". The records after this one were taken 2026-09-29 on the earlier form,
+     * which drove the carry itself through {@code space seam-carry}; their failure texts are that
+     * form's.</p>
      *
      * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}:
      * fails at the carry decision, "production does not agree the craft has entered the moon's sphere
@@ -339,6 +379,19 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * planet), so the moon's position in this cell is read from production
      * ({@code space zone-sphere} → {@code fromGalacticCell}) immediately before each move.</p>
      *
+     * <p>red-witnessed: 2026-10-04, on the form where the craft's own computer carries it, after two
+     * healthy runs of the class. With {@code CellSeam#hasEnteredZone} at
+     * {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry, "production
+     * does not agree the craft has entered the moon's sphere from the planet's own cell (moved
+     * 132365.5 blocks from a moon whose sphere is 264731): its flight computer was granted no carry,
+     * and the controller asked directly answers {"started":false,"wouldCarry":false,
+     * "fromCell":"19_0_0" …}". With {@code TileAdvancedFlightComputer#update} at
+     * {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} never asking, the same
+     * carry fails with the controller answering {@code "wouldCarry":true}. With
+     * {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false} it
+     * stays green, as it must: nothing here leaves a sphere. The record after this one was taken on
+     * the earlier form, which drove the carry through {@code space seam-carry}.</p>
+     *
      * <p>red-witnessed: 2026-10-01, after a healthy run of the class (3/3), with
      * {@code SpaceSubsystem#zoneMembershipIn} at {@code if (craftCoord == null || craftCoord.cellBlocks() <= 0L)}
      * put back to refusing any craft whose {@code zone()} is null, this fails at the carry decision:
@@ -370,50 +423,52 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         // CONTROL: beside the moon, outside its sphere, the controller leaves the craft alone. Without
         // this, a carry armed for every craft in a planet's cell satisfies every assertion below.
         double[] besideMoon = moonInPlanetCell(luna);
-        teleportInCell(slot, vsId, besideMoon[0] + luna.radius * BESIDE_AT, besideMoon[1],
+        long[] besidePose = inCell(besideMoon[0] + luna.radius * BESIDE_AT, besideMoon[1],
                 besideMoon[2]);
-        double beside = distanceFromMoon(luna, slot, vsId);
+        moveTo(slot, vsId, besidePose[0], besidePose[1], besidePose[2]);
+        assertNotCarriedAway(launched, "moved beside the moon, outside its sphere");
+        release(slot, vsId);
+        ShipInfo besideHull = ShipInfo.byId(this::exec, slot, vsId);
+        assertEquals("arrangement: the craft is not where it was moved to: " + besideHull.raw(),
+                besidePose[0], besideHull.x, CONTINUITY_SLACK);
+        double beside = distance(new double[] {besideHull.x, besideHull.y, besideHull.z},
+                moonInPlanetCell(luna));
         assertTrue("arrangement: the craft must stand OUTSIDE the moon's sphere (" + beside
                 + " against " + luna.radius + ")", beside > luna.radius);
         assertStays(slot, luna.durableId, "a craft in the planet's own cell " + beside
                 + " blocks from a moon whose sphere is " + luna.radius);
 
         double[] moonAtMove = moonInPlanetCell(luna);
-        teleportInCell(slot, vsId, moonAtMove[0] + luna.radius * INSIDE_AT, moonAtMove[1],
+        long[] insidePose = inCell(moonAtMove[0] + luna.radius * INSIDE_AT, moonAtMove[1],
                 moonAtMove[2]);
+        // Marked BEFORE the move: the craft's own computer decides on the tick after it.
+        long carryMark = events.mark();
+        moveTo(slot, vsId, insidePose[0], insidePose[1], insidePose[2]);
+        String granted = awaitOwnCarry(carryMark, slot, luna.durableId, "entered the moon's sphere "
+                + "from the planet's own cell (moved " + luna.radius * INSIDE_AT + " blocks from a "
+                + "moon whose sphere is " + luna.radius + ")");
+        double[] decidedOn = decidedOn(granted);
+        // Read right after the grant: the moon moves ~15 blocks a tick in this cell, and the slack
+        // below is sized against that motion (MOON_MOTION_SLACK_OF_RADIUS).
         double[] moonAtCarry = moonInPlanetCell(luna);
-        double inside = distanceFromMoon(slot, vsId, moonAtCarry);
-        assertTrue("arrangement: the craft must stand inside the moon's entry threshold (" + inside
-                        + " against " + luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + ")",
+        double inside = distance(decidedOn, moonAtCarry);
+        assertTrue("arrangement: the carry must have been decided on a craft inside the moon's entry "
+                        + "threshold (" + inside + " against "
+                        + luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + "): " + granted,
                 inside < luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION));
 
-        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
-        long carryMark = events.mark();
-        Reply carry = Reply.of(exec("stellurgytest space seam-carry " + slot + " id "
-                + luna.durableId));
-        assertTrue("production does not agree a craft in the planet's own cell has entered the "
-                + "moon's sphere (" + inside + " blocks out against " + luna.radius + "): " + carry,
-                carry.bool("wouldCarry"));
-        assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                carry.bool("started"));
-        String record = Events.recordsWhere(events.awaitField(carryMark, "ship_entered_cell", "ship",
-                luna.durableId, "the carry started (" + carry + "), so the craft must settle where it "
-                        + "was aimed", SETTLE_TICKS), "ship", luna.durableId).get(0);
+        Arrival arrival = arrivalSince(carryMark, luna.durableId, granted);
+        String record = arrival.record;
         assertEquals("the carry left from the planet's own cell: " + record, luna.planetKey,
                 Events.text(record, "origin"));
         String destination = Events.text(record, "destination");
         assertEquals("a craft in the planet's cell that flew into a moon's sphere belongs to that "
                 + "MOON, and is named in its own zone: " + record, luna.moonKey,
                 GalacticCoord.fromCellKey(destination).zone());
-        EntryStatus arrived = EntryStatus.forShip(this::exec, luna.durableId).requireFound(
-                "the carry was announced, so the ledger must hold this craft's row");
-        assertEquals("the ledger no longer names the cell the carry announced — the craft was carried "
-                + "again after it arrived: " + arrived, destination, arrived.cellKey);
+        EntryStatus arrived = arrival.ledger;
 
         // RENAMED, NOT MOVED: in the moon's zone the offset is measured from the MOON, so it must be
         // the pose the carry was decided on less where the moon stood.
-        double[] decidedOn = {carry.arrayNumber("pose", 0), carry.arrayNumber("pose", 1),
-                carry.arrayNumber("pose", 2)};
         double slack = luna.radius * MOON_MOTION_SLACK_OF_RADIUS;
         assertEquals("the carry displaced the craft along X — it must only be renamed: " + arrived,
                 decidedOn[0] - moonAtCarry[0], arrived.lx, slack);
@@ -441,30 +496,18 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 sphere.arrayNumber("fromGalacticCell", 1), sphere.arrayNumber("fromGalacticCell", 2)};
     }
 
-    /** Put the craft at a pose in its cell's slot world and prove it is there. */
-    private void teleportInCell(int slot, String vsId, double x, double y, double z) throws Exception {
+    /** A pose in the craft's cell, asserted to stay inside it, as the block pose a move is given. */
+    private static long[] inCell(double x, double y, double z) {
         assertTrue("arrangement: the craft must stay inside its cell, or the cube decides before any "
                         + "sphere: (" + x + "," + y + "," + z + ")",
                 Math.abs(x) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH
                         && Math.abs(y) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH
                         && Math.abs(z) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH);
-        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
-                + "teleport-ship-by-id " + slot + " " + vsId + " " + (long) x + " " + (long) y + " "
-                + (long) z)).ok());
-        exec("stellurgytest vs unpark-by-id " + slot + " " + vsId);
-        ShipInfo moved = ShipInfo.byId(this::exec, slot, vsId);
-        assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
-                (long) x, moved.x, CONTINUITY_SLACK);
+        return new long[] {(long) x, (long) y, (long) z};
     }
 
-    /** The craft's distance from the moon, both read now. */
-    private double distanceFromMoon(Moon moon, int slot, String vsId) throws Exception {
-        return distanceFromMoon(slot, vsId, moonInPlanetCell(moon));
-    }
-
-    private double distanceFromMoon(int slot, String vsId, double[] moonAt) throws Exception {
-        ShipInfo at = ShipInfo.byId(this::exec, slot, vsId);
-        double dx = at.x - moonAt[0], dy = at.y - moonAt[1], dz = at.z - moonAt[2];
+    private static double distance(double[] a, double[] b) {
+        double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
@@ -506,16 +549,32 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         }
     }
 
-    /** What one carry did: the controller's reply, the arrival record, and the ledger after it. */
-    private static final class Carried {
-        final Reply carry;
+    /** Where a carry arrived: the arrival record, and the ledger row after it. */
+    private static final class Arrival {
         final String record;
         final EntryStatus ledger;
 
-        Carried(Reply carry, String record, EntryStatus ledger) {
-            this.carry = carry;
+        Arrival(String record, EntryStatus ledger) {
             this.record = record;
             this.ledger = ledger;
+        }
+    }
+
+    /**
+     * What one carry did: the pose it was decided on, the grant that decided it, the arrival record,
+     * and the ledger after it.
+     */
+    private static final class Carried {
+        final double[] decidedOn;
+        final String granted;
+        final String record;
+        final EntryStatus ledger;
+
+        Carried(double[] decidedOn, String granted, Arrival arrival) {
+            this.decidedOn = decidedOn;
+            this.granted = granted;
+            this.record = arrival.record;
+            this.ledger = arrival.ledger;
         }
 
         String cell() {
@@ -617,10 +676,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     /** The same, also putting the craft at {@code toZ} across the axis. */
     private Placed moveWithin(Placed from, long toX, long toZ) throws Exception {
         int slot = from.ledger.slotDim;
-        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
-                + "teleport-ship-by-id " + slot + " " + from.vsId + " " + toX + " "
-                + (long) from.pose.y + " " + toZ)).ok());
-        exec("stellurgytest vs unpark-by-id " + slot + " " + from.vsId);
+        moveTo(slot, from.vsId, toX, (long) from.pose.y, toZ);
+        assertNotCarriedAway(from.ledger, "moved to " + toX + " from the moon");
+        release(slot, from.vsId);
         ShipInfo moved = ShipInfo.byId(this::exec, slot, from.vsId);
         assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
                 toX, moved.x, CONTINUITY_SLACK);
@@ -628,42 +686,101 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * Move the craft along X to {@code toX} from the moon (Y and Z kept) and drive the controller's
-     * carry on the live pose. The arrangement is asserted — the craft is where it was moved — and so
-     * is the controller's own verdict that it has {@code crossed}.
+     * Move the craft along X to {@code toX} from the moon (Y and Z kept) and wait for its OWN flight
+     * computer to be granted the carry, then for the arrival. The arrangement is asserted on the pose
+     * the carry was decided on — the craft is judged where it was moved — and the verdict that it has
+     * {@code crossed} is the grant itself.
      */
     private Carried moveAndCarry(Moon moon, Placed from, long toX, String crossed) throws Exception {
         int slot = from.ledger.slotDim;
-        assertTrue("the move failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id " + slot
-                + " " + from.vsId + " " + toX + " " + (long) from.pose.y + " " + (long) from.pose.z))
-                .ok());
-        exec("stellurgytest vs unpark-by-id " + slot + " " + from.vsId);
-        ShipInfo moved = ShipInfo.byId(this::exec, slot, from.vsId);
-        assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
-                toX, moved.x, CONTINUITY_SLACK);
-
-        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        // Marked BEFORE the move: the computer decides on the tick after it, and a mark taken
+        // afterwards can miss that decision.
         long carryMark = events.mark();
-        Reply carry = Reply.of(exec("stellurgytest space seam-carry " + slot + " id "
-                + moon.durableId));
-        assertTrue("production does not agree the craft has " + crossed + " (the controller's own "
-                + "decision on the live pose, " + toX + " blocks out against a radius of "
-                + moon.radius + "): " + carry, carry.bool("wouldCarry"));
-        assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                carry.bool("started"));
-        assertEquals("the carry named a different ship: " + carry, moon.durableId,
-                carry.text("shipId"));
+        moveTo(slot, from.vsId, toX, (long) from.pose.y, (long) from.pose.z);
+        String granted = awaitOwnCarry(carryMark, slot, moon.durableId, crossed + " (" + toX
+                + " blocks out against a radius of " + moon.radius + ")");
+        double[] decidedOn = decidedOn(granted);
+        assertEquals("arrangement: the carry was decided on a pose other than the one the craft was "
+                + "moved to: " + granted, toX, decidedOn[0], CONTINUITY_SLACK);
+        return new Carried(decidedOn, granted, arrivalSince(carryMark, moon.durableId, granted));
+    }
+
+    /**
+     * Put the craft at a pose in its slot world. Nothing is read back and nothing else is done: the
+     * craft's own computer acts on the very next tick, before even a release to the physics reaches
+     * it — measured 2026-10-04, an {@code unpark-by-id} sent right after the move found no such ship
+     * in the slot, three scenarios out of three — so anything taken here races it.
+     */
+    private void moveTo(int slot, String vsId, long x, long y, long z) throws Exception {
+        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
+                + "teleport-ship-by-id " + slot + " " + vsId + " " + x + " " + y + " " + z)).ok());
+    }
+
+    /** Release a craft that was moved and LEFT where it is to the physics again. */
+    private void release(int slot, String vsId) throws Exception {
+        assertTrue("the moved craft could not be released to the physics — it is not in its slot",
+                Reply.of(exec("stellurgytest vs unpark-by-id " + slot + " " + vsId)).ok());
+    }
+
+    /**
+     * The craft's ledger row still names the cell it was in: its own computer did not carry it away
+     * from a pose it must be left at. Read BEFORE the hull, so a wrong carry is named here and not as
+     * a hull missing from the slot it was moved in.
+     */
+    private void assertNotCarriedAway(EntryStatus before, String where) throws Exception {
+        EntryStatus now = EntryStatus.forShip(this::exec, before.shipId).requireFound(
+                "the craft just moved within its cell must still have its ledger row");
+        assertEquals("the craft's own flight computer carried it out of " + before.cellKey + " when "
+                + where + ", a pose it must be left at: " + now, before.cellKey, now.cellKey);
+    }
+
+    /**
+     * The craft's own flight computer GRANTED a carry since {@code mark} — the record written where
+     * {@code CellCrossingController#requestCarry} returns. When none comes, the controller is asked
+     * the same question directly, so the failure says which half is wrong: a decision of "stays" is
+     * the controller's, a decision of "carry" that the computer never acted on is the trigger's.
+     */
+    private String awaitOwnCarry(long mark, int slot, String durableId, String crossed)
+            throws Exception {
+        try {
+            return events.awaitRecordWithFields(mark, "carry_requested", "the craft's flight computer "
+                            + "must be granted a carry once it has " + crossed, SETTLE_TICKS,
+                    "ship", durableId, "granted", "true");
+        } catch (AssertionError noGrant) {
+            Reply asked = Reply.of(exec("stellurgytest space seam-carry " + slot + " id " + durableId));
+            throw new AssertionError("production does not agree the craft has " + crossed + ": its "
+                    + "flight computer was granted no carry, and the controller asked directly answers "
+                    + asked + " — wouldCarry:false is the decision, wouldCarry:true is a trigger that "
+                    + "never asked", noGrant);
+        }
+    }
+
+    /** The pose a granted carry was decided on, as {@code carry_requested} recorded it. */
+    private static double[] decidedOn(String granted) {
+        double[] pose = {Events.number(granted, "px"), Events.number(granted, "py"),
+                Events.number(granted, "pz")};
+        assertFalse("the grant names no pose it was decided on, so nothing below can compare against "
+                + "it: " + granted, Double.isNaN(pose[0]) || Double.isNaN(pose[1])
+                || Double.isNaN(pose[2]));
+        return pose;
+    }
+
+    /**
+     * The arrival of this craft since {@code mark}, and its ledger row after it — asserted to still
+     * name the cell the arrival announced.
+     */
+    private Arrival arrivalSince(long mark, String durableId, String granted) throws Exception {
         // The FIRST arrival of this craft since the mark is this carry's; a later one would be a
         // second carry, which the ledger check below exists to catch.
-        String record = Events.recordsWhere(events.awaitField(carryMark, "ship_entered_cell", "ship",
-                moon.durableId, "the carry started (" + carry + "), so the craft must settle where "
-                        + "it was aimed", SETTLE_TICKS), "ship", moon.durableId).get(0);
-        EntryStatus ledger = EntryStatus.forShip(this::exec, moon.durableId).requireFound(
+        String record = Events.recordsWhere(events.awaitField(mark, "ship_entered_cell", "ship",
+                durableId, "the carry was granted (" + granted + "), so the craft must settle where "
+                        + "it was aimed", SETTLE_TICKS), "ship", durableId).get(0);
+        EntryStatus ledger = EntryStatus.forShip(this::exec, durableId).requireFound(
                 "the carry was announced, so the ledger must hold this craft's row");
         assertEquals("the ledger no longer names the cell the carry announced — the craft was carried "
                 + "again after it arrived: " + ledger, Events.text(record, "destination"),
                 ledger.cellKey);
-        return new Carried(carry, record, ledger);
+        return new Arrival(record, ledger);
     }
 
     /**
@@ -671,8 +788,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * named at are the pose the carry was decided on — and the hull is physically there.
      */
     private void assertRenamedNotMoved(Carried c, String durableId) throws Exception {
-        double[] decidedOn = {c.carry.arrayNumber("pose", 0), c.carry.arrayNumber("pose", 1),
-                c.carry.arrayNumber("pose", 2)};
+        double[] decidedOn = c.decidedOn;
         assertEquals("the carry moved the craft along X — it was renamed, and must not have been "
                 + "displaced: " + c.ledger, decidedOn[0], c.ledger.lx, CONTINUITY_SLACK);
         assertEquals("...along Y: " + c.ledger, decidedOn[1], c.ledger.ly, CONTINUITY_SLACK);
@@ -720,9 +836,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * The controller's decision on the craft in {@code slot} is "stays". Asked, not waited for: the
-     * trigger that would carry it is not ticking here, so a quiet window would pin nothing; the
-     * decision is a reading. A refusal carries a {@code reason} and decided nothing, so it is told
+     * The controller's decision on the craft in {@code slot} is "stays". Asked, not waited for: a
+     * carry that does not happen publishes nothing, so a quiet window would pin nothing; the decision
+     * is a reading. A refusal carries a {@code reason} and decided nothing, so it is told
      * apart first.
      */
     private void assertStays(int slot, String durableId, String craft) throws Exception {

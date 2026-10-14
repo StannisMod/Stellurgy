@@ -62,9 +62,6 @@ public final class VSIntegration {
         // Forge fires no world tick event on that side; both are pure Stellurgy types, so this line loads
         // nothing VS-importing of its own.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DeckFollowsItsShip());
-        // Publish "a ship became usable" on the bus. Registered here for the same reason as the line
-        // above: it is a pure Stellurgy type and only runs where a substrate exists to have ships at all.
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShipLoadedAnnouncer());
         // Two craft stop when they meet. Its own module, deletable in one piece — see its javadoc
         // for what it deliberately does not do.
         ShipMeetingStop.register();
@@ -99,22 +96,6 @@ public final class VSIntegration {
     }
 
     /**
-     * Every ship in {@code world} that is LOADED and past its settling delay, as
-     * {@code substrate uuid -> Stellurgy durable id}. Empty when the world holds none — never null, so a
-     * caller on a world without ships and a caller who asked too early write the same
-     * loop.
-     *
-     * <p>A stronger fact than "registered" or "constructed" and a weaker one than "being flown":
-     * see {@link ShipLoadedAnnouncer}, which is the reason this exists.</p>
-     */
-    public static java.util.Map<String, java.util.UUID> shipsReadyForPhysics(World world) {
-        if (world == null) {
-            return java.util.Collections.emptyMap();
-        }
-        return VSBridge.shipsReadyForPhysics(world);
-    }
-
-    /**
      * Assemble the craft standing in the given block footprint into a movable ship, under the
      * identity its own flight computer carries.
      *
@@ -142,26 +123,144 @@ public final class VSIntegration {
     public static java.util.UUID assembleTier2Ship(
             World world, dev.stannismod.stellurgy.util.StorageChunk pasted,
             int x0, int y0, int z0) {
+        return assembleInFootprint(world, pasted, x0, y0, z0,
+                dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause.ASSEMBLED);
+    }
+
+    /**
+     * The re-assembly half of a crossing: {@link #assembleTier2Ship(World,
+     * dev.stannismod.stellurgy.util.StorageChunk, int, int, int)} for a craft that ALREADY
+     * EXISTED and whose blocks have just been pasted here.
+     *
+     * <p>Identical in every mechanical respect, identity included — the name is read off the
+     * pasted flight computer either way. The only difference is what the resulting ship-was-named
+     * announcement says about WHY the ship appeared. Nothing downstream of the assembly can work
+     * that out for itself: a paste and a new build arrive as the same blocks through the same call,
+     * and the distinction decides whether a consumer mints a durable record for a new vessel or
+     * reattaches to the one this vessel already had. So the caller who knows says it here, rather
+     * than letting each consumer guess from whatever proxy is to hand.</p>
+     */
+    public static java.util.UUID pasteTier2Ship(
+            World world, dev.stannismod.stellurgy.util.StorageChunk pasted,
+            int x0, int y0, int z0) {
+        return assembleInFootprint(world, pasted, x0, y0, z0,
+                dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause.PASTED);
+    }
+
+    /**
+     * Assemble a craft BUILT where it stands — the assembler's case — into a movable ship. The same as
+     * {@link #assembleTier2Ship}, with the footprint taken from the world instead of from a snapshot:
+     * {@code region} is the box the caller scanned, and it is FITTED here to the non-air blocks inside
+     * it, so the caller does no extent arithmetic of its own and the blocks are never copied — the
+     * substrate relocates the real ones. {@code null} when the region holds no flight computer.
+     */
+    public static java.util.UUID assembleBuiltTier2Ship(World world, net.minecraft.util.math.AxisAlignedBB region) {
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = fittedToBlocks(world, region);
+        if (footprint == null) {
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship in {} in dim {}: the region holds no"
+                    + " blocks at all.", region, world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        return assembleWithin(world, footprint,
+                dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause.ASSEMBLED);
+    }
+
+    private static java.util.UUID assembleInFootprint(
+            World world, dev.stannismod.stellurgy.util.StorageChunk pasted,
+            int x0, int y0, int z0,
+            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause) {
         if (pasted == null) {
             return null;
         }
-        // The EXTENT IS DERIVED, never passed. Every caller has just pasted this snapshot at this
-        // origin, so its own sizes ARE the footprint — and a caller that computed them could get
-        // them wrong, which one promptly did: deriving the width from the assembler's scan box
-        // instead of from the snapshot reded all five ground-flight scenarios, because the scan
-        // missed the layer the flight computer stood in. There is no arithmetic left to get wrong.
-        int width = pasted.getSizeX(), height = pasted.getSizeY(), depth = pasted.getSizeZ();
-        BlockPos afcPos = flightComputerInFootprint(world, x0, y0, z0, width, height, depth);
+        return assembleWithin(world, footprintOf(pasted, x0, y0, z0), cause);
+    }
+
+    private static java.util.UUID assembleWithin(
+            World world, net.minecraft.world.gen.structure.StructureBoundingBox footprint,
+            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause) {
+        BlockPos afcPos = flightComputerInFootprint(world, footprint);
         if (afcPos == null) {
-            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at"
-                            + " ({},{},{}) {}x{}x{} in dim {}: no flight computer stands in that"
-                            + " footprint, so the craft would have no name and would take a"
-                            + " substrate-minted id that nothing else in the game knows.",
-                    x0, y0, z0, width, height, depth,
-                    world == null ? "null" : world.provider.getDimension());
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks at {} in dim {}:"
+                            + " no flight computer stands in that footprint, so the craft would have no"
+                            + " name and would take a substrate-minted id that nothing else in the game"
+                            + " knows.",
+                    footprint, world == null ? "null" : world.provider.getDimension());
             return null;
         }
-        return assembleTier2ShipAt(world, afcPos);
+        // The same footprint BOUNDS the ship: the substrate's block search may not leave it. The ship
+        // is what was pasted here, and nothing that merely touches it — a launch pad reached through
+        // the snow on its rim, a tree — the search used to take until it hit the size cap.
+        return assembleTier2ShipAt(world, afcPos, cause, footprint);
+    }
+
+    /** Why the substrate would not make a ship of a built craft. */
+    public enum AssemblyRefusal {
+        /** More blocks than the substrate's ship size limit. */
+        TOO_LARGE,
+        /** The region holds no flight computer, so the craft has nothing to be named by. */
+        NO_FLIGHT_COMPUTER
+    }
+
+    /**
+     * Would {@link #assembleBuiltTier2Ship} with these arguments make a ship, or would the substrate drop
+     * it? {@code null} when it would make one.
+     *
+     * <p>Asked BEFORE assembling, by the one caller with a player to tell: the substrate decides a spawn a
+     * tick after it is queued and, refusing, drops it with nothing anyone sees — the assembler said
+     * "assembled" and there was no ship. The question runs the substrate's own search and rule on the same
+     * fitted footprint the assembly would bound itself to, on the world as it stands.</p>
+     */
+    public static AssemblyRefusal builtTier2ShipRefusal(World world, net.minecraft.util.math.AxisAlignedBB region) {
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = fittedToBlocks(world, region);
+        BlockPos afcPos = footprint == null ? null : flightComputerInFootprint(world, footprint);
+        if (afcPos == null) {
+            return AssemblyRefusal.NO_FLIGHT_COMPUTER;
+        }
+        return VSBridge.assemblyRefusal(world, afcPos, footprint);
+    }
+
+    /**
+     * The tightest box around the non-air blocks of {@code region}, inclusive, or {@code null} when it
+     * holds none — the same fit a snapshot copy makes, without copying anything. Both block coordinates of
+     * the region are inclusive, as the assembler's scan box is.
+     */
+    private static net.minecraft.world.gen.structure.StructureBoundingBox fittedToBlocks(
+            World world, net.minecraft.util.math.AxisAlignedBB region) {
+        if (world == null || region == null) {
+            return null;
+        }
+        net.minecraft.world.gen.structure.StructureBoundingBox fit = null;
+        for (int x = (int) region.minX; x <= region.maxX; x++) {
+            for (int z = (int) region.minZ; z <= region.maxZ; z++) {
+                for (int y = (int) region.minY; y <= region.maxY; y++) {
+                    BlockPos p = new BlockPos(x, y, z);
+                    net.minecraft.block.state.IBlockState state = world.getBlockState(p);
+                    if (state.getBlock().isAir(state, world, p)) {
+                        continue;
+                    }
+                    if (fit == null) {
+                        fit = new net.minecraft.world.gen.structure.StructureBoundingBox(x, y, z, x, y, z);
+                    } else {
+                        fit.expandTo(new net.minecraft.world.gen.structure.StructureBoundingBox(x, y, z, x, y, z));
+                    }
+                }
+            }
+        }
+        return fit;
+    }
+
+    /**
+     * The region a pasted snapshot's blocks occupy, inclusive. The EXTENT IS DERIVED, never passed: every
+     * caller has just pasted this snapshot at this origin, so its own sizes ARE the footprint — and a
+     * caller that computed them could get them wrong, which one promptly did: deriving the width from the
+     * assembler's scan box instead of from the snapshot reded all five ground-flight scenarios, because
+     * the scan missed the layer the flight computer stood in. (The assembler no longer comes this way: it
+     * hands its region to {@link #assembleBuiltTier2Ship}, which fits it to the blocks itself.)
+     */
+    private static net.minecraft.world.gen.structure.StructureBoundingBox footprintOf(
+            dev.stannismod.stellurgy.util.StorageChunk pasted, int x0, int y0, int z0) {
+        return new net.minecraft.world.gen.structure.StructureBoundingBox(x0, y0, z0,
+                x0 + pasted.getSizeX() - 1, y0 + pasted.getSizeY() - 1, z0 + pasted.getSizeZ() - 1);
     }
 
     /**
@@ -195,15 +294,15 @@ public final class VSIntegration {
      * wrong. Returns {@code null} when the footprint holds no flight computer, which means the blocks
      * are not a tier-2 craft and nothing should be assembled from them.</p>
      */
-    private static BlockPos flightComputerInFootprint(World world, int x0, int y0, int z0,
-                                                     int width, int height, int depth) {
+    private static BlockPos flightComputerInFootprint(World world,
+                                                     net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         if (world == null) {
             return null;
         }
-        for (int ey = 0; ey < height; ey++) {
-            for (int ex = 0; ex < width; ex++) {
-                for (int ez = 0; ez < depth; ez++) {
-                    BlockPos p = new BlockPos(x0 + ex, y0 + ey, z0 + ez);
+        for (int y = footprint.minY; y <= footprint.maxY; y++) {
+            for (int x = footprint.minX; x <= footprint.maxX; x++) {
+                for (int z = footprint.minZ; z <= footprint.maxZ; z++) {
+                    BlockPos p = new BlockPos(x, y, z);
                     if (world.getTileEntity(p)
                             instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
                         return p;
@@ -218,7 +317,10 @@ public final class VSIntegration {
      * The assembly itself, once the craft's own flight computer has been FOUND. Private: the only
      * way in is the footprint form above, which is what keeps "the anchor is the computer" true.
      */
-    private static java.util.UUID assembleTier2ShipAt(World world, BlockPos anchorPos) {
+    private static java.util.UUID assembleTier2ShipAt(
+            World world, BlockPos anchorPos,
+            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause,
+            net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         java.util.UUID durable = durableNameAtAnchor(world, anchorPos);
         // ONE SHIP, ONE IDENTITY. The substrate's uuid IS the craft's durable name, so nothing has to
         // translate between two values and no lookup can be answered about the wrong craft. Before
@@ -275,7 +377,7 @@ public final class VSIntegration {
             return null;
         }
         // The identity IS the durable name. There is no second value and no caller-supplied one.
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable);
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable, cause, footprint);
     }
 
     /**
@@ -548,9 +650,10 @@ public final class VSIntegration {
         // DECLARE the departure before cutting. The cut is what makes this world's registry drop the
         // craft, and that drop is indistinguishable from a destruction to anything merely watching -
         // so the classification is made HERE, by the code that knows where the ship is going, and the
-        // announcer publishes "left for dim N" rather than "gone". Without this a crossing tells
-        // every consumer that the craft it is carrying, crew aboard, has ceased to exist.
-        ShipLoadedAnnouncer.declareDeparture(srcWorld, srcShipId,
+        // ship manager announces the removal as a departure to dim N rather than a destruction.
+        // Without this a crossing tells every consumer that the craft it is carrying, crew aboard,
+        // has ceased to exist.
+        VSBridge.declareDeparture(srcWorld, srcShipId,
                 dstWorld == null ? srcWorld.provider.getDimension()
                         : dstWorld.provider.getDimension());
         // Cut a TIGHT box (not the 256-tall column) and paste into clear sky at dstY (above the
@@ -562,7 +665,7 @@ public final class VSIntegration {
             // Nothing was cut, so nothing will leave the registry on account of this crossing. Take
             // the mark back, or a genuine later destruction of this craft would be reported as a
             // departure to a cell it never reached.
-            ShipLoadedAnnouncer.abandonDeparture(srcWorld, srcShipId);
+            VSBridge.abandonDeparture(srcWorld, srcShipId);
         }
         // Declare the source FINISHED. It is collected on the next tick of this world whether or not
         // anything had it loaded — which is the case that used to have no collector at all and left a
@@ -621,8 +724,9 @@ public final class VSIntegration {
             // The paste footprint. The identity is no longer carried across by hand: the craft's
             // flight computer crossed WITH its blocks and still holds the name, so the assembly
             // reads it there — which is the same value `srcDurableName` used to carry, from the
-            // same tile, with no call site able to forget it.
-            shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
+            // same tile, with no call site able to forget it. A paste, not a build: the naming
+            // announcement says so, so a consumer reattaches instead of minting a second record.
+            shipUuid = pasteTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         } else {
             // The only DESTRUCTIVE failure of the four: the source has already been cut by this point,
             // so the ship exists as loose blocks at the paste site and nowhere else. Logged at ERROR
@@ -738,8 +842,9 @@ public final class VSIntegration {
         // reasoning that the ship it names died with the hyperspace world. The substrate's object
         // did; the NAME did not. It is in the flight computer's own NBT (`shipId`) and the snapshot
         // carries tile entities, so the name was sitting in the pasted blocks the whole time and
-        // the ledger row keyed on it now resolves again.
-        java.util.UUID shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
+        // the ledger row keyed on it now resolves again. A paste, not a build: these blocks came
+        // out of a snapshot of a craft that already existed, and the naming announcement says so.
+        java.util.UUID shipUuid = pasteTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         return new CrossResult(anchor, shipUuid, dstY, dstY + snap.getSizeY());
     }
 
@@ -870,13 +975,14 @@ public final class VSIntegration {
      * bound", so in a world holding more than one ship that scan searches a stranger's craft and
      * happily returns a real, wrong flight computer. A caller that then writes to it gets a successful
      * call and no effect on the ship it meant.</p>
+     *
+     * <p>Answers for a LOADED ship only, from the physics engine's own record of the ship's force
+     * controllers (see {@link VSBridge#flightComputerOfLoadedShip}) — no shipyard walk, no chunk
+     * loading. An unloaded ship answers {@code null}.</p>
      */
     public static BlockPos flightComputerOf(net.minecraft.world.WorldServer world,
             java.util.UUID shipUuid) {
-        if (shipUuid == null) {
-            return null;
-        }
-        return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid));
+        return VSBridge.flightComputerOfLoadedShip(world, shipUuid);
     }
 
     /**
@@ -1555,6 +1661,18 @@ public final class VSIntegration {
      */
     public static int[] loadAllShips(World world) {
         return VSBridge.loadAllShipsCounted(world);
+    }
+
+    /**
+     * The physics record of the ship NAMED by {@code shipId}, as {@code [mass, comX, comY, comZ]} in
+     * its own frame, or {@code null} when this world holds no such ship.
+     *
+     * <p>Exists so a test can see the number the mass model wrote: the whole server suite stayed green
+     * through the change that replaced how every block's mass is decided, because nothing in it ever
+     * asked a ship what it weighed.</p>
+     */
+    public static double[] shipInertiaById(World world, String shipId) {
+        return VSBridge.shipInertiaById(world, shipId);
     }
 
     /**

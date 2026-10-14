@@ -394,7 +394,7 @@ public class TileRocketMonitoringStation extends TileEntity
             final int fAmt = (ft != null) ? rocket.getFuelAmount(ft) : 0;
             final int fCap = (ft != null) ? rocket.getFuelCapacity(ft) : 0;
 
-            int thrust = -1, weight = -1;
+            int thrust = -1, massKg = -1;
             if (rocket instanceof dev.stannismod.stellurgy.entity.EntityRocket) {
                 try {
                     dev.stannismod.stellurgy.entity.EntityRocket er =
@@ -402,7 +402,7 @@ public class TileRocketMonitoringStation extends TileEntity
                     dev.stannismod.stellurgy.api.StatsRocket stats = er.getRocketStats();
                     if (stats != null) {
                         thrust = (int) stats.getThrust();
-                        weight = (int) stats.getWeight();
+                        massKg = (int) stats.getMass();
                     }
                 } catch (Throwable t) { /* keep simple */ }
             }

@@ -16,6 +16,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -412,6 +413,11 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
      * not the "same-dim no-op" this javadoc used to claim; the recorded placement below says so.)
      * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
      * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
+     *
+     * <p>red-witnessed: with {@code FetchCommand#execute} at {@code new
+     * BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's
+     * placement at the teleporter's target passes and this fails on the position assertion with
+     * "preX=4096.5 … postX=4116.5" (2026-09-30).</p>
      */
     @Test
     public void selfFetchCompletesAndPreservesPosition() throws Exception {
@@ -445,6 +451,18 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().record("selfFetchPlacement", placed);
         awaitClientDim(clientMark, plot().dim,
                 "the rendered position read below belongs to the world he ends in");
+        // The respawn is not the arrival. Vanilla's handleRespawn builds a NEW client player and
+        // stands it at the world spawn (Minecraft.setDimensionAndSpawnPlayer ->
+        // preparePlayerToSpawn); the position the server chose comes in the NEXT packet. Read
+        // between the two, the client reports 8.5, 8.5 — which is what this assertion used to
+        // measure under load. So the read waits for the client to APPLY a placement at the
+        // teleporter's own target, and the verdict below still compares against where he stood
+        // before: a fetch that aimed elsewhere passes this wait and fails that assertion.
+        String target = Events.firstField(placed, "target");
+        assertNotNull("teleporter_placed must name its target: " + placed, target);
+        String[] t = target.split(",");
+        awaitClientPlacedNear(clientMark, Double.parseDouble(t[0]) + 0.5, Double.parseDouble(t[2]) + 0.5,
+                "the position read below is the one the server chose, not the respawn placeholder");
 
         JsonObject post = bot().reportState();
         double postX = post.get("playerX").getAsDouble();

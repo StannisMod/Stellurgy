@@ -442,6 +442,21 @@ public class PhysicsObject implements IPhysicsEntity {
         return ticksExisted >= DISABLE_PHYSICS_FOR_X_INITIAL_TICKS;
     }
 
+    /**
+     * Whether the manager has announced this ship object as usable. Held by the object because the
+     * announcement is once per load and a load is a new object: a craft that unloads and comes back
+     * starts false again, which is exactly the re-announcement a consumer needs.
+     */
+    private boolean usableAnnounced;
+
+    boolean isUsableAnnounced() {
+        return usableAnnounced;
+    }
+
+    void markUsableAnnounced() {
+        usableAnnounced = true;
+    }
+
     // This is used by vs-control >.<
     /**
      * A thread safe way of accessing tile entities within a ship. Not guaranteed to provide the most up to do tile.

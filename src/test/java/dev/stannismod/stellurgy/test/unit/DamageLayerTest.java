@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageLayer;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import java.util.List;
 
@@ -17,8 +18,9 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>The e2e above it needs a real server, a ship and five minutes; these are the same rules stated
  * where a wrong answer costs a second. What they pin is deliberately narrow: which records a box
- * selects, what a move does to the destination, and that a layer survives a round trip through NBT
- * and lands where its new origin says. The behaviour of the relocation itself is not their business.</p>
+ * selects, what a move does to the destination, that a layer survives a round trip through NBT
+ * and lands where its new origin says, and that a hole's provenance arrives under its own name
+ * (INV-DMG-10). The behaviour of the relocation itself is not their business.</p>
  */
 public class DamageLayerTest {
 
@@ -91,9 +93,8 @@ public class DamageLayerTest {
     @Test
     public void aCapturedLayerLandsAtItsNewOriginThroughNbt() {
         BlockDamageSavedData source = new BlockDamageSavedData();
-        // Two records inside a capture whose origin is the yard corner. Provenance is not exercised
-        // here: it resolves a registry name back to a block, and there is no block registry at this
-        // tier — that half is the e2e's, which runs against a real one.
+        // Two records inside a capture whose origin is the yard corner; stages only — provenance has
+        // its own method below.
         source.setStage(new BlockPos(YARD_X + 2, YARD_Y + 1, YARD_Z + 3), 2);
         source.setStage(new BlockPos(YARD_X + 5, YARD_Y + 4, YARD_Z + 1), 4);
 
@@ -117,5 +118,37 @@ public class DamageLayerTest {
         // And an empty capture must say so as a value rather than as a malformed tag.
         assertTrue("an undamaged structure's layer is not empty",
                 DamageLayer.readFromNBT(new NBTTagCompound()).isEmpty());
+    }
+
+    /**
+     * Pins INV-DMG-10: a hole's provenance crosses a carry under the very name and meta it was written
+     * with — a block the registry still holds, and one whose mod is gone, which is the case a lookup
+     * through Forge's defaulted registry turns into air. The registry is bootstrapped so that a carry
+     * which did look the name up would answer as it does in a game, not throw.
+     *
+     * red-witnessed: with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by a lookup of the name in {@code Block.REGISTRY} handed to {@code recordDestroyed}, fails: "INV-DMG-10: a hole of a block no longer registered must arrive under ITS name … expected:<[removedmod:hull_plate]> but was:<[minecraft:air]>" (2026-10-08).
+     */
+    @Test
+    public void aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry() {
+        MinecraftBootstrap.ensure();
+        BlockPos registeredHole = new BlockPos(YARD_X + 1, YARD_Y, YARD_Z + 1);
+        BlockPos lostHole = new BlockPos(YARD_X + 3, YARD_Y + 2, YARD_Z + 1);
+        BlockDamageSavedData source = new BlockDamageSavedData();
+        source.recordDestroyedName(registeredHole, "minecraft:stone", 3);
+        source.recordDestroyedName(lostHole, "removedmod:hull_plate", 5);
+
+        DamageLayer layer = DamageLayer.harvest(source, YARD_X, YARD_Y, YARD_Z,
+                YARD_X + 8, YARD_Y + 8, YARD_Z + 8, YARD_X, YARD_Y, YARD_Z);
+        BlockDamageSavedData destination = new BlockDamageSavedData();
+        layer.applyTo(destination, 100, 64, 100);
+
+        BlockPos registeredLanded = new BlockPos(101, 64, 101);
+        BlockPos lostLanded = new BlockPos(103, 66, 101);
+        assertEquals("INV-DMG-10: a hole of a registered block must arrive under its own name",
+                "minecraft:stone", destination.getDestroyedBlockName(registeredLanded));
+        assertEquals("INV-DMG-10: and with its own meta", 3, destination.getDestroyedMeta(registeredLanded));
+        assertEquals("INV-DMG-10: a hole of a block no longer registered must arrive under ITS name, the"
+                + " only statement of what filled it", "removedmod:hull_plate", destination.getDestroyedBlockName(lostLanded));
+        assertEquals("INV-DMG-10: and with its own meta", 5, destination.getDestroyedMeta(lostLanded));
     }
 }

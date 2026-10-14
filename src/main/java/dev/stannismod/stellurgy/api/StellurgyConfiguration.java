@@ -531,10 +531,13 @@ public class StellurgyConfiguration {
 
     @ConfigProperty
     public boolean advancedWeightSystem;
-    @ConfigProperty
-    public boolean advancedWeightSystemInventories;
+    /**
+     * Multiplier on the mass of what a craft's machines HOLD — items in inventories, fluids in tanks —
+     * and on nothing else: not the blocks, not the people aboard. {@code 0} makes cargo weightless.
+     * Synced because the client prices a rocket's weight too.
+     */
     @ConfigProperty(needsSync = true)
-    public double weightMaterialScale = 1.0;
+    public double contentMassScale = 1.0;
     @ConfigProperty(needsSync = true)
     public double fuelMassScale = 1.0;
     @ConfigProperty(needsSync = true)
@@ -1000,9 +1003,16 @@ public class StellurgyConfiguration {
         stellurgyConfig.gravityAffectsFuel = config.get(ROCKET, "gravityAffectsFuels", true, "Make fuel use depend on gravity.").getBoolean();
         stellurgyConfig.launchingDestroysBlocks = config.get(ROCKET, "launchBlockDestruction", false, "Allow launches to damage nearby blocks, plants, glass, soil, turn rock into lava, and more").getBoolean();
         blackListRocketBlocksStr = config.getStringList("rocketBlockBlackList", ROCKET, new String[]{"minecraft:portal", "minecraft:bedrock", "minecraft:snow_layer", "minecraft:water", "minecraft:flowing_water", "minecraft:lava", "minecraft:flowing_lava", "minecraft:fire", "stellurgy:rocketfire"}, "Blocks that cannot be part of rocket. Format: modid:block e.g \"minecraft:chest\"");
-        stellurgyConfig.advancedWeightSystem = config.get(ROCKET, "advancedWeightSystem", true, "Enable advanced rocket weight calculation, including the handled inventories. Block weights are stored in weights.json").getBoolean();
-        stellurgyConfig.advancedWeightSystemInventories = config.get(ROCKET, "advancedWeightSystemInventories", true, "Include inventory contents in rocket weight. Note: may not work with modded inventories (eg IE storage chests)").getBoolean();
-        stellurgyConfig.weightMaterialScale = config.get(ROCKET, "weightMaterialScale", 1.0, "Global multiplier applied to material-derived and fallback block weights (does not affect explicit overrides or rocket component parts). Raise to make hulls/structure mass matter more").getDouble();
+        stellurgyConfig.advancedWeightSystem = config.get(ROCKET, "advancedWeightSystem", true, "Tier-1 rockets weigh their blocks in kilograms (weights.json) and launch only above the minimum thrust-to-weight. Off: every block counts as one unit of mass and the launch check is off. What machines hold is scaled by contentMassScale. Tier-2 ships are always weighed").getBoolean();
+        double contentMassScale = config.get(ROCKET, "contentMassScale", 1.0, "Multiplier on the mass of what a craft's machines hold (items in inventories, fluids in tanks); block mass and the people aboard are not scaled. 0 makes cargo weightless. Must not be negative. Note: may not see modded inventories that expose no item or fluid capability").getDouble();
+        if (!(contentMassScale >= 0.0)) {
+            // Refused, loudly: a negative or NaN weight stops a craft's centre of mass being a
+            // weighted mean, and the solver integrates whatever that produces.
+            logger.error("contentMassScale = " + contentMassScale + " is refused (it must be 0 or more); "
+                    + "using 1.0, so cargo weighs what it is");
+            contentMassScale = 1.0;
+        }
+        stellurgyConfig.contentMassScale = contentMassScale;
         stellurgyConfig.fuelMassScale = config.get(ROCKET, "fuelMassScale", 1.0, "Global multiplier applied to the mass of fuel/oxidizer carried by a rocket. Raise to make full tanks weigh more relative to thrust").getDouble();
         stellurgyConfig.minLaunchTWR = config.get(ROCKET, "minLaunchTWR", 1.05, "Minimum thrust-to-weight ratio (thrust / wet weight) a rocket needs before it is allowed to launch. 1.0 means it can barely lift itself; values above 1.0 add a safety margin").getDouble();
         stellurgyConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses. 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty entirely (condition then only affects the failure roll). Independent of partsWearSystem, which gates only whether wear ACCRUES").getDouble();

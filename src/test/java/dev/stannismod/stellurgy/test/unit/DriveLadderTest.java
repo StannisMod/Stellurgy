@@ -47,7 +47,7 @@ public class DriveLadderTest {
     /** A fully built generator of {@code tier}, hauling the baseline hull. */
     private static long fullBuildSpeed(DriveTier tier) {
         return JumpSpeed.blocksPerTick(DriveTuning.MAX_DRIVE_POWER,
-                DriveTuning.PLACEHOLDER_SHIP_MASS, tier);
+                DriveTuning.BASELINE_SHIP_MASS, tier);
     }
 
     // ── the ladder ────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ public class DriveLadderTest {
         // something absurdly far, departs and takes what it takes — the barrier is then life support
         // and generation over that duration, which are real systems, rather than a red message.
         long speed = JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER,
-                DriveTuning.PLACEHOLDER_SHIP_MASS, DriveTier.INTERSTELLAR);
+                DriveTuning.BASELINE_SHIP_MASS, DriveTier.INTERSTELLAR);
         long ticks = JumpSpeed.transitTicks(
                 blocksForLightYears(DriveTier.GALACTIC.bandLightYears()), speed);
 

@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
+import java.util.OptionalLong;
 import java.util.UUID;
 
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
+import dev.stannismod.stellurgy.integration.vs.FlightComputerMassSource;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+
 /**
- * How heavy a ship is — the one number the speed formula needs and the build does not yet produce.
+ * How heavy a ship is, for the drive — the one number the speed formula needs from the hull.
  *
- * <p>This is a seam, on purpose and in exactly one method. The formula that consumes it, its tests,
- * the forecast the pilot reads and the transit that flies at the resulting speed are all real; what
- * is not real yet is the survey that would weigh a hull block by block. When that arrives it
- * replaces {@link #massOf} and nothing else moves.</p>
- *
- * <p>A placeholder that returns a plausible constant is the honest shape here. The alternative —
- * leaving the speed formula unbuilt until mass exists — would mean shipping a jump whose duration
- * is a magic number, and then having to rewrite every caller anyway.</p>
+ * <p>Read through the same mass port every other consumer of ship mass reads, so the drive weighs the
+ * hull the flight model weighs: its blocks, what they hold and who is aboard, in kilograms.</p>
  */
 public final class ShipMassProvider {
 
@@ -23,16 +20,16 @@ public final class ShipMassProvider {
     }
 
     /**
-     * The mass of the ship anchored at {@code anchor}. Every hull currently answers the same, which
-     * is why a light ship and a heavy one fly at the same speed today — the drive is the only lever
-     * until this method learns to weigh a hull.
+     * The mass of the ship {@code shipId} names, in kilograms, or ABSENT when this world cannot weigh
+     * it — no such ship here, no flight computer aboard, or a hull that weighs nothing. Absent is not
+     * zero and is not a stand-in: a caller that gets it has nothing to compute a speed from, and says
+     * so.
      */
-    public static long massOf(World world, BlockPos anchor, UUID shipId) {
-        return DriveTuning.PLACEHOLDER_SHIP_MASS;
-    }
-
-    /** Whether mass is still the placeholder. Read by the readouts, so the pilot is not misled. */
-    public static boolean isPlaceholder() {
-        return true;
+    public static OptionalLong massOf(World world, UUID shipId) {
+        ShipMassFrame frame = new FlightComputerMassSource(world).massFrame(shipId);
+        if (frame == null || !(frame.getTotalMass() > 0.0D)) {
+            return OptionalLong.empty();
+        }
+        return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));
     }
 }

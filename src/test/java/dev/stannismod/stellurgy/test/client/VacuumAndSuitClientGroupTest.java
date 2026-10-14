@@ -454,6 +454,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // WINDOW: from the mark to the log read below, counted on the player's OWN world clock —
             // the atmosphere judges him on that world's ticks, so client ticks would buy a busy box
             // fewer judgments and a quieter log.
+            // SERVER-ONLY: the atmosphere judges the player on his world's server ticks; the reads are the server's log and the server's chest reading.
             GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
@@ -661,7 +662,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             Events events = serverEvents();
             long mark = events.markInstrumented();
             // WINDOW: the same absence window, on the player's own world clock.
-            GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
+            // Both clocks: the verdict below also reads the CLIENT's chest air, synced from the server.
+            advanceWorldAndClient(plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a breathable atmosphere must never reach the enchanted suit's buffer;"

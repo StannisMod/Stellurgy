@@ -1252,6 +1252,7 @@ public class FreeFlightModeTest extends AbstractSharedClientE2ETest {
         // its clock is the server's: counted there, forty is forty brake steps on any box, where
         // forty client ticks bought a busy one fewer. It replaced a poll whose predicate,
         // `|my| < 0.05`, was the assertion below, so the old leg could only time out, never fail.
+        // SERVER-ONLY: the cut has arrived (linked above); the brake is the rocket's own server update and the read is the server's rocket report.
         GameTicks.advance(serverClient(), GameTicks.server(), windowTicks(5, 8));
         RocketInfo info = rocketInfo(rocketId);
         double myCut = info.motionY;
@@ -1332,6 +1333,7 @@ public class FreeFlightModeTest extends AbstractSharedClientE2ETest {
         // the start ritual's ease (the rocket's own server update, gain 0.25 a tick) has closed on
         // its fixed hover target within a handful of them. Counted on the server, forty is forty
         // steps of that law on any box; more of them move neither number, the target being fixed.
+        // SERVER-ONLY: the engines lit (linked above); the ease is the rocket's server update and the read is the server's rocket report.
         GameTicks.advance(serverClient(), GameTicks.server(), 40);
 
         RocketInfo info = rocketInfo(rocketId);

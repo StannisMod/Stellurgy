@@ -58,7 +58,9 @@ public abstract class MixinEntityRocketLaunchGate {
                 + ",\"gravity\":" + Double.toString((double) gravity)
                 + ",\"twr\":" + Double.toString((double) stats.getThrustToWeightRatio(gravity))
                 + ",\"thrust\":" + stats.getThrust()
-                + ",\"weight\":" + Double.toString((double) stats.getWeight())
+                // The wet craft's weight at ONE standard gravity, in newtons — the unit thrust is in,
+                // so thrust over it is the one-gee ratio a reader compares the local one against.
+                + ",\"weight\":" + Double.toString((double) stats.getWeightNewtons(1f))
                 + ",\"minLaunchTWR\":" + Double.toString(cfg.minLaunchTWR)
                 + ",\"weightSystem\":" + cfg.advancedWeightSystem);
         return gravity;

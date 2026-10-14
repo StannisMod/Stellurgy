@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.SeatCarry;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -61,13 +62,22 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
     private static final double ATTITUDE_MOVED_DOT = 0.98;
 
     /**
-     * How far the CLIENT's rendered rider climb may sit from the SERVER's ship climb, in blocks.
+     * How far the CLIENT may move a seated rider (or his seat) away from where it put him relative
+     * to the ship it shows, over a climb, in blocks — the largest change in that offset, read tick
+     * by tick off one record ({@link SeatCarry#riderDrift}).
      *
-     * <p>The TEST'S OWN replication tolerance: the two are the same climb read on two sides, one
-     * interpolated. Three blocks is under a craft's own height, so a rider left behind still
-     * fails.</p>
+     * <p>The TEST'S OWN: a rider glued to his ship holds the offset exactly, so the honest number is
+     * zero. Three blocks is under a craft's own height, so a rider left behind still fails. It used
+     * to bound the CLIENT rider's climb against the SERVER ship's, read six client ticks apart —
+     * the same number, kept, for a quantity that no longer depends on when it was read.</p>
      */
     private static final double RIDER_TRACKS_SHIP_BLOCKS = 3.0;
+
+    /**
+     * How long the client is given to SHOW a climb the server has already performed, in ticks — a
+     * deadline on pose replication of a move that happened, never a settle.
+     */
+    private static final int SHOWN_CLIMB_LINK_BUDGET_TICKS = 200;
 
     /**
      * How far the camera yaw may move under a hard sideways mouse look, in degrees.
@@ -778,10 +788,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         awaitClientMount(seatMark, "the client must be riding the seat dummy before its position is"
                 + " baselined — that reading IS the rider's", SEAT_LINK_BUDGET_TICKS, "");
 
-        // Baseline the CLIENT pilot position BEFORE the climb: the mount the bot rides (its dummy)
-        // and the player camera. A pilot glued to the ship rises with it; a detached one stays here.
-        double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
-        double camYBefore = bot().reportState().get("playerY").getAsDouble();
+        // Mark the CLIENT's log BEFORE the climb: every tick from here on, the client records where it
+        // put the seat dummy and the pilot and where it showed the ship, in one call. A pilot glued
+        // to the ship rises with it; a detached one stays where these first records have him.
+        long carryMark = clientEvents().mark();
 
         // Drive REAL keys: hold vertical-up. The client samples it, sends it to the seat, and the
         // AFC lifts the ship. Up isolates from ground friction.
@@ -807,31 +817,23 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                         + " ticks of thrust (null: no longer reporting a position)",
                 climbed != null && climbed > 1.0);
 
-        // --- The seated pilot must TRAVEL with the ship (client-observed). Read the CLIENT rider +
-        // camera again: both must have climbed, and the rider's climb must track the server ship's.
-        // Before the fix that glues the seat dummy to the moving ship, the dummy stays at spawn while
-        // the ship departs, so these client deltas would be ~0 even though the server ship moved.
-        // EXPERIMENT: the comparison is DEFINED six client ticks after the release reached the
-        // flight computer — the offset is part of what is measured (a rider lagging his ship by more
-        // than the bar at six ticks is the failure). The bar, RIDER_TRACKS_SHIP_BLOCKS, is the test's own and was not
-        // measured at this offset; it is not derived from it either.
-        bot().waitWorldTicks(6);
-        String afterSettle = shipInfoById(shipId);
-        double serverYAfter = ShipInfo.of(afterSettle).y;
-        double riderYAfter = bot().reportRidingEntity().get("posY").getAsDouble();
-        double camYAfter = bot().reportState().get("playerY").getAsDouble();
-        scenario().record("shipAfterSettle", afterSettle)
-                .record("riderBeforeAfter", riderYBefore + " -> " + riderYAfter)
-                .record("serverBeforeAfter", yBefore + " -> " + serverYAfter);
-        assertTrue("the CLIENT-rendered rider must climb with the ship (it stayed behind): "
-                        + "riderYBefore=" + riderYBefore + " riderYAfter=" + riderYAfter,
-                riderYAfter - riderYBefore > 1.0);
-        assertTrue("the pilot's CLIENT camera must climb with the ship: camYBefore=" + camYBefore
-                        + " camYAfter=" + camYAfter,
-                camYAfter - camYBefore > 1.0);
-        assertTrue("the client rider climb must TRACK the server ship climb (client="
-                        + (riderYAfter - riderYBefore) + " server=" + (serverYAfter - yBefore) + ")",
-                Math.abs((riderYAfter - riderYBefore) - (serverYAfter - yBefore)) < RIDER_TRACKS_SHIP_BLOCKS);
+        // --- The seated pilot must TRAVEL with the ship (client-observed). Before the fix that glues
+        // the seat dummy to the moving ship, the dummy stays at spawn while the ship departs, so the
+        // client would show the ship climbing and the rider not. Both halves of that come from the
+        // client's own per-tick record, read up to the record in which the client has SHOWN the ship
+        // climbing more than a block — a link, so nothing below depends on how long after the cut
+        // it is read.
+        SeatCarry carry = SeatCarry.awaitShownClimb(clientEvents(), carryMark, shipId, 1.0,
+                "the client must show the climb the server performed, carrying its seated pilot",
+                SHOWN_CLIMB_LINK_BUDGET_TICKS);
+        scenario().record("seatCarry", carry.toString());
+        assertTrue("the CLIENT-rendered rider must climb with the ship (it stayed behind): " + carry
+                + " | " + carry.raw, carry.seatClimb > 1.0);
+        assertTrue("the pilot's CLIENT camera must climb with the ship: " + carry + " | " + carry.raw,
+                carry.riderClimb > 1.0);
+        assertTrue("the client must keep the seat and its pilot where the ship it shows carries them,"
+                + " at every tick of the climb: " + carry + " | " + carry.raw,
+                carry.seatDrift < RIDER_TRACKS_SHIP_BLOCKS && carry.riderDrift < RIDER_TRACKS_SHIP_BLOCKS);
 
         // --- The OTHER TWO translation axes, in world coordinates. The vertical key above proves
         // exactly ONE channel of the pilot path; nose and lateral are separate fields of the same

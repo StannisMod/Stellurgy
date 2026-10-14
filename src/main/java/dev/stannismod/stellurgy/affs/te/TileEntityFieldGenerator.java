@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.affs.te;
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.block.BlockFieldGenerator;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.affs.network.PacketFieldTouchEffect;
 import dev.stannismod.stellurgy.affs.network.PacketSyncActiveGenerators;
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
@@ -107,6 +108,12 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
 
         if (world.isRemote) {
             updateClientPrediction();
+            return;
+        }
+        if (VSIntegration.isOnUnnamedShip(world, pos)) {
+            // The blocks are loaded but the ship they belong to is not named yet, so this emitter's
+            // position is a shipyard address. It does not draw on its coil, project, or push anyone:
+            // a field it cannot place has nothing correct to do.
             return;
         }
 

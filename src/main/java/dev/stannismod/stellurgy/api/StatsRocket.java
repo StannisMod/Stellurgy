@@ -16,10 +16,50 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * The derived stat vector of one tier-1 rocket.
+ *
+ * <p><b>Units.</b> {@code mass} is a MASS, in kilograms — never a weight-at-1g. {@code thrust}
+ * is a force, in newtons. Local weight is therefore {@code mass * STANDARD_GRAVITY *
+ * gravitationalMultiplier}, and every gravity-dependent quantity (net acceleration, TWR, the
+ * launch gate) derives from that one expression instead of assuming the rocket sits at one gee.
+ */
 public class StatsRocket {
 
     private static final String TAGNAME = "rocketStats";
     public static final int INVALID_SEAT = Integer.MIN_VALUE;
+
+    /** The sentinel a fluid slot carries when nothing has been loaded into it yet. */
+    private static final String NO_FLUID = "null";
+
+    /** Standard gravity, m/s². One unit of {@code gravitationalMultiplier} is one standard gravity. */
+    public static final float STANDARD_GRAVITY = 9.81f;
+
+    /**
+     * Free-fall acceleration in blocks per tick squared, at one standard gravity: vanilla's own
+     * {@code motionY -= 0.08} (`EntityLivingBase.travel`).
+     *
+     * <p>This is 9.81 m/s² and not a stronger gravity, because one tick is <b>90.3 ms</b>, not 50:
+     * {@code 0.08 / 0.0903² = 9.81}. Four unrelated vanilla constants agree with that tick length —
+     * terminal velocity 3.92 blocks/tick = 43.4 m/s, the jump impulse 0.42 blocks/tick = 4.65 m/s,
+     * walking 2.39 m/s, sprinting 3.11 m/s — so the game is SI-consistent at one metre per block and
+     * only its SECOND differs from ours. Every derived readout in m/s² converts by dividing a
+     * per-tick quantity by 0.0903², never by 0.05².</p>
+     *
+     * <p>A rocket, a player and a tier-2 ship all fall at this rate. They did not before: the classic
+     * ascent used 0.05, the classic descent 0.04905, free flight 0.04 and a ship 0.0245, so a ship
+     * descended out from under the crew standing on it.</p>
+     */
+    public static final double GRAVITY_BLOCKS_PER_TICK_SQUARED = 0.08D;
+
+    /**
+     * The newtons that one unit of the pre-3.0.0 dimensionless thrust rating maps onto
+     * (5 tonnes-force). Empirical curves that were fitted against that rating — only the
+     * exhaust scorch radius — normalise by this so their shape survives the move to SI.
+     * Nothing else may read it: thrust is newtons everywhere else.
+     */
+    public static final float THRUST_RATING_UNIT_NEWTONS = 49050f;
+
     private final List<HashedBlockPosition> passengerSeats = new ArrayList<>();
     /**
      * The height this flight reaches orbit at, written by the launch; {@link #ORBIT_HEIGHT_UNSET} until
@@ -31,8 +71,10 @@ public class StatsRocket {
     public static final int ORBIT_HEIGHT_UNSET = -1;
     public float injectionBurnLenghtMult;
     HashedBlockPosition pilotSeatPos;
-    private int thrust;
-    private float weight;
+    /** Engine thrust, newtons. A long: one nuclear core rates 4.9e7 N, so an int saturated at ~44 cores. */
+    private long thrust;
+    /** Dry mass, kilograms. Fuel mass is added by {@link #getMass()}. */
+    private float mass;
     private float drillingPower;
     private String fuelFluid;
     private String oxidizerFluid;
@@ -70,7 +112,7 @@ public class StatsRocket {
 
     public StatsRocket() {
         thrust = 0;
-        weight = 0;
+        mass = 0;
         fuelFluid = "null";
         oxidizerFluid = "null";
         workingFluid = "null";
@@ -128,38 +170,53 @@ public class StatsRocket {
         return passengerSeats.size();
     }
 
-    public int getThrust() {
-        return (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier);
+    /** Engine thrust in newtons, after the config multiplier. */
+    public long getThrust() {
+        return (long) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier);
     }
 
-    public void setThrust(int thrust) {
+    /** @param thrust engine thrust, newtons */
+    public void setThrust(long thrust) {
         this.thrust = thrust;
     }
 
-    public float getWeight_NoFuel() {return weight;}
-
-    public float getWeight() {
-        float fluidWeight = 0;
-        if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-            if (FluidRegistry.isFluidRegistered(getFuelFluid())) {
-                Fluid f = FluidRegistry.getFluid(getFuelFluid());
-                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
-                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
-            }
-            if (FluidRegistry.isFluidRegistered(getOxidizerFluid())) {
-                Fluid f = FluidRegistry.getFluid(getOxidizerFluid());
-                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_OXIDIZER));
-            }
-            if (FluidRegistry.isFluidRegistered(getWorkingFluid())) {
-                Fluid f = FluidRegistry.getFluid(getWorkingFluid());
-                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
-            }            
-        }
-        return weight + fluidWeight;
+    /** Dry mass in kilograms — the rocket with empty tanks. */
+    public float getDryMass() {
+        return mass;
     }
 
-    public void setWeight(float weight) {
-        this.weight = weight;
+    /** True if the named fluid exists. The sentinel is answered without touching the registry:
+     *  an empty rocket is the common case, and it lets the mass of one be taken before the fluid
+     *  registry is up. */
+    private static boolean isLoadedFluid(String name) {
+        return name != null && !NO_FLUID.equals(name) && !name.isEmpty()
+                && FluidRegistry.isFluidRegistered(name);
+    }
+
+    /** Wet mass in kilograms — dry mass plus the fuel and oxidizer currently carried. */
+    public float getMass() {
+        float fluidMass = 0;
+        if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
+            if (isLoadedFluid(getFuelFluid())) {
+                Fluid f = FluidRegistry.getFluid(getFuelFluid());
+                fluidMass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+                fluidMass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
+            }
+            if (isLoadedFluid(getOxidizerFluid())) {
+                Fluid f = FluidRegistry.getFluid(getOxidizerFluid());
+                fluidMass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_OXIDIZER));
+            }
+            if (isLoadedFluid(getWorkingFluid())) {
+                Fluid f = FluidRegistry.getFluid(getWorkingFluid());
+                fluidMass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
+            }
+        }
+        return mass + fluidMass;
+    }
+
+    /** @param mass dry mass, kilograms */
+    public void setMass(float mass) {
+        this.mass = mass;
     }
 
     public String getFuelFluid() {
@@ -195,59 +252,66 @@ public class StatsRocket {
     }
 
     /**
-     * The gravity the flight model and the launch gate both weigh a rocket by, in standard
-     * gravities. Reading it through one method is what keeps the gate and the flight model from
-     * disagreeing about which body the rocket is on: {@code gravityAffectsFuel = false} pins both
-     * to one gee.
+     * The gravity actually seen by the flight model, in standard gravities. Reading it through
+     * one method is what keeps the launch gate and the flight model from disagreeing about which
+     * planet the rocket is on: {@code gravityAffectsFuel = false} pins both to one gee.
      */
     private static float effectiveGravityMultiplier(float gravitationalMultiplier) {
         return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;
     }
 
-    public float getAcceleration(float gravitationalMultiplier) {
-        float weight = getWeight();
-        if (weight <= 0) {
-            return 0;
-        }
-        float N = getThrust() - (weight * effectiveGravityMultiplier(gravitationalMultiplier));
-        return N / weight / 20f;
+    /** Local weight in newtons of a given mass — the force the engines have to beat to hover. */
+    public static float weightNewtons(float massKg, float gravitationalMultiplier) {
+        return massKg * STANDARD_GRAVITY * effectiveGravityMultiplier(gravitationalMultiplier);
     }
 
-    /** Acceleration with empty tanks (dry weight only) — the upper bound reached as fuel burns off. */
-    public float getDryAcceleration(float gravitationalMultiplier) {
-        float weight = getWeight_NoFuel();
-        if (weight <= 0) {
-            return 0;
-        }
-        float N = getThrust() - (weight * effectiveGravityMultiplier(gravitationalMultiplier));
-        return N / weight / 20f;
+    /** Local weight of the wet rocket, newtons. */
+    public float getWeightNewtons(float gravitationalMultiplier) {
+        return weightNewtons(getMass(), gravitationalMultiplier);
     }
 
     /**
-     * Thrust-to-weight ratio against the current wet weight (dry + fuel) as it weighs on a body of
-     * the given gravity. 0 if weightless; on a body with no gravity at all any thrust is enough to
-     * leave it, so the ratio is infinite when there is thrust.
-     *
-     * @param gravitationalMultiplier gravity of the body the rocket stands on, in standard gravities
+     * Net climb per tick at full thrust, in blocks per tick squared — the units the entity adds to its
+     * motion. The net specific force {@code (thrust - weight) / mass} is expressed in standard
+     * gravities and then scaled by what one standard gravity is worth per tick, so a rocket at TWR 0
+     * falls at exactly the rate a player does.
      */
-    public float getThrustToWeightRatio(float gravitationalMultiplier) {
-        float weight = getWeight();
-        if (weight <= 0) {
+    private float netClimbPerTick(float massKg, float gravitationalMultiplier) {
+        if (massKg <= 0) {
             return 0;
         }
-        float localWeight = weight * effectiveGravityMultiplier(gravitationalMultiplier);
+        float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);
+        return (float) (netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED);
+    }
+
+    public float getAcceleration(float gravitationalMultiplier) {
+        return netClimbPerTick(getMass(), gravitationalMultiplier);
+    }
+
+    /** Acceleration with empty tanks (dry mass only) — the upper bound reached as fuel burns off. */
+    public float getDryAcceleration(float gravitationalMultiplier) {
+        return netClimbPerTick(getDryMass(), gravitationalMultiplier);
+    }
+
+    /** Thrust-to-weight ratio against the wet mass at the LOCAL gravity. 0 if massless. */
+    public float getThrustToWeightRatio(float gravitationalMultiplier) {
+        if (getMass() <= 0) {
+            return 0;
+        }
+        float localWeight = getWeightNewtons(gravitationalMultiplier);
         if (localWeight <= 0) {
+            // A body with no gravity: any thrust at all is enough to leave it.
             return getThrust() > 0 ? Float.POSITIVE_INFINITY : 0;
         }
         return getThrust() / localWeight;
     }
 
-    /** True if the rocket clears the configured minimum thrust-to-weight ratio to launch from a
-     *  body of the given gravity; the boundary is inclusive. When the advanced weight system is
-     *  disabled the weight-based launch gate is off entirely (classic behaviour — no TWR check),
-     *  so this returns true regardless of thrust or weight. This is the single source of truth
-     *  for weight-based launch gating; callers must not re-derive the TWR check independently —
-     *  a caller that judges a craft before launch (an assembler) asks this on the stats it means
+    /** True if the rocket clears the configured minimum thrust-to-weight ratio to launch
+     *  from a body of the given gravity; the boundary is inclusive. When the advanced weight
+     *  system is disabled the mass-based launch gate is off entirely (classic behaviour — no TWR
+     *  check), so this returns true regardless of thrust or mass. This is the single source of
+     *  truth for mass-based launch gating; callers must not re-derive the TWR check independently
+     *  — a caller that judges a craft before launch (an assembler) asks this on the stats it means
      *  to judge.
      *  @param gravitationalMultiplier gravity of the body being launched from, in standard
      *                                 gravities — a light moon is easier to leave than Earth */
@@ -269,21 +333,21 @@ public class StatsRocket {
         for (FuelType type : FuelType.values()) {
             full.setFuelAmount(type, getFuelCapacity(type));
         }
-        if ("null".equals(full.fuelFluid)) {
+        if (NO_FLUID.equals(full.fuelFluid)) {
             FuelType fuelType = getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0
                     ? FuelType.LIQUID_MONOPROPELLANT : FuelType.LIQUID_BIPROPELLANT;
             full.fuelFluid = heaviestFluidName(fuelType, full.fuelFluid);
         }
-        if ("null".equals(full.oxidizerFluid)) {
+        if (NO_FLUID.equals(full.oxidizerFluid)) {
             full.oxidizerFluid = heaviestFluidName(FuelType.LIQUID_OXIDIZER, full.oxidizerFluid);
         }
-        if ("null".equals(full.workingFluid)) {
+        if (NO_FLUID.equals(full.workingFluid)) {
             full.workingFluid = heaviestFluidName(FuelType.NUCLEAR_WORKING_FLUID, full.workingFluid);
         }
         return full;
     }
 
-    /** The name of the heaviest fluid the registry accepts as {@code type}, or {@code none} when it
+    /** The name of the densest fluid the registry accepts as {@code type}, or {@code none} when it
      *  accepts no fluid of that type — a tank no fluid fits stays as empty as it was. */
     private static String heaviestFluidName(FuelType type, String none) {
         String heaviest = none;
@@ -346,7 +410,7 @@ public class StatsRocket {
         StatsRocket stat = new StatsRocket();
 
         stat.thrust = this.thrust;
-        stat.weight = this.weight;
+        stat.mass = this.mass;
         stat.fuelFluid = this.fuelFluid;
         stat.oxidizerFluid = this.oxidizerFluid;
         stat.workingFluid = this.workingFluid;
@@ -658,7 +722,7 @@ public class StatsRocket {
      */
     public void reset() {
         thrust = 0;
-        weight = 0;
+        mass = 0;
         fuelFluid = "null";
         oxidizerFluid = "null";
         workingFluid = "null";
@@ -680,7 +744,7 @@ public class StatsRocket {
     }
     public void reset_no_fuel() {
         thrust = 0;
-        weight = 0;
+        mass = 0;
         drillingPower = 0f;
 
         pilotSeatPos.x = INVALID_SEAT;
@@ -709,8 +773,8 @@ public class StatsRocket {
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagCompound stats = new NBTTagCompound();
 
-        stats.setInteger("thrust", this.thrust);
-        stats.setFloat("weight", this.weight);
+        stats.setLong("thrust", this.thrust);
+        stats.setFloat("mass", this.mass);
         stats.setFloat("drillingPower", this.drillingPower);
         stats.setString("fuelFluid", this.fuelFluid);
         stats.setString("oxidizerFluid", this.oxidizerFluid);
@@ -797,8 +861,8 @@ public class StatsRocket {
 this.reset();
         if (nbt.hasKey(TAGNAME)) {
             NBTTagCompound stats = nbt.getCompoundTag(TAGNAME);
-            this.thrust = stats.getInteger("thrust");
-            this.weight = stats.getFloat("weight");
+            this.thrust = stats.getLong("thrust");
+            this.mass = stats.getFloat("mass");
             this.fuelFluid = stats.getString("fuelFluid");
             this.oxidizerFluid = stats.getString("oxidizerFluid");
             this.workingFluid = stats.getString("workingFluid");

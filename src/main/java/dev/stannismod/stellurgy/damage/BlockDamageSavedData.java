@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.damage;
 import net.minecraft.block.Block;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.MapStorage;
@@ -98,13 +97,23 @@ public class BlockDamageSavedData extends WorldSavedData {
         if (block == null || block.getRegistryName() == null) {
             return;
         }
+        recordDestroyedName(pos, block.getRegistryName().toString(), meta);
+    }
+
+    /**
+     * Record what stood at {@code pos} by its registry NAME — for a copy of a record that already
+     * exists, which carries the name as it was written. Never resolved through the registry on the way:
+     * a name whose mod is gone must arrive as that name, since it is the only statement of what the
+     * hole should be filled with.
+     */
+    public void recordDestroyedName(BlockPos pos, String registryName, int meta) {
         long key = pos.toLong();
         Entry entry = entries.get(key);
         if (entry == null) {
             entry = new Entry();
             entries.put(key, entry);
         }
-        entry.originalBlock = block.getRegistryName().toString();
+        entry.originalBlock = registryName;
         entry.originalMeta = meta;
         markDirty();
     }
@@ -216,11 +225,6 @@ public class BlockDamageSavedData extends WorldSavedData {
         }
         nbt.setTag("entries", list);
         return nbt;
-    }
-
-    /** Resolve a recorded provenance name back to a block, or null if that block is no longer present. */
-    public static Block blockFromName(String registryName) {
-        return registryName == null ? null : Block.REGISTRY.getObject(new ResourceLocation(registryName));
     }
 
     private static final class Entry {

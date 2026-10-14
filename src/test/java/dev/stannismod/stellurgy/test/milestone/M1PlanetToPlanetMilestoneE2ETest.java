@@ -376,8 +376,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * station window — each sits behind a link above whose inversion fails first.</p>
      *
      * <p>red-witnessed: one inversion per rung, each red at its own rung with the earlier ones green.
-     * THE BUILD (2026-09-28) — the assembler's {@code VSIntegration.assembleTier2Ship} call
-     * ({@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleTier2Ship(world, shipStructure,}) skipped: the rung's helper link fails first, "the BUILD
+     * THE BUILD (2026-09-28, taken on the pre-2026-10-07 form that handed over a pasted snapshot) —
+     * the assembler's hand-over ({@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}) skipped: the rung's helper link fails first, "the BUILD
      * pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks"; the
      * rung's own ship count restates that link. THE CRYSTAL'S ADDRESSES —
      * {@code TileNavigationComputer.shipCrystal} reading an empty stack: "putting a memory crystal into

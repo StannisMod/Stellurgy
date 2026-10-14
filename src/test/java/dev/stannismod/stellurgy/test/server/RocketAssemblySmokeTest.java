@@ -85,14 +85,18 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * capacity for at least one type is non-zero — the StatsRocket invariants
      * the production launch-readiness check relies on.
      */
+    /**
+     * <p>red-witnessed: for the dry-mass verdict only (the others predate this branch — with
+     * {@code StatsRocket#getDryMass} at {@code return mass;} answering a dry mass of 0, fails "dry_mass_kg must be > 0", 2026-09-30.</p>
+     */
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");
         RocketInfo info = rocketInfo(entityId);
         assertTrue("thrust must be positive after assembling with 2 engines: " + info.raw(),
                 info.thrust > 0);
-        assertTrue("weight_no_fuel must be > 0 with 6 tanks + 2 engines + guidance: " + info.raw(),
-                info.weightNoFuel > 0);
+        assertTrue("dry_mass_kg must be > 0 with 6 tanks + 2 engines + guidance: " + info.raw(),
+                info.dryMassKg > 0);
         // At least one fuel type must have non-zero capacity (6 fuel tanks). The fuel types are the
         // registry's, so the reader is asked for the aggregate rather than for a type by name.
         assertTrue("aggregate fuel capacity across types must be > 0: " + info.raw(),

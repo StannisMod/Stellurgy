@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.event.ShipEvent;
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 import dev.stannismod.stellurgy.integration.vs.DeckHold;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.space.ShipAboardTag;
@@ -196,11 +196,11 @@ public abstract class MixinDeckHoldEvents {
 
     @Inject(method = "onShipGone", require = 1,
             at = @At(value = "INVOKE", target = "Ljava/util/Iterator;remove()V"))
-    private void stellurgyTest$endedShipGone(ShipEvent.ShipGoneEvent event, CallbackInfo ci) {
+    private void stellurgyTest$endedShipGone(ShipLifecycleEvent.ShipUnnamed event, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
         TestTrace.recordHere("deck_hold_ended",
-                "\"why\":\"shipGone\",\"ship\":\"" + TestTrace.json(String.valueOf(event.shipId))
-                        + "\",\"substrate\":\"" + TestTrace.json(String.valueOf(event.substrateId))
+                "\"why\":\"shipGone\",\"ship\":\"" + TestTrace.json(String.valueOf(event.durableId))
+                        + "\",\"substrate\":\"" + TestTrace.json(String.valueOf(event.shipUuid))
                         + "\"");
     }
 

@@ -34,6 +34,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *   <li>{@code ship_unloaded} — the HEAD of {@code unload()}: the chunk claim is about to be queued
  *       for unload (server) or dropped and its renderers killed (client). Recorded at HEAD so the
  *       ship's data is still readable. Payload: {@code vsShip}, {@code name}, {@code dim}.</li>
+ *   <li>{@code ship_pose_adopted} — see {@code stellurgyTest$poseAdopted}: a written transform taken
+ *       by the game tick.</li>
  * </ul>
  *
  * <p>Both are recorded through {@link TestTrace#recordHere}, so the side is the effective side of
@@ -67,6 +69,24 @@ public abstract class MixinPhysicsObjectEvents {
         TestTrace.recordHere("ship_loaded", "\"vsShip\":\"" + initial.getUuid() + "\",\"name\":\""
                 + TestTrace.json(initial.getName()) + "\",\"dim\":" + world.provider.getDimension()
                 + ",\"remote\":" + world.isRemote);
+    }
+
+    /**
+     * {@code ship_pose_adopted} — the game tick ADOPTED a transform written from outside (a rigid
+     * teleport): the one call in {@code onTick} that runs only inside its forced-transform branch. From
+     * here the tick and physics transforms both carry the written pose, so an unpark after this record
+     * integrates from the new pose and not the old one. The physics thread steps only unparked craft,
+     * so for a parked craft this is the whole of the adoption. Payload: {@code vsShip}, {@code dim},
+     * {@code y} (the pose adopted).
+     */
+    @Inject(method = "onTick", remap = false, require = 1, at = @At(value = "INVOKE",
+            target = "Lorg/valkyrienskies/mod/common/ships/ship_transform/ShipTransformationManager;"
+                    + "setPrevPhysicsTransform(Lorg/valkyrienskies/mod/common/ships/ship_transform/ShipTransform;)V"))
+    private void stellurgyTest$poseAdopted(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        ShipData ship = getShipData();
+        TestTrace.recordHere("ship_pose_adopted", "\"vsShip\":\"" + ship.getUuid() + "\",\"dim\":"
+                + getWorld().provider.getDimension() + ",\"y\":" + ship.getShipTransform().getPosY());
     }
 
     @Inject(method = "unload", at = @At("HEAD"), remap = false)

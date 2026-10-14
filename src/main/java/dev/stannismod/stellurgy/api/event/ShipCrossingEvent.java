@@ -25,13 +25,13 @@ import java.util.List;
  *       descent down.</li>
  * </ul>
  *
- * <h2>Why this is not a subclass of {@link ShipEvent.ShipLeftWorldEvent}</h2>
+ * <h2>Why this is not a subclass of {@link ShipLifecycleEvent.ShipDeparted}</h2>
  *
- * <p>That event is already posted for every departure, from the substrate REGISTRY's falling edge, by
- * the announcer that watches it. It answers a coarser question — "left here alive, as opposed to
+ * <p>That event is already posted for every departure, by the ship manager when the departed craft's
+ * registration in this world ends. It answers a coarser question — "left here alive, as opposed to
  * destroyed" — for a consumer that never sees a crossing. Making these its subclasses would post two
  * events for one departure to anyone listening on the base. They are a different observer of the same
- * moment: richer, and from inside the crossing rather than beside it.</p>
+ * moment: richer, and from inside the crossing rather than at the registry.</p>
  *
  * <h2>Every payload is total</h2>
  *
@@ -63,10 +63,10 @@ public class ShipCrossingEvent extends Event {
     public final World world;
     /** The ship's durable Stellurgy identity, or {@code null} for a craft that has none.
      *
-     *  <p>The substrate's own id is deliberately NOT carried. {@link ShipEvent} offers it as a
-     *  logging convenience; here it would have to be plumbed from the crossing service into three
-     *  controllers that do not otherwise hold it, to supply a value no subscriber can resolve
-     *  anything with. The durable id is the one Stellurgy's ledger and navigation are keyed on.</p> */
+     *  <p>The substrate's own id is deliberately NOT carried: it would have to be plumbed from the
+     *  crossing service into three controllers that do not otherwise hold it, to supply a value no
+     *  subscriber can resolve anything with. The durable id is the one Stellurgy's ledger and
+     *  navigation are keyed on.</p> */
     public final String shipId;
     /** Who was aboard when the crossing captured the crew. Empty, never null; never modified. */
     public final List<EntityPlayerMP> crew;

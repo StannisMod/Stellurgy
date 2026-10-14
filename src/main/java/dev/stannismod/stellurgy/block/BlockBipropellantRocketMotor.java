@@ -28,7 +28,19 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class BlockBipropellantRocketMotor extends BlockFullyRotatable implements IRocketEngine, IBrokenPartBlock {
+public class BlockBipropellantRocketMotor extends BlockFullyRotatable
+        implements IRocketEngine, IBrokenPartBlock, dev.stannismod.stellurgy.api.IShipActuatorBlock {
+
+    @Override
+    public void addActuators(World world, BlockPos pos, IBlockState state,
+                             List<dev.stannismod.stellurgy.ship.control.Actuator> out) {
+        ChemicalMotorActuators.add(world, pos, state, getThrust(world, pos), out);
+    }
+
+    @Override
+    public boolean isWorking(World world, BlockPos pos, IBlockState state) {
+        return ChemicalMotorActuators.working(world, pos);
+    }
 
     public BlockBipropellantRocketMotor(Material mat) {
         super(mat);
@@ -40,9 +52,10 @@ public class BlockBipropellantRocketMotor extends BlockFullyRotatable implements
         return false;
     }
 
+    /** Rated thrust, newtons. */
     @Override
     public int getThrust(World world, BlockPos pos) {
-        return 10;
+        return 490_500;
     }
 
     @Override

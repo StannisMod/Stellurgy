@@ -618,6 +618,23 @@ public final class Reply {
         return members == null ? new String[0] : valuesOf(members);
     }
 
+    /**
+     * Every KEY of a MAP-SHAPED object field ({@code "gases":{"N2":7800,"O2":2100}}), in the order the
+     * producer wrote them — the names {@link #objectValues} cannot give, for a caller that must act on
+     * each entry by its name (put a planet's gases back one by one).
+     *
+     * <p>Refuses when the reply carries no such object.</p>
+     */
+    public String[] objectKeys(String field) {
+        JsonObject members = requireObject("objectKeys", field);
+        String[] out = new String[members.entrySet().size()];
+        int i = 0;
+        for (java.util.Map.Entry<String, JsonElement> member : members.entrySet()) {
+            out[i++] = member.getKey();
+        }
+        return out;
+    }
+
     private static String[] valuesOf(JsonObject members) {
         String[] out = new String[members.entrySet().size()];
         int i = 0;

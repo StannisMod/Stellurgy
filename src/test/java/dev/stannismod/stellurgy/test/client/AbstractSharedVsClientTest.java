@@ -121,7 +121,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * be a literal {@code true} in the reply builder — it meant "the lookup found a ship and built a
      * report" and nothing about readiness, so every wait on it was a wait on nothing. Real readiness
      * is the conjunction the physics loop selects by, and it is now published as
-     * {@code ShipEvent.ShipLoadedEvent} and recorded off the bus as {@code ship_usable}.</p>
+     * {@code ShipLifecycleEvent.ShipUsable} and recorded off the bus as {@code ship_usable}.</p>
      *
      * <p>The {@code mark} is the one taken BEFORE the assembly — the same mark
      * {@link #awaitShipSpawned} uses. Both facts happen after it, in that order, and a mark taken
@@ -140,8 +140,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         // same value: `ship` is the craft's durable Stellurgy name, taken off its own record, and `vsShip`
         // is the substrate's opaque key — minted in different places, and a caller arrives holding
         // whichever its own chain produced. The comment here claimed until 2026-09-17 that they were
-        // "the same value (one ship, one identity)"; `ShipLoadedAnnouncer` posts
-        // `ShipLoadedEvent(world, durable, substrateKey)` from two separate sources, so they are not.
+        // "the same value (one ship, one identity)"; the usable event carries the durable id and the
+        // physics uuid as two separate fields, read off the record in two places, so they are not.
         //
         // Over the CHAIN, not the first record: a load is undone by an unload, and where ships may
         // unload (a scenario that turned the test server's permanent loading off) the load recorded
@@ -545,6 +545,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         // OWN pose and the craft is back on its pad. Thirty ticks of the hull's world clock is the
         // stretch this helper has always given it; the read below, taken after the craft has flown
         // unparked, is what reports a stretch that was too short.
+        // SERVER-ONLY: the transform is adopted by the server's physics object; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
         String unparked = exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
@@ -552,6 +553,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                 Reply.of(unparked).ok());
         // WINDOW: physics running unparked — a craft whose adoption did not take is back at its pad
         // here, and the gate below names where it was sent and where it is.
+        // SERVER-ONLY: the craft flies on the server's physics; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);
 
         String after = shipInfoById(dim, shipId);

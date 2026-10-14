@@ -150,15 +150,22 @@ public final class ShipIdentity {
      * caller that asks the instant the assembler returns — or a crossing reports — is asking before
      * the hull exists on the far side of the substrate's spawn queue.
      *
-     * <p><b>A link, read first.</b> The mark is taken BEFORE the one read, so a craft that is already
-     * there is answered at once and a craft that is not is waited for on production's own
-     * announcement of it, {@code ship_usable}, which the read cannot have missed. The wait is over
+     * <p><b>A link, read first.</b> The mark is taken BEFORE the reads, so a craft that is already
+     * usable is answered at once and a craft that is not is waited for on production's own
+     * announcement of it, {@code ship_usable}, which the reads cannot have missed. The wait is over
      * the CHAIN ({@link #endsUsable}): a load a later unload undid does not count. Then the id is
      * read once more through the refusing {@link #physicsIdOf} — never {@code null}, which
      * downstream turns back into a guess.</p>
      *
-     * <p>It replaced a bounded retry of the same read, stepped on whatever clock the caller handed
-     * it; the budget now counts ticks of the caller's own log, the same total.</p>
+     * <p><b>The read-first branch answers on {@code ready}, not on the name being found.</b> A name
+     * resolves as soon as the craft is REGISTERED, and a registered craft whose physics has not
+     * started sits exactly as still as a held or a weightless one — so a caller whose next step
+     * reads a pose or a velocity would measure a craft that cannot move yet. {@code ready} in {@code
+     * vs ship-info} is the same pair of gates the ship manager announces {@code ship_usable} on, read
+     * between ticks, so the two cannot disagree about which side of the edge the craft is on.
+     * <i>Measured 2026-09-29: a cell scenario awaited through the name alone opened its stillness
+     * window on {@code ready:false} and stayed green with a planet's gravity forced into the cell
+     * (sank 1.48 in 76 ticks); the same break on a craft awaited as usable sank 74 blocks.</i></p>
      *
      * @param serverLog the SERVER's event log, where {@code ship_usable} is recorded
      */
@@ -169,15 +176,19 @@ public final class ShipIdentity {
         // absence is the answer here and only here: "no hull carries that name yet" is the branch
         // that waits, and the wait's own refusing read below is what reports it if it never comes.
         String hullId = Reply.of("stellurgytest vs ship-uuid", reply).textOr("id", null);
+        String info = "(not asked: no hull carries the name yet)";
         if (Reply.of(reply).boolOr("found", false) && hullId != null) {
-            return hullId;
+            info = probe.exec("stellurgytest vs ship-info " + dim + " id " + hullId);
+            if (ShipInfo.isLoaded(info) && ShipInfo.of(info).ready) {
+                return hullId;
+            }
         }
         serverLog.awaitMatching(mark, "ship_usable",
                 usable -> endsUsable(usable, serverLog.since(mark, "ship_unloaded"), durableShipId, dim),
                 "carrying ship " + durableShipId + " in dim " + dim + ", later than every unload of it",
                 "ARRANGEMENT: this scenario's own craft " + durableShipId + " must become usable in"
-                        + " dim " + dim + ", or nothing below can be addressed to it (the read before"
-                        + " the wait said: " + reply + ")", tickBudget);
+                        + " dim " + dim + ", or nothing below can be addressed to it (the reads before"
+                        + " the wait said: " + reply + " / " + info + ")", tickBudget);
         return physicsIdOf(probe, dim, durableShipId);
     }
 

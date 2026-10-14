@@ -6,6 +6,7 @@ import org.junit.runners.MethodSorters;
 
 
 import dev.stannismod.stellurgy.test.SeatMount;
+import dev.stannismod.stellurgy.test.SeatCarry;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.TransitSetup;
 import dev.stannismod.stellurgy.test.Reply;
@@ -88,10 +89,20 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
     private static final double TELEPORT_LANDED_WITHIN_BLOCKS = 200;
 
     /**
-     * How far the CLIENT's rendered rider may sit from the SERVER's ship climb, in blocks — the
-     * test's own replication tolerance, under a craft's own height.
+     * How far the CLIENT may move a seated rider (or his seat) away from where it put him relative
+     * to the ship it shows, over a climb, in blocks — the largest change in that offset, read tick by
+     * tick off one record ({@link SeatCarry#riderDrift}). The test's own: a glued rider holds the
+     * offset exactly, and three blocks is under a craft's own height. It used to bound the client
+     * rider's climb against the SERVER ship's, read six client ticks apart; the number is kept for a
+     * quantity that no longer depends on when it was read.
      */
     private static final double RIDER_TRACKS_SHIP_BLOCKS = 3.0;
+
+    /**
+     * How long the client is given to SHOW a climb the server has already performed, in ticks — a
+     * deadline on pose replication of a move that happened, never a settle.
+     */
+    private static final int SHOWN_CLIMB_LINK_BUDGET_TICKS = 200;
 
     @Override
     protected String subsystem() {
@@ -463,8 +474,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // marks are taken here because a climb leg has no earlier one of its own.
         long climbClientMark = clientEvents().mark();
         long climbServerMark = serverEvents().mark();
-        double riderYBefore = requireStillAboard("before the " + label + " climb leg is driven",
-                climbClientMark, climbServerMark).get("posY").getAsDouble();
+        requireStillAboard("before the " + label + " climb leg is driven", climbClientMark,
+                climbServerMark);
         // EXPERIMENT: a dose of thrust from the key's arrival — which is a link inside it, so a key
         // that never reached the computer is not read as a ship that would not climb — and one
         // reading of the ship once the release has arrived too.
@@ -474,23 +485,40 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         assertTrue("[" + label + "] " + PILOT_THRUST_DOSE_TICKS + " ticks of the vertical-up key must"
                 + " lift the ship (yBefore=" + yBefore + " yAfter=" + yAfter + ")",
                 yAfter - yBefore > 1.0);
-        // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
-        // ship by more than RIDER_TRACKING_TOLERANCE at that offset is the failure. The tolerance is
-        // the test's own and was not measured at this offset.
-        bot().waitWorldTicks(6);
-        double serverDelta = shipY() - yBefore;
         // Through the guard for the same reason as the read before the climb: a pilot who came adrift
-        // DURING the leg is the most interesting way this can fail, and a bare read turns it into a
-        // NullPointerException that names neither the leg nor the moment.
-        double riderDelta = requireStillAboard("after the " + label + " climb leg was driven",
-                climbClientMark, climbServerMark).get("posY").getAsDouble() - riderYBefore;
+        // DURING the leg is the most interesting way this can fail, and the carry record below says
+        // nothing about a rider the client stopped carrying — it writes nothing for him at all.
+        requireStillAboard("after the " + label + " climb leg was driven", climbClientMark,
+                climbServerMark);
+        // The rider and the ship he rides, as the CLIENT placed them in the same tick, up to the
+        // record in which it has shown the ship climbing more than a block — a link, so the verdict
+        // does not depend on how long after the cut it is read. A transform that lost precision this
+        // far out moves the rider off the offset his seat holds on the craft.
+        SeatCarry carry = SeatCarry.awaitShownClimb(clientEvents(), climbClientMark, shipId, 1.0,
+                "[" + label + "] the client must show the climb the server performed, carrying its"
+                        + " seated pilot", SHOWN_CLIMB_LINK_BUDGET_TICKS);
         // Third witness on divergence: the SERVER-side player position separates "the seat glue died
-        // server-side" (server player static too) from "the client stopped tracking" (server player
-        // climbed, client did not).
+        // server-side" (server player static too) from "the client stopped carrying him" (server
+        // player climbed, client did not).
         String serverPlayer = exec("stellurgytest player health");
-        assertTrue("[" + label + "] the CLIENT rider must track the server ship's climb (client="
-                + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer,
-                Math.abs(riderDelta - serverDelta) < RIDER_TRACKS_SHIP_BLOCKS);
+        assertTrue("[" + label + "] the CLIENT must carry the rider with the ship it shows (" + carry
+                + "); server player: " + serverPlayer + " | " + carry.raw,
+                carry.riderClimb > 1.0 && carry.riderDrift < RIDER_TRACKS_SHIP_BLOCKS
+                        && carry.seatDrift < RIDER_TRACKS_SHIP_BLOCKS);
+
+        // LET GO OF THE CRUISE. Releasing the key keeps the cruise the key ramped — Flight Assist
+        // holds it, which is what the setpoint is for — so without this the craft goes on climbing
+        // into whatever the next leg does, and a teleport's "rider arrives WITH his ship" then
+        // compares a server read of a moving craft against a client read taken ticks later. Measured
+        // 2026-09-30 on a hull that tracks its ramp: velY 12.1 blocks/s after the teleport, the
+        // rider 3.0 blocks "ahead" of a ship read three calls earlier. Asserted on the computer's
+        // read-back, not on the command having been delivered.
+        String stopped = exec("stellurgytest vs ff-cruise-by-id " + cellDim + " " + shipId + " 0 0 0");
+        Reply held = Reply.of(stopped);
+        scenario().requireArranged("[" + label + "] the cruise the climb left behind must be let go"
+                        + " before the next leg, or that leg is flown by a climbing craft: " + stopped,
+                held.bool("afcResolved") && held.number("cruiseForward") == 0.0
+                        && held.number("cruiseRight") == 0.0 && held.number("cruiseUp") == 0.0);
     }
 
     // ─── extreme |X|: far from the origin, in the overworld ─────────────────────────────────────
@@ -579,6 +607,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 }
                 // Park him back near the origin so the next case starts from a known place.
                 exec("stellurgytest player far-tp 0.5 200 0.5");
+                // SERVER-ONLY: a server-side park between cases; the next case reads the server's own teleport reply.
                 dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
             }
 
@@ -661,22 +690,17 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                     continue;
                 }
 
-                // Put the pilot on the ship — the ONLY relocation in the leg. The mark precedes it:
-                // his arrival is what loads the ship.
-                long loadMark = rungLog.markInstrumented();
+                // Put the pilot on the ship — the ONLY relocation in the leg: his arrival is what
+                // loads the ship.
                 String delivery = deliverToFarRung(x);
                 if (delivery != null) {
                     inconclusive.add("x=" + x + " " + delivery);
                     continue;
                 }
-                String farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                        this::exec, rungLog, 0, durableName, 200);
+                String farShipId;
                 try {
-                    rungLog.awaitMatching(loadMark, "ship_usable",
-                            usable -> dev.stannismod.stellurgy.test.ShipIdentity.endsUsable(usable,
-                                    rungLog.since(loadMark, "ship_unloaded"), farShipId, 0),
-                            "carrying ship " + farShipId + " in dim 0, later than every unload of it",
-                            "the rung's ship must LOAD with the client present", 200);
+                    farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
+                            this::exec, rungLog, 0, durableName, 200);
                 } catch (AssertionError neverLoaded) {
                     verdicts.put(x, "the ship never LOADED with the client present: "
                             + farOneLine(neverLoaded.getMessage()));
@@ -823,23 +847,31 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * @return {@code "OK ..."} with the numbers, or the reason it failed
      */
     private String farClimbLeg(String farShipId, double yBefore) throws Exception {
-        double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
+        long carryMark = clientEvents().mark();
         PilotThrust.climb(bot(), serverEvents(), serverClient(), 0, PilotThrust.DOSE_TICKS,
                 "the spike pilot's held vertical key must reach his flight computer");
-        // EXPERIMENT: the comparison is DEFINED six client ticks after the cut. The tolerance is the
-        // spike's own and was not measured at this offset.
-        bot().waitWorldTicks(6);
         double serverDelta = farShipY(farShipId) - yBefore;
-        double riderDelta = bot().reportRidingEntity().get("posY").getAsDouble() - riderYBefore;
-        String numbers = "serverLift=" + farFmt(serverDelta) + " riderLift=" + farFmt(riderDelta)
-                + " divergence=" + farFmt(Math.abs(riderDelta - serverDelta));
         if (!(serverDelta > 1.0d)) {
             // A third witness separates "the seat glue died" from "the ship would not move".
-            return "the vertical-up key did not lift the ship (" + numbers + "); server player: "
-                    + farOneLine(exec("stellurgytest player health"));
+            return "the vertical-up key did not lift the ship (serverLift=" + farFmt(serverDelta)
+                    + "); server player: " + farOneLine(exec("stellurgytest player health"));
         }
-        if (Math.abs(riderDelta - serverDelta) >= 3.0d) {
-            return "the CLIENT rider did not track the server ship (" + numbers + ")";
+        // The rider and the ship he rides, as the CLIENT placed them in the same tick, up to the
+        // record in which it has shown the ship climbing more than a block — a link, so the verdict
+        // does not depend on how long after the cut it is read.
+        SeatCarry carry;
+        try {
+            carry = SeatCarry.awaitShownClimb(clientEvents(), carryMark, farShipId, 1.0,
+                    "the client must show the climb the server performed, carrying its seated pilot",
+                    SHOWN_CLIMB_LINK_BUDGET_TICKS);
+        } catch (AssertionError neverShown) {
+            return "the CLIENT never showed the ship climbing with its rider (serverLift="
+                    + farFmt(serverDelta) + "): " + farOneLine(neverShown.getMessage());
+        }
+        String numbers = "serverLift=" + farFmt(serverDelta) + " " + carry;
+        if (!(carry.riderClimb > 1.0d) || carry.riderDrift >= RIDER_TRACKS_SHIP_BLOCKS
+                || carry.seatDrift >= RIDER_TRACKS_SHIP_BLOCKS) {
+            return "the CLIENT did not carry the rider with the ship it shows (" + numbers + ")";
         }
         return "OK " + numbers;
     }

@@ -41,26 +41,13 @@ import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 @Mixin(value = PhysicsCalculations.class, remap = false)
 public abstract class MixinPhysicsCalculationsMotionSample {
 
-    /**
-     * The flight computer's linear thrust authority, blocks/s² — a COPY of
-     * {@code MixinTileAdvancedFlightComputer.AR_MAX_LINEAR_ACCEL}, which a mixin class cannot
-     * expose. It decides only the {@code clamped} column; a drift costs that column, never a sample.
-     */
-    @Unique
-    private static final double stellurgyTest$MAX_LINEAR_ACCEL = 40.0;
-
     /** How many forces this step's controllers have applied so far. Physics thread only. */
     @Unique
     private int stellurgyTest$forcesApplied;
-    /** The magnitude of the last applied force. Physics thread only. */
-    @Unique
-    private double stellurgyTest$lastForce;
 
     @Inject(method = "addForceAndTorque", at = @At("HEAD"))
     private void stellurgyTest$noteForce(Vector3dc force, Vector3dc torque, CallbackInfo ci) {
         stellurgyTest$forcesApplied++;
-        stellurgyTest$lastForce = Math.sqrt(force.x() * force.x() + force.y() * force.y()
-                + force.z() * force.z());
     }
 
     @Redirect(method = "calculateForces",
@@ -86,11 +73,15 @@ public abstract class MixinPhysicsCalculationsMotionSample {
         // instrument alone. Measured on the first calibration run: median step 0.0, p95 2.0.
         ShipTransform pose = physo.getShipTransformationManager().getCurrentPhysicsTransform();
         Vector3d vNow = calc.getLinearVelocity();
-        double[] vCmd = self.probeCommandActive ? self.probeVelocity : self.commandedVelocity;
+        // Each reference read once, as the controller reads them.
+        dev.stannismod.stellurgy.ship.control.FlightCommand command = self.probeCommand;
+        if (command == null) {
+            command = self.flightCommand;
+        }
+        double[] vCmd = command == null ? null : command.velocity();
         double cmdSpeed = vCmd == null || vCmd.length < 3 ? 0.0
                 : Math.sqrt(vCmd[0] * vCmd[0] + vCmd[1] * vCmd[1] + vCmd[2] * vCmd[2]);
         double mass = calc.getMass();
-        double accelMag = mass <= 0.0 ? 0.0 : stellurgyTest$lastForce / mass;
         BlockPos at = self.getPos();
         SideTrace.of(physo.getWorld()).motion().phys(
                 MotionTrace.keyOf(physo.getWorld().provider.getDimension(),
@@ -111,9 +102,10 @@ public abstract class MixinPhysicsCalculationsMotionSample {
                 dt, pose.getPosX(), pose.getPosY(), pose.getPosZ(),
                 Math.sqrt(vNow.x * vNow.x + vNow.y * vNow.y + vNow.z * vNow.z),
                 cmdSpeed, mass,
-                // "Clamped" is read back off the acceleration that was actually applied rather than
-                // reported by the clamp itself: at the authority ceiling the controller is no longer
-                // tracking its command, and that is the observable fact worth recording.
-                accelMag >= stellurgyTest$MAX_LINEAR_ACCEL - 1.0e-6);
+                // "Clamped": the hull delivered less than the flight law asked for, as the controller
+                // itself judged it this step. At its authority it is no longer tracking its command,
+                // which is the fact worth recording; there is no fixed ceiling to compare against,
+                // because the authority is whatever the hull's actuators sum to.
+                self.isDeliveringLessThanAsked());
     }
 }

@@ -92,6 +92,7 @@ final class PilotThrust {
                     seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", String.valueOf(dim)),
                     "with input = set in dim " + dim, what, LINK_TICKS);
             // STIMULUS: the dose under the held key, counted from its arrival — see DOSE_TICKS.
+            // SERVER-ONLY: the dose is thrust steps the flight computer integrates on the hull's world, counted from the key's linked arrival; whatever a caller reads afterwards is its own window.
             GameTicks.advanceWorld(server, dim, thrustTicks);
         } catch (Exception | AssertionError failed) {
             bot.releaseKey(Keyboard.KEY_R);
