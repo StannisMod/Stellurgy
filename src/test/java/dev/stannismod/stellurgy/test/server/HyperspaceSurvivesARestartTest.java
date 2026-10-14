@@ -218,11 +218,15 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         requireArranged("the jump must still be in flight when the server goes down, or"
                 + " nothing is parked to survive anything: " + tick, inTransit >= 1);
 
-        // THE CONTROL, and it is not optional: if no ship reached hyperspace on this boot, "no ship
-        // after the restart" would be the arrangement's own answer rather than the product's.
-        int parkedBefore = readIntOr(envelope(harness.client().read("stellurgytest vs ship-count-all " + hyperDimBefore)), "count", -1);
-        requireArranged("a ship must actually be registered in hyperspace (dim "
-                + hyperDimBefore + ") before the restart - found " + parkedBefore, parkedBefore >= 1);
+        // THE CONTROL, and it is not optional: if this craft did not reach hyperspace on this boot,
+        // "not there after the restart" would be the arrangement's own answer rather than the
+        // product's. Asked by the craft's durable name, the identity a crossing preserves.
+        String durable = setup.requireDurableId();
+        String parkedBefore = envelope(harness.client().read("stellurgytest vs ship-uuid " + hyperDimBefore
+                + " " + durable));
+        requireArranged("this scenario's craft " + durable + " must actually be registered in hyperspace"
+                + " (dim " + hyperDimBefore + ") before the restart: " + parkedBefore,
+                Reply.of(parkedBefore).bool("found"));
 
         // Hand the jump to PRODUCTION, so what crosses the restart is a claimed jump rather than a
         // hull sitting in a lane. It is the arrangement's job because the probe stack builds its own
@@ -267,14 +271,15 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         TransitSetup.piloted(c -> envelope(harness.client().arrange(c))); // the probe stack must come up on boot 2, or nothing below reads anything
         int hyperDimAfter = TransitStatus.read(c -> envelope(harness.client().arrange(c))).hyperDim;
 
-        int parkedAfter = readIntOr(envelope(harness.client().read("stellurgytest vs ship-count-all " + hyperDimAfter)), "count", -1);
-        assertEquals("a ship parked in hyperspace must still be parked in hyperspace after a real"
+        String parkedAfter = envelope(harness.client().read("stellurgytest vs ship-uuid " + hyperDimAfter
+                + " " + durable));
+        assertTrue("a ship parked in hyperspace must still be parked in hyperspace after a real"
                 + " restart - that is what makes a jump something a restart is survivable BY."
                 + " Hyperspace was dim " + hyperDimBefore + " on boot 1 and dim " + hyperDimAfter
-                + " on boot 2, holding " + parkedBefore + " ship(s) before and " + parkedAfter
-                + " after.\n  registries on disk after boot 1: " + savedRegistries
+                + " on boot 2; craft " + durable + " before: " + parkedBefore + ", after: " + parkedAfter
+                + "\n  registries on disk after boot 1: " + savedRegistries
                 + "\n  boot 1 serialisations: " + boot1Serialisations,
-                parkedBefore, parkedAfter);
+                Reply.of(parkedAfter).bool("found"));
     }
 
     /**

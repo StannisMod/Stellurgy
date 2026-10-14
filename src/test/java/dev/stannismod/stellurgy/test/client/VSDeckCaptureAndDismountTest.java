@@ -2105,9 +2105,10 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // that merely went up is answered by any neighbour that assembled one in the same window.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
 
@@ -2175,7 +2176,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 Reply.of(arrange("stellurgytest player mount-entity " + dummyId).raw()).bool("mounted"));
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. The site stands
@@ -2186,8 +2187,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // HEIGHT 24 is the ENVELOPE, not the hull: ~10 blocks of hull, a deck on top of it, a body
         // standing (~2) and jumping (~1.25) there, and the room the scenarios below dismount, drop
         // and roll in. A check sized to what is BUILT is green in exactly the case that failed.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
-                "the hull, the deck a pilot dismounts onto, and the air he jumps into above it"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
+                "the hull, the deck a pilot dismounts onto, and the air he jumps into above it");
     }
 
     /** This scenario's ship, asked by identity, as the probe answered it. */

@@ -252,18 +252,19 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(originDim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleBuilt(site, c -> act(c).raw(), dev.stannismod.stellurgy.test.RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 2, 16,
-                "the craft whose flight smoothness is measured across the jump"));
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
-                waitForLoadedShip(originDim) >= 1);
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16, "the craft whose flight smoothness is measured across the jump");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The ship's IDENTITY, from the assembler that minted its durable name. This used to be a
         // bounded lookup at the build site, defended as "the one moment a positional lookup is
         // defensible" — but a bound is a statement about DISTANCE and ships do not collide, so it
         // says nothing about how many hulls are in the box. The name is not a distance.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        disposeOfShipAtEnd(durableShipId);
+        // Loaded in its cell before the jump is flown: the link is this craft's own `ship_usable`.
         String shipId = awaitPhysicsId(originDim, durableShipId);
         // Name the craft to the transit stack, by its durable id: a jump begun for a ship the stack
         // cannot name captures nobody (measured 2026-09-05 — the pilot arrived in nothing).
@@ -986,15 +987,6 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // client's own mount record is the thing being waited for, and it cannot be arrived at too
         // early off a mark taken before the attempt.
         ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
-    }
-
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
-                "this scenario's craft must be loaded before the jump is flown");
     }
 
     private static boolean readBool(String json, String key) {

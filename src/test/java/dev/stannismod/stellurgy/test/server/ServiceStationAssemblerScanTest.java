@@ -2,7 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -46,8 +47,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String PARTS_COUNT = "partsToRepairCount";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
     private static final String ASM_COUNT = "assemblersCount";
 
     /**
@@ -151,16 +158,10 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away. The
         // halo is 7 rather than the default 2 because this scenario stands a service station beside
         // the craft and the old fill reached `baseX+12`; the volume has to cover both.
-        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ_PAD),
-                c -> act(c).raw(), RocketFixture.placeAt(
-                FixtureSite.openAir(0, baseX, CZ_PAD),
-                c -> arrange(c).raw(), "simple", 7, 10,
-                "the craft the service station scans, and the ground the station stands on"));
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
-        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
+        // The rocket is the one the press's own `rocket_born` record names.
+        int rocketId = rockets.assembleAt(FixtureSite.openAir(0, baseX, CZ_PAD), c -> act(c).raw(),
+                "simple", 7, 10,
+                "the craft the service station scans, and the ground the station stands on");
 
         String inject = arrange("stellurgytest infra inject-broken-part " + rocketId + " 5").raw();
         assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());

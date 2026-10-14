@@ -71,8 +71,15 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
+    /** The physics id of the craft this scenario built; driving it keeps the id. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
 
     /**
@@ -111,45 +118,30 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // open a window the record had already passed through, and the wait would expire on a ship
         // that had been loaded for seconds.
         long loadMark = events.mark();
-        String assemble = assembleFixture(SITE, VARIANT);
-        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipBirth birth = assembleFixture(SITE, VARIANT, loadMark);
+        builtShip = birth.physicsId;
+        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
-        // 1) The ship must be in the queryable registry — READ, not waited for.
-        //
-        // The registration IS deferred: `queueShipSpawn` only adds to a spawn queue, which the
-        // world drains on its next tick. But nothing here can observe the pre-drain state, because
-        // every probe command is itself drained on the server thread and the server holds the task
-        // queue's monitor across a whole drain — so two consecutive commands are separated by a
-        // complete pass by construction. The wait that used to stand here spent its budget only
-        // when the answer was going to be no anyway.
-        //
-        // (The comment this replaces said VS relocates the blocks "on its own thread". It does not:
-        // `queueShipSpawn` calls `enforceGameThread`.)
-        int all = shipCount("ship-count-all");
-        assertTrue("assembly must create a VS ship in the queryable registry (all=" + all + ")",
-                all >= 1);
+        // 1) The ship must be in the queryable registry: its ASSEMBLED naming (awaited by the
+        //    assembly above) names it, and the registry is asked about THAT id.
+        String registered = read("stellurgytest vs ship-registered 0 " + birth.physicsId).raw();
+        assertTrue("assembly must create a VS ship in the queryable registry: " + registered,
+                Reply.of(registered).bool("registered"));
 
         // 2) A headless server has no player near the ship to auto-load it, so it stays
-        //    unloaded/dormant. Force it loaded + physics-enabled (a nearby client does
+        //    unloaded/dormant. Force THIS ship loaded + physics-enabled (a nearby client does
         //    this itself in real play).
         //
-        //    The assertion is that the ship IS loaded afterwards, not that a load was REQUESTED.
-        //    Those came apart on 2026-09-16: a test server now holds its ships loaded, so nothing
-        //    needs requesting and `requested:0` is the honest answer — which the old pin read as a
-        //    failure. `requested` says what this call had to do; `alreadyLoaded` says what it found
-        //    done. Either way the postcondition is one ship loaded in this world.
-        String load = arrange("stellurgytest vs load-ships 0").raw();
-        assertTrue("load-ships must account for the ship, either as a queued load or as one already"
-                + " loaded: " + load,
-                (Reply.of(load).integer("requested") == 1) || (Reply.of(load).integer("alreadyLoaded") == 1));
+        //    The assertion is that the ship IS loaded afterwards, not that a load was REQUESTED: a
+        //    test server holds its ships loaded, so nothing may need requesting. `found` says the
+        //    world registers the ship the load was asked for.
+        String load = arrange("stellurgytest vs load-ship 0 " + birth.physicsId).raw();
+        assertTrue("load-ship must find the ship this assembly named: " + load,
+                Reply.of(load).bool("found"));
 
-        // 3) The ship's NAME, from the assembler that minted it, and then its position asked BY that
-        //    name. The identity used to be re-derived here from a bounded lookup at the build spot,
-        //    defended as "provably the only one there" — a premise about this fixture rather than
-        //    about the lookup, and the build site is in a world every server-tier class shares.
-        final String[] shipId = {ShipIdentity.physicsIdOf(c -> read(c).raw(), 0,
-                ShipIdentity.nameFromAssembly(assemble))};
+        // 3) The ship's physics id, as its own naming announced it, and its position asked BY that id.
+        final String[] shipId = {birth.physicsId};
         // Linked on the physics object's own load, which is what "the ship became loaded" MEANS:
         // `ship_loaded` is written from the PhysicsObject constructor and carries the substrate's
         // id, so this names THIS hull rather than counting how many are loaded in the dimension.
@@ -160,7 +152,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String loadedInfo = read("stellurgytest vs ship-info 0 id " + shipId[0]).raw();
         double zBefore = ShipInfo.of(loadedInfo).z;
         assertTrue("the substrate announced this hull loaded, so it must have a pose to report: "
-                        + loadedInfo + ", all=" + all,
+                        + loadedInfo,
                 !Double.isNaN(zBefore));
 
         // CONTROL, and the reason this class was rewritten: a raw velocity SETPOINT does not move a
@@ -203,13 +195,11 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
                 zAfter - zAfterSetpoint > requiredDisplacement);
     }
 
-    private int shipCount(String sub) throws Exception {
-        Reply mReply = Reply.of(read("stellurgytest vs " + sub + " 0").raw());
-        return mReply.has("count") ? mReply.integer("count") : -1;
-    }
-
-    /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */
-    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+    /**
+     * Place the fixture on a pad and run scan+assemble; answers the ship the press made, read off its
+     * records since {@code mark} (taken BEFORE this call).
+     */
+    private ShipBirth assembleFixture(FixtureSite site, String variant, long mark) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and DRIVEN in is EMPTY. The site stands in open
@@ -223,6 +213,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
                 bz = bp[2];
         String assemble = act("stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz).raw();
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-        return assemble;
+        return ShipBirth.ofPress(events, mark, site.dim, bp, assemble, LOAD_TICKS,
+                "the craft whose drive is commanded");
     }
 }

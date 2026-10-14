@@ -46,8 +46,10 @@ import static org.junit.Assert.assertTrue;
  *       independent" is a belief rather than a property. {@link #enforceDeterministicOrder} fails
  *       loudly rather than letting a subclass run in an undefined order.</li>
  *   <li><b>Stay inside {@link #plot()}.</b> Each scenario is handed its own 64-block patch, never
- *       recycled. A scenario that asks a GLOBAL question ({@code stellurgytest rocket list},
- *       {@code stellurgytest station list}) must narrow the answer with {@link Plot#contains}.</li>
+ *       recycled. A scenario that asks a GLOBAL question ({@code stellurgytest station list}) must
+ *       narrow the answer with {@link Plot#contains}. Crafts are never asked about globally: a
+ *       scenario holds the id of every craft it built and disposes of each by that id before it
+ *       ends, and the scope fails a scenario that leaves one ({@code CraftCensus}).</li>
  *   <li><b>Declare the phase</b> as it goes, through {@link #scenario()} — that is what lets a
  *       failure name the broken system without anyone opening this file.</li>
  *   <li><b>No un-restored global mutation.</b> Atmosphere density and weather are shareable only if
@@ -296,6 +298,107 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         ensureHarnessBooted();
         failFastWhenTheGroupIsAlreadyDown();
         resetBetweenScenarios();
+        // Refusing rather than asserting, as every mark this preparation takes: a recorder that is
+        // not up is a harness gap, and it fails only the scenario that then declares a craft.
+        craftLogMark = serverEvents().markIfInstrumented();
+    }
+
+    // ── the crafts this scenario built, and their disposal by id ─────────────
+
+    /**
+     * The ships this scenario declared its own, each by whichever id it holds — the physics id or the
+     * durable one. Per INSTANCE, and JUnit makes one instance per scenario, so it is this scenario's.
+     */
+    private final java.util.List<String> ownShips = new java.util.ArrayList<>();
+    /** The rocket entities this scenario declared its own, by entity id. */
+    private final java.util.List<Integer> ownRockets = new java.util.ArrayList<>();
+    /** The server log's mark when this scenario began: every record of its crafts' lives is later. */
+    private Events.MarkOrWhyNot craftLogMark;
+
+    /**
+     * Declare {@code shipId} — the physics id, or the durable id — a ship THIS scenario built, so it is
+     * disposed of when the scenario ends. Call it as soon as the id is known, before anything that can
+     * fail: a scenario that fails half way still owes its world back.
+     *
+     * <p>A ship that CROSSED is followed to where it is: its {@code ship_lifecycle} records since the
+     * scenario began carry the physics id and the durable id together, so the craft's later
+     * registrations in other worlds are the same vessel's, reached from the id declared here and from
+     * nothing else.</p>
+     */
+    protected final void disposeOfShipAtEnd(String shipId) {
+        ownShips.add(shipId);
+    }
+
+    /**
+     * Declare the rocket entity {@code entityId} one THIS scenario built, so it is removed when the
+     * scenario ends. Its id is the one its {@code rocket_born} record named.
+     */
+    protected final void disposeOfRocketAtEnd(int entityId) {
+        ownRockets.add(entityId);
+    }
+
+    /**
+     * The scenario's own crafts go, each by its id, before the scenario ends — the scope then checks
+     * that the server holds none ({@code CraftCensus}), so a craft missed here fails THIS scenario.
+     *
+     * <p>A ship is disposed of in every world where it is still REGISTERED: named there, and not
+     * since DESTROYED there or DEPARTED from there (a departed craft stands in its destination under
+     * the PASTED record there). An UNLOADED ship is still registered and is disposed of too. A vessel
+     * already gone — destroyed by the scenario itself, say — is not touched.</p>
+     */
+    @org.junit.After
+    public final void disposeOfOwnCrafts() throws Exception {
+        if (shared == null || shared.harnessDead || (ownShips.isEmpty() && ownRockets.isEmpty())) {
+            return;
+        }
+        Events.Probe arrangeProbe = c -> arrange(c).raw();
+        for (int rocket : ownRockets) {
+            Disposal.rocket(arrangeProbe, rocket);
+        }
+        if (ownShips.isEmpty()) {
+            return;
+        }
+        if (craftLogMark == null || !craftLogMark.usable()) {
+            throw new AssertionError("this scenario declared ships " + ownShips + " and they cannot be"
+                    + " followed to where they are: the server log was not usable when the scenario"
+                    + " began (" + (craftLogMark == null ? "no mark was taken" : craftLogMark.refusal)
+                    + "). The scope's census will find whatever is left.");
+        }
+        java.util.List<String> lives = Events.records(serverEvents().since(craftLogMark.seq, "ship_lifecycle"));
+        java.util.Set<String> vessel = new java.util.HashSet<>(ownShips);
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (String life : lives) {
+                String ship = Events.text(life, "ship");
+                String durable = Events.text(life, "durable");
+                if (vessel.contains(ship) || (durable != null && vessel.contains(durable))) {
+                    grew |= vessel.add(ship);
+                    grew |= durable != null && vessel.add(durable);
+                }
+            }
+        }
+        // Per WORLD: one identity may be registered in two worlds across a crossing, and the order in
+        // which the two worlds announce their edges is not the order of the crossing.
+        java.util.Map<String, String[]> standing = new java.util.LinkedHashMap<>();
+        for (String life : lives) {
+            String ship = Events.text(life, "ship");
+            if (!vessel.contains(ship)) {
+                continue;
+            }
+            String dim = Events.text(life, "dim");
+            String cause = Events.text(life, "cause");
+            if ("named".equals(Events.text(life, "edge"))) {
+                standing.put(ship + "@" + dim, new String[]{dim, ship});
+            } else if ("DESTROYED".equals(cause) || "DEPARTED".equals(cause)) {
+                // UNLOADED is not among them: an unloaded ship is still registered in that world,
+                // and the substrate's registry sweep collects a finished one there all the same.
+                standing.remove(ship + "@" + dim);
+            }
+        }
+        for (String[] ship : standing.values()) {
+            Disposal.ship(arrangeProbe, serverEvents(), Integer.parseInt(ship[0]), ship[1]);
+        }
     }
 
     private void enforceDeterministicOrder() {
@@ -674,25 +777,11 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
             advanceServerAndClient(5);
         }
         // WHO OWNS THIS BODY, asked of the server on a scenario that has already lost its verdict —
-        // so the chat markers these commands echo can no longer disturb anything.
-        //
-        // Three questions, and the first two ask about different PLACES on purpose. A ship at the
-        // PLOT would mean the teleport dropped the body into geometry and the physics mod ejected it.
-        // A ship where the BODY actually is means the opposite and is far worse: the body is being
-        // carried, so a capture outlived the scenario that made it and the teleport is being undone
-        // every tick by whatever re-projects him onto his deck point. The deck capture answers which.
-        // Asked with `ships-at`, which is CONTAINMENT and a COUNT — the right shape for "is a hull
-        // here at all". The bounded nearest lookup this replaced answered with a winner and a
-        // distance, so "one ship, 60 blocks away" and "two ships, both containing the point" printed
-        // the same way, and a reader of the failure could not tell them apart.
-        String shipOnPlot = askServer("stellurgytest vs ships-at " + plot.dim
-                + " " + plot.centerX() + " " + Plot.DEFAULT_Y + " " + plot.centerZ());
-        String shipOnBody = last != null && last.has("playerX")
-                ? askServer("stellurgytest vs ships-at " + plot.dim
-                        + " " + (int) Math.round(last.get("playerX").getAsDouble())
-                        + " " + (int) Math.round(last.get("playerY").getAsDouble())
-                        + " " + (int) Math.round(last.get("playerZ").getAsDouble()))
-                : "(no player point to ask about)";
+        // so the chat markers these commands echo can no longer disturb anything. A body still held
+        // by a deck capture is being carried, and the teleport is undone every tick by whatever
+        // re-projects him onto his deck point. No hull is looked for by place: the base disposes of
+        // every craft a scenario leaves, so none of a predecessor's can stand here, and the capture
+        // names the craft that holds him by its id.
         String capture = askServer("stellurgytest vs deck-capture");
         // AND THE CLIENT'S OWN RESOLVER, because the server's answer is only half the question. A body
         // travelling at a CONSTANT delta per tick with its own motion at zero is not being moved by its
@@ -728,8 +817,6 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
                 + "\n  every POSITION WRITE since the teleport, with the caller that made it — this"
                 + " is the only line here that NAMES a writer instead of listing candidates: "
                 + positionWritesSinceTheTeleport()
-                + "\n  ships CONTAINING the PLOT centre: " + shipOnPlot
-                + "\n  ships CONTAINING where the BODY ended up: " + shipOnBody
                 + "\n  its deck capture, as the SERVER sees it: " + capture
                 + "\n  the CLIENT's own ship-frame resolver: " + clientResolver
                 + "\n  client world=" + bot().reportWeather()

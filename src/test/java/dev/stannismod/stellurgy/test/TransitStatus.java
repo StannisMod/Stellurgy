@@ -46,9 +46,6 @@ public final class TransitStatus {
     public final long poseX;
     public final long poseY;
     public final long poseZ;
-    /** The parked ship's own Y, and how far it sits from the pose above. */
-    public final long shipY;
-    public final long poseDist;
     /** Where the in-flight crew BELONGS, or {@code -1}. See the class note. */
     public final int crewDim;
     /** The raw id of the shared hyperspace parking world. */
@@ -56,13 +53,11 @@ public final class TransitStatus {
     /** How many arrived ships are still retrying their crew re-seat. See the class note. */
     public final int reseating;
     /**
-     * Where the ships in the parking world actually are, as the probe's own point-free text.
-     *
-     * <p>Deliberately a STRING and not a parsed list: the producer builds it out of
-     * {@code queryableShipPositions} for a human reading a failure, and a test that needs a ship's
-     * position by identity has {@code vs ship-info} for exactly that.</p>
+     * Where THIS transit's own craft stands in the target world, {@code x,y,z} in whole blocks, read
+     * off its registry record by the durable id the transit departed under — or {@code ""} when that
+     * world registers no craft of the name. Nothing in this reply is about any other craft.
      */
-    public final String ships;
+    public final String craftPos;
 
     private final String raw;
 
@@ -74,12 +69,10 @@ public final class TransitStatus {
         this.poseX = (long) reply.number("poseX");
         this.poseY = (long) reply.number("poseY");
         this.poseZ = (long) reply.number("poseZ");
-        this.shipY = (long) reply.number("shipY");
-        this.poseDist = (long) reply.number("poseDist");
         this.crewDim = reply.integer("crewDim");
         this.hyperDim = reply.integer("hyperDim");
         this.reseating = reply.integer("reseating");
-        this.ships = reply.text("ships");
+        this.craftPos = reply.text("craftPos");
     }
 
     /**

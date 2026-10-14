@@ -2,8 +2,10 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -30,35 +32,31 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionOreCompletionTest extends AbstractSharedServerTest {
 
-    /**
-     * How many entries a zero-drilling-power mission may return.
-     *
-     * <p>The TEST'S OWN: the refill chip is the only entry the contract expects, and the allowance
-     * of one more is there because a sibling test's rocket can contribute a duplicate in the shared
-     * world. Anything above that is the mission handing out ore it never mined.</p>
-     */
-    private static final int MAX_ZERO_POWER_ENTRIES = 2;
+    /** The registry name of the blank chip the completion refills the guidance computer with. */
+    private static final String ASTEROID_CHIP = "stellurgy:asteroidchip";
 
     private static final String MISSION_ID = "missionId";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 700);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume"));
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
     }
 
     private long startOreMission(int rocketId, long duration, float drillingPower) throws Exception {
@@ -67,7 +65,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
-        return Long.parseLong(mmReply.text(MISSION_ID));
+        return rockets.missionStarted(0, Long.parseLong(mmReply.text(MISSION_ID)));
     }
 
     /** Whether drillingPower is zero or not, the mission UNCONDITIONALLY
@@ -82,13 +80,12 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip() throws Exception {
         int rid = buildAndAssembleRocket(9000);
         long mid = startOreMission(rid, 1000, 1.0f);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
+        MissionCompletion cargo = MissionCompletion.now(commands(), rockets, mid);
         // Refilled chip lands in the respawned rocket's guidance
         // computer (storage chunk inventory tile). It's a fresh chip
         // with no NBT — registry name match is enough.
         assertTrue("respawned rocket must carry an asteroid chip post-completion: " + cargo.raw(),
-                cargo.carriesItem("stellurgy:asteroidchip"));
+                cargo.carriesItem(ASTEROID_CHIP));
     }
 
     /** Production gate: with {@code drillingPower == 0f} the entire
@@ -102,35 +99,30 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionSkipsHarvestWhenDrillingPowerZero() throws Exception {
         int rid = buildAndAssembleRocket(9100);
         long mid = startOreMission(rid, 1000, 0.0f);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
-        // The blank refill chip (line 118) is the only item expected
-        // — extract a count and pin upper bound. Tolerant of the
-        // respawn-coords search returning multiple rockets if a prior
-        // test in the same JVM placed one nearby (different Z origin
-        // 700 keeps them apart but allow ≤ 2 for safety).
-        int entries = cargo.itemEntries;
-        assertTrue("drillingPower=0 -> only the refill chip (≤ 2 entries to allow "
-                        + "a duplicate from a sibling test rocket); got " + entries
-                        + "; resp=" + cargo.raw(),
-                entries >= 1 && entries <= MAX_ZERO_POWER_ENTRIES);
+        MissionCompletion cargo = MissionCompletion.now(commands(), rockets, mid);
+        // The blank refill chip (line 118) is the only item expected: the returned rocket carries
+        // at least it, and nothing that is not it.
+        String[] items = cargo.itemIds();
+        assertTrue("drillingPower=0 -> the returned rocket carries the refill chip; resp=" + cargo.raw(),
+                items.length >= 1);
+        for (String item : items) {
+            assertTrue("drillingPower=0 -> the returned rocket carries only the refill chip, not "
+                    + item + "; resp=" + cargo.raw(), ASTEROID_CHIP.equals(item));
+        }
     }
 
     /** The ore-mining completion path spawns a plain EntityRocket (line
-     *  119) at launch coords. rocket-cargo finds at least one rocket in
-     *  the search BB. Together with the gas test (which spawns
-     *  EntityStationDeployedRocket — a SUBCLASS of EntityRocket so it
-     *  also matches the EntityRocket.class filter), this pin only
-     *  confirms "some rocket exists" — type discrimination is a
-     *  follow-up. */
+     *  119) at launch coords — not the station-deployed craft the gas
+     *  path returns. Pinned on the completion's own birth records: it
+     *  returns exactly one rocket, and that rocket's class. */
     @Test
     public void oreCompletionRespawnsRocketInLaunchDim() throws Exception {
         int rid = buildAndAssembleRocket(9200);
         long mid = startOreMission(rid, 1000, 1.0f);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
-        assertTrue("at least one rocket entity must exist near launch coords after ore completion: "
-                        + cargo.raw(),
-                cargo.rocketCount > 0);
+        MissionCompletion cargo = MissionCompletion.now(commands(), rockets, mid);
+        assertEquals("the ore completion must return exactly one rocket: " + cargo.raw(),
+                1, cargo.returnedRocketCount());
+        assertEquals("the ore completion returns a plain rocket: " + cargo.raw(),
+                "EntityRocket", cargo.returnedClass());
     }
 }

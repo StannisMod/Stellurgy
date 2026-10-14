@@ -122,16 +122,6 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         return Reply.of(json).integerOr(key, fallback);
     }
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
-                "this scenario's craft must be loaded before the rider is put on it");
-    }
-
     /**
      * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
      * tracking headroom.
@@ -183,17 +173,18 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(dim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleBuilt(site, c -> act(c).raw(), dev.stannismod.stellurgy.test.RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 2, 16,
-                "the craft whose rider must stay aboard through the cruise"));
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
-                waitForLoadedShip(dim) >= 1);
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16, "the craft whose rider must stay aboard through the cruise");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The seat inside the craft this scenario BUILT, named by the assembler that minted it. The
         // anchored form resolved the yard nearest a point over the whole registry, so it could reach
-        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
+        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it. The
+        // craft is loaded before the rider is put on it: the link is its own `ship_usable`.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        disposeOfShipAtEnd(durableShipId);
         String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), dim, durableShipId, 200);
         PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), dim, scenarioShipId)
                 .requireFound("the pilot seat must be found, or the test is vacuous");

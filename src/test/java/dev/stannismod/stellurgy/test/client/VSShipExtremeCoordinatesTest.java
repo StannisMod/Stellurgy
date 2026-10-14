@@ -228,9 +228,10 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
 
         Events events = serverEvents();
         long assemblyMark = events.markInstrumented();
-        String assemble = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The craft's CREATION, and its identity, from one record. A count that rises says a ship
         // appeared somewhere in the world; `ship_spawned` says which craft was made, so the identity
         // and the existence are the same fact and neither is polled for.
@@ -667,19 +668,19 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 }
                 Events rungLog = serverEvents();
                 long spawnMark = rungLog.markInstrumented();
-                String assemble = assembleFarFixture(x);
-                if (assemble == null) {
+                ShipAssembly built = assembleFarFixture(x);
+                if (built == null) {
                     inconclusive.add("x=" + x + " the fixture did not build or did not assemble"
                             + " (arrangement, not the coordinate)");
                     continue;
                 }
-                // absence is the answer: this SWEEPS coordinates and records a verdict per one, so a
-                // probe that answered nothing is this row's failure and not the end of the sweep.
-                if (!(Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0)) {
-                    verdicts.put(x, "the build did not route to a SHIP: " + farOneLine(assemble));
+                String assemble = built.reply;
+                if (!built.madeNoRocket()) {
+                    verdicts.put(x, "the build did not route to a SHIP: " + farOneLine(built.toString()));
                     continue;
                 }
                 String durableName = dev.stannismod.stellurgy.test.ShipIdentity.nameFromAssembly(assemble);
+                disposeOfShipAtEnd(durableName);
                 try {
                     rungLog.awaitField(spawnMark, "ship_spawned", "stellurgyShip", durableName,
                             "the rung's assembly must spawn a VS ship", 200);
@@ -906,9 +907,9 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * fixture will not lay, and this leg's subject is WHERE the build stops working, so a refusal is the
      * measurement and is recorded and walked past.
      *
-     * @return the assemble reply, or {@code null} if the fixture itself never landed
+     * @return the press and what it made, or {@code null} if the fixture itself never landed
      */
-    private String assembleFarFixture(int x) throws Exception {
+    private ShipAssembly assembleFarFixture(int x) throws Exception {
         String fixture = arrange("stellurgytest fixture rocket 0 " + x + " " + FixtureSite.OPEN_AIR_Y + " "
                 + FAR_ARENA_Z + " " + VARIANT).raw();
         if (!Reply.of(fixture).ok()) {
@@ -920,7 +921,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             System.out.println("[SPIKE ship] fixture at x=" + x + " gave no builderPos: " + farOneLine(fixture));
             return null;
         }
-        return act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        return ShipAssembly.press(0, c -> act(c).raw(), serverEvents(), bp);
     }
 
     /**
@@ -1018,7 +1019,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site, String variant)
+    private ShipAssembly assembleFixture(FixtureSite site, String variant)
             throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int dim = site.dim, baseX = site.x, baseY = site.y, baseZ = site.z;
@@ -1026,7 +1027,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // number the pre-clear it replaces was throwing away. The cell this builds in is void, so
         // there is no terrain to escape — what the band buys here is ONE definition of where a
         // fixture stands, shared with every other class, instead of a 64 nobody chose.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
-                "the craft that is then flown to the far edge of the realized pose band"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), variant, 2, 16,
+                "the craft that is then flown to the far edge of the realized pose band");
     }
 }

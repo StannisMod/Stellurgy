@@ -78,17 +78,19 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
+        long buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft that jumps away from the body");
+        builtShip = birth.physicsId;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
-        // THIS ship, by the name the assembler minted for it — then the physics id it maps to. The
-        // build site is in a world this class shares with its siblings, so a lookup there answers
-        // with a neighbour's craft in exactly the same shape as with this one.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // THIS ship, by the name the assembler minted for it — then the physics id it maps to, once
+        // its own announcement says it is usable.
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         // The ship is loaded before its world transform has propagated, so "is a ship here yet?" is a
         // POLL, not a question with an answer the moment the count goes up.
@@ -103,9 +105,7 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // "the world transform to propagate"; the condition never tested that — it tested whether
         // the ship could be resolved at all, which is what the message now says.
         String info = read("stellurgytest vs ship-info 0 id " + shipId).raw();
-        assertTrue("VS could not resolve a state for this ship at its own build site: " + info
-                + " countAll=" + read("stellurgytest vs ship-count-all 0").raw()
-                + " loaded=" + read("stellurgytest vs ship-count 0").raw(),
+        assertTrue("VS could not resolve a state for this ship at its own build site: " + info,
                 ShipInfo.isLoaded(info));
         ShipInfo atBuildSite = ShipInfo.of(info);
         double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
@@ -201,21 +201,23 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
                 drift <= ALLOWED_HORIZONTAL_DRIFT);
     }
 
+    /** The physics id of the craft this scenario built; the jump is a rigid move that keeps it. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
 
-    // --- helpers (mirror VSShipDescentTest) ------------------------------------------------------
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
 
     /**
@@ -231,10 +233,9 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

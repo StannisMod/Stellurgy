@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -48,7 +49,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(cmd -> ok(client().read(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
@@ -77,17 +77,19 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
-                "the craft is built in this volume and then teleported to its descent altitude"));
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built in this volume and then teleported to its descent altitude");
     }
 
     /** Force-load a 3×3 grid of chunks centered on (worldX, worldZ) in

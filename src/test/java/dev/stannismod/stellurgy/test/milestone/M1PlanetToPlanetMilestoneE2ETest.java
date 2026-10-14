@@ -121,7 +121,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      */
     private static final int SLOT_APPLIED_TICKS = 40;
 
-    private static final String COUNT = "count";
     private static final String LEDGER = "ledger";
     private static final String SLOT_DIMS = "slotDims";
     private static final String SHIP_ID = "shipId";
@@ -469,8 +468,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         assertTrue("the craft a player built on the pad must become a SHIP when he presses Scan and "
                         + "then Build on the assembler's own screen. This is the whole tier-2 build "
                         + "route as a human drives it, and its completion signal has to be the ship "
-                        + "itself: a tier-2 craft spawns no rocket entity, so the rocket list would "
-                        + "report a healthy nothing. ships=" + ships
+                        + "itself: a tier-2 craft spawns no rocket entity, so no rocket record would "
+                        + "ever say it happened. ships=" + ships
                         + " spawnDiag=" + read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot").raw()
                         + " builderEnergy=" + energyAt(builderPos),
                 ships >= 1);
@@ -990,7 +989,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // comes out under shows the moon OUTSIDE the radius its descent trigger fires inside — the
         // shell as the packet carries it, never a number this test derives.
         String arrivalSky = read("stellurgytest space bodies").raw();
-        long[] moonAtArrival = skyReadingOf(arrivalSky, homeMoon.dim);
+        long[] moonAtArrival = skyReadingOf(arrivalSky, shipId, homeMoon.dim);
         requireArranged("the moon he jumped to must be in his sky on arrival: " + arrivalSky,
                 moonAtArrival != null);
         assertTrue("a jump must stand the ship OFF its destination, outside the moon's descent"
@@ -1011,7 +1010,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 budget * 5);
         // …and HE goes with it, still in his seat: the pilot's client follows the craft into the world
         // that holds the moon's zone, and the crossing's own seat chain says he never stood up.
-        final int zoneDim = shipSlotDim(read("stellurgytest space bodies").raw());
+        final int zoneDim = LedgerEntry.forShip(cmd -> read(cmd).raw(), shipId)
+                .requireFound("the carried craft must still be on the ledger").slotDim();
         final int cellDim = awaitClientWorldMatching(jumpClientMark, dim -> dim == zoneDim,
                 "the moon's zone world " + zoneDim,
                 "the pilot must be carried into the moon's zone WITH his ship — a carry that moves"
@@ -1039,13 +1039,13 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         requireArranged("the moon must be MOVING, or keeping station with it is no test at all:"
                 + " travel=" + sampleTravel + " over clock " + moonAt0[3] + ".." + moonAt1[3],
                 perTick > 0.0);
-        long[] before = skyReadingOf(read("stellurgytest space bodies").raw(), homeMoon.dim);
+        long[] before = skyReadingOf(read("stellurgytest space bodies").raw(), shipId, homeMoon.dim);
         long[] moonBefore = frameOf(homeMoon.cell, homeMoon.homeCell);
         int stationTicks = (int) Math.ceil(4.0 * before[0] / perTick);
         for (int given = 0; given < stationTicks; given += STATION_DOSE_PIECE_TICKS) {
             advanceServerAndClient(Math.min(STATION_DOSE_PIECE_TICKS, stationTicks - given));
         }
-        long[] after = skyReadingOf(read("stellurgytest space bodies").raw(), homeMoon.dim);
+        long[] after = skyReadingOf(read("stellurgytest space bodies").raw(), shipId, homeMoon.dim);
         long[] moonAfter = frameOf(homeMoon.cell, homeMoon.homeCell);
         double moonTravel = travel(moonBefore, moonAfter);
         requireArranged("the window must be long enough to tell the two cases apart: the moon"
@@ -1074,7 +1074,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // inside the descent radius, so that is the one the test must load and the one it must judge —
         // reading it here rather than deciding it keeps the test measuring the production choice.
         String bodies = read("stellurgytest space bodies").raw();
-        int nearestDim = nearestDescendTargetDim(bodies);
+        int nearestDim = nearestDescendTargetDim(bodies, shipId);
         // The cell he left is the control: it is a body's cell too (he took off from it), so if BOTH
         // read empty the registry cannot attribute any cell, and if only the destination does, the
         // console offered an address the rest of the game does not agree exists.
@@ -1162,7 +1162,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // every burst from the component it can still see rather than from a plan — a burst that
         // fell short is simply a larger component next time round.
         String feed = bodies;
-        long[] aim = nearestDescendTargetVector(feed);
+        long[] aim = nearestDescendTargetVector(feed, shipId);
         requireArranged("the arrived cell must report WHERE its descend-target body is, not "
                         + "only how far — the pilot's own sky draws it along that direction: " + feed,
                 aim != null);
@@ -1240,7 +1240,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             feed = flyBurst(key, burstTicks, cutTicks);
             bursts++;
             descentDim = clientDim(descentDim);
-            aim = nearestDescendTargetVector(feed);
+            aim = nearestDescendTargetVector(feed, shipId);
             descended = descentDim != cellDim || aim == null;
         }
         if (aim == null && descentDim == cellDim) {
@@ -1256,7 +1256,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                             + "finished descent as a chase that never converged",
                     budget * 5);
         }
-        range = nearestDescendTargetDistance(feed);
+        range = nearestDescendTargetDistance(feed, shipId);
         assertTrue("a piloted ship that has CLOSED ON a body must be taken DOWN off the space cell — "
                         + "that entry is the only way a tier-2 craft reaches a surface, and the pilot's "
                         + "whole input is flying at the body he arrived beside. The CLIENT's own "
@@ -1264,7 +1264,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "read the two ranges below against the descent radius before suspecting the "
                         + "approach. clientDim=" + descentDim + " cellDim=" + cellDim
                         + " rangeAtArrival=" + rangeAtArrival
-                        + " rangeNow=" + nearestDescendTargetDistance(read("stellurgytest space bodies").raw())
+                        + " rangeNow=" + nearestDescendTargetDistance(read("stellurgytest space bodies").raw(), shipId)
                         + " flown=" + flown
                         + " nearestBodyDim=" + nearestDim
                         + " descentStatus=" + read("stellurgytest space descent-status").raw()
@@ -1674,12 +1674,12 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /**
-     * {@code {range, shell}} of body {@code dim} in the sky of the ledgered ship's cell, or
-     * {@code null} when that sky does not show it.
+     * {@code {range, shell}} of body {@code dim} in the sky of the cell of the ship named
+     * {@code shipId}, or {@code null} when that sky does not show it.
      */
-    private static long[] skyReadingOf(String bodies, int dim) {
+    private static long[] skyReadingOf(String bodies, String shipId, int dim) {
         Reply reply = Reply.of("stellurgytest space bodies", bodies);
-        for (String ship : reply.objectArray(SHIPS)) {
+        for (String ship : ownLedgerRow(reply, shipId)) {
             int slotDim = Reply.of("one ledgered ship", ship).integer(FEED_SLOT_DIM);
             for (String sky : reply.objectArray(FEED)) {
                 Reply one = Reply.of("one cell's sky", sky);
@@ -1717,12 +1717,18 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         return at;
     }
 
-    /** The slot world of the one ship this loop has on the ledger, from {@code space bodies}. */
-    private static int shipSlotDim(String bodies) {
-        String[] ships = Reply.of("stellurgytest space bodies", bodies).objectArray(SHIPS);
-        requireArranged("exactly one ship must be on the ledger — this loop flies one: " + bodies,
-                ships.length == 1);
-        return Reply.of("one ledgered ship", ships[0]).integer(FEED_SLOT_DIM);
+    /**
+     * The ledger row of the ship named {@code shipId} in a {@code space bodies} reply — none or one,
+     * picked by the ledger's own key and never by position in the list.
+     */
+    private static java.util.List<String> ownLedgerRow(Reply bodies, String shipId) {
+        java.util.List<String> own = new java.util.ArrayList<>();
+        for (String ship : bodies.objectArray(SHIPS)) {
+            if (String.valueOf(shipId).equals(Reply.of("one ledgered ship", ship).text("ship"))) {
+                own.add(ship);
+            }
+        }
+        return own;
     }
 
     private static double travel(long[] a, long[] b) {
@@ -2011,10 +2017,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * from {@code TileAdvancedFlightComputer:613}), so the world loaded here is the one the trigger
      * will pick.</p>
      */
-    private static int nearestDescendTargetDim(String bodies) {
+    private static int nearestDescendTargetDim(String bodies, String shipId) {
         int best = Integer.MIN_VALUE;
         long bestDistance = Long.MAX_VALUE;
-        for (String body : descendTargets(bodies)) {
+        for (String body : descendTargets(bodies, shipId)) {
             Reply b = Reply.of("one cell body", body);
             long distance = (long) b.number(BODY_DISTANCE);
             if (distance < bestDistance) {
@@ -2026,19 +2032,18 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /**
-     * Every descend-target body in the SKY of each ledgered ship's cell — the {@code feed} entry keyed
-     * by that ship's slot world, which is the packet the pilot's client draws.
+     * Every descend-target body in the SKY of the cell of the ship named {@code shipId} — the
+     * {@code feed} entry keyed by that ship's slot world, which is the packet the pilot's client draws.
      *
      * <p>The sky and not the cell's own body list: a moon's zone is a set of cells none of which the
      * moon is named in, so a craft parked beside it holds an EMPTY cell list while its pilot sees the
      * moon a thousand blocks off. The pilot flies by what he sees, and so does the descent trigger.
-     * Walked per ship rather than over the whole reply, so two ledgered ships never pool their
-     * skies.</p>
+     * Read off this craft's own ledger row, so no other craft's sky can answer for it.</p>
      */
-    private static java.util.List<String> descendTargets(String bodies) {
+    private static java.util.List<String> descendTargets(String bodies, String shipId) {
         Reply reply = Reply.of("stellurgytest space bodies", bodies);
         java.util.List<String> out = new java.util.ArrayList<>();
-        for (String ship : reply.objectArray(SHIPS)) {
+        for (String ship : ownLedgerRow(reply, shipId)) {
             int slotDim = Reply.of("one ledgered ship", ship).integer(FEED_SLOT_DIM);
             for (String sky : reply.objectArray(FEED)) {
                 Reply one = Reply.of("one cell's sky", sky);
@@ -2068,9 +2073,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * reading them together is what he does when he looks out of the cockpit, and reading only the
      * scalar is the one thing he cannot do.</p>
      */
-    private static long[] nearestDescendTargetVector(String bodies) {
+    private static long[] nearestDescendTargetVector(String bodies, String shipId) {
         long[] best = null;
-        for (String body : descendTargets(bodies)) {
+        for (String body : descendTargets(bodies, shipId)) {
             Reply b = Reply.of("one cell body", body);
             long distance = (long) b.number(BODY_DISTANCE);
             if (best == null || distance < best[3]) {
@@ -2123,8 +2128,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * only measure of whether he is getting anywhere. {@link Long#MAX_VALUE} when the cell reports no
      * body to descend onto, which keeps "no target" from reading as "range zero".
      */
-    private static long nearestDescendTargetDistance(String bodies) {
-        long[] vector = nearestDescendTargetVector(bodies);
+    private static long nearestDescendTargetDistance(String bodies, String shipId) {
+        long[] vector = nearestDescendTargetVector(bodies, shipId);
         return vector == null ? Long.MAX_VALUE : vector[3];
     }
 

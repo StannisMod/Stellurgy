@@ -443,14 +443,16 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         scenarioDim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
         final FixtureSite site = FixtureSite.openAir(scenarioDim, 40, 40);
         Events events = serverEvents();
-        String assembled = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the craft the pilot turns and then stops"));
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                Reply.of(assembled).integer("rocketCount") == 0);
-        ShipReadiness.requireLoaded(c -> read(c).raw(), scenarioDim,
-                "this scenario's craft must be loaded in its cell before anyone sits in it");
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), events, VARIANT, 2, 16,
+                "the craft the pilot turns and then stops");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: " + built,
+                built.madeNoRocket());
+        String durableName = ShipIdentity.nameFromAssembly(assembled);
+        disposeOfShipAtEnd(durableName);
+        // Loaded in its cell before anyone sits in it: the link is this craft's own `ship_usable`.
         scenarioShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, scenarioDim,
-                ShipIdentity.nameFromAssembly(assembled), 200);
+                durableName, 200);
         PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), scenarioDim, scenarioShipId)
                 .requireFound("the pilot seat inside THIS scenario's ship");
 
@@ -1000,9 +1002,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // the identity from a nearest-ship lookup at the build site.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "a with-pilot-seat assembly must create a VS ship in the queryable registry");
 
@@ -1390,7 +1393,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         return Reply.of(json).integer(field);
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
@@ -1404,8 +1407,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping on
         // it, and the room a craft rolled upside down by the mouse sweeps.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
-                "the hull, the deck a body rides, and the air the craft rolls and climbs through"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
+                "the hull, the deck a body rides, and the air the craft rolls and climbs through");
     }
 
     // ---- who is sent the readout ---------------------------------------------------------------
@@ -1477,6 +1480,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         requireArranged("the decked craft can hover and must be built on the first press: " + press,
                 press.ok() && press.bool("built"));
         String durable = press.text("shipId");
+        disposeOfShipAtEnd(durable);
         // ARRANGEMENT links, typed as such: the naming and the first model are the premise that
         // gives this scenario its addresses, not the audience it is about.
         String named = ArrangementFailure.arranged(() -> serverEvents().awaitRecordWithFields(serverMark,

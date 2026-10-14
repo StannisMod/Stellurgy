@@ -9,7 +9,6 @@ import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
-import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -42,9 +41,9 @@ import static org.junit.Assert.*;
  *       allocator removes that without anyone having to notice it.</li>
  *   <li><b>An open screen outlives its scenario.</b> Every scenario here opens one; each closes it,
  *       and the shared reset closes anything left and then asserts the screen is gone.</li>
- *   <li><b>A GLOBAL query answering with a neighbour's object.</b>
- *       {@link #clickingScanThenBuildAssemblesRocket()} reads {@code stellurgytest rocket list}, which is
- *       world-wide, and narrows it to {@link Plot#contains}.</li>
+ *   <li><b>A neighbour's object answering for this scenario's.</b>
+ *       {@link #clickingScanThenBuildAssemblesRocket()} learns its rocket from the assembler's own
+ *       {@code rocket_born} record, never from a query of the world.</li>
  *   <li><b>A GUI that must stay open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
  *       works with the console still open — the full client reset would close the very screen it is
  *       about to click. It reads what each click DID (the command reaching the console, the
@@ -387,8 +386,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         int by = bp[1];
         int bz = bp[2];
         String builder = dim + " " + bx + " " + by + " " + bz;
-        scenario().record("builderPos", bx + "," + by + "," + bz)
-                .describeOnFailureWith("stellurgytest rocket list " + dim);
+        scenario().record("builderPos", bx + "," + by + "," + bz);
 
         scenario().arranging("stand on the launchpad within reach of the builder");
         long standMark = clientEvents().mark();
@@ -416,7 +414,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         // land after the scan had happened to end, and every press before it was discarded unseen.
         // `assembler_pass_finished` IS that end, so Build is pressed once, after it.
         //
-        // Success is then read off the ROCKET standing in this scenario's own plot, not off
+        // Success is then read off the ROCKET this machine made (its `rocket_born`), not off
         // `rocket_assembled`'s status, and the reason is a property of the recorder rather than a
         // preference: `rocket_assembled` is taken at
         // assembleRocket's RETURN and carries the tile's status AS OF THAT RETURN, and the last
@@ -428,8 +426,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         // after setting FINISHED, and every record here says tier2:false.) Measured 2026-09-06: 29
         // assembly exits, all ALREADY_ASSEMBLED, the first of them the successful build.
         //
-        // What the events still buy over the pre-migration form — which polled this same list and,
-        // after three minutes, printed it — is the failure: every press that reached the machine
+        // What the events buy over the pre-migration form — which polled a world-wide rocket list
+        // and, after three minutes, printed it — is the failure: every press that reached the machine
         // with the canScan/isScanning pair it was judged on, and every attempt at an assembly with
         // the status it ended on. That tells a dropped packet from a refused build from a build
         // that never ran, which the list alone cannot.
@@ -445,16 +443,19 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
                 "the BUILD pass must end in an assembly at this machine", PASS_TICKS,
                 "pos", machinePos);
         String assemblies = events.since(buildMark, "rocket_assembled");
-        String list = read("stellurgytest rocket list " + dim).raw();
-        int rocketId = rocketIdInThisPlot(list);
+        java.util.List<String> born = RocketFixture.rocketsBornAt(events, buildMark, bp);
+        for (String record : born) {
+            disposeOfRocketAtEnd((int) Events.number(record, "e"));
+        }
         String presses = events.since(buildMark, "assembler_command_received");
-        assertTrue("clicking Scan then Build on the real GUI must ASSEMBLE a rocket standing in "
-                        + plot() + "; rocket list was " + list
+        assertEquals("clicking Scan then Build on the real GUI must ASSEMBLE exactly one rocket at this"
+                        + " machine; its rocket_born records were " + born
                         + " | every exit of assembleRocket since the first click, with the status it"
                         + " ended on: " + assemblies
                         + " | every press that reached the machine, with the canScan/isScanning pair"
                         + " that decides whether it was acted on or silently ignored: " + presses,
-                rocketId >= 0);
+                1, born.size());
+        int rocketId = (int) Events.number(born.get(0), "e");
         events.assertChain(buildMark, "a rocket assembled at this machine must have been COMMANDED"
                 + " through the GUI - an assembly with no press behind it would be some other"
                 + " scenario's machine answering", 40,
@@ -478,32 +479,6 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
                 Events.anyRecordHas(joined, "cls", "EntityRocket"));
 
         bot().closeScreen();
-    }
-
-    /**
-     * The id of a rocket standing in THIS scenario's plot, or -1.
-     *
-     * <p>{@code stellurgytest rocket list} is a GLOBAL query. Taking "the one that is there" is correct
-     * only while the world holds exactly one rocket, which is precisely what a shared world stops
-     * guaranteeing.</p>
-     */
-    /**
-     * Every rocket the PREVIOUS scenario left behind goes, before this one builds its own — see
-     * {@link RocketList#clearFrom} for what a plot cannot contain and why.
-     *
-     * <p>A {@code @Before} for the same reason the base's whole reset is one: JUnit runs
-     * {@code @After} before the rules finish, so cleanup the next scenario must see belongs at the
-     * next scenario's start.</p>
-     */
-    @Before
-    public void clearRocketsLeftByTheLastScenario() throws Exception {
-        System.out.println("[reset] rockets cleared from this class's world: "
-                + RocketList.clearFrom(c -> arrange(c).raw(), 0));
-    }
-
-    private int rocketIdInThisPlot(String list) {
-        java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
-        return mine.isEmpty() ? -1 : mine.get(0).id;
     }
 
     // ── railgun ───────────────────────────────────────────────────────────────

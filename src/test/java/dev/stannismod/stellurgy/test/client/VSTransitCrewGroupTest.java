@@ -27,10 +27,9 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Every scenario here arranges itself through {@code stellurgytest space transit-setup-piloted} /
  * {@code -empty}, and that probe allocates a <b>fresh origin pool cell per call</b>. So each
- * scenario works in a dimension of its own: the whole-dimension ship counts these bodies use as
- * assembly gates ({@code vs ship-count-all &lt;originDim&gt;}) are scoped by construction, not by
- * luck, and none of them needed narrowing. That is the opposite of the ground-fixture cluster, where
- * every scenario shares dim 0 and the gates had to be rewritten.</p>
+ * scenario works in a dimension of its own. Its craft is still addressed only by the ids the setup
+ * handed back: it is awaited usable on its own {@code ship_usable}, and disposed of by its durable
+ * name when the scenario ends, wherever the jump left it.</p>
  *
  * <p>The things the scenarios DO leave behind are closed by {@link AbstractSharedVsClientTest}:
  * a still-riding player and the flight computer's static command channels. Their original
@@ -80,6 +79,16 @@ public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
             bot().setRenderDistance(widened.previous);
             widened.previous = -1;
         }
+        flyOutAnyJumpLeftInTheAir();
+    }
+
+    /**
+     * A jump this scenario left in the air is flown out BEFORE its craft is disposed of (the base's
+     * {@code @After}, which JUnit runs after this one): a hull destroyed in the lane would leave the
+     * transit to arrive with nothing, inside whatever scenario runs next.
+     */
+    @org.junit.After
+    public void flyOutThisScenariosJumpBeforeItsCraftIsDisposedOf() throws Exception {
         flyOutAnyJumpLeftInTheAir();
     }
 
@@ -155,17 +164,23 @@ public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
      */
     private String parkedHullName;
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for. ShipReadiness carries the measurement behind this: across the
-        // server tier the same helper was planted at both branches, and the branch that WAITS never
-        // executed — at one fork or at six, the ship is already loaded by the time a scenario asks.
-        // A wait that waits for nothing converts a state that should fail loudly into absorbed
-        // ambiguity and then answers 0 for several different reasons, so the postcondition replaces
-        // it and names what to look at: a craft that never registered, or one that registered and
-        // did not load.
-        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
-                "this scenario's craft must be loaded before the transit is driven");
+    /**
+     * How long the setup's craft may take to become usable in its origin cell, in ticks. A link's
+     * deadline: its expiry means the craft never became usable, not that it was slow.
+     */
+    private static final int OWN_SHIP_USABLE_BUDGET_TICKS = 200;
+
+    /**
+     * The craft the setup built for THIS scenario: declared for disposal at the scenario's end, and
+     * awaited USABLE in its origin cell — a link on its own {@code ship_usable}, by the durable name the
+     * setup handed back, so no other craft in the world can answer for it.
+     *
+     * @return its physics id in the origin cell
+     */
+    private String awaitOwnShipUsable(TransitSetup setup) throws Exception {
+        disposeOfShipAtEnd(setup.requireDurableId());
+        return ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), setup.originDim,
+                setup.requireDurableId(), OWN_SHIP_USABLE_BUDGET_TICKS);
     }
 
     // ---- the jump as a CHAIN of events: pilotedJumpChain(), transitEvents, arrivedTargetDim live in
@@ -314,8 +329,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         int originDim = setup.originDim;
 
         // Wait for the async assembly to load the ship in the origin cell (count-all -> load-ships -> count).
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
 
         // Now the ship is up: put the bot in the origin cell and on the ship's pilot seat, keyed by
         // the identity the setup handed back rather than by the anchor every scenario here shares.
@@ -415,8 +429,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
 
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
 
         seatTheBot(originDim, setup.requireShipId());
 
@@ -536,6 +549,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         Events arrangeLog = serverEvents();
         long setupMark = arrangeLog.markInstrumented();
         TransitSetup setup = TransitSetup.of(envelope(serverClient().arrange("stellurgytest space transit-setup-piloted")));
+        disposeOfShipAtEnd(setup.requireDurableId());
         int originDim = setup.originDim;
 
         // ARRANGEMENT. The fixture's assembly is async, so wait for the ship to EXIST: the registry's
@@ -803,8 +817,7 @@ private String hud() throws Exception {
 
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
 
         seatTheBot(originDim, setup.requireShipId());
 
@@ -1135,8 +1148,7 @@ private String hud() throws Exception {
 
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
         seatTheBot(originDim, setup.requireShipId());
 
         // ── CONTROL, in the origin cell ─────────────────────────────────────────────────────────
@@ -1432,8 +1444,7 @@ private String hud() throws Exception {
 
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
 
         // Board the way every other scenario here boards (seat + its own control), then stand up.
         // The ship's world position is read for the stand-up arrangement's re-drop, not asserted on.
@@ -1612,8 +1623,7 @@ private String hud() throws Exception {
 
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
         seatTheBot(originDim, setup.requireShipId());
 
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
@@ -1712,8 +1722,7 @@ private String hud() throws Exception {
 
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        awaitOwnShipUsable(setup);
 
         // Boards SEATED and jumps from the chair: that is what writes a SEATED departure record, and
         // the record is the subject here.

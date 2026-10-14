@@ -126,14 +126,11 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         int slotDim = extractInt(arrived, "dim");
 
         GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);
-        String bodies = read("stellurgytest space bodies").raw();
-        String row = null;
-        for (String ship : Reply.of("stellurgytest space bodies", bodies).objectArray("ships")) {
-            // Read bare: the producer always writes `ship` on every ledger row.
-            if (durableId.equals(Reply.of(ship).text("ship"))) {
-                row = ship;
-            }
-        }
+        // THIS craft's ledger row, asked for by its durable id: absent when the craft is no longer in
+        // space.
+        String bodies = read("stellurgytest space bodies id " + durableId).raw();
+        String[] rows = Reply.of("stellurgytest space bodies", bodies).objectArray("ships");
+        String row = rows.length == 1 && durableId.equals(Reply.of(rows[0]).text("ship")) ? rows[0] : null;
         assertTrue("a ship that jumped AT a body must still be in space afterwards — its ledger row is"
                         + " gone, which is what a descent does. Descents since the jump: "
                         + events.since(jumpMark, "descent_requested") + " | arrival=" + arrived
@@ -201,26 +198,22 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
                 ARRIVAL_TICKS, "ship", durableId, "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
-        assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
-        // Identified by the craft this scenario BUILT, which is now what the wait above is keyed
-        // on. "The only loaded ship in this cell" stood here and was an accident: it worked while
-        // an earlier scenario's hull unloaded once nobody was near it, and stopped the day a test
-        // server began holding ships loaded — the cell then held two and the read could not say
-        // which was this jump's. Re-reading the id off the record stood here next, and it answered
-        // whichever ship the route-only wait had matched.
-        String arrivedId = ShipIdentity.physicsIdOf(c -> read(c).raw(), targetDim, durableId.trim());
+        // Identified by the craft this scenario BUILT, which is what the wait above is keyed on, and
+        // linked on that craft's own announcement that it is usable in the target cell.
+        String arrivedId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                durableId.trim(), USABLE_TICKS);
         assertTrue("the arrived ship is not VS-managed in the target cell; id=" + arrivedId,
                 ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
         return arrived;
     }
 
     private TransitSetup setUpPilotedShip() throws Exception {
+        buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         // A crossing resolves its ship by IDENTITY, never by the anchor every transit fixture
         // shares, so a setup that minted no durable name cannot be crossed at all.
-        setup.requireDurableId();
+        builtDurable = setup.requireDurableId();
         // ONE SHIP, ONE IDENTITY — production's rule, now pinned on the fixture that used to break
         // it. This build was once assembled off a STONE block of its own deck, so the computer's
         // durable name was never found and the substrate minted a second id; the reply then carried
@@ -233,25 +226,29 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
                         + "found no computer and took a substrate-minted name instead: "
                         + setup.raw(),
                 setup.durableId, setup.shipId);
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
         return setup;
     }
 
+    /** Server ticks for the craft to become usable where it was built or has arrived. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
     private static String extractString(String json, String key) {
         return Reply.of(json).text(key);

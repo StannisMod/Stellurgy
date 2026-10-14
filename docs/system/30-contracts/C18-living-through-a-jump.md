@@ -226,6 +226,13 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   **What this does NOT license**: an unbounded retry nobody can see. The settle keeps working because
   the arrival is owed, and if it stops making progress that is a diagnostic to be surfaced as one —
   loud and about the machinery, not a message to a player about his ship.
+- **JUMP-16 (a hull declared finished is collected, whatever load request stands on it)** `[V][SYS]`
+  A registered ship that is DEAD, or owns an empty block set, and is neither loaded nor queued for an
+  immediate load leaves the registry on the next manager tick, announced `DESTROYED` (or `DEPARTED`
+  when a crossing declared it). A BACKGROUND load request does not shield it: the request is withdrawn
+  with the record (`WorldServerShipManager.java:233-259`). A loaded or immediately-loading craft is
+  collected by the destroy pass the tick after it loads. FOR: JUMP-10 — a disposal by deregistration is
+  a disposal only if the deregistered hull is then gone.
 
 ## Interaction with the offline-progress policy
 
@@ -282,6 +289,9 @@ client harness cannot span a server restart at all.
   JUMP-9 is uncovered — the parked ship is unmanned.
   `VSShipTransitPersistTest` pins the snapshot path JUMP-9 demotes to repair.
 - **JUMP-6** — `ShipTransitManagerTest.anAbortedDepartureIsANoOpForTheCrew`.
+- **JUMP-16** — `VSCrossingLeavesNoShipBehindTest.aShipFinishedWhileABackgroundLoadHoldsItIsCollected`
+  (server tier): the craft let unload, the load hold put back, its background request linked on its own
+  record, then declared finished; links on its `DESTROYED`.
 - **One instrument looks like coverage it is not**: `VSShipTransitCrewE2ETest` asserts riding
   before the jump and riding in the target dimension after it `[T]`, and never observes the client
   between them. Both assertions are true whatever happens in the middle — the ends are exactly the

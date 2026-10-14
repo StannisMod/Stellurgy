@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
-import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -62,12 +61,6 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         return "helm-controls";
     }
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
-    }
-
     /**
      * A pilot presses T and his ship's battery engages the ship nearest his heading — not the nearest
      * one, and not one behind him; under "a ship whose crew carries our code is a friend", that ship is
@@ -95,11 +88,14 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         // ---- three hulls: his, and two that will be placed from his view
         WarShip shooter = WarShip.build(server, commands(), FixtureSite.openAir(0, SHOOTER_SRC_X, SRC_Z), null,
                 "his own ship");
+        disposeOfShipAtEnd(shooter.vsShip);
         shooter.parkAt(PARK_X, PARK_Y, PARK_Z, ON_THE_HULL);
         WarShip quarry = WarShip.build(server, commands(), FixtureSite.openAir(0, QUARRY_SRC_X, SRC_Z), null,
                 "the ship he will name");
+        disposeOfShipAtEnd(quarry.vsShip);
         WarShip decoy = WarShip.build(server, commands(), FixtureSite.openAir(0, DECOY_SRC_X, SRC_Z), null,
                 "the nearer ship off his heading");
+        disposeOfShipAtEnd(decoy.vsShip);
 
         // ---- his battery: a gun beside his seat, a console touching it, on "no ship is a friend"
         int[] seat = shooter.seat();
@@ -261,6 +257,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         // ---- at the helm: a parked ship, him in its seat, a block before its nose
         WarShip ship = WarShip.build(server, commands(), FixtureSite.openAir(0, CURSOR_SRC_X, SRC_Z), null,
                 "the ship he sits in");
+        disposeOfShipAtEnd(ship.vsShip);
         ship.parkAt(PARK_X, PARK_Y, PARK_Z, ON_THE_HULL);
         seatAtTheHelm(client, ship);
         double[] eye = new double[3];

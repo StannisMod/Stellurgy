@@ -1,8 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Disposal;
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.SeatMount;
+import dev.stannismod.stellurgy.test.ShipBirth;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -10,7 +17,7 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * One seat — one mount dummy, at EVERY dummy-producing path. The right-click mount recipe reuses
- * the seat's existing bound dummy; the {@code vs seat-mount} probe (the harness's stand-in for a
+ * the seat's existing bound dummy; the {@code vs seat-mount-at} probe (the harness's stand-in for a
  * right-click on an assembled ship's subspace seat) must obey the same rule, or every test mount
  * leaks an extra dummy whose riderless twin clears the ship's pilot input each server tick and
  * fights the seated pilot's controls.
@@ -33,21 +40,62 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
                 + " stellurgy:pilotSeat"));
         assertTrue("placing the pilot seat failed: " + place, Reply.of(place).ok());
 
-        // The bare form is right here and nowhere else: this test PLACES the only pilot seat in the
-        // world two statements above, and the reader's seat count is what says so in a failure.
-        SeatMount first = SeatMount.firstLoadedSeat(
-                cmd -> String.join("\n", client().arrange(cmd)), 0);
-        first.requireSeatFound("seat-mount must find the pilot seat just placed");
-
-        SeatMount second = SeatMount.firstLoadedSeat(
-                cmd -> String.join("\n", client().arrange(cmd)), 0);
-        second.requireSeatFound("seat-mount must find that same pilot seat again");
+        // The seat is addressed where this test PLACED it, two statements above — never looked for
+        // among the world's loaded seats.
+        String mountAt = "stellurgytest vs seat-mount-at 0 " + x + " " + y + " " + z;
+        Reply first = Reply.of(mountAt, String.join("\n", client().arrange(mountAt)))
+                .requireOk("seat-mount-at must bind a dummy to the pilot seat just placed");
+        Reply second = Reply.of(mountAt, String.join("\n", client().arrange(mountAt)))
+                .requireOk("seat-mount-at must bind a dummy to that same pilot seat again");
 
         assertEquals("a second mount on the same seat must REUSE its bound dummy, not spawn a "
-                        + "twin (first=" + first.raw() + " second=" + second.raw() + ")",
-                first.requireDummyId(), second.requireDummyId());
-        assertTrue("the second response must say the dummy was reused: " + second.raw(),
-                second.reused);
+                        + "twin (first=" + first + " second=" + second + ")",
+                first.integer(DUMMY_ID), second.integer(DUMMY_ID));
+        assertTrue("the second response must say the dummy was reused: " + second,
+                second.bool("reused"));
+    }
+
+    /** Ticks a test allows the server for one link on its own records. */
+    private static final int LINK_TICKS = 200;
+
+    private final Events events = new Events(c -> read(c).raw(),
+            ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+
+    /**
+     * A riderless dummy whose seat no longer stands removes itself — here the seat goes with its ship,
+     * which a discard takes away by deleting the ship's chunks, so no block of it is ever broken.
+     *
+     * <p>The dummy is bound with nobody on it, then the craft is discarded by its own id and the
+     * discard is linked on its {@code DESTROYED}; the verdict is the world's own removal of THAT dummy,
+     * by its entity id.</p>
+     */
+    @Test
+    @Pins("SHIPCTL-20")
+    @RedWitness(member = "EntityDummy#onUpdate",
+            at = "if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {",
+            replacedBy = "if (!world.isRemote && getPassengers().isEmpty() && false) {",
+            fails = "the riderless dummy of a seat that went with its discarded ship was never removed",
+            on = "2026-10-14")
+    public void aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself() throws Exception {
+        int[] builder = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-seat", 4, 12,
+                "the craft whose seat the dummy is bound to stands in this volume");
+        long buildMark = events.mark();
+        String press = act("stellurgytest rocket assemble 0 " + builder[0] + " " + builder[1] + " "
+                + builder[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, builder, press, LINK_TICKS,
+                "the craft whose seat the dummy is bound to");
+        String shipId = birth.awaitUsable(c -> read(c).raw(), events, LINK_TICKS);
+
+        int dummy = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId)
+                .requireSeatFound("the dummy must be bound to the assembled craft's seat")
+                .requireDummyId();
+
+        long discardMark = events.mark();
+        Disposal.ship(c -> arrange(c).raw(), events, 0, shipId);
+        events.awaitRecordWithFields(discardMark, "entity_removed",
+                "the riderless dummy of a seat that went with its discarded ship was never removed — it"
+                        + " stays in the world bound to a seat that no longer exists", LINK_TICKS,
+                "e", String.valueOf(dummy), "cls", "EntityDummy");
     }
 
 }

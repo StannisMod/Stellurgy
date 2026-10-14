@@ -473,6 +473,24 @@ public final class ServerEventRecorder {
                         : "");
     }
 
+    /**
+     * The engine let go of a ship OBJECT — {@code ship_released}, one per naming, on every path that
+     * takes an object down. Its own type rather than an edge of {@code ship_lifecycle}: it speaks for the
+     * object, not the registration, and a reader pairing namings with unnamings must not meet it.
+     */
+    @SubscribeEvent
+    public static void onShipReleased(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipReleased event) {
+        World world = event.world;
+        instrument(world, "server_bus_ship_released");
+        if (world == null) {
+            return;
+        }
+        record(world, "ship_released",
+                "\"ship\":\"" + event.shipUuid + "\""
+                        + ",\"durable\":" + (event.durableId == null ? "null" : "\"" + event.durableId + "\"")
+                        + ",\"dim\":" + world.provider.getDimension());
+    }
+
     private static void recordLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event,
                                         String edge,
                                         dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause,

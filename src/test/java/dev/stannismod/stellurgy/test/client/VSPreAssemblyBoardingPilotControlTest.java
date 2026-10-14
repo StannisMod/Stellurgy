@@ -745,30 +745,23 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
     }
 
     /**
-     * The passing post-assembly test's boarding mechanism, performed BEFORE assembly. The seat probe
-     * finds its seat by scanning the world's loaded tile entities, so a seat that is still a loose
-     * world block is exactly as findable as one already relocated into a ship - which is what makes
-     * this variant possible at all.
+     * The passing post-assembly test's boarding mechanism, performed BEFORE assembly. The dummy is
+     * bound to the seat named by its block address — the fixture's own seat, at the position the block
+     * measurement just verified — so a seat that is still a loose world block is addressed exactly as
+     * one already relocated into a ship, which is what makes this variant possible at all.
      */
     private String boardByProbe() throws Exception {
-        SeatMount mountInfo = SeatMount.firstLoadedSeat(c -> arrange(c).raw(), 0);
-        scenario().requireArranged("the seat probe must FIND the loose pilot seat before assembly: "
-                + mountInfo.raw(), mountInfo.seatFound);
+        String seatMount = arrange("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " "
+                + seatZ).raw();
+        Reply bound = Reply.of("stellurgytest vs seat-mount-at", seatMount);
+        scenario().requireArranged("the probe must bind a dummy to the loose pilot seat at (" + seatX
+                + "," + seatY + "," + seatZ + ") before assembly: " + seatMount, bound.ok());
 
-        // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
-        // OUR seat, at the position the block measurement just verified.
-        scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + seatX
-                        + "," + seatY + "," + seatZ + "), not some other pilot seat in the world: "
-                        + mountInfo.raw(),
-                mountInfo.seatX() == seatX
-                        && mountInfo.seatY() == seatY
-                        && mountInfo.seatZ() == seatZ);
-
-        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
+        String mount = arrange("stellurgytest player mount-entity " + bound.integer("dummyId")).raw();
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // No settle: the caller links on both sides' mount records from marks it took before this.
-        return "seatMount=" + mountInfo.raw() + " mount=" + mount;
+        return "seatMount=" + seatMount + " mount=" + mount;
     }
 
     // ---- Observation helpers -----------------------------------------------------------------

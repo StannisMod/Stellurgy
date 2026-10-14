@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
-import org.junit.Before;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -65,10 +64,15 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     /** Each config key a scenario set, with the value it held before; emptied by {@link #restoreConfig}. */
     private final java.util.Map<String, Double> configBefore = new java.util.LinkedHashMap<>();
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
+    /** Every craft this scenario built, by its own id; disposed of when the scenario ends. */
+    private final java.util.List<WarShip> built = new java.util.ArrayList<>();
+
+    @org.junit.After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (WarShip ship : built) {
+            ship.dispose();
+        }
+        built.clear();
     }
 
     /** The probe's own contract for `config set`: a test puts back what it changed. */
@@ -103,6 +107,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
 
         WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft the round is fired at");
+        built.add(ship);
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
         // A block of this ship whose subspace address we know: its pilot seat.
@@ -211,6 +216,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
 
         WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, MOVE_SRC_X, MOVE_SRC_Z), null,
                 "the craft the round lodges in");
+        built.add(ship);
         ship.parkAt(MOVE_FAR_X, MOVE_FAR_Y, MOVE_FAR_Z, ON_THE_HULL);
         int[] sub = ship.seat();
         double[] world = ship.toWorld(sub[0], sub[1], sub[2]);

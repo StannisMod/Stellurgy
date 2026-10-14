@@ -63,19 +63,46 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // different question: nothing builds there, the crossing ARRIVES there, and clearing the
         // arrival area is an arrangement act rather than a claim about it.
         clearArrivalArea(DST_X, DST_Z);
-        String coords = placeFixture(SRC_X, SRC_Z);
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(SRC_X, SRC_Z);
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        builtDurable = ShipIdentity.nameFromAssembly(asm);
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, SHIP_LINK_TICKS,
+                "the craft whose pilot seat must survive the arrival");
+        crossIntoTheHeat(birth);
+    }
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes wherever its latest naming put it — the build site, or the far side of the crossing. */
+    @After
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
+    }
+
+    /** Server ticks for this craft to be named and become usable, on either side of the crossing. */
+    private static final int SHIP_LINK_TICKS = 200;
+
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+
+    private void crossIntoTheHeat(ShipBirth birth) throws Exception {
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
         // craft is found by, since a crossing carries the name and re-mints the physics id. Both seat
         // questions below are asked THROUGH a ship rather than of the world: an unaddressed seat
         // probe answers about whichever pilot seat the world lists first, and this test has already
         // been caught reading a loose control seat that never crossed anything.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String srcShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        String durableId = birth.durable;
+        String srcShipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, SHIP_LINK_TICKS));
         assertTrue("source ship not managed by VS before the crossing; id=" + srcShipId,
                 ShipInfo.loadedIn(c -> read(c).raw(), 0, srcShipId));
 
@@ -129,14 +156,13 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
                 + " " + DST_X + " " + DST_Y + " " + DST_Z).raw();
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
                 Reply.of(cross).ok());
-        assertTrue("the crossed ship never re-loaded at the destination: " + cross,
-                loadedShips(0) >= 1);
 
         // The crew's own question: is there a seat on the arrived ship, still linked to its computer?
         // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
         // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
-        // "whatever seat the world lists first".
-        String dstShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // "whatever seat the world lists first". Linked on the arrived craft becoming usable.
+        String dstShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, 0, durableId,
+                SHIP_LINK_TICKS);
         assertTrue("the arrived ship is not managed by VS at the destination; id=" + dstShipId,
                 ShipInfo.loadedIn(c -> read(c).raw(), 0, dstShipId));
         String post = arrange("stellurgytest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0").raw();
@@ -160,13 +186,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         if (originalTemperature != Integer.MIN_VALUE) {
             arrange("stellurgytest planet set-temp 0 " + originalTemperature);
         }
-    }
-
-    /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
     /**
@@ -205,11 +224,10 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
      * shared builder runs ASSERTS on an open-air site, so a block found standing here is an
      * arrangement failure that names itself instead of a craft that quietly fails to assemble.
      */
-    private String placeFixture(int baseX, int baseZ) throws Exception {
-        int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), c -> arrange(c).raw(),
+    private int[] placeFixture(int baseX, int baseZ) throws Exception {
+        return RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), c -> arrange(c).raw(),
                 "with-pilot-seat", 2, 10,
                 "the craft whose pilot seat must survive the arrival stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String blockOf(String json) {

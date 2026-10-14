@@ -59,17 +59,20 @@ public class VSNavComputerAssemblyTest extends AbstractSharedServerTest {
                         + " the test could not tell assembly apart from doing nothing: " + before,
                 (!Reply.of(before).bool("linked")));
 
+        long pressMark = events.mark();
         String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
-        assertTrue("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-
+        ShipBirth ship = ShipBirth.ofPress(events, pressMark, 0, bp, asm, SHIP_LINK_TICKS,
+                "with the physics mod an AFC-bearing build must become a ship");
+        builtShip = ship.physicsId;
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + ship, ship.rocketsBorn.isEmpty());
         // THE LINK IS READ ON THE SHIP, found by the name its assembler minted. The craft's blocks
         // leave the world for the ship's subspace yard, so the computer is no longer at any world
-        // position; the ship's own flight computer is resolved by identity and the navigation computer
-        // stands where the fixture put it relative to that one — one block along +Z — which the rigid
-        // relocation preserves.
-        String physicsId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
-                events, 0, ShipIdentity.nameFromAssembly(asm), SHIP_LINK_TICKS));
+        // position; the ship's own flight computer is resolved by identity and the navigation
+        // computer stands where the fixture put it relative to that one — one block along +Z —
+        // which the rigid relocation preserves.
+        String physicsId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(
+                c -> read(c).raw(), events, 0, ship.durable, SHIP_LINK_TICKS));
         String model = read("stellurgytest vs flight-model-by-id 0 " + physicsId).raw();
         requireArranged("the ship this build became must resolve its own flight computer, which is"
                 + " where its navigation computer is found from: " + model, Reply.of(model).bool("found"));
@@ -79,6 +82,17 @@ public class VSNavComputerAssemblyTest extends AbstractSharedServerTest {
         assertTrue("the assembler must link the navigation computer it found in the build: " + after.raw()
                         + " (pre-assembly state was " + before + ")",
                 after.linked);
+    }
+
+    /** The physics id of the craft this scenario built; disposed of when the scenario ends. */
+    private String builtShip;
+
+    @org.junit.After
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
 
     /**

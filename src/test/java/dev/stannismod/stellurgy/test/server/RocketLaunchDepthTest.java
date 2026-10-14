@@ -7,8 +7,8 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -58,8 +58,9 @@ import static org.junit.Assert.*;
  */
 public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "stellurgyDimensions";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -70,20 +71,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
         // FIRST link: the volume this rocket is built and launched in is empty. It is an assertion
         // and not a clearing — the site stands in open air, so anything standing in it means the
         // arrangement is wrong, and saying so here is what keeps it from arriving later as a launch
         // that would not take off.
-        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
-                "simple", 2, 10,
-                "the rocket is built and launched in this volume"));
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the rocket is built and launched in this volume");
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
@@ -258,13 +253,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
     private static final String TOO_HEAVY = "error.rocket.tooHeavy";
 
     /**
-     * Every craft these scenarios launch climbs out of its plot and keeps moving, so the next
-     * scenario starts by removing what an earlier one left in the overworld — at its START, because
-     * JUnit runs an {@code @After} before the rules have finished.
+     * Every craft these scenarios launch climbs out of its plot and keeps moving, so each scenario
+     * disposes of the crafts it built, by the ids their presses' records named, before it ends. A
+     * scenario on a moon does so in its own {@code finally}, before the worlds it minted are deleted.
      */
-    @Before
-    public void disposeOfCraftAnEarlierScenarioLaunched() throws Exception {
-        RocketList.clearFrom(c -> arrange(c).raw(), 0);
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     /**
@@ -355,9 +350,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * because an accepted launch sends the craft straight up through it.</p>
      */
     private int rocketAt(FixtureSite site, String what) throws Exception {
-        return RocketFixture.rocketEntityId(RocketFixture.assembleBuilt(site,
-                c -> act(c).raw(), RocketFixture.placeAt(site,
-                c -> arrange(c).raw(), "simple", 0, 255 - site.y, what)));
+        return rockets.assembleAt(site, c -> act(c).raw(), "simple", 0, 255 - site.y, what);
     }
 
     /** {@code stellurgytest planet info} for one world, read as data. */
@@ -557,7 +550,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             assertTrue("a craft on a moon must be accepted for another moon of the same planet: "
                     + toSibling.window, toSibling.launched);
         } finally {
-            RocketList.clearFrom(c -> arrange(c).raw(), luna);
+            rockets.disposeStanding();
             if (sibling != Integer.MIN_VALUE) {
                 arrange("stellurgy planet delete " + sibling);
             }
@@ -823,7 +816,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " a threshold of " + between + " (its one-gee ratio is " + oneGeeRatio + ") must"
                     + " be let go from the moon: " + atBetween.window, atBetween.launched);
         } finally {
-            RocketList.clearFrom(c -> arrange(c).raw(), luna);
+            rockets.disposeStanding();
             setConfig("minLaunchTWR", minWas);
             setConfig("advancedWeightSystem", weightSystemWas);
         }
@@ -895,7 +888,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " gravity (" + localRatio + ") would clear it: " + atBetween.window,
                     TOO_HEAVY, atBetween.refusal);
         } finally {
-            RocketList.clearFrom(c -> arrange(c).raw(), luna);
+            rockets.disposeStanding();
             setConfig("minLaunchTWR", minWas);
             setConfig("gravityAffectsFuel", gravityWas);
             setConfig("advancedWeightSystem", weightSystemWas);
@@ -993,11 +986,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + read("stellurgytest rocket fuel " + measuredCraft).raw(), wetRatio < dryRatio);
 
             setConfig("minLaunchTWR", Double.toString((dryRatio + wetRatio) / 2));
-            String assemble = RocketFixture.assembleBuilt(plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
-                    c -> act(c).raw(), RocketFixture.placeAt(
-                    plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
-                    c -> arrange(c).raw(), "simple", 0, 255 - site().y,
-                    "the identical craft the assembler judges at the new threshold"));
+            FixtureSite second = plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET);
+            int[] secondBuilder = RocketFixture.placeAt(second, c -> arrange(c).raw(), "simple", 0,
+                    255 - site().y, "the identical craft the assembler judges at the new threshold");
+            long pressed = rockets.mark();
+            String assemble = RocketFixture.assembleBuilt(second, c -> act(c).raw(), secondBuilder);
+            // Whatever the press made is held for disposal; whether it made one is the verdict below.
+            rockets.allBornAt(pressed, secondBuilder);
             Reply built = Reply.of("stellurgytest rocket assemble", assemble);
             boolean assemblerBuilt = built.ok();
             System.out.println("[launch-gate] assembler at the midpoint: " + assemble);

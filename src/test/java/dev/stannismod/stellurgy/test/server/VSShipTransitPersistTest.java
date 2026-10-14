@@ -39,11 +39,13 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
+        buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
 
         // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
@@ -96,19 +98,28 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
         // ONLY through the persisted snapshot — the live ship was discarded.
-        assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
-                + "); countAll=" + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
-        // Named rather than approached: the cell's ship count now carries the ids it counted, so
-        // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
-        // this replaced would answer in the same shape if the cell held two.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(c -> read(c).raw(), targetDim);
+        // Named rather than approached: THIS craft, by the durable name the restored jump carried,
+        // linked on its own announcement that it is usable in the target cell.
+        String arrivedId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                setup.requireDurableId(), USABLE_TICKS);
         assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
                 + " failed); id=" + arrivedId,
                 ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
     }
 
+    /** Server ticks for the craft to become usable where it was built or has arrived. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     // --- helpers (mirror VSShipTransitTest) ------------------------------------------------------
@@ -116,18 +127,6 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /**
-     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
-     *
-     * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
-     * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
-     */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
     private static int extractInt(String json, String key) {
         return Reply.of(json).integer(key);

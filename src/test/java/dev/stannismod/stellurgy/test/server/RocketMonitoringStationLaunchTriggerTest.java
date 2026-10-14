@@ -2,8 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -48,7 +49,6 @@ import static org.junit.Assert.*;
  */
 public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServerTest {
 
-    private static final String ENT_ID = "entityId";
     private static final String OBSERVED = "observed";
     private static final String WAS_POWERED = "wasPowered";
     private static final String EQUIVALENT_POWER = "equivalentPower";
@@ -122,19 +122,19 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
                 + " minecraft:air"));
     }
 
-    /** Assembles a rocket via the standard fixture; returns its entity id. */
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** Assembles a rocket via the standard fixture; the one its press's {@code rocket_born} record names. */
     private int assembleFixture(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
         // this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleBuilt(site, cmd -> join(client().act(cmd)), RocketFixture.placeAt(site, cmd -> join(client().arrange(cmd)),
-                "simple", 2, 10,
-                "the craft whose launch the station triggers stands in this volume"));
-        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
-        Reply emReply = Reply.of(assemble);
-        assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));
-        return Integer.parseInt(emReply.text(ENT_ID));
+        return rockets.assembleAt(site, cmd -> join(client().act(cmd)), "simple", 2, 10,
+                "the craft whose launch the station triggers stands in this volume");
     }
 
     /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */

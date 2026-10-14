@@ -112,17 +112,14 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
-        // CONTROL: nothing is ledgered before the climb — a later "settled" is then a real observation.
-        EntryStatus control = EntryStatus.wholeLedger(c -> read(c).raw());
-        assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
-                0, control.ships);
-
         // Build a piloted tier-2 ship in the overworld and assemble it into a VS ship.
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        ShipBirth birth = build(SRC_X, SRC_Z);
+
+        // CONTROL: this craft is not ledgered before the climb — a later "settled" is then a real
+        // observation.
+        EntryStatus control = EntryStatus.forShip(c -> read(c).raw(), birth.durable);
+        assertTrue("witness sensitivity control — this craft must not be ledgered before the climb: "
+                + control, !control.found);
 
         // The cell the production resolver answers for the launch dimension — the entry MUST land here.
         String launch = read("stellurgytest space launch-cell 0").raw();
@@ -135,8 +132,9 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // line the server reports for the overworld).
         // The name comes from the assembler, which minted it — not from asking the shared overworld what
         // stands near the pad, which answers with a neighbouring scenario's craft just as readily.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        String durableId = birth.durable;
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
@@ -161,9 +159,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // look; the record is written by the subject, at the instant it happens.
         awaitEnteredSpace(events, entryMark, durableId,
                 "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS,
-                // Keep the destination slots' ships load-queued (headless has no player to auto-load
-                // them). This is work the wait has to keep doing, not part of what is being waited for.
-                () -> loadAllEntrySlots(setup));
+                null);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
 
@@ -172,9 +168,8 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                 status.cellKey);
         int slotDim = status.slotDim;
         assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
-        assertTrue("the settled ship's cell world is not live in a slot; status=" + status
-                + " countAll=" + read("stellurgytest vs ship-count-all " + slotDim).raw(),
-                loadedShips(slotDim) >= 1);
+        // The settled craft's cell world is live in its slot: linked on THIS craft becoming usable there.
+        ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, slotDim, durableId, USABLE_TICKS);
     }
 
     /**
@@ -202,14 +197,10 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
-        String coords = placeFixture(FixtureSite.openAir(0, JUMP_SRC_X, JUMP_SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
-
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        ShipBirth birth = build(JUMP_SRC_X, JUMP_SRC_Z);
+        String durableId = birth.durable;
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
@@ -223,13 +214,13 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
 
         awaitEnteredSpace(events, entryMark, durableId,
                 "precondition: the ship must enter space, or there is nothing to jump", SETTLE_TICKS,
-                () -> loadAllEntrySlots(setup));
+                null);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = status.slotDim;
         String originCell = status.cellKey;
-        assertTrue("the entered ship's cell world is not live in a slot; status=" + status,
-                loadedShips(slotDim) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, slotDim,
+                durableId, USABLE_TICKS));
 
         // Jump it ONE sector over. The slot dim is passed explicitly: the console sender's own world is
         // the overworld, and the default would read that instead of the cell the ship is in.
@@ -288,15 +279,12 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // only slips a sector once that first tick lands. So bring the observer in now — after the
         // jump, never during it — and read the address again.
         int arrivedSlot = extractInt(arrived, "slotDim");
-        arrange("stellurgytest vs load-ships " + arrivedSlot);
-        // The jump RE-ASSEMBLED the hull, so the physics id it had in the origin cell names nothing
-        // here; the durable id is the one thing that crossed. Ask the ledger's own bridge for the new
-        // one, and refuse to go on without it — the alternative below was "whatever ship is nearest
-        // (0,200,0) in the arrival slot", which is an address no craft was ever put at.
+        // The jump RE-ASSEMBLED the hull, so the physics id it had in the origin cell may name nothing
+        // here; the durable id is the one thing that crossed. Ask the ledger's own bridge for the
+        // arrival's id, refuse to go on without it, and ask for THAT craft to be loaded.
         String arrivedVsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), arrivedSlot, durableId);
+        arrange("stellurgytest vs load-ship " + arrivedSlot + " " + arrivedVsId).requireOk("ask for the arrival");
         final String[] pose = {""};
-        /** How many ships the cell held at the instant the pose was sampled — for a failure only. */
-        final int[] loadedInCell = {-1};
         // The ledger's own coordinate for this craft, kept from the last sample: the pose witness
         // below compares the ship against WHERE THE LEDGER SAYS IT IS, and both are read inside the
         // same window.
@@ -308,31 +296,20 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // and report stability about a ship that was never asked to move.
         GameTicks.observe(client(), GameTicks.world(arrivedSlot),
                 DRIFT_SAMPLES, DRIFT_TICKS_BETWEEN_SAMPLES, () -> {
-                    arrange("stellurgytest vs load-ships " + arrivedSlot);
-                    // THE POSE FIRST, with nothing between it and the load-ships above. Reading
-                    // the count before it inserted one probe round-trip into that gap, and the
-                    // ship unloaded inside the gap often enough to red a healthy run (measured).
-                    // A diagnostic that changes what it is measuring is worse than none.
+                    arrange("stellurgytest vs load-ship " + arrivedSlot + " " + arrivedVsId);
+                    // THE POSE FIRST, with nothing between it and the load above: the ship unloaded
+                    // inside an extra probe round-trip often enough to red a healthy run (measured).
                     //
                     // Asked BY NAME, so the reply is about this craft or about nothing: the cell's
-                    // ship is unloaded and reloaded between samples (measured: count 0 mid-
-                    // observation on a healthy run), and a nearest-ship lookup answers such a
-                    // sample with whatever else is loaded rather than with a miss.
+                    // ship is unloaded and reloaded between samples, and the reply's own `managed`
+                    // says which kind of sample this was.
                     String poseNow = read("stellurgytest vs ship-info " + arrivedSlot + " id " + arrivedVsId).raw();
-                    // The count travels WITH the pose rather than gating on it: the reader of a
-                    // failure needs to know whether he is looking at an unloaded sample. It is kept
-                    // BESIDE the reply and not appended to it — a reply with a word glued onto the
-                    // end is no longer the JSON it claims to be, and every reader of it then fails
-                    // with a parse error about the world.
                     pose[0] = poseNow;
-                    loadedInCell[0] = extractInt(read("stellurgytest vs ship-count " + arrivedSlot).raw(),
-                            "count");
                     String held = read("stellurgytest space entry-status id " + durableId).raw();
                     ledgerRow[0] = held;
                     assertEquals("the arrived ship's address drifted out of the cell it flew to once"
                                     + " its flight computer began self-reporting its position;"
-                                    + " status=" + held + " ship=" + pose[0]
-                                    + " loadedShipsInCell=" + loadedInCell[0],
+                                    + " status=" + held + " ship=" + pose[0],
                             targetCell, extractString(held, "cellKey"));
                 });
         // And the same fact read off the SHIP rather than off the ledger — the two compared where
@@ -345,8 +322,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // pose band on 2026-09-11 put a settled ship at its cell's centre on world Y 0, which no
         // magnitude test can tell from anything. Comparing against the ledger's own coordinate is
         // what the check meant all along, and it survives the next change of mapping too.
-        assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0]
-                        + " loadedShipsInCell=" + loadedInCell[0],
+        assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0],
                 ShipInfo.isLoaded(pose[0]));
         ShipInfo arrivedPose = ShipInfo.of(pose[0]);
         double[] expected = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
@@ -362,7 +338,6 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                             + " reached the coordinate the jump was aimed at. axis " + axis
                             + ": ship " + actual[axis] + " vs ledger " + expected[axis]
                             + " (tolerance " + CellSeam.CARRY_MARGIN + "). ship=" + pose[0]
-                            + " loadedShipsInCell=" + loadedInCell[0]
                             + " ledger=" + ledgerRow[0],
                     Math.abs(actual[axis] - expected[axis]) <= CellSeam.CARRY_MARGIN);
         }
@@ -370,31 +345,40 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                 SubsystemStatus.read(c -> read(c).raw()).transits);
     }
 
+    /** Server ticks for a craft to be named and become usable where it is: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 
-    // --- helpers (mirror VSShipCrossingSpikeTest / VSShipTransitTest) -----------------------------
+    // --- helpers ----------------------------------------------------------------------------------
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
-    }
-
-    /**
-      * How many ships are loaded in this slot, once at least one is — budgeted in server ticks, so a
-      * loaded machine is given the same number of chunk-load ticks as an idle one rather than the
-      * same number of seconds.
-      */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
+    /** Lay and press a piloted craft at {@code (x, z)}; the craft is this scenario's from here on. */
+    private ShipBirth build(int x, int z) throws Exception {
+        int[] bp = placeFixture(FixtureSite.openAir(0, x, z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft this scenario flies into space");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        return birth;
     }
 
 
@@ -411,10 +395,9 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

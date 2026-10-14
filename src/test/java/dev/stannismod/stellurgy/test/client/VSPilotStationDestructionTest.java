@@ -248,9 +248,10 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // incremented by every neighbour that ever assembled one on this shared world.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         FlyingShip ship = new FlyingShip();
         ship.id = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
@@ -400,14 +401,14 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the craft is built in and FLOWN out of is EMPTY, measured by the
         // air fill's own `placed`. Open air, so this ASSERTS rather than digs — a craft climbing on
         // a held key out of a ten-block pit meets its rim, and the red then accuses the destruction
         // handler this class exists to test.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the hull, and the first blocks of the lane it climbs before the seat is broken"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
+                "the hull, and the first blocks of the lane it climbs before the seat is broken");
     }
 }

@@ -104,9 +104,10 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         shipId = awaitShipSpawned(events,
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
 
@@ -277,14 +278,14 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the craft is built in and cruises out of is EMPTY, measured by the
         // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
         // replaces — a craft that cruises out of a pit meets its rim, and the red then names the
         // cruise. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the hull, and the first blocks of the lane it cruises along"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
+                "the hull, and the first blocks of the lane it cruises along");
     }
 }

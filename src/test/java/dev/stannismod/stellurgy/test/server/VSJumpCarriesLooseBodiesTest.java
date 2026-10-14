@@ -48,16 +48,25 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 
 
+        buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
-        int originDim = setup.originDim;
-        requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        builtDurable = setup.requireDurableId();
+        carry(setup);
+    }
 
-        // The ship the setup just assembled, by the name the setup reports. Every scenario in this
-        // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
-        // question with several right answers and the yard lookup takes the first — measured
-        // elsewhere as seatFound:false on a craft that had just been built.
-        String shipId = setup.requireShipId();
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** Server ticks for the setup's craft to become usable in its cell: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    private void carry(TransitSetup setup) throws Exception {
+        int originDim = setup.originDim;
+        // The ship the setup just assembled, by the name the setup reports, linked on its own
+        // announcement that it is usable in the origin cell.
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
+                events, originDim, setup.requireDurableId(), USABLE_TICKS));
 
         // Where the ship actually is in its cell — the deck the body is dropped onto.
         PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), originDim, shipId)
@@ -117,12 +126,9 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
                 "the carry never put its cargo down in the arrival dimension", PLACEMENT_TICKS);
 
         // The identity and the pose are READ once, after production has said the bodies are down —
-        // the same readings the poll took, now taken at a moment that means something.
-        String counted = read("stellurgytest vs ship-count " + targetDim).raw();
-        String[] named = Reply.of("stellurgytest vs ship-count", counted).textArray("ships");
-        assertEquals("the arrival dimension must hold exactly this jump's hull: " + counted,
-                1, named.length);
-        String arrivedInfo = read("stellurgytest vs ship-info " + targetDim + " id " + named[0]).raw();
+        // the arrived hull by the durable name the jump carried.
+        String arrivedId = ShipIdentity.physicsIdOf(c -> read(c).raw(), targetDim, setup.requireDurableId());
+        String arrivedInfo = read("stellurgytest vs ship-info " + targetDim + " id " + arrivedId).raw();
         assertTrue("the substrate announced the cargo down, so the hull it was placed on must be"
                 + " resolvable here: " + arrivedInfo, ShipInfo.isLoaded(arrivedInfo));
         ShipInfo ship = ShipInfo.of(arrivedInfo);
@@ -146,19 +152,18 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
                 0, leftBehind);
     }
 
+    /** The craft goes wherever its latest naming put it — the origin cell, or the far side of the jump. */
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
     private static int extractInt(String json, String key) {
         // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a

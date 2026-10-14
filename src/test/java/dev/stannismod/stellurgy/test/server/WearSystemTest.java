@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -34,14 +35,20 @@ public class WearSystemTest extends AbstractSharedServerTest {
                 "simple", 2, 10, "the craft is built and worn in this volume");
     }
 
+    /** Press the assembler at {@code builderPos}; the rocket its own {@code rocket_born} record names. */
     private int assembleAndGetId(int[] builderPos) throws Exception {
+        long mark = rockets.mark();
         String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + builderPos[0] + " " + builderPos[1] + " " + builderPos[2]));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-        String list = String.join("\n", client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.bornAt(mark, builderPos);
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private int thrustOf(int entityId) throws Exception {

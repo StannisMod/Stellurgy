@@ -973,9 +973,10 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory reset");
-        String assemble = assembleFixture(site, variant);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, variant);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // The registry's own addShip, awaited as a LINK. The count poll this replaces could not see
         // one: raising its budget from 200 to 600 ticks was measured and changed nothing (2/4 red
@@ -1044,7 +1045,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         return where;
     }
 
-    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site, String variant) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // THE FOREST THIS USED TO FELL IS NOT HERE ANY MORE, and the history is worth keeping
@@ -1067,9 +1068,9 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // body is released in the cavity under that roof. It also has to fit: `stellurgytest fill` caps a
         // volume at 32768 and a 42x42 footprint leaves room for 18 layers (31752), so a taller box
         // here would be refused by the probe rather than by a reviewer.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 18, 18,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), variant, 18, 18,
                 "the hull, the cockpit cavity a body is released inside, and the whole volume the"
-                        + " assembly flood can escape into"));
+                        + " assembly flood can escape into");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

@@ -141,9 +141,10 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
 
-        String assemble = assembleFixture(site);
-        assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-shield-emitter build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, from the registry's record of THIS assembly's own add.
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
@@ -372,7 +373,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         return v * v;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the hull and its shield shell occupy is EMPTY, measured by the air
@@ -380,7 +381,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // the ten-block shaft it replaces was a hazard for this subject in particular: a shell whose
         // radius is checked against blocks is checked against the pit's walls as readily as against
         // the craft. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 20,
-                "the hull, and the shell the emitter projects around it"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 20,
+                "the hull, and the shell the emitter projects around it");
     }
 }

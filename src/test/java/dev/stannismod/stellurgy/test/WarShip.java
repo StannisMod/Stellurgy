@@ -15,8 +15,8 @@ import static org.junit.Assert.assertTrue;
  * keyed by its durable name) and loaded ({@code ship_loaded}, keyed by its physics id), and from then
  * on names the craft by that id in every call.</p>
  *
- * <p>A scenario that uses this disposes of what it built in the {@code @Before} of the next one, with
- * {@link ShipReadiness#clearCraftFrom}.</p>
+ * <p>A scenario that uses this disposes of what it built, by this id, before it ends —
+ * {@link #dispose}, or {@link Disposal#ship} with the id a relocation re-registered it under.</p>
  */
 public final class WarShip {
 
@@ -55,8 +55,9 @@ public final class WarShip {
             before.run(builder);
         }
         String asm = RocketFixture.assembleBuilt(site, c -> commands.act(c).raw(), builder);
-        assertTrue("an AFC-bearing build must become a ship, not a rocket: " + asm,
-                Reply.of("stellurgytest rocket assemble", asm).integer("rocketCount") == 0);
+        java.util.List<String> rockets = RocketFixture.rocketsBornAt(log, mark, builder);
+        assertTrue("an AFC-bearing build must become a ship, not a rocket — its assembler made " + rockets
+                + ": " + asm, rockets.isEmpty());
         String durable = ShipIdentity.nameFromAssembly(asm);
         String spawned = log.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durable,
                 what + " — no hull was ever registered for this craft", LINK_TICKS);
@@ -65,6 +66,11 @@ public final class WarShip {
                 what + " — hull " + vsShip + " reached the registry and never became a loaded ship",
                 LINK_TICKS);
         return new WarShip(log, commands, durable, vsShip);
+    }
+
+    /** Dispose of this hull by its id ({@link Disposal#ship}); for a hull that was not relocated. */
+    public void dispose() throws Exception {
+        Disposal.ship(c -> commands.arrange(c).raw(), log, 0, vsShip);
     }
 
     /** The substrate's report on this hull, by id; refuses one it no longer manages. */

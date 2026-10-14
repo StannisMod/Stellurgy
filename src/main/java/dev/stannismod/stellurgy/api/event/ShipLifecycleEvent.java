@@ -7,8 +7,8 @@ import javax.annotation.Nullable;
 import java.util.UUID;
 
 /**
- * The life of a tier-2 craft as a ship: it is NAMED, it becomes USABLE, and it is UNNAMED — every
- * edge posted by the ship manager at the place the transition happens.
+ * The life of a tier-2 craft as a ship: it is NAMED, it becomes USABLE, its object is RELEASED and it
+ * is UNNAMED — every edge posted by the ship manager at the place the transition happens.
  *
  * <h2>One family, published at the source</h2>
  *
@@ -27,7 +27,7 @@ import java.util.UUID;
  * birth. Finding an edge by watching a level means polling, and a subsystem that polls ends up with
  * its own private idea of which tick the craft started existing on.</p>
  *
- * <h2>The three edges</h2>
+ * <h2>The edges</h2>
  *
  * <ul>
  *   <li>{@link ShipNamed} — the engine holds a live ship object for this identity: the craft can be
@@ -37,6 +37,8 @@ import java.util.UUID;
  *       engine withholds physics for the first ticks after a load so a freshly placed hull does not
  *       fall through the floor, and fills the surrounding-chunk cache on a tick of its own. A
  *       consumer that wants to fly the craft, or to put a body on its deck, wants this one.</li>
+ *   <li>{@link ShipReleased} — the engine let go of the live ship object a naming announced; one per
+ *       naming, whatever took the object down.</li>
  *   <li>{@link ShipUnnamed} — the ship can no longer be resolved by id, and {@link ShipUnnamed#cause}
  *       says whether it will be back ({@link Cause#UNLOADED}), is alive elsewhere
  *       ({@link Cause#DEPARTED}, posted as {@link ShipDeparted} with its destination), or has ceased
@@ -173,6 +175,26 @@ public class ShipLifecycleEvent extends Event {
      */
     public static class ShipUsable extends ShipLifecycleEvent {
         public ShipUsable(World world, UUID shipUuid, @Nullable UUID durableId) {
+            super(world, shipUuid, durableId);
+        }
+    }
+
+    /**
+     * The engine no longer holds a live ship object for this identity: the counterpart of
+     * {@link ShipNamed}, posted ONCE for every object a naming announced, on whatever path the object
+     * went — destroyed, dropped as a blockless remnant, or unloaded.
+     *
+     * <p>A ship has two halves — its registration and, while loaded, its object — and they can be
+     * taken down on different paths and ticks. {@link ShipUnnamed} speaks for the registration and is
+     * announced once, by whichever path removes the entry; an object whose entry was already gone
+     * announces no unnaming. This one speaks for the object, so "every object a naming created was
+     * let go" is a statement a consumer can check: an object still ticking under an identity with no
+     * registration behind it is a naming with no release.</p>
+     *
+     * <p>Ordered BEFORE the unnaming its path produces, when it produces one in the same tick.</p>
+     */
+    public static class ShipReleased extends ShipLifecycleEvent {
+        public ShipReleased(World world, UUID shipUuid, @Nullable UUID durableId) {
             super(world, shipUuid, durableId);
         }
     }

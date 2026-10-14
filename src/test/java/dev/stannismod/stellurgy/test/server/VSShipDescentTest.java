@@ -45,17 +45,20 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Phase 1: ENTER a ship so it is settled in a slot cell (the proven entry path). ---
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, FIND_AFC_TICKS,
+                "the craft that enters space and descends");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
-        // The ship's own name, from the assembler that minted it — and from there its physics id. The
-        // pad sits in a world this class shares, so "the ship near (SRC_X,SRC_Y,SRC_Z)" is a question
-        // a neighbour's craft can answer.
-        String shipId = ShipIdentity.nameFromAssembly(asm);
-        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, shipId);
+        // The ship's own name, from the assembler that minted it — and from there its physics id, once
+        // its own announcement says it is usable.
+        String shipId = birth.durable;
+        String vsId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, FIND_AFC_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, vsId);
         double sx = src.x, sy = src.y, sz = src.z;
@@ -76,7 +79,7 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // over and over until it agrees.
         awaitEnteredSpace(events, entryMark, shipId,
                 "precondition: the ship must enter space, or there is nothing to descend from",
-                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
+                SETTLE_TICKS, null);
         EntryStatus entryStatus = EntryStatus.forShip(c -> read(c).raw(), shipId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = entryStatus.slotDim;
@@ -84,9 +87,11 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
                 slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
-        // CONTROL: the overworld holds no VS ship now (entry cut the source out) — a later "1" is the descent.
-        assertEquals("witness sensitivity control — overworld must hold no VS ship before the descent",
-                0, extractInt(read("stellurgytest vs ship-count-all " + TARGET_DIM).raw(), "count"));
+        // CONTROL: this craft is not registered in the overworld now (the entry cut it out), so its
+        // arrival there below is the descent's.
+        String inTarget = read("stellurgytest vs ship-uuid " + TARGET_DIM + " " + shipId).raw();
+        assertTrue("witness sensitivity control — this craft must not be in the overworld before the"
+                + " descent: " + inTarget, !Reply.of(inTarget).bool("found"));
 
         // Nothing to stop feeding: the pilot input lives on the SHIP's own flight computer, and that
         // tile was cut out of dim 0 by the entry above. This used to clear a world-wide static that
@@ -95,23 +100,17 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // Ensure the settled ship is loaded in its slot, then locate its flight computer. The ship's
         // blocks (incl. the AFC tile entity) live in the slot world's far subspace shipyard; they enter
         // loadedTileEntityList only once VS loads the ship, so force-load + poll (async load).
-        assertTrue("the settled ship never loaded in its slot", loadedShips(slotDim) >= 1);
-        // NOT A WAIT, and it never was one — it RETRIED an operation, which is the shape ruled on
-        // when seventeen ship-load waits were deleted rather than converted: a wait exists because
-        // something is not true synchronously after an action, and here the action is the pump on
-        // the line above. The load is asked for once, and the lookup that follows is answerable
-        // because the ship is resident when it is asked — the reading directly above has already
-        // established that the slot holds a loaded ship.
-        //
-        // By id: this scenario knows which ship it flew up, and "the first settled ship in the slot"
-        // is a different question that happens to have the same answer today.
-        arrange("stellurgytest vs load-ships " + slotDim).raw();
+        // Linked on this craft's own announcement that it is usable in its slot, then asked for by
+        // its id. By id: this scenario knows which ship it flew up, and "the first settled ship in the
+        // slot" is a different question that happens to have the same answer today.
+        String slotVsId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
+                events, slotDim, shipId, FIND_AFC_TICKS));
+        arrange("stellurgytest vs load-ship " + slotDim + " " + slotVsId).requireOk("ask for the settled ship");
         String afc = read("stellurgytest space find-afc " + slotDim + " " + shipId).raw();
         // `found` is missing only from the probe's "world or ledger not ready" reply, and
         // absence is the answer: not located, failing here with that reply.
         assertTrue("could not locate the ship's flight computer in the slot " + slotDim
-                        + " after its ships were load-queued; the slot reports "
-                        + loadedShips(slotDim) + " loaded ship(s): " + afc,
+                        + " although the ship is usable there as " + slotVsId + ": " + afc,
                 Reply.of(afc).boolOr("found", false));
         int ax = extractInt(afc, "x"), ay = extractInt(afc, "y"), az = extractInt(afc, "z");
 
@@ -122,8 +121,8 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started"));
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
-        assertEquals("the descending ship leaves the ledger on the cut", 0,
-                EntryStatus.wholeLedger(c -> read(c).raw()).ships);
+        EntryStatus afterCut = EntryStatus.forShip(c -> read(c).raw(), shipId);
+        assertTrue("the descending ship leaves the ledger on the cut: " + afterCut, !afterCut.found);
 
         // The crossing re-assembles the ship in the planet's world asynchronously, and production
         // announces when it has: this waits for THAT, by id, instead of sampling the loaded count
@@ -132,13 +131,21 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // chain instead of a number. The `descent-status` poll this replaces was a pure read of a
         // counter -- diagnostic only, so nothing is lost by dropping it.
         events.awaitField(descentMark, "ship_entered_planet","ship", shipId,
-                "the ship never crossed into the planet's dimension via the descent; countAll="
-                        + read("stellurgytest vs ship-count-all " + TARGET_DIM).raw(),
+                "the ship never crossed into the planet's dimension via the descent",
                 SETTLE_TICKS);
     }
 
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 
@@ -148,16 +155,6 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
 
     /**
@@ -173,10 +170,9 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

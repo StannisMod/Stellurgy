@@ -114,13 +114,12 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // would be a real risk taken for no contract.
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(originDim, 40, 40);
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleBuilt(site, c -> act(c).raw(), dev.stannismod.stellurgy.test.RocketFixture.placeAt(
-                site, c -> arrange(c).raw(), "with-pilot-seat", 2, 16,
-                "the craft that is flown, relogged and flown again inside this cell"));
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
-                + originDim + ")", waitForLoadedShip(originDim) >= 1);
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16,
+                "the craft that is flown, relogged and flown again inside this cell");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The scenario's ship, by IDENTITY, from the assembler that minted its durable name. This
         // was a bounded lookup at the build site, defended as the one place "no other craft could
@@ -130,6 +129,9 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
         // scenario's leavings.
         String durableId = ShipIdentity.nameFromAssembly(assembled);
+        disposeOfShipAtEnd(durableId);
+        // Loaded in the pool cell before the transit is driven: the link is this craft's own
+        // `ship_usable`, which the await below waits on.
         String shipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), originDim,
                 durableId, 200);
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
@@ -511,16 +513,6 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
     private double clientPlayerY() throws Exception {
         JsonObject state = bot().reportState();
         return state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
-    }
-
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
-                "this scenario's craft must be loaded before the transit is driven");
     }
 
     private static int readInt(String json, String key) {

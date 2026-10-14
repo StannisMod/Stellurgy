@@ -14,5 +14,4 @@ dev.stannismod.stellurgy.test.client.VSTransitCrewGroupTest#standTheBotOnTheDeck
 dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#openConsoleFromTheDeck 1
 dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#openScreenByRealKeyPress 1
 dev.stannismod.stellurgy.test.server.AMirrorSendsTheBeamBackTest#aBeamHeldOnAMirrorComesBackToTheGunThatFiredIt 1
-dev.stannismod.stellurgy.test.server.InterstellarJumpLegTest#awaitArrival 1
 dev.stannismod.stellurgy.test.server.WorldCommandFixtures#awaitEnteredSpace 1

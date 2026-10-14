@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -28,23 +29,21 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
-                "simple", 2, 10,
-                "the craft is built and flown in this volume"));
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
     }
 
     /** Pins INV-RKT-09 (a fuelless free-flight rocket stays grounded after prepareLaunch). */

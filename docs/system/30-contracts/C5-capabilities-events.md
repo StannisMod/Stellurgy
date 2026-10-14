@@ -274,7 +274,9 @@ completeness. Each registers when it is added to a world and unregisters on whic
 Stellurgy **declares and posts** this one; it is not a Forge or libVulpes event. `ShipLifecycleEvent`
 (`api/event/`) is the ONE ship-lifecycle family: `ShipNamed` (`ASSEMBLED` /
 `PASTED` / `LOADED`), `ShipUsable` (physics will be stepped — once per ship object, i.e. per load),
-`ShipUnnamed` (`UNLOADED` / `DESTROYED`) and its subclass `ShipDeparted` (`DEPARTED`, carrying
+`ShipReleased` (the engine let go of the ship OBJECT a naming announced — once per naming, on every
+path that takes an object down: the destroy pass, the spawn drain's remnant drop and the unload,
+posted before the unnaming that path produces), `ShipUnnamed` (`UNLOADED` / `DESTROYED`) and its subclass `ShipDeparted` (`DEPARTED`, carrying
 `destinationDim`). Every edge is posted by the vendored physics manager at the place the transition
 happens (`valkyrienskies/…/WorldServerShipManager.java`), on the **server game thread** inside the
 world tick, in two flushes of `publishLifecycleEvents` (`WorldServerShipManager.java:635`, called at
@@ -290,9 +292,12 @@ which consumes a departure the crossing declared BEFORE its cut (`VSIntegration.
 `VSBridge.declareDeparture` → `WorldServerShipManager#declareDeparture`) and posts `ShipDeparted`, or
 posts `DESTROYED`. A world that stops ticking announces nothing. `[V]`
 
+Which records the unloaded-record sweep collects, a background load request notwithstanding: JUMP-16.
+
 | Forge event | handler | side | what it does |
 |---|---|---|---|
 | `ShipLifecycleEvent.ShipNamed` / `.ShipUnnamed` (Stellurgy-declared) | `ServerEventRecorder#onShipNamed` / `#onShipUnnamed` (test source set) | S | TESTS ONLY — the subscriber is not in a released jar: one `ship_lifecycle` record per announcement (`ship`, `durable`, `cause`, `edge`, `dim`, and `destinationDim` on a departure). |
+| `ShipLifecycleEvent.ShipReleased` (Stellurgy-declared) | `ServerEventRecorder#onShipReleased` (test source set) | S | TESTS ONLY — one `ship_released` record per released ship object (`ship`, `durable`, `dim`) |
 | `ShipLifecycleEvent.ShipUsable` (Stellurgy-declared) | `ServerEventRecorder#onShipUsable` (test source set) | S | TESTS ONLY — one `ship_usable` record per load (`ship` = durable id, `vsShip` = physics id, `dim`) |
 | `ShipLifecycleEvent.ShipNamed` (Stellurgy-declared) | `ShipMassTrigger.Hooks#onShipNamed` | S | the authoritative hull mass recompute: compares against the incremental path on ASSEMBLED/PASTED and LOGS a disagreement, writes silently on LOADED. Keeps no tally — a test observes it at `ShipInertiaWriter.compare`. Catches its own failures — the handler contract forbids throwing, and this one runs inside the ship manager's tick |
 | `ShipLifecycleEvent.ShipUsable` (Stellurgy-declared) | `DeckHold#onShipUsable` (`DeckHold.java`) | S | resolves every deck hold waiting for that durable id |

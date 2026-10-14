@@ -4,7 +4,13 @@ import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.CraftCensus;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +34,8 @@ public final class SharedClientScope extends TestClassScope {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     final Map<String, Plot> plots = new HashMap<>();
     int nextPlotIndex;
+    /** The eviction announcements made by the census's reader of the pair's server log. */
+    private final EvictionReports evictions = new EvictionReports();
 
     @Override
     protected void open(Class<?> testClass) {
@@ -76,6 +84,21 @@ public final class SharedClientScope extends TestClassScope {
                 + (System.nanoTime() - startedNanos) / 1_000_000L
                 + " — one server JVM + one client JVM for " + test.getClass().getSimpleName()
                 + (seeded.isEmpty() ? " (no seeded game directory)" : " seeded:" + seeded));
+    }
+
+    /**
+     * After every scenario the pair's server holds no craft — see {@link CraftCensus}. A pair that is not
+     * up, or that stopped answering (the scenario that killed it has already failed), is not judged.
+     */
+    @Override
+    protected void afterScenario(String scenario) throws Exception {
+        if (server == null || harnessDead) {
+            return;
+        }
+        TestClient serverClient = server.client();
+        Events events = new Events(c -> Reply.answering(c, serverClient.read(c)).raw(),
+                ticks -> GameTicks.advance(serverClient, GameTicks.server(), ticks), evictions);
+        CraftCensus.requireNoneLeft(scenario, serverClient, events);
     }
 
     @Override

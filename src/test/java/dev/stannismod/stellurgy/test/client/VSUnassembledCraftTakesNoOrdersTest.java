@@ -123,9 +123,10 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // answered by every neighbour that ever assembled one.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleShip();
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleShip();
+        String assemble = assembleBuilt.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // Kept, not discarded: the mark precedes the assembly, so this record is this scenario's
         // own ship, and the mount below has to name it rather than take the first loaded seat.
         String controlShipId = awaitShipSpawned(events, spawnMark,
@@ -415,10 +416,10 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      * FIRST link, and it ASSERTS where the warmup+fill pair DUG. HEIGHT 16: the hull, plus the air
      * above it this scenario watches for a craft that must NOT move.
      */
-    private String assembleShip() throws Exception {
-        return RocketFixture.assembleBuilt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> arrange(c).raw(),
+    private ShipAssembly assembleShip() throws Exception {
+        return ShipAssembly.at(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
                 "with-pilot-seat", 2, 16,
-                "the loose craft that must take no orders, and the air it must not climb into"));
+                "the loose craft that must take no orders, and the air it must not climb into");
     }
 
     // ---- Observation helpers ---------------------------------------------------------------------

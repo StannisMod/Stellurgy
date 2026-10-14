@@ -99,7 +99,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C6](./30-contracts/C6-mixin-asm-at.md) | mixin targets / AT | seam table |
 | [C7](./30-contracts/C7-lang-assets.md) | lang / asset keys | namespace table |
 | [C8](./30-contracts/C8-crew-any-attitude.md) | any-attitude crew behaviour aboard a tier-2 (VS) ship — capture, frames, camera, interaction | `CREW-C1..C17` |
-| [C9](./30-contracts/C9-ship-control.md) | tier-2 pilot control — input delivery to the linked computer, seat binding and link lifecycle, FA autopilot | `SHIPCTL-1..19` |
+| [C9](./30-contracts/C9-ship-control.md) | tier-2 pilot control — input delivery to the linked computer, seat binding and link lifecycle, FA autopilot | `SHIPCTL-1..20` |
 | [C10](./30-contracts/C10-ship-stats.md) | the tier-2 stat surface derived from construction — mass, authority, readouts, live recompute; and the tier-1 rocket launch gate (local gravity, inclusive, off with the weight system, one decision for launch and assemblers) | `STAT-1..25`, `STAT-26..29` |
 | [C11](./30-contracts/C11-physics-substrate-port.md) | the Stellurgy↔physics-substrate boundary — who may name engine types, the port's operation inventory, ONE SHIP ONE IDENTITY, a ship is the blocks that were pasted, and a loaded ship holds its chunks | `PORT-1..15` |
 | [C12](./30-contracts/C12-ship-heat.md) | the ship thermal contract — heat as energy, rejection, the environment, the failure ladder, the signature | `HEAT-1..18` |
@@ -107,7 +107,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C14](./30-contracts/C14-cell-sky-and-bodies.md) | which sky a world draws, and when a cell's bodies feed it | `CON-C14-01..20` |
 | [C15](./30-contracts/C15-cell-address-and-frame.md) | what a cell's address MEANS — a durable name vs a position that moves with its body, and what an authored neighbourhood holds | `ADDR-1..25` (ADDR-5 retired) |
 | [C16](./30-contracts/C16-space-clock.md) | which clock the space subsystem reads, on either side | `CLOCK-1..5` |
-| [C18](./30-contracts/C18-living-through-a-jump.md) | what a jump promises the people ABOARD — where they are, what they may do, what each crossing carries, and that an arrival has no failure path | `JUMP-1..15` (JUMP-7 retired) |
+| [C18](./30-contracts/C18-living-through-a-jump.md) | what a jump promises the people ABOARD — where they are, what they may do, what each crossing carries, and that an arrival has no failure path | `JUMP-1..16` (JUMP-7 retired) |
 | [C19](./30-contracts/C19-reference-frames.md) | which body a craft's velocity is measured AGAINST, and what a change of frame may not alter | `FRAME-1..11` |
 | [C20](./30-contracts/C20-repair.md) | what repairing a structure means — the two outcomes, who pays, how bays share a hull | `REPAIR-1..15` |
 | [C21](./30-contracts/C21-atmosphere-model.md) | what an atmosphere IS and what may be derived from it — one model for a compartment and a planet | `CON-C21-01..18` |

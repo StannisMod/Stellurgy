@@ -93,16 +93,18 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
+        long buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft whose last passenger is relocated");
+        builtShip = birth.physicsId;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
-        // WHICH ship, from the assembler that named it. What remains a POLL is the world transform
-        // propagating — the ship is loaded before that happens — and that is a fact about time, not
-        // about which craft is being waited for.
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, ShipIdentity.nameFromAssembly(asm));
+        // WHICH ship, from the assembler that named it, once its own announcement says it is usable.
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
         // READ, not a poll. What `managed:true` reports is that the substrate resolved a STATE for
         // this id — the probe answers `{"managed":false}` when it cannot — and that is true by the
         // time this line runs: the spawn is drained on the world's tick, and every probe command is
@@ -114,9 +116,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // "the world transform to propagate"; the condition never tested that — it tested whether
         // the ship could be resolved at all, which is what the message now says.
         String info = read("stellurgytest vs ship-info 0 id " + shipId).raw();
-        assertTrue("VS could not resolve a state for this ship at its own build site: " + info
-                + " countAll=" + read("stellurgytest vs ship-count-all 0").raw()
-                + " loaded=" + read("stellurgytest vs ship-count 0").raw(),
+        assertTrue("VS could not resolve a state for this ship at its own build site: " + info,
                 ShipInfo.isLoaded(info));
         ShipInfo atBuildSite = ShipInfo.of(info);
         double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
@@ -211,21 +211,23 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
                 drift <= ALLOWED_HORIZONTAL_DRIFT);
     }
 
+    /** The physics id of the craft this scenario built; nothing here re-registers it. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
 
-    // --- helpers (mirror VSJumpingShipDoesNotFlingBystandersTest) -------------------------------
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
     /**
      * WHERE this scenario's craft stands, and the first link that says the volume is empty.
@@ -236,10 +238,9 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
      * site anything found is an arrangement failure that names itself; the warmup went with it,
      * because the fill force-loads every chunk in its own box.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft whose last passenger must not be flung when it is relocated");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

@@ -2,8 +2,10 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -45,24 +47,26 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
 
     private static final String MISSION_ID = "missionId";
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume"));
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
     }
 
     private long startGasMission(int rocketId, long duration) throws Exception {
@@ -71,7 +75,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
-        return Long.parseLong(mmReply.text(MISSION_ID));
+        return rockets.missionStarted(0, Long.parseLong(mmReply.text(MISSION_ID)));
     }
 
     /** Places a monitoringStation block in the SAME chunk as the rocket
@@ -126,8 +130,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  <p>The rocket-side half of the lifecycle (production also calls
      *  {@code rocket.linkInfrastructure} on the freshly spawned
      *  EntityStationDeployedRocket) is pinned by
-     *  {@link #completionLinksInfrastructureToRespawnedRocket} via the
-     *  {@code rocket-relink-state} probe.
+     *  {@link #completionLinksInfrastructureToRespawnedRocket}.
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
     @Pins("INV-MSN-08")
@@ -147,8 +150,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         assertTrue("pre-completion infra must report hasMission=true: " + preState,
                 Reply.of(preState).bool("hasMission"));
 
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
+        MissionCompletion cargo = MissionCompletion.now(commands(), rockets, mid);
         assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         // Post-completion tile.mission cleared by production's unlinkMission().
@@ -168,16 +170,8 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  the linked infra tile's coord, i.e. the "your monitoring station
      *  now follows the returned rocket" UX.
      *
-     *  <p>This test cannot reuse the bbox-restricted {@code rocket-cargo}
-     *  probe — with a vanilla EntityRocket fixture the
-     *  {@code writeMissionPersistentNBT} call inside the
-     *  MissionResourceCollection ctor is a no-op, so the new rocket's
-     *  {@code launchLocation} restored from empty NBT defaults to
-     *  (0,0,0). The rocket therefore spawns at world origin, outside
-     *  the {@code rocket-cargo} bbox around the original launch coords.
-     *  The {@code rocket-relink-state} probe is class-filtered (scans
-     *  the whole launch dim for EntityStationDeployedRocket instances)
-     *  and finds the rocket regardless of position.
+     *  <p>The returned rocket is the one the completion's own
+     *  {@code rocket_born} record names; its links are read off it by id.
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
     @Pins("INV-MSN-08")
@@ -191,35 +185,20 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
 
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
+        MissionCompletion cargo = MissionCompletion.now(commands(), rockets, mid);
         assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
-
-        String relink = ok(client().read("stellurgytest mission rocket-relink-state 0"));
-        assertFalse("rocket-relink-state must not error: " + relink,
-                Reply.of(relink).has("error"));
-        // At least one EntityStationDeployedRocket exists in launch dim
-        // post-completion — production's onMissionComplete spawned it.
-        assertFalse("deployedCount must be > 0 after gas completion: " + relink,
-                (Reply.of(relink).integer("deployedCount") == 0));
-        // Production looped infrastructureCoords and called
-        // rocket.linkInfrastructure for each entry. The placed monitoring
-        // station coord must appear in some StationDeployedRocket's
-        // infrastructureCoords list. Test for the exact triple as JSON
-        // array to avoid matching a coincidental coord-with-shared-axis.
-        // Walked as the structure it is: the reply holds a rocket per element, each with its own
-        // `infrastructure` array of [x,y,z]. Built as a needle it depended on the producer's
-        // rendering of a coordinate — a space after a comma, or a double for a whole number, and
-        // the claim reads as the link never having been made.
+        assertEquals("the gas completion must return exactly one rocket: " + cargo.raw(),
+                1, cargo.returnedRocketCount());
+        assertTrue("the returned rocket must be the station-deployed craft the gas path builds: "
+                + cargo.raw(), "EntityStationDeployedRocket".equals(cargo.returnedClass()));
+        // Walked as the structure it is: `infrastructure` is an array of [x,y,z]. Built as a needle
+        // it depended on the producer's rendering of a coordinate — a space after a comma, or a
+        // double for a whole number, and the claim reads as the link never having been made.
         boolean linked = false;
-        for (String rocket : Reply.of("stellurgytest mission rocket-relink-state", relink)
-                .objectArray("rockets")) {
-            for (int[] coord : Reply.of("one deployed rocket", rocket)
-                    .blockPosArray("infrastructure")) {
-                linked |= coord[0] == ipos[0] && coord[1] == ipos[1] && coord[2] == ipos[2];
-            }
+        for (int[] coord : cargo.infrastructure()) {
+            linked |= coord[0] == ipos[0] && coord[1] == ipos[1] && coord[2] == ipos[2];
         }
-        assertTrue("rocket infrastructureCoords must contain ["
-                        + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]: " + relink, linked);
+        assertTrue("the returned rocket's infrastructureCoords must contain ["
+                        + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]: " + cargo.raw(), linked);
     }
 }

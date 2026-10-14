@@ -1028,9 +1028,10 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // two of its samples is indistinguishable from one that never happened.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
         // ship that is, and nothing below re-derives it from a position.
         scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
@@ -1063,7 +1064,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         return where;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
@@ -1073,8 +1074,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: hull, deck, a body standing and walking on it, and the room the
         // hull rolls through.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
-                "the hull, the deck the crew member is held on, and the air he walks and rolls through"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
+                "the hull, the deck the crew member is held on, and the air he walks and rolls through");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

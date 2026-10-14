@@ -31,8 +31,9 @@ import static org.junit.Assert.*;
  * <p><b>What one world costs, and how each scenario pays it back.</b> The entry flies every scenario's
  * ship to the launch body's own cell, and the re-seat matches a seat by proximity with no ship-id
  * filter, so a ship left in the cell is a second candidate. Each scenario therefore builds on its own
- * launch site, counts the ledger as a delta, and ends by dismounting and releasing the player, forgetting
- * its ship in the ledger and destroying it in the cell ({@link #releaseThisScenariosShipAndCrew}).</p>
+ * launch site, asks the ledger only about its own ship, and ends by dismounting and releasing the
+ * player, forgetting its ship in the ledger and destroying it in the cell by its id
+ * ({@link #releaseThisScenariosShipAndCrew}).</p>
  */
 @RunWith(ClassScopeRunner.class)
 @ClassScope(SpaceCellRelogGroupTest.RelogPair.class)
@@ -146,8 +147,9 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         if (arrangedShipId != null) {
             arrange("stellurgytest space ledger-forget " + arrangedShipId);
         }
-        if (scenarioSlotDim != Integer.MIN_VALUE) {
-            ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), scenarioSlotDim);
+        if (scenarioSlotDim != Integer.MIN_VALUE && arrangedShipId != null) {
+            String hull = ShipIdentity.physicsIdOf(c -> read(c).raw(), scenarioSlotDim, arrangedShipId);
+            Disposal.ship(c -> arrange(c).raw(), serverEvents(), scenarioSlotDim, hull);
         }
         arrange("stellurgytest tp " + OVERWORLD_DIM);
     }

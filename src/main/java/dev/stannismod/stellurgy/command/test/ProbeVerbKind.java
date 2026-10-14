@@ -247,7 +247,6 @@ enum ProbeVerbKind {
             case "machine tick-until":
             case "mission infra-state":
             case "mission rocket-cargo":
-            case "mission rocket-relink-state":
             case "mission state":
             case "nav status":
             case "oredict empty":
@@ -280,13 +279,13 @@ enum ProbeVerbKind {
             case "registry lookup":
             case "registry sounds":
             case "registry summary":
+            case "crafts census":
             case "rocket event-counts":
             case "rocket event-counts-full":
             case "rocket event-payloads":
             case "rocket find-by-uuid":
             case "rocket fuel":
             case "rocket info":
-            case "rocket list":
             case "rocket planet-data-read-empty":
             case "rocket prelaunch-cancel-counts":
             case "rocket stats-from-nbt":
@@ -350,7 +349,6 @@ enum ProbeVerbKind {
             case "space nebulae":
             case "space subsystem-status":
             case "space transit-export":
-            case "space vs-count":
             case "space zone-membership":
             case "space zone-planets":
             case "space zone-sphere":
@@ -386,15 +384,12 @@ enum ProbeVerbKind {
             case "vs player-ship-data":
             case "vs seat-status":
             case "vs seat-yard":
-            case "vs ship-count":
-            case "vs ship-count-all":
+            case "vs ship-contains":
+            case "vs ship-registered":
             case "vs ship-frame-check":
             case "vs ship-info":
             case "vs ship-name":
             case "vs ship-uuid":
-            case "vs ships-at":
-            case "vs ships-loaded":
-            case "vs ships-registered":
             case "vs subspace-census":
             case "vs to-world":
             case "vs would-take-over":
@@ -533,7 +528,7 @@ enum ProbeVerbKind {
             case "player set-health":
             case "player set-move-forward":
             case "rocket arm-prelaunch-cancel":
-            case "rocket clear":
+            case "rocket remove":
             case "rocket disarm-prelaunch-cancel":
             case "rocket drain-fuel":
             case "rocket fill-fuel":
@@ -624,7 +619,7 @@ enum ProbeVerbKind {
             case "turret target-player":
             case "vent setair":
             case "vs afc-clear":
-            case "vs destroy-ships":
+            case "vs destroy-ship":
             case "vs drop-item":
             case "vs drop-living":
             case "vs drop-stand":
@@ -636,12 +631,11 @@ enum ProbeVerbKind {
             case "vs force-rot-by-id":
             case "vs force-vel-at":
             case "vs force-vel-by-id":
-            case "vs load-ships":
+            case "vs load-ship":
             case "vs permaload":
             case "vs point-at":
             case "vs point-by-id":
             case "vs push-ship-by-id":
-            case "vs seat-input":
             case "vs seat-input-by-id":
             case "vs seat-link":
             case "vs seat-mount":
@@ -651,9 +645,7 @@ enum ProbeVerbKind {
             case "vs spin-ship-by-id":
             case "vs stow":
             case "vs strand-blockless-record":
-            case "vs teleport-ship":
             case "vs teleport-ship-by-id":
-            case "vs unpark":
             case "vs unpark-by-id":
             case "weaponconsole allegiance":
             case "weaponconsole cleartarget":

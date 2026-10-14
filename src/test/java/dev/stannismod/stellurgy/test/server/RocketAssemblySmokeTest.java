@@ -5,6 +5,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -37,7 +38,6 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     /** @see #FIXTURE_FOOTPRINT_BLOCKS */
     private static final int FIXTURE_HEIGHT_BLOCKS = 5;
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String STATUS = "status";
 
     /** Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk). */
@@ -163,22 +163,20 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void invalidRocketMissingEngineFailsAssemblyWithReason() throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, 780, 500);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link, and the same one buildAndAssemble takes: the volume is EMPTY. In open air
         // this ASSERTS rather than digs, and the assertion is what was missing here — the fill
         // this replaces was fired and its answer thrown away.
         int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 "invalid-no-engine", 2, 10,
                 "the engineless build the scan must reject stands in this volume");
-        int bx = bp[0],
-                by = bp[1],
-                bz = bp[2];
 
-        String assemble = String.join("\n", client().act(
-                "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
+        long mark = rockets.mark();
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> String.join("\n", client().act(cmd)), bp);
         assertTrue("assemble of engineless rocket must fail: " + assemble,
                 Reply.of(assemble).has("error"));
+        java.util.List<String> born = rockets.allBornAt(mark, bp);
+        assertTrue("the rejected engineless build must spawn no rocket, but the press wrote " + born,
+                born.isEmpty());
         Reply smReply = Reply.of(assemble);
         String status = smReply.text(STATUS);
         assertTrue("status for engineless rocket must indicate missing thrust "
@@ -223,33 +221,21 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * poke in, no populate to race, and no biome for the counts to depend on.</p>
      */
     private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, and the air fill's own `placed` is the measurement. The
         // box covers what getRocketPadBounds scans — (baseX..baseX+5, baseY+1..baseY+maxTowerSize-1,
         // baseZ..baseZ+5) — plus a halo, so detritus from a prior fixture in the same JVM is caught
         // here rather than inside the scan. It force-loads every chunk in the box on the way, which
-        // is what the warmup it replaces was for.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
-                variant, 2, 10,
+        // is what the warmup it replaces was for. The rocket is the one the press's own
+        // `rocket_born` record names.
+        return rockets.assembleAt(site, cmd -> String.join("\n", client().act(cmd)), variant, 2, 10,
                 "the craft this scenario assembles and reads back stands in this volume");
-        int bx = bp[0],
-                by = bp[1],
-                bz = bp[2];
+    }
 
-        String assemble = String.join("\n", client().act(
-                "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble (" + variant + ") failed: " + assemble,
-                Reply.of(assemble).ok());
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
 
-        String rocketList = String.join("\n", client().read("stellurgytest rocket list 0"));
-        // Pick the last id reported — rocket list grows as fixtures stack up
-        // in the same JVM, so the most recently spawned rocket sits at the
-        // end of the rocket array.
-        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
-        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
-        return lastId;
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     /** What the server says about one craft, read through the verb's own reader. */

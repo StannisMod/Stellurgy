@@ -1,11 +1,18 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.AssembledCraft;
 import dev.stannismod.stellurgy.test.ConfigFlag;
+import dev.stannismod.stellurgy.test.Disposal;
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import dev.stannismod.stellurgy.test.ShipBirth;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -39,11 +46,40 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
 
     private static final String STATUS = "status";
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    /** The server's log, stepped on the world the crafts are built in, for the ship's naming. */
+    private final Events events =
+            new Events(c -> read(c).raw(), t -> GameTicks.advanceWorld(client(), 0, t), evictionReports());
+
+    /** The ships this scenario's presses made, by the physics id their naming announced. */
+    private final java.util.List<String> ships = new java.util.ArrayList<>();
+
+    @After
+    public void disposeOfThisScenariosCrafts() throws Exception {
+        try {
+            for (String ship : ships) {
+                Disposal.ship(c -> arrange(c).raw(), events, 0, ship);
+            }
+        } finally {
+            ships.clear();
+            rockets.disposeStanding();
+        }
+    }
+
+    /** Lay and press {@code variant} at {@code site}, holding every rocket the press made; the raw reply. */
+    private String press(FixtureSite site, String variant, String what) throws Exception {
+        int[] builder = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
+                variant, 2, 10, what);
+        long mark = rockets.mark();
+        String reply = RocketFixture.assembleBuilt(site, cmd -> String.join("\n", client().act(cmd)), builder);
+        rockets.allBornAt(mark, builder);
+        return reply;
+    }
+
     /** Build the simple fixture at the given pad and return the raw assemble response. */
     private String buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        final int baseX = site.x, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         client().arrange("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
@@ -51,9 +87,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        return RocketFixture.assembleBuilt(site, cmd -> String.join("\n", client().act(cmd)), RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
-                "simple", 2, 10,
-                "the craft is built and flown in this volume"));
+        return press(site, "simple", "the craft is built and flown in this volume");
     }
 
     private static String status(String assembleResponse) {
@@ -81,22 +115,28 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
         try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
             // The fixtures' own extent: two blocks round the pad, ten above it.
-            String rocket = RocketFixture.assembleBuilt(FixtureSite.openAir(0, 3520, 3400),
-                    c -> String.join("\n", client().act(c)), RocketFixture.placeAt(FixtureSite.openAir(0, 3520, 3400),
-                    c -> String.join("\n", client().arrange(c)), "with-fluid-cargo", 2, 10,
-                    "the rocket is built in this volume"));
+            String rocket = press(FixtureSite.openAir(0, 3520, 3400), "with-fluid-cargo",
+                    "the rocket is built in this volume");
             assertEquals("control: a rocket with cargo in place of tanks must be refused for want of "
                     + "the climb to orbit, or the ship below proves nothing: " + rocket,
                     "NOFUEL", status(rocket));
 
-            String ship = RocketFixture.assembleBuilt(FixtureSite.openAir(0, 3580, 3400),
-                    c -> String.join("\n", client().act(c)), RocketFixture.placeAt(FixtureSite.openAir(0, 3580, 3400),
-                    c -> String.join("\n", client().arrange(c)), "with-pilot-deck", 2, 10,
-                    "the ship is built in this volume"));
+            FixtureSite shipSite = FixtureSite.openAir(0, 3580, 3400);
+            int[] shipBuilder = RocketFixture.placeAt(shipSite, c -> String.join("\n", client().arrange(c)),
+                    "with-pilot-deck", 2, 10, "the ship is built in this volume");
+            long mark = events.markInstrumented();
+            String ship = RocketFixture.assembleBuilt(shipSite, c -> String.join("\n", client().act(c)),
+                    shipBuilder);
             assertTrue("a ship must assemble with fuel required even though its tanks cannot reach "
                     + "orbit: " + ship, Reply.of(ship).ok());
-            assertEquals("…and it must be a SHIP, not a rocket entity: " + ship,
-                    0, Reply.of(ship).integer("rocketCount"));
+            ShipBirth birth = ShipBirth.ofPress(events, mark, 0, shipBuilder, ship,
+                    AssembledCraft.LINK_BUDGET_TICKS, "the ship assembled with fuel required");
+            ships.add(birth.physicsId);
+            for (String born : birth.rocketsBorn) {
+                rockets.holdBorn(born);
+            }
+            assertTrue("…and it must be a SHIP, not a rocket entity: the press's assembler wrote "
+                    + birth.rocketsBorn + "; " + ship, birth.rocketsBorn.isEmpty());
         }
     }
 

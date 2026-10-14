@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.*;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -53,8 +54,9 @@ public class VSUnmannedTransitSettlesOnItsPoseTest extends AbstractSharedServerT
         // flown manned either, so it cannot carry the contrast this test is named for.
         // Marked before the fixture is built, because the registry add it is waited on below happens
         // INSIDE that call: a mark taken after it would be waiting for a second ship.
-        long buildMark = events.mark();
+        buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(c -> envelope(client().arrange(c)));
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
 
@@ -81,14 +83,13 @@ public class VSUnmannedTransitSettlesOnItsPoseTest extends AbstractSharedServerT
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         String lastTick = envelope(client().arrange("stellurgytest space transit-status"));
 
-        // Positive control for the instrument: the probe must have RESOLVED the arrived ship at all.
-        // Without this, an assertion about where the ship is would also pass on a run where the registry
-        // answered nothing — which is the opposite of what we mean to assert.
-        // Control first: the target world must actually hold a ship, or "its position is not X" below
-        // would pass on a run where the ship had vanished — the opposite of what this asserts.
-        String positions = Reply.of("stellurgytest space transit-tick", lastTick).text("ships");
-        assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick,
-                !positions.isEmpty());
+        // Positive control for the instrument: the probe must have RESOLVED this jump's own craft, by
+        // its durable id, in the target world's registry. Without this, an assertion about where the
+        // ship is would also pass on a run where the registry answered nothing.
+        TransitStatus settled = TransitStatus.of(lastTick);
+        String position = settled.craftPos;
+        assertTrue("the target world registers no craft of this jump's name, so nothing below measures"
+                + " the arrival: " + lastTick, !position.isEmpty());
 
         // The whole assertion, asked WITHOUT a position-keyed lookup: the ship's own transform position
         // must be the pose realizing the target coordinate. The arrival paste column sits at y=200 while
@@ -96,19 +97,22 @@ public class VSUnmannedTransitSettlesOnItsPoseTest extends AbstractSharedServerT
         // off" — it is a different world region, and its address inverts through the pose mapping into a
         // neighbouring cell. Compared as text on purpose: these are exact integers, and a tolerance here
         // would quietly accept the paste band on some future cell whose pose happens to be low.
-        TransitStatus settled = TransitStatus.of(lastTick);
         String expected = settled.poseX + "," + settled.poseY + "," + settled.poseZ;
-        // MEMBERSHIP of the list, compared per entry. The field is `x,y,z;x,y,z;…`, so a
-        // substring over the whole string is satisfied by a NEIGHBOURING ship's coordinate that
-        // merely contains these digits — `1100,64,1000` contains `100,64,100` — which is exactly
-        // the "a bit off" reading the comment above says must not pass.
-        boolean settledOnThePose = false;
-        for (String one : positions.split(";")) {
-            settledOnThePose |= expected.equals(one);
+        assertEquals("an unmanned arrival must settle ON the pose realizing its target coordinate; this"
+                + " craft stands at " + position + ": " + lastTick, expected, position);
+    }
+
+    /** The durable name of the craft the setup built, and the mark taken before it; disposed of at the end. */
+    private long buildMark;
+    private String builtDurable;
+
+    @org.junit.After
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> envelope(client().read(c)), c -> envelope(client().arrange(c)), events,
+                    buildMark, builtDurable);
+            builtDurable = null;
         }
-        assertTrue("an unmanned arrival must settle ON the pose realizing its target coordinate; expected "
-                + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick,
-                settledOnThePose);
     }
 
     /**

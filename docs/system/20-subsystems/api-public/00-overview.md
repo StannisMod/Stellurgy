@@ -38,7 +38,8 @@ below for the resulting cyclic coupling).
   `DataStorage`, `satellite/IDataHandler`, `ISatelliteIdItem`. → [`satellite-data.md`](./satellite-data.md)
 - **Ship lifecycle announcement** — `event/ShipLifecycleEvent` (+ its `Cause` enum): the ONE family
   (ruled 2026-10-06) for the edges at which the physics engine names, readies and un-names a tier-2
-  craft — `ShipNamed` (`ASSEMBLED` / `PASTED` / `LOADED`), `ShipUsable`, `ShipUnnamed` (`UNLOADED` /
+  craft — `ShipNamed` (`ASSEMBLED` / `PASTED` / `LOADED`), `ShipUsable`, `ShipReleased` (its ship object
+  let go, once per naming), `ShipUnnamed` (`UNLOADED` /
   `DESTROYED`) and `ShipDeparted` (`DEPARTED` + `destinationDim`) — each posted at its source by
   `valkyrienskies/…/WorldServerShipManager` on the server game thread. The thread + handler contract
   is in the class javadoc; contract C5 B.10 routes. (`event/ShipEvent` now carries only the flight
@@ -109,6 +110,6 @@ C1 NBT (`StatsRocket`, `SatelliteProperties`, `SatelliteBase`, `DataStorage`, `S
 C2 wire (`StellurgyConfiguration` per-field sync format + `MAGIC_CODE` terminator) · C3 registry
 (`SatelliteRegistry` string ids, `FuelType`/`DataType` ordinals) · C4 config (all `@ConfigProperty`
 flags) · C5 capabilities (`PART_WEAR`, `PROTECTIVEARMOR`) & events (`RocketEvent.*`,
-`AtmosphereEvent.*`, `ShipLifecycleEvent.ShipNamed`/`ShipUsable`/`ShipUnnamed`/`ShipDeparted`).
+`AtmosphereEvent.*`, `ShipLifecycleEvent.ShipNamed`/`ShipUsable`/`ShipReleased`/`ShipUnnamed`/`ShipDeparted`).
 
 > File and line counts for `api/` are not stated here: they drift, and no single measure of "lines" is agreed.

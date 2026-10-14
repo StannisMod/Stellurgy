@@ -143,6 +143,7 @@ public final class TestBindingsCheck {
                 com.github.stannismod.forge.testing.client.bridge.ClientInstruments.mechanicsRows(),
                 dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION));
         System.out.println(WaitLoops.check(root, classesRoot(), failures));
+        System.out.println(CraftCensusConfinement.check(root, failures));
 
         Map<String, Integer> ages = new HashMap<>();
         String gitProblem = clauseAges(root, ages);

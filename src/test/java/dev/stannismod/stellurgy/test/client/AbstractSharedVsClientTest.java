@@ -708,18 +708,37 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
                 + " passenger, so the plot assertion that follows would fail for the wrong reason."
                 + " client reports " + riding, isRiding(riding));
         scenario().record("resetRiding", riding);
+        // No craft is cleared here: the scenario that built a craft disposes of it by its id before
+        // it ends (disposeOfShipAtEnd), and the scope fails a scenario that left one.
+    }
 
-        // AND THE CRAFT ITSELF GOES. A scenario used to be able to walk away from its hull because
-        // nobody was near it, so it unloaded, and an unloaded hull does not move. That stopped being
-        // true when a test server began holding its ships loaded: measured 2026-09-16 inside one
-        // class, an abandoned craft was still CLIMBING at y=609 and another had fallen to y=70 and
-        // was drifting sideways — in the world the next scenario was about to run in.
-        //
-        // Last in the reset, deliberately: the dismount above needs the seat, and the seat is on the
-        // craft. And the count is printed rather than asserted — a scenario that built nothing
-        // legitimately clears nothing, and a number nobody can predict is not a contract.
-        System.out.println("[reset] craft cleared from this family's world: "
-                + dev.stannismod.stellurgy.test.ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
+    /**
+     * He is taken off his seat on the SERVER before this scenario's crafts are disposed of (the
+     * shared base's {@code @After}, which JUnit runs after this one): the disposal is the server's,
+     * and a seat destroyed under a seated player unseats him on a tick nobody marked.
+     *
+     * <p>The link is the server's own {@code dismount} record (the position-writer mixin at the head
+     * of {@code Entity#dismountRidingEntity}), written inside the probe call that dismounts him. The
+     * CLIENT's half is not waited for here: off the seat of a craft that never became a ship, his
+     * client recorded no dismount within the budget at all, so a client link on that path is a wait
+     * on something that does not always happen. A client still showing him seated is the next
+     * scenario's reset to settle, which it already does on the client's own record.</p>
+     */
+    @org.junit.After
+    public final void unseatBeforeTheCraftIsDisposedOf() throws Exception {
+        if (scope() == null || !scope().booted() || scope().harnessDead) {
+            return;
+        }
+        Events server = serverEvents();
+        long serverMark = server.markInstrumented();
+        Reply off = arrange("stellurgytest player dismount");
+        int wasRidingId = off.integer("wasRidingId");
+        if (wasRidingId < 0) {
+            return;
+        }
+        server.awaitRecordWithFields(serverMark, "dismount", "a scenario that ends SEATED must be taken"
+                        + " off his seat before its craft is disposed of (" + off + ")",
+                SEAT_LINK_BUDGET_TICKS, "who", botName(), "mount", String.valueOf(wasRidingId));
     }
 
     private static boolean isRiding(JsonObject riding) {
@@ -821,18 +840,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
                     // verdict above is the SERVER's. Printing them side by side unlabelled is how a
                     // single position gets read as a disagreement between the sides (2026-09-16).
                     + " | the body, CLIENT: " + bot().reportState()
-                    + " | the body, SERVER: " + read("stellurgytest vs player-ship-data").raw()
-                    // ...and WHAT that hull is made of. A craft can be loaded, posed and present
-                    // while containing nothing: `blocks:0` is a registry remnant, and a hull with no
-                    // blocks has no world box for a containment query to answer with. The pose alone
-                    // cannot tell that apart from a body standing in the wrong place.
-                    + " | the registry: " + read("stellurgytest vs ships-registered 0").raw()
-                    // ...and WHERE THE NEIGHBOURS ARE. This scenario passes ALONE and fails after its
-                    // siblings have run (measured 2026-09-16), so the hulls they left behind are part
-                    // of the arrangement whether the scenario means them to be or not. A containment
-                    // question is answered against all of them, and the reply's `containingShipIds`
-                    // names only the ones that matched — never the ones that were asked.
-                    + " | every loaded hull: " + read("stellurgytest vs ships-loaded 0").raw(), notHeld);
+                    + " | the body, SERVER: " + read("stellurgytest vs player-ship-data").raw(), notHeld);
         }
         return capture;
     }
@@ -853,6 +861,9 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * why a second record raises a ARRANGEMENT failure naming the count instead of picking one.
      * ({@code VSGroundFlightGroupTest} takes a separate mark per assembly — that is the shape a
      * class with two builds wants, and it is what keeps this count at one.)</p>
+     *
+     * <p>The ship it names is this scenario's own, so it is declared for disposal at the scenario's
+     * end ({@link #disposeOfShipAtEnd}).</p>
      */
     protected final String awaitShipSpawned(Events events, long mark, String what) throws Exception {
         String reply = events.await(mark, "ship_spawned", what, 200);
@@ -862,6 +873,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
                 spawned == 1);
         String vsShip = Events.lastField(reply, "vsShip");
         scenario().requireArranged("a ship_spawned record must name the ship: " + reply, vsShip != null);
+        disposeOfShipAtEnd(vsShip);
         return vsShip;
     }
 

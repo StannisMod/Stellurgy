@@ -4,8 +4,11 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
-import org.junit.Before;
+import org.junit.After;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -99,12 +102,21 @@ public class HyperdriveTest extends AbstractSharedServerTest {
             ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
-     * Each scenario starts with an empty sky: a craft left by the scenario before is still loaded and
-     * still ticking, and it is cleared here, at the start of the one that must not meet it.
+     * Every craft this scenario assembled, by its durable name, beside the mark taken before its
+     * assembly. Disposed of when the scenario ends wherever its latest naming put it: an armed and
+     * pressed drive can carry it out of {@link #DIM} under a new registration before then.
      */
-    @Before
-    public void emptySky() throws Exception {
-        ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), DIM);
+    private final List<String> builtDurables = new ArrayList<>();
+    private final List<Long> buildMarks = new ArrayList<>();
+
+    @After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (int i = 0; i < builtDurables.size(); i++) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMarks.get(i),
+                    builtDurables.get(i));
+        }
+        builtDurables.clear();
+        buildMarks.clear();
     }
 
     /** The jump craft as assembled, and where its machines stand relative to its flight computer. */
@@ -141,8 +153,11 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         String bay = fixture.object("jumpBayFromFlightComputer");
         requireArranged(what + " — the fixture must say where its drive machines stand: " + fixture,
                 bay != null);
-        return new JumpCraft(AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what),
-                Reply.of(bay));
+        long mark = events.mark();
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        builtDurables.add(craft.durable);
+        buildMarks.add(mark);
+        return new JumpCraft(craft, Reply.of(bay));
     }
 
     /** What the craft's drive is, as the ship's own answer. */
@@ -765,7 +780,8 @@ public class HyperdriveTest extends AbstractSharedServerTest {
             ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "the ship is asked for again");
         }
         long loadMark = events.mark();
-        arrange("stellurgytest vs load-ships " + DIM);
+        arrange("stellurgytest vs load-ship " + DIM + " " + ship.craft.physicsId)
+                .requireOk("ask for the ship by its id");
         events.awaitRecordWithField(loadMark, "ship_usable", "vsShip", ship.craft.physicsId,
                 "the ship must come back when it is asked for", AssembledCraft.LINK_BUDGET_TICKS);
 

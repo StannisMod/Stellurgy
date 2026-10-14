@@ -5,8 +5,9 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -32,7 +33,6 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     private static final int FINITE_LINK_DISTANCE_BLOCKS = 10_000;
 
-    private static final String ENT_ID = "entityId";
     private static final String CONN = "connectedCount";
     private static final String FLUID_AMOUNT = "totalAmount";
 
@@ -84,14 +84,8 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         int fx = rocketSite.x - 8, fy = rocketSite.y + 1, fz = rocketSite.z;
         String at = " 0 " + fx + " " + fy + " " + fz;
 
-        String assemble = RocketFixture.assembleBuilt(rocketSite, cmd -> String.join("\n", client().act(cmd)), RocketFixture.placeAt(rocketSite, cmd -> String.join("\n", client().arrange(cmd)),
-                "simple", 2, 10, "the craft the fueling station fills stands in this volume"));
-        Reply assembled = Reply.of("stellurgytest rocket assemble", assemble);
-        assertTrue("rocket assemble probe errored: " + assemble, assembled.ok()
-                && ("SUCCESS".equals(assembled.text("status"))
-                        || "ALREADY_ASSEMBLED".equals(assembled.text("status"))));
-        assertTrue("could not parse entityId: " + assemble, assembled.has(ENT_ID));
-        int rocketId = assembled.integer(ENT_ID);
+        int rocketId = rockets.assembleAt(rocketSite, cmd -> String.join("\n", client().act(cmd)),
+                "simple", 2, 10, "the craft the fueling station fills stands in this volume");
 
         String placeFs = arrange("stellurgytest place" + at + " stellurgy:fuelingStation").raw();
         assertTrue("fuelingStation place failed: " + placeFs, Reply.of(placeFs).bool("placed"));
@@ -244,24 +238,17 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      * RocketAssemblySmokeTest).</p>
      */
     private int assembleFixture(FixtureSite site, String variant) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
-        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
-                variant, 2, 10,
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. The rocket is the
+        // one the press's own `rocket_born` record names.
+        return rockets.assembleAt(site, cmd -> String.join("\n", client().act(cmd)), variant, 2, 10,
                 "the craft this infrastructure links to stands in this volume");
-        int bx = bp[0],
-                by = bp[1],
-                bz = bp[2];
+    }
 
-        String assemble = String.join("\n", client().act(
-                "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
-        Reply emReply = Reply.of(assemble);
-        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
-        int rocketId = Integer.parseInt(emReply.text(ENT_ID));
-        assertTrue("rocket entityId<0: " + assemble, rocketId >= 0);
-        return rocketId;
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private void ok(java.util.List<String> response) {

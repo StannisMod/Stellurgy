@@ -19,8 +19,9 @@ import static org.junit.Assert.assertTrue;
  * were single-scenario classes, each paying its own client boot.</p>
  *
  * <p>What each scenario leaves in the shared world: the deploy scenario spawns a rocket at the player
- * and seats him in it, and dismounts him before it ends; the rocket stays on its plot, which nothing
- * else visits. Every observation is scoped by a mark taken before its stimulus.</p>
+ * and seats him in it, and dismounts him before it ends; the rocket, named by the probe's reply, is
+ * disposed of by that id when the scenario ends. Every observation is scoped by a mark taken before
+ * its stimulus.</p>
  */
 @org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
 public class SatelliteClientGroupTest extends AbstractSharedClientTest {
@@ -123,6 +124,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
         try {
             String resp = act("stellurgytest satellite deploy-unresolved").raw();
             assertTrue("deploy-unresolved probe must succeed: " + resp, Reply.of(resp).ok());
+            disposeOfRocketAtEnd(Reply.of("stellurgytest satellite deploy-unresolved", resp).integer("rocketId"));
             assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted"));
 
             // Carrying the key, not the type alone: any other message in the window would satisfy a

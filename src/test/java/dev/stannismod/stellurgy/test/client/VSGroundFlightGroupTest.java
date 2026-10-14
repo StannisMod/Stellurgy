@@ -229,7 +229,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      */
     private static final int TRAVEL_DOSE_TICKS = 30;
 
-    private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
 
     private static final String SEAT_VARIANT = "with-pilot-seat";
@@ -283,22 +282,23 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // different ships" would be a claim made by the very instrument under test.
         Events events = serverEvents();
         long spawnMarkA = events.markInstrumented();
-        String assembleA = assembleFixture(siteA, AFC_VARIANT);
-        scenario().requireArranged("ship A must assemble: " + assembleA,
-                (Reply.of(assembleA).integer("rocketCount") == 0));
+        ShipAssembly assembleABuilt = assembleFixture(siteA, AFC_VARIANT);
+        String assembleA = assembleABuilt.reply;
+        scenario().requireArranged("ship A must assemble: " + assembleABuilt,
+                assembleABuilt.madeNoRocket());
         String idA = awaitShipSpawned(events, spawnMarkA,
                 "ship A's assembly must create a VS ship in the queryable registry (async spawn)");
 
         long spawnMarkB = events.markInstrumented();
-        String assembleB = assembleFixture(siteB, AFC_VARIANT);
-        scenario().requireArranged("ship B must assemble: " + assembleB,
-                (Reply.of(assembleB).integer("rocketCount") == 0));
+        ShipAssembly assembleBBuilt = assembleFixture(siteB, AFC_VARIANT);
+        String assembleB = assembleBBuilt.reply;
+        scenario().requireArranged("ship B must assemble: " + assembleBBuilt,
+                assembleBBuilt.madeNoRocket());
         String idB = awaitShipSpawned(events, spawnMarkB,
                 "ship B's assembly must create a VS ship in the queryable registry (async spawn)");
 
         // BOTH stay loaded with one client that cannot stand in two places — the test server holds
         // them, and this leg asks which ship a lookup names, never whether a ship stays loaded.
-        arrange("stellurgytest vs load-ships 0").raw();
         long approachMark = clientEvents().mark();
         arrange("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, ax + 0.5, az + 0.5,
@@ -441,9 +441,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // world is answered by every neighbour that ever assembled one — and it names the ship.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, AFC_VARIANT);
-        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, AFC_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
@@ -612,9 +613,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, AFC_VARIANT);
-        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, AFC_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // The ship must appear in the queryable registry (async spawn did not fault) — its own
         // record, which also NAMES it: the identity every question below is keyed on.
@@ -662,9 +664,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, SEAT_VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, SEAT_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, off this scenario's own creation record — not re-derived from the base below.
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
 
@@ -749,9 +752,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, SEAT_VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, SEAT_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, off this scenario's own creation record. It is fixed HERE, before the ship has
         // moved a block, and it stays valid through the sixty-tick climb below — the flight that no
         // positional bound survives.
@@ -970,11 +974,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         return Math.abs(((a - b + 540) % 360) - 180);
     }
 
-    private int count(String sub) throws Exception {
-        String command = "stellurgytest vs " + sub + " 0";
-        return read(command).integer(COUNT);
-    }
-
     private double[] readVec(String shipInfoJson) {
         ShipInfo ship = ShipInfo.of(shipInfoJson);
         return new double[]{ship.x, ship.y, ship.z};
@@ -990,13 +989,13 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site, String variant) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // the scenarios below fly, rotate and ride the craft out of this volume.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
-                "the hull, and the first blocks of the lane it flies and rotates through"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), variant, 2, 16,
+                "the hull, and the first blocks of the lane it flies and rotates through");
     }
 }

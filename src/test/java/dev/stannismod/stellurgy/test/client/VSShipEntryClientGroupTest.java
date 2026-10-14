@@ -48,8 +48,8 @@ import static org.junit.Assert.assertTrue;
  *       settled craft leaves a cell by descending, and evicting one would make every later assertion
  *       about a subsystem no player can reach;</li>
  *   <li>each scenario MEASURES the state its premise names instead of assuming it — the refusing one
- *       occupies until the pool says exhausted, and claims only that its own entry ledgered nothing
- *       (a delta), never that space is globally empty.</li>
+ *       occupies until the pool says exhausted, and claims only that its own craft is not in the
+ *       ledger (asked by its durable id), never that space is globally empty.</li>
  * </ol>
  *
  * <p>So neither scenario depends on which of them ran first.</p>
@@ -468,10 +468,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // slot, but a scenario whose whole premise is "the pool is full" must not take the pool's
         // SIZE on trust from a config file it does not read — and on a shared client it must not
         // assume the previous scenario left it empty either.
-        // The ledger's size BEFORE this scenario: a craft the granted scenario settled is a
-        // legitimate resident of this world, so what this scenario may claim is that ITS OWN entry
-        // ledgered nothing — never that space is globally empty.
-        int ledgerBefore = ledgerSize();
 
         // Every slot must end up held by a cell of THIS scenario's own, and the reason is the
         // difference between a pool that is full and a pool that can be MADE room in. The manager
@@ -588,12 +584,13 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             requireUprightForAnAltitudeClaim(shipInfoById(shipUuid),
                     "a climb past the orbit line, which is what makes a refusal possible");
             // "It stopped being reported" has four causes and they need opposite answers: the craft
-            // was TAKEN by the crossing (ledger grew, and the pilot is in a cell), it was UNLOADED
-            // (still counted in the world, not loaded), it is GONE from the world entirely, or it
-            // simply stopped climbing. One reading each, and only on the way to a failure.
+            // was TAKEN by the crossing (its own ledger entry, and the pilot is in a cell), it was
+            // UNLOADED or is GONE (its own lifecycle records say which), or it simply stopped
+            // climbing. One reading each, by this craft's ids, and only on the way to a failure.
             SubsystemStatus spaceNow = SubsystemStatus.read(c -> read(c).raw());
-            String loaded = read("stellurgytest vs ship-count 0").raw();
-            String all = read("stellurgytest vs ship-count-all 0").raw();
+            String ledgered = read("stellurgytest space ledger-get " + durableShipName).raw();
+            String lives = Events.recordsWhere(events.since(refusalMark, "ship_lifecycle"), "ship", shipUuid)
+                    .toString();
             JsonObject where = bot().reportWeather();
             int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : -9999;
             scenario().arrangementFailed("the entry gate recorded NO decision for this climb (the craft"
@@ -602,8 +599,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                     + " The hull is level, so the tilt this class usually dies of is NOT the reason."
                     + " The wait: " + noDecision
                     + " WHICH of the four it is:"
-                    + " subsystem=" + spaceNow.raw() + " shipsLoadedInDim0=" + loaded
-                    + " shipsAtAllInDim0=" + all + " clientDim=" + clientDim
+                    + " subsystem=" + spaceNow.raw() + " thisCraftLedgered=" + ledgered
+                    + " thisCraftLifecycle=" + lives + " clientDim=" + clientDim
                     + " byId=" + shipInfoById(shipUuid)
                     + " delivery=" + seatDeliveryServer() + " gate=" + gate);
         }
@@ -652,13 +649,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         assertTrue("after a refusal the pilot's client must still be in the LAUNCH dimension "
                 + "(0), not a space cell. clientDim=" + clientDim, clientDim == 0);
 
-        // And nothing entered space: the refusal was a refusal, not a half-crossing. Measured as a
-        // DELTA, because a ship an earlier scenario legitimately settled is still in this world's
-        // ledger and is not this scenario's business.
-        int ledgerAfter = ledgerSize();
-        assertTrue("a refused entry must ledger NOTHING into space — the ledger held "
-                        + ledgerBefore + " craft before this scenario and " + ledgerAfter
-                        + " after it", ledgerAfter == ledgerBefore);
+        // And this craft did not enter space: the refusal was a refusal, not a half-crossing. Asked
+        // of the ledger BY THIS CRAFT'S durable id — a craft another scenario settled is none of
+        // this one's business, and a count of the ledger cannot tell the two apart.
+        String ledgered = read("stellurgytest space ledger-get " + durableShipName).raw();
+        Reply ledgerEntry = Reply.of("stellurgytest space ledger-get", ledgered);
+        scenario().requireArranged("the ledger must be live to answer whether this craft entered"
+                + " space: " + ledgered, ledgerEntry.has("found"));
+        assertTrue("a refused entry must ledger NOTHING into space, and the ledger holds this craft ("
+                + durableShipName + "): " + ledgered, !ledgerEntry.bool("found"));
     }
 
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────
@@ -781,15 +780,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             }
         }
         return held;
-    }
-
-    /** How many craft the space ledger holds right now. */
-    private int ledgerSize() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
-        
-        scenario().requireArranged("subsystem-status must report the ledger: " + status.raw(),
-                true /* the reader refuses a status with no ledger count */);
-        return status.ledger;
     }
 
     /** The NAMED ship's altitude, or {@code NaN} while it is reporting none (the cut, for instance). */

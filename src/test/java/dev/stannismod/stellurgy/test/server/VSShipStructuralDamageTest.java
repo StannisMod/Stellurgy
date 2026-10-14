@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
-import org.junit.Before;
+import org.junit.After;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -43,10 +43,15 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
+    /** The craft this scenario built, once built; disposed of by its own id when the scenario ends. */
+    private WarShip built;
+
+    @After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        if (built != null) {
+            built.dispose();
+            built = null;
+        }
     }
 
     @LegacyWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
@@ -63,6 +68,7 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
         // Build a ship and move it, so world and subspace no longer coincide.
         WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft whose block is shot");
+        built = ship;
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
         // A block of this ship whose subspace address we know: its pilot seat.
@@ -95,9 +101,8 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
         // in one block, and give it an identity of its own.
         Reply result = Reply.of(act("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 3.0D) + " "
                 + world[2] + " 0 -1 0 200000 KINETIC 77001").raw()).requireOk("declare the impact");
-        assertTrue("the impact point resolved to no ship at all (candidates offered: "
-                + result.integer("candidateShips") + "), so the engine walked the world frame where"
-                + " this ship has no blocks:\n" + result, result.bool("onShip"));
+        assertTrue("the impact point resolved to no ship at all, so the engine walked the world frame"
+                + " where this ship has no blocks:\n" + result, result.bool("onShip"));
         assertTrue("an impact at the ship's world position struck nothing — the world point was not"
                 + " mapped into the frame the ship's blocks live in:\n" + result,
                 !"NOTHING_STRUCK".equals(result.text("outcome")));

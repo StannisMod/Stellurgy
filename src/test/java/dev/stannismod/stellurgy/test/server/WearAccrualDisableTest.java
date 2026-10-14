@@ -2,9 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketList;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -23,7 +23,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String BREAKING_PROB = "breakingProb";
 
     /**
@@ -35,13 +34,16 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
      */
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), "simple", 2, 10,
-                "the craft is built and worn in this volume"));
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-        String list = read("stellurgytest rocket list 0").raw();
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        // The rocket is the one the press's own `rocket_born` record names.
+        return rockets.assembleAt(site, c -> act(c).raw(), "simple", 2, 10,
+                "the craft is built and worn in this volume");
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private double damagePartsAndReadProb(int rocketId, int iterations) throws Exception {

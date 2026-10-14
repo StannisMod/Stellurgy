@@ -110,16 +110,16 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
      */
     private Arrived jumpUnderCruise(long speed, String route) throws Exception {
 
+        buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
 
-        // The origin cell is freshly minted and holds this craft alone, so "the only loaded ship
-        // here" is an identification rather than a proximity guess. This fixture carries TWO ids —
-        // the substrate's and a durable one it mints off the computer — and the cruise verbs resolve
-        // the FIRST, so the other one is deliberately not used here.
-        String originVsId = ShipIdentity.theOnlyLoadedShipIn(c -> read(c).raw(), originDim);
+        // The craft the setup built, by the physics id its own reply names — the id the cruise verbs
+        // resolve — once its own announcement says it is usable in the origin cell.
+        String originVsId = setup.requireShipId();
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
 
         String commanded = arrange("stellurgytest vs ff-cruise-by-id " + originDim + " " + originVsId
                 + " 0 0 " + COMMANDED_CRUISE).raw();
@@ -143,31 +143,35 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
-        assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
-        // Identified off the ARRIVAL'S OWN RECORD, not off "the only loaded ship in this cell". That
-        // read worked only while an earlier scenario's hull unloaded itself once nobody was near it;
-        // with a test server holding ships loaded, the target cell holds two and a count cannot say
-        // which one this jump produced.
+        // Identified off the ARRIVAL'S OWN RECORD, and linked on that craft becoming usable in the
+        // target cell.
         String durableId = Events.text(arrived, "ship");
         assertTrue("the arrival must name the craft that made it, or the cruise read below is about"
-                + " whichever hull the cell happens to hold: " + arrived,
+                + " some other hull: " + arrived,
                 durableId != null && !durableId.trim().isEmpty());
-        return new Arrived(targetDim, ShipIdentity.physicsIdOf(c -> read(c).raw(), targetDim, durableId.trim()));
+        return new Arrived(targetDim, ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                durableId.trim(), USABLE_TICKS));
     }
 
+    /** Server ticks for a craft to become usable once it is built or has arrived: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     // ─── plumbing, mirroring this tier's siblings ───────────────────────────────
 
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
     private static int extractInt(String json, String key) {
         return Reply.of(json).integer(key);

@@ -60,17 +60,13 @@ import static org.junit.Assert.*;
  *       whatever the fixed seed generated. The x=3000.. / z=500 strip is what every green run of
  *       this file was taken on; relocating it onto the shared-harness default would have been a
  *       change of subject dressed as a refactor. See {@link #lane()}.</li>
- *   <li><b>The rocket is found by PLOT, not by "the last one in the world".</b> The old
- *       {@code buildAndAssemble} read {@code stellurgytest rocket list 0} and took the highest id it saw.
- *       That is safe when the world holds exactly one rocket and silently wrong when it holds 27 —
- *       precisely the object-answers-for-another-object failure a shared world creates. The lookup
- *       now filters on {@link Plot#contains}.</li>
+ *   <li><b>The rocket is named by its own assembly, not found in the world.</b> The id is the one
+ *       the press's {@code rocket_born} record carries, and the scenario disposes of that rocket by
+ *       it when it ends — so no reading asks which of the world's rockets is this scenario's.</li>
  * </ul>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class FreeFlightModeTest extends AbstractSharedClientTest {
-
-    private static final String ROCKET_ID = "id";
 
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
@@ -335,63 +331,17 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // A retry of an operation that "sometimes" fails is a wait on something that does not
         // always happen, and it converts the failure into a pause. If this goes red, the reply names
         // the refusal — and a refusal on a freshly laid pad is a finding, not weather.
+        long mark = serverEvents().markInstrumented();
         String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), bp);
         assertTrue("the assembler must build the rocket laid on its pad one command earlier: "
                 + assemble, Reply.of(assemble).ok());
 
-        return rocketIdInThisPlot();
-    }
-
-    /**
-     * The id of the rocket standing in THIS scenario's plot.
-     *
-     * <p>{@code stellurgytest rocket list 0} is a GLOBAL query: on a shared harness the world holds every
-     * earlier scenario's rocket too. The pre-migration code took the highest id it saw, which is
-     * correct only while exactly one rocket exists. Each entry carries its {@code pos}, so the
-     * answer is narrowed to the plot that built it — and an ambiguous answer is a ARRANGEMENT
-     * failure naming what it saw, never a silently-picked candidate.</p>
-     */
-    /**
-     * Every rocket the PREVIOUS scenario left flying goes, before this one builds its own.
-     *
-     * <p>At the next scenario's start rather than in an {@code @After}, for the reason the base gives
-     * for its whole reset: JUnit runs {@code @After} before the rules finish. And in the base's
-     * pre-teleport hook rather than in a {@code @Before} of this class, because a {@code @Before}
-     * here runs AFTER the base has already placed the bot in the new plot — and a scenario that fails
-     * mid-flight leaves him riding its rocket, which a placement does not move him off. Measured
-     * 2026-09-28 in an inversion run: a red scenario's still-riding pilot was found 60 blocks up and
-     * outside the NEXT scenario's plot, and that scenario died on its own "must start inside its
-     * plot" check — a red that belonged to its predecessor. Disposal dismounts riders first, so
-     * running it before the teleport hands the base a pilot on his feet.</p>
-     *
-     * <p><b>The plot does not cover this, and that is the finding.</b> The allocator hands each
-     * scenario its own patch of world and never recycles one, so nothing else ever looks there — for
-     * what stays put. Measured 2026-09-16, three loaded runs out of three: a rocket 93 ticks old, 120
-     * blocks up and 80 downrange of where it was built, standing inside the NEXT scenario's plot and
-     * making that scenario's own "exactly one rocket stands here" gate refuse. A craft leaves its
-     * owner's patch of world under its own power; allocation cannot prevent that, and only disposal
-     * can.</p>
-     */
-    @Override
-    protected void resetFamilyStateBeforeTeleport() throws Exception {
-        System.out.println("[reset] rockets cleared from this class's world: "
-                + RocketList.clearFrom(c -> arrange(c).raw(), 0));
-    }
-
-    private int rocketIdInThisPlot() throws Exception {
-        String list = read("stellurgytest rocket list 0").raw();
-        java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
-        // The AGE is in the message because it is what an ambiguous answer turns on: two craft here
-        // are either this scenario building twice (both young) or somebody else's craft that moved
-        // into this plot (one of them old). The coordinates alone cannot tell those apart, and the
-        // reading was made three times before anything carried the number that would have.
-        scenario().requireArranged("exactly one rocket must stand in " + plot()
-                + " after assemble, found " + mine.size() + " here —" + RocketList.describe(list)
-                + " (age is ticks existed: a craft this scenario just assembled is young, one an"
-                + " earlier scenario left behind is not)", mine.size() == 1);
-        int found = mine.get(0).id;
-        scenario().record("rocketId", found);
-        return found;
+        // The rocket is the one this press's own `rocket_born` record names — never one looked for
+        // in the world — and it is this scenario's to dispose of when the scenario ends.
+        int rocket = RocketFixture.rocketBornAt(serverEvents(), mark, bp);
+        disposeOfRocketAtEnd(rocket);
+        scenario().record("rocketId", rocket);
+        return rocket;
     }
 
     /** What the server says about one craft, read through the verb's own reader. */
@@ -421,10 +371,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     // WHY EVERY WAIT BELOW NAMES ITS ROCKET. `Events.await` matches on the TYPE alone, and this
-    // class is 27 scenarios on ONE shared world: every earlier scenario's rocket is still standing
-    // there, several left in flight, and each can write its own in-flight flag or land on its own
-    // while a later scenario is watching. A link that could not name the rocket would be answered
-    // by a neighbour — the same failure the plot-filtered rocketIdInThisPlot() exists for. The join
+    // class is 27 scenarios on ONE shared world, and a link that could not name the rocket would be
+    // answered by any rocket in that world that writes its in-flight flag or lands. The join
     // is the `e` FIELD, through awaitField / awaitRecordWithFields; the local wrapper this replaced
     // matched a raw substring (`"e":<id>,`), which rides on the writer's field ORDER and on the
     // value being followed by a comma.

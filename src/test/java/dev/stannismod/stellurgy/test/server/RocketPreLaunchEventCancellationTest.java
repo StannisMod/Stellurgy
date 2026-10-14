@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.RocketInfo;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import org.junit.After;
 import org.junit.Test;
 
@@ -50,7 +50,6 @@ import static org.junit.Assert.*;
  */
 public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String OBSERVED = "observed";
     private static final String CANCELLED = "cancelled";
 
@@ -62,12 +61,18 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
     private static final int CX_NO_CANCEL = 6300;
     private static final int CZ           = 6000;
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
     @After
     public void disarmCancellation() throws Exception {
-        // Belt-and-braces: even if @Test threw before its finally ran,
-        // disarm here. A leaked-armed canceller would break every
-        // subsequent rocket-launch test in the shared harness.
-        arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
+        try {
+            // Belt-and-braces: even if @Test threw before its finally ran,
+            // disarm here. A leaked-armed canceller would break every
+            // subsequent rocket-launch test in the shared harness.
+            arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
+        } finally {
+            rockets.disposeStanding();
+        }
     }
 
     @Test
@@ -131,16 +136,9 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         // said it "reproduces RocketAssemblySmokeTest's hygiene without depending on its helper" —
         // which is the copied-idiom shape exactly: the copy came over, the reason stayed behind,
         // and both fills threw away the one number they measured. There is a shared builder now.
-        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ),
-                c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, baseX, CZ),
-                c -> arrange(c).raw(), "simple", 2, 10,
-                "the craft whose pre-launch event this scenario cancels stands in this volume"));
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId in assemble response: " + assemble, eimReply.has(ENTITY_ID));
-        return Integer.parseInt(eimReply.text(ENTITY_ID));
+        // The rocket is the one the press's own `rocket_born` record names.
+        return rockets.assembleAt(FixtureSite.openAir(0, baseX, CZ), c -> act(c).raw(), "simple", 2, 10,
+                "the craft whose pre-launch event this scenario cancels stands in this volume");
     }
 
     private static int extract(String src, String field) {

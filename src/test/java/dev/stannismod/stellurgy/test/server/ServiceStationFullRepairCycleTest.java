@@ -2,7 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -59,8 +60,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String PARTS_COUNT = "partsToRepairCount";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
     private static final String INITIAL_COUNT = "initialPartToRepairCount";
     private static final String ASM_COUNT = "assemblersCount";
     private static final String PROC_COUNT = "partsProcessingCount";
@@ -108,16 +115,9 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // FIRST link, ASSERTING where the fill DUG and threw its own answer away. Halo 7, because
         // the old volume reached `ROCKET_CX+12` to keep the craft's own lane clear of the assembler
         // footprint this scenario stands beside it.
-        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ),
-                c -> act(c).raw(), RocketFixture.placeAt(
-                FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ),
-                c -> arrange(c).raw(), "simple", 7, 10,
-                "the craft the repair cycle works on, in its own lane beside the assembler"));
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
-        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
+        // The rocket is the one the press's own `rocket_born` record names.
+        int rocketId = rockets.assembleAt(FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ), c -> act(c).raw(),
+                "simple", 7, 10, "the craft the repair cycle works on, in its own lane beside the assembler");
 
         // Mark one of the rocket's advRocketmotor TileBrokenParts as
         // stage 5.

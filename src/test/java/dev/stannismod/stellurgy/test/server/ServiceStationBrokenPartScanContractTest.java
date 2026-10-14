@@ -2,8 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -61,8 +62,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String PART_POS = "partPos";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
     private static final String PARTS_COUNT = "partsToRepairCount";
     private static final String INITIAL_COUNT = "initialPartToRepairCount";
     private static final String STAGE = "stage";
@@ -188,15 +195,10 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
     private AssembledRocket buildAndAssembleRocket(int baseX) throws Exception {
         // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
         // Halo 7: this scenario stands a service station ten blocks east of the craft.
-        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ_PAD),
-                c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, baseX, CZ_PAD),
-                c -> arrange(c).raw(), "simple", 7, 10,
+        // The rocket is the one the press's own `rocket_born` record names.
+        return new AssembledRocket(rockets.assembleAt(FixtureSite.openAir(0, baseX, CZ_PAD),
+                c -> act(c).raw(), "simple", 7, 10,
                 "the craft whose worn parts the station scans, and the ground it stands on"));
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
-        return new AssembledRocket(Integer.parseInt(eimReply.text(ENTITY_ID)));
     }
 
     private void placeServiceStation(int sx, int sy, int sz) throws Exception {

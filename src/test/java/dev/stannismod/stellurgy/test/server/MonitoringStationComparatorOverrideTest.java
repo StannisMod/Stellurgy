@@ -2,7 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -36,8 +38,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class MonitoringStationComparatorOverrideTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
-    private static final String ENTITY_ID = "entityId";
     private static final String COMPARATOR_OVERRIDE = "comparatorOverride";
     private static final String LINKED_ENTITY_ID = "linkedEntityId";
 
@@ -136,16 +136,21 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
 
     // -- helpers ----------------------------------------------------------
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(int baseX, int baseZ) throws Exception {
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. The site is in the band, so this ASSERTS rather
         // than digs, and its fill force-loads every chunk in the box, which is what the warmup did.
-        return dev.stannismod.stellurgy.test.RocketFixture.rocketEntityId(
-                dev.stannismod.stellurgy.test.RocketFixture.assembleBuilt(dev.stannismod.stellurgy.test.FixtureSite.openAir(0, baseX, baseZ),
-                        c -> act(c).raw(), dev.stannismod.stellurgy.test.RocketFixture.placeAt(
-                        dev.stannismod.stellurgy.test.FixtureSite.openAir(0, baseX, baseZ),
-                        c -> arrange(c).raw(), "simple", 2, 10,
-                        "the craft the monitoring station reports on stands in this volume")));
+        return rockets.assembleAt(dev.stannismod.stellurgy.test.FixtureSite.openAir(0, baseX, baseZ),
+                c -> act(c).raw(), "simple", 2, 10,
+                "the craft the monitoring station reports on stands in this volume");
     }
 
     private static int extract(String src, String field) {

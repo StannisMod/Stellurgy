@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -39,7 +40,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest {
 
-    private static final String ROCKET_LIST_ID = "id";
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
         return RocketInfo.byId(cmd -> String.join("\n", client().read(cmd)), id);
@@ -62,13 +62,10 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
                         + drillInfo.raw(), drillInfo.drillingPower > 0.0);
     }
 
-    /** Mirror of RocketAssemblySmokeTest#buildAndAssemble — warmup chunks,
-     *  pre-clear the bbCache volume with air, run fixture + assemble,
-     *  return the spawned entity id. */
+    /** Warm the chunks, lay the fixture and assemble it; the rocket that press made, named by its own
+     *  {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        final int baseX = site.x, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         String warmup = String.join("\n", client().arrange(
@@ -79,23 +76,15 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
-                variant, 2, 10,
+        return rockets.assembleAt(site, cmd -> String.join("\n", client().act(cmd)), variant, 2, 10,
                 "the craft is built and flown in this volume");
-        int bx = bp[0],
-                by = bp[1],
-                bz = bp[2];
+    }
 
-        String assemble = String.join("\n", client().act(
-                "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble (" + variant + ") failed: " + assemble,
-                Reply.of(assemble).ok());
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
 
-        String rocketList = String.join("\n", client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
-        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
-        return lastId;
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
 }

@@ -2,8 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -35,7 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final String ENT_ID = "entityId";
     private static final String TOTAL_PLACED = "totalPlaced";
     private static final String TILES_WITH_CAP = "tilesWithCapability";
 
@@ -119,17 +119,18 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
     private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
-        // this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 10,
-                "the craft the unloader empties stands in this volume"));
-        assertTrue("rocket assemble failed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply emReply = Reply.of(assemble);
-        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
-        return Integer.parseInt(emReply.text(ENT_ID));
+        // this ASSERTS rather than digs. The rocket is the one the press's own `rocket_born` record
+        // names.
+        return rockets.assembleAt(site, c -> act(c).raw(), variant, 2, 10,
+                "the craft the unloader empties stands in this volume");
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private static int extract(String src, String field) {

@@ -167,10 +167,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
                         + " ship is what makes the physics mod load it");
 
         Events loadEvents = serverEvents();
-        String assemble = assembleFixture(site);
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        disposeOfShipAtEnd(ShipIdentity.nameFromAssembly(assemble));
         System.out.println("[S1/ship] assemble=" + assemble);
-        assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // The craft this spike built, by the name the assembler minted — so every lookup below is
         // about it and not about whichever hull is nearest the pad on a world the tier shares. Its
@@ -387,14 +389,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         return reply.integer(field);
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the hull and the cabin built on it occupy is EMPTY, measured by
         // the air fill's own `placed`. Open air, so this ASSERTS rather than digs. It matters more
         // here than in most: the subject is a SEALED cabin, and a shell whose stone is continuous
         // with the pit's wall is not the shape this leg believes it built.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the hull, and the sealed cabin raised on it"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
+                "the hull, and the sealed cabin raised on it");
     }
 }

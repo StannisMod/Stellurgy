@@ -65,7 +65,7 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site, String variant) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
@@ -75,8 +75,8 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping
         // there, and the room the hull sweeps as it rolls.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 24,
-                "the hull, the deck a crew member rides, and the air it rolls through"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), variant, 2, 24,
+                "the hull, the deck a crew member rides, and the air it rolls through");
     }
 
     @LegacyWitness(prose = "with {@code ShipFrameTravel#followShipPoses} (the pass that re-images a held"
@@ -102,9 +102,11 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
                 "the observer that must not be near the spawn is a CLIENT, so his being away is a"
                         + " fact about the client and not about elapsed ticks");
 
-        String assemble = assembleFixture(site, VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly built = assembleFixture(site, VARIANT);
+        String assemble = built.reply;
+        disposeOfShipAtEnd(ShipIdentity.nameFromAssembly(assemble));
+        assertTrue("a with-pilot-seat build must route to a ship, making no rocket: " + built,
+                built.madeNoRocket());
 
         // WHICH ship, from the assembler that minted its name — and the wait for it: this link is on
         // `ship_usable` for THAT name, so it is also the proof that the assembly created a ship. The

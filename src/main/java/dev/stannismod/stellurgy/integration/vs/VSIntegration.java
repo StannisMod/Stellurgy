@@ -84,17 +84,6 @@ public final class VSIntegration {
     }
 
     /**
-     * Mark every registered ship in {@code world} as finished, so the substrate collects them on its
-     * next tick; answers how many were marked.
-     *
-     * <p>For a scenario clearing up after itself. It is irreversible by design — the substrate never
-     * revives a craft declared finished — so nothing in gameplay should reach for it.</p>
-     */
-    public static int markAllShipsDead(World world) {
-        return VSBridge.markAllShipsDead(world);
-    }
-
-    /**
      * Assemble the craft standing in the given block footprint into a movable ship, under the
      * identity its own flight computer carries.
      *
@@ -408,8 +397,8 @@ public final class VSIntegration {
     }
 
     /**
-     * RIGID-TELEPORT the ship NAMED by {@code shipUuid} to {@code (x,y,z)} — the identity-keyed twin
-     * of {@link #teleportShipTo}. {@code false} when the physics mod is absent or no such ship is
+     * RIGID-TELEPORT the ship NAMED by {@code shipUuid} to {@code (x,y,z)}: the world-frame pose moves,
+     * the subspace blocks stay put. {@code false} when the physics mod is absent or no such ship is
      * registered here.
      */
     public static boolean teleportShipToByUuid(World world, java.util.UUID shipUuid,
@@ -490,18 +479,6 @@ public final class VSIntegration {
     /** UNPARK (re-enable physics on) the VS ship at {@code (x,y,z)}. See {@link #parkShipAt}. */
     public static boolean unparkShipAt(World world, double x, double y, double z) {
         return VSBridge.unparkShipAt(world, x, y, z);
-    }
-
-    /**
-     * RIGID-TELEPORT the VS ship nearest to {@code (x,y,z)} to {@code (dstX,dstY,dstZ)}: the world-frame
-     * pose moves (rotation kept, VS Y-limits widened as needed), the subspace blocks stay put. Entities
-     * are not capped by the 256 build height, so extreme-Y poses are legal — this is the realization
-     * lever for honest galactic local-Y and the arrange step of the extreme-coordinate spikes. Park the
-     * ship first ({@link #parkShipAt}), teleport, then unpark.
-     */
-    public static boolean teleportShipTo(World world, double x, double y, double z,
-                                         double dstX, double dstY, double dstZ) {
-        return VSBridge.teleportShipTo(world, x, y, z, dstX, dstY, dstZ);
     }
 
     /**
@@ -670,7 +647,7 @@ public final class VSIntegration {
         // anything had it loaded — which is the case that used to have no collector at all and left a
         // blockless record answering position lookups for the life of the world. Nothing here decides
         // WHEN or in what order; that stays the substrate's, which is the only place it is understood.
-        VSBridge.releaseShipIfNothingLoaded(srcWorld, srcShipId);
+        VSBridge.discardShip(srcWorld, srcShipId);
         // The cut took the seat BLOCKS; the dummies bound to them are entities and survive it. On a
         // crossing they must not: the ship is re-assembled in ANOTHER world and its riders are re-seated
         // there on fresh dummies, so a source-side dummy is a chair whose ship no longer exists - and
@@ -893,23 +870,9 @@ public final class VSIntegration {
     }
 
     /**
-     * A single subspace block position of the VS ship whose world BB contains {@code (x,y,z)}, or
-     * {@code null} when no ship is there / its shipyard is empty. Located through the
-     * queryable ship registry (headless-reliable, unlike a loaded-TE scan), so a test harness can hand
-     * a ship-managing block to a controller that addresses a ship by one of its blocks.
-     */
-    public static net.minecraft.util.math.BlockPos shipBlockAt(World world, double x, double y, double z) {
-        return shipBlockInYard(world, shipyardBoundsAt(world, x, y, z));
-    }
-
-    /**
-     * A single subspace block position of the ship NAMED by {@code shipUuid} — the identity-keyed twin
-     * of {@link #shipBlockAt}, and the one to reach for whenever the caller knows which ship it means.
-     *
-     * <p>{@link #shipBlockAt} resolves its shipyard through {@link #shipyardBoundsAt}, which answers
-     * for whatever craft is nearest with no distance bound; the block it then returns is a real block
-     * of a real ship, and nothing in it says the ship is the caller's. A controller handed that block
-     * addresses a stranger's craft and reports success.</p>
+     * A single subspace block position of the ship NAMED by {@code shipUuid}, located through the
+     * queryable ship registry and a force-loaded scan of its shipyard, or {@code null} when that
+     * shipyard is empty.
      */
     public static net.minecraft.util.math.BlockPos shipBlockOf(World world, java.util.UUID shipUuid) {
         if (shipUuid == null) {
@@ -951,7 +914,7 @@ public final class VSIntegration {
     /**
      * The SUBSPACE {@link BlockPos} of the {@code TileAdvancedFlightComputer} on the VS ship whose world BB
      * contains {@code (x,y,z)}, or {@code null} when no ship is there / it carries no flight
-     * computer. Same queryable, force-loaded subspace scan as {@link #shipBlockAt}, but matched by tile type
+     * computer. Same queryable, force-loaded subspace scan as {@link #shipBlockOf}, but matched by tile type
      * instead of "first non-air". The transit depart path holds only a world-frame ship anchor (unlike entry
      * and descent, which run from the AFC tile itself and get its position for free), so it must recover the
      * AFC block - which {@code CrewTransfer.capture} filters the ship's seats against - by scanning the
@@ -1049,7 +1012,7 @@ public final class VSIntegration {
         int minX = (int) yard.minX, maxX = (int) yard.maxX;
         int minZ = (int) yard.minZ, maxZ = (int) yard.maxZ;
         // Force-load the shipyard chunks first (a headless server holds the physo loaded but may not
-        // chunk-load its far subspace region, so an un-loaded scan finds no tile) - same reason as shipBlockAt.
+        // chunk-load its far subspace region, so an un-loaded scan finds no tile) - same reason as shipBlockOf.
         for (int cx = minX >> 4; cx <= (maxX >> 4); cx++) {
             for (int cz = minZ >> 4; cz <= (maxZ >> 4); cz++) {
                 world.getChunkProvider().provideChunk(cx, cz);
@@ -1575,11 +1538,11 @@ public final class VSIntegration {
     }
 
     /**
-     * Deregister {@code uuid} in {@code world} when nothing holds it loaded — the disposal of a hull
-     * no record claims. {@code false} when the physics mod is absent or that ship is loaded.
+     * Mark the registered ship {@code uuid} finished, loaded or not, so the substrate collects it on
+     * its next tick and DISCARDS its blocks. {@code false} when {@code world} registers no such ship.
      */
-    public static boolean releaseShipIfNothingLoaded(World world, java.util.UUID uuid) {
-        return world != null && VSBridge.releaseShipIfNothingLoaded(world, uuid);
+    public static boolean discardShip(World world, java.util.UUID uuid) {
+        return world != null && VSBridge.discardShip(world, uuid);
     }
 
     /**
@@ -1600,52 +1563,33 @@ public final class VSIntegration {
         VSBridge.ensureShipPhysicsEnabled(world, pos);
     }
 
-    /** Number of Valkyrien Skies ships loaded in {@code world}, or -1 when the world holds none. */
-    public static int loadedShipCount(World world) {
-        return VSBridge.loadedShipCount(world);
+    /**
+     * Where the REGISTERED ship {@code shipUuid} stands in {@code world} — its transform position off its
+     * registry record, loaded or not — or {@code null} when this world registers no such ship.
+     */
+    public static double[] registeredShipPosition(World world, java.util.UUID shipUuid) {
+        return shipUuid == null ? null : VSBridge.registeredShipPosition(world, shipUuid);
     }
 
     /**
-     * The identities of the loaded ships {@link #loadedShipCount} counts, or an empty list when VS
-     * is absent. A caller that has established "this world holds exactly one ship" needs this to say
-     * WHICH — the count alone leaves it reaching for a positional lookup to find out.
+     * Whether {@code world}'s ship registry holds the ship {@code shipUuid}, loaded or not. A lookup by
+     * identity: it says nothing about any other ship the registry holds.
      */
-    public static java.util.List<String> loadedShipIds(World world) {
-        return VSBridge.loadedShipIds(world);
-    }
-
-    /** Total ships in {@code world} loaded or not (queryable registry), or -1 when the world holds none. */
-    public static int queryableShipCount(World world) {
-        return VSBridge.queryableShipCount(world);
+    public static boolean isShipRegistered(World world, java.util.UUID shipUuid) {
+        return world != null && shipUuid != null && VSBridge.shipDataByUuid(world, shipUuid) != null;
     }
 
     /**
      * TEST-ONLY FAULT INJECTION: register a blockless, unloaded ship record in {@code world}.
      *
-     * <p>Answers {@code [uuid, registrySizeRightAfterTheAdd]}, or {@code null} when the add did not take —
-     * absence rather than a fabricated pair, because a caller that got {@code ["", "0"]} could not
-     * tell "no physics mod" from "the plant did nothing".</p>
+     * <p>Answers {@code [uuid, registeredRightAfterTheAdd]} ({@code "true"}/{@code "false"}), or
+     * {@code null} when the add did not take — absence rather than a fabricated pair, because a caller
+     * that got {@code ["", "false"]} could not tell "no physics mod" from "the plant did nothing".</p>
      */
     public static String[] strandBlocklessRecord(World world, net.minecraft.util.math.BlockPos anchor) {
         return VSBridge.strandBlocklessRecord(world, anchor);
     }
 
-    /**
-     * DIAGNOSTIC: identity of the ship registry {@code world} answers with, matching the hex the
-     * physics mod prints when it serialises that world. {@code "?"} when the world answers with no registry.
-     */
-    public static String queryableIdentity(World world) {
-        return VSBridge.queryableIdentity(world);
-    }
-
-    /**
-     * DIAGNOSTIC: the transform positions of every queryable ship in {@code world}, as
-     * {@code "x,y,z;x,y,z"}. Asks about no point, so a caller can find out WHERE a ship is rather than
-     * only whether one answers for a place it guessed. Empty when holds no ships.
-     */
-    public static String queryableShipPositions(World world) {
-        return VSBridge.queryableShipPositions(world);
-    }
 
     /**
      * Force every known ship in {@code world} loaded and physics-enabled (headless/no-observer
@@ -1655,6 +1599,15 @@ public final class VSIntegration {
      *         physics object yet, so a caller can tell "nothing needed loading" from "there was
      *         nothing here"; {@code null} when no ship was named.
      */
+    /**
+     * Enable physics on the registered ship {@code uuid} and request its load when it is not loaded:
+     * {@code -1} when {@code world} registers no such ship, {@code 0} when it was already loaded,
+     * {@code 1} when a load was requested.
+     */
+    public static int loadShip(World world, java.util.UUID uuid) {
+        return world == null || uuid == null ? -1 : VSBridge.loadShip(world, uuid);
+    }
+
     public static int[] loadAllShips(World world) {
         return VSBridge.loadAllShipsCounted(world);
     }

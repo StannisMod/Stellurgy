@@ -1240,10 +1240,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         assertTrue("the production space subsystem must be live on boot 1 (that is what the seeded "
                 + "config opt-in is for) - without it this test would silently assert nothing: "
                 + status.raw(), status.registered);
-        // CONTROL (witness sensitivity): the ledger is counted BEFORE the climb, so a ledger that grew
-        // afterwards is an observation about the entry and not about a pre-existing record. A delta,
-        // because a server whose earlier scenario already settled a ship is a legitimate start.
-        int ledgerBefore = status.ledger;
 
         startClient();
         bot().waitForWorld();
@@ -1261,21 +1257,27 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
         Events events = serverEvents();
-        String coords = placeFixture(launchSite(), VARIANT);
+        int[] builder = placeFixture(launchSite(), VARIANT);
         // The mark BEFORE the assembler is told, so the ship this arrangement is about cannot be
-        // missed between two counts and cannot be confused with one that already existed.
+        // missed and cannot be confused with one that already existed.
         long assemblyMark = events.mark();
-        String assembled = act("stellurgytest rocket assemble " + LAUNCH_DIM + " " + coords).raw();
-        assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        assertTrue("the ship never assembled in the launch dimension",
-                waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
+        ShipAssembly built = ShipAssembly.press(LAUNCH_DIM, c -> act(c).raw(), events, builder);
+        String assembled = built.reply;
+        assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + built,
+                built.madeNoRocket());
 
         // The ship BY NAME, from the assembler that minted the durable id — then the physics id it
-        // maps to. The pad lookup this replaced was a proximity query on a world the whole family
-        // shares, and a neighbour's craft answers it in the same shape.
+        // maps to, once this ship is loaded. The pad lookup this replaced was a proximity query on a
+        // world the whole family shares, and a neighbour's craft answers it in the same shape.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
-        String srcVsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), LAUNCH_DIM, durableShipId);
+        String srcVsId = awaitOwnShipLoaded(events, assemblyMark, LAUNCH_DIM, durableShipId);
+        // CONTROL (witness sensitivity): THIS craft is not in the ledger before the climb, so the
+        // entry found there afterwards is an observation about the entry and not a pre-existing
+        // record. Asked by its durable id: a ship an earlier scenario settled is a legitimate
+        // resident of the ledger and none of this one's business.
+        LedgerEntry beforeTheClimb = LedgerEntry.forShip(c -> read(c).raw(), durableShipId);
+        assertFalse("this craft must not be in the ledger before it has climbed: " + beforeTheClimb.raw(),
+                beforeTheClimb.found);
         ShipInfo srcInfo = ShipInfo.byId(c -> read(c).raw(), LAUNCH_DIM, srcVsId);
         int sx = (int) Math.round(srcInfo.x);
         int sy = (int) Math.round(srcInfo.y);
@@ -1307,10 +1309,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                         + " the production ledger - the restore reads that very ledger, so an"
                         + " arrangement that never wrote it tests nothing",
                 RESTORE_LINK_BUDGET_TICKS);
-        SubsystemStatus ledgerStatus = SubsystemStatus.read(c -> read(c).raw());
-        assertTrue("the settled ship must be countable in the subsystem's own ledger, not only in"
-                + " the record of the write (" + ledgerBefore + " before the climb): " + ledgerStatus.raw()
-                + " | " + settledRecord, ledgerStatus.ledger >= ledgerBefore + 1);
 
         // Find the slot the entry bound the cell to. Slot ids are minted per boot, so they are read
         // off the crossing's own records rather than known. An entry that ended up ABANDONED settles
@@ -1366,8 +1364,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
                 status.registered);
-        assertEquals("no ship may be ledgered before the flight: " + status.raw(),
-                0, status.ledger);
 
         startClient();
         bot().waitForWorld();
@@ -1380,13 +1376,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                 Reply.of(launch).ok() && Reply.of(launch).has("cellKey"));
 
         Events events = serverEvents();
-        String coords = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
+        int[] builder = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
         long assemblyMark = events.mark();
-        String assembled = act("stellurgytest rocket assemble " + LAUNCH_DIM + " " + coords).raw();
-        assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        assertTrue("the ship never assembled in the launch dimension",
-                waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
+        ShipAssembly built = ShipAssembly.press(LAUNCH_DIM, c -> act(c).raw(), events, builder);
+        String assembled = built.reply;
+        assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + built,
+                built.madeNoRocket());
 
         // The ship's identity on the GROUND, TRANSLATED from the name the assembler minted rather than
         // captured from a lookup at the fixture's spot: the family shares this world, so "the ship at
@@ -1395,7 +1390,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         // re-assembles them, so the craft that flies is a different VS object. This one addresses the
         // pilot's throttle before the crossing; `arrangedShipId` addresses everything after it.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
-        String groundShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), LAUNCH_DIM, durableShipId);
+        String groundShipId = awaitOwnShipLoaded(events, assemblyMark, LAUNCH_DIM, durableShipId);
+        LedgerEntry beforeTheFlight = LedgerEntry.forShip(c -> read(c).raw(), durableShipId);
+        assertFalse("this craft may not be ledgered before the flight: " + beforeTheFlight.raw(),
+                beforeTheFlight.found);
 
         ShipInfo srcInfo = ShipInfo.byId(c -> read(c).raw(), LAUNCH_DIM, groundShipId);
         int sx = (int) Math.round(srcInfo.x);
@@ -1486,9 +1484,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                         + "cross into its launch body's cell and settle there, carrying its pilot",
                 RESTORE_LINK_BUDGET_TICKS, Chains.grantedEntry());
         String entryChain = events.since(entryMark);
-        SubsystemStatus ledgerStatus = SubsystemStatus.read(c -> read(c).raw());
-        assertTrue("the entered ship must be countable in the subsystem's own ledger, not only in "
-                + "the record of the write: " + ledgerStatus.raw(), ledgerStatus.ledger >= 1);
+        // That the ledger itself holds THIS craft — not only the record of the write — is read by its
+        // durable id below, once the settled slot has named it.
         // Hands off. Aimed at the ship he actually flew - the pre-crossing one - because that is the
         // computer his throttle went to; the craft on the far side is a different VS object with a
         // fresh tile.
@@ -1864,7 +1861,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         String hullId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), log, dim, arrangedShipId, 200);
         String info = read("stellurgytest vs ship-info " + dim + " id " + hullId).raw();
         if (!ShipInfo.isLoaded(info)) {
-            arrange("stellurgytest vs load-ships " + dim);
+            arrange("stellurgytest vs load-ship " + dim + " " + hullId);
             log.awaitMatching(mark, "ship_usable",
                     usable -> ShipIdentity.endsUsable(usable, log.since(mark, "ship_unloaded"), hullId, dim),
                     "carrying " + hullId + " in dim " + dim + ", later than every unload of it",
@@ -1879,31 +1876,32 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
     }
 
     /**
-     * The assembly becoming a SHIP, then that ship being LOADED in {@code dim}.
+     * THIS scenario's assembly becoming a SHIP, then that ship being LOADED in {@code dim} — both
+     * asked of its own records, by the durable name the assembler minted.
      *
-     * <p>The first half is a link and is awaited as one: {@code ship_spawned} is the physics mod's
-     * own registry taking the ship, so a red says the assembly never produced one rather than
-     * reporting a count that stayed where it was. The second half is not a link - "the shipyard is
-     * loaded" is live state on a headless server that nobody stands near, and force-loading it is
-     * what this poll is for - so it stays a bounded poll and returns the count it found.</p>
+     * <p>The first half is a link: {@code ship_spawned} carrying this craft's durable name is the
+     * physics mod's own registry taking it, so a red says the assembly never produced one. The load
+     * is asked ONCE, of this ship by its id ({@code vs load-ship}) — a headless server has no player
+     * to hold a craft loaded — and whether it took is production's own {@code ship_usable} for this
+     * craft, awaited as the link it is.</p>
+     *
+     * @param mark a mark on {@code events}, taken before the press
+     * @return the ship's physics id in {@code dim}
      */
-    protected int waitForLoadedShip(Events events, long mark, int dim) throws Exception {
-        events.await(mark, "ship_spawned", "the build must become a ship in the physics mod's own"
-                + " registry - a ship count that never rises cannot tell an assembler that refused"
-                + " from a queue that never drained", RESTORE_LINK_BUDGET_TICKS);
-        // The spawn is a LINK and is awaited above. What follows was a poll for the LOAD, and it
-        // is asserted instead: a headless server has no player to hold a craft loaded, so the ask
-        // is made once — and then it either took or it did not. Repeating the ask forty times
-        // cannot make a registered craft load if the first ask failed, it only converts that into
-        // 200 ticks of ambiguity and an answer of 0 that means several different things.
-        arrange("stellurgytest vs load-ships " + dim).raw();
-        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
-                "the ship this scenario just spawned must be loaded before a login can restore it");
+    protected String awaitOwnShipLoaded(Events events, long mark, int dim, String durableShipId)
+            throws Exception {
+        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durableShipId,
+                "the build must become a ship in the physics mod's own registry",
+                RESTORE_LINK_BUDGET_TICKS);
+        String vsShip = Events.text(spawned, "vsShip");
+        String command = "stellurgytest vs load-ship " + dim + " " + vsShip;
+        Reply load = Reply.of(command, arrange(command).raw());
+        assertTrue("the world must register the ship its registry just took, or nothing can load it: "
+                + load + " | " + spawned, load.ok() && load.bool("found"));
+        return ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, dim, durableShipId,
+                RESTORE_LINK_BUDGET_TICKS);
     }
 
-    /** Clear the build site so the fixture is not welded to whatever terrain generated there. */
-
-    /** Place a fixture build and return its build-controller position, as the assembler wants it. */
     /**
      * WHERE this scenario's craft stands, and the first link that says the volume is empty.
      *
@@ -1917,10 +1915,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     protected static String readShipId(String json) {

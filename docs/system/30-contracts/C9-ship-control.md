@@ -153,6 +153,19 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   placed on a ship with NO pilot seat **auto-links** (the replacement path after SHIPCTL-14); a
   second seat's placement is refused with a message. R10/R11 hold for the ship's LIFETIME. **(c)**
   Mid-flight building of non-control blocks is OUT of scope.
+- **SHIPCTL-20** `[V][SYS]` A RIDERLESS mount dummy whose seat no longer stands removes itself, on the
+  server, on its own tick — whatever took the seat away, including a discarded ship whose chunks are
+  deleted and whose blocks are therefore never broken. Its seat stands while the bound seat position
+  holds a seat block, or — that position not loaded — while it lies in the shipyard under a REGISTERED
+  ship (unloaded, and coming back); an unbound dummy's seat is the block it sits in (`EntityDummy`).
+  A RIDDEN dummy is never removed this way: across an assembly the pilot rides a stale mount bound to
+  vacated coordinates until the rebind moves him off it (`CrewTransfer.rebindAcrossAssembly`). The
+  block's own `breakBlock` remains the immediate path for a broken seat (SHIPCTL-14). It is vanilla's
+  idiom for an entity bound to a block: a hanging entity checks its surface (`EntityHanging.onUpdate`),
+  a sleeping player his bed (`EntityPlayer.isInBed`). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
+  рядом с игроком можно оставить как требование, но чистить надо как-то автоматически"* (the dummy near
+  the player may stay a requirement, but it must be cleaned up automatically), and the choice of the
+  dummy-side check the same day (*"1"*).
 
 ## Rulings index (R1-R22, all maintainer, 2026-07-19 / 2026-07-20)
 

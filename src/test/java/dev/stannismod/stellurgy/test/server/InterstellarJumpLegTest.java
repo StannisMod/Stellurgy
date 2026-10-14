@@ -93,17 +93,32 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // A ship that reached space the way a ship does: built, assembled, flown past the ceiling.
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        builtDurable = ShipIdentity.nameFromAssembly(asm);
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, SHIP_LINK_TICKS,
+                "the craft that flies the two legs");
+        flyBothLegs(setup, birth);
+    }
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** Server ticks for this build's hull to be named and become usable: one or two ticks away. */
+    private static final int SHIP_LINK_TICKS = 200;
+
+    private void flyBothLegs(String setup, ShipBirth birth) throws Exception {
+        assertTrue("an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The ship's own name, from the assembler that minted it, and the physics id it maps to. Every
         // call below is addressed to one of the two: the overworld this class builds in is shared, so
         // "the ship near the pad" is a question with more than one true answer.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        String durableId = birth.durable;
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, SHIP_LINK_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         int sx = (int) src.x;
@@ -223,8 +238,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
     private EntryStatus awaitEntered(long mark, String setup, int budgetTicks, String durableId)
             throws Exception {
         WorldCommandFixtures.awaitEnteredSpace(events, mark, durableId,
-                "the ship must finish entering space", budgetTicks,
-                () -> loadAllEntrySlots(setup));
+                "the ship must finish entering space", budgetTicks, null);
         return EntryStatus.forShip(c -> read(c).raw(), durableId);
     }
 
@@ -253,12 +267,16 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         return events.awaitMatching(mark, "ship_transit_ended",
                 reply -> Events.anyRecordHasAll(reply, "ship", durableId, "destination", cell),
                 "carrying ship = " + durableId + " and destination = " + cell,
-                "the jump must arrive at the cell it was aimed at", budgetTicks,
-                () -> loadAllEntrySlots(setup));
+                "the jump must arrive at the cell it was aimed at", budgetTicks);
     }
 
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 
@@ -267,17 +285,6 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
-
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
 
     /**
@@ -293,10 +300,9 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

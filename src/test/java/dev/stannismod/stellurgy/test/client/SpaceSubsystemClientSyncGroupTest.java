@@ -1,9 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Disposal;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
@@ -522,20 +525,21 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         Events serverLog = serverEvents();
         long spawnMark = serverLog.markInstrumented();
         String asm = arrange("stellurgytest space vs-assemble deep").raw();
-        Reply assembled = Reply.of(asm);
+        Reply assembled = Reply.of("stellurgytest space vs-assemble", asm);
         assertTrue("vs-assemble must report a slot dim: " + asm, assembled.has("slot"));
         int slot = assembled.integer("slot");
-        serverLog.await(spawnMark, "ship_spawned", "the assembled ship must be spawned by the"
-                + " substrate's queue before its registry can be asked about it", 200);
-        // absence is the answer: a reply with no count reads -1, which the assertion below refuses.
-        int queryable = Reply.of(read("stellurgytest vs ship-count-all " + slot).raw()).integerOr("count", -1);
-        assertTrue("a ship must be created in the pool world's registry: count-all=" + queryable, queryable >= 1);
+        // The ship this scenario built, by the id its own assembly handed back.
+        String shipUuid = assembled.text("shipUuid");
+        disposeOfShipAtEnd(shipUuid);
+        // The pool world's registry taking THIS ship is its own `ship_spawned` record.
+        serverLog.awaitField(spawnMark, "ship_spawned", "vsShip", shipUuid, "the assembled ship must be"
+                + " created in the pool world's registry by the substrate's queue", 200);
 
         scenario().measuring("the ship loads with the client on it");
-        int loaded = enterSlotOnShipAndAwaitLoad(serverLog, slot,
+        String loaded = enterSlotOnShipAndAwaitLoad(serverLog, slot, shipUuid,
                 "the ship must LOAD (physics) with a client on it in the pool dim");
-        assertTrue("the ship must LOAD (physics) with a client on it in the pool dim: loaded=" + loaded,
-                loaded >= 1);
+        assertTrue("the ship must LOAD (physics) with a client on it in the pool dim: " + loaded,
+                ShipInfo.isLoaded(loaded));
 
         // The LEAVING is a dimension change, waited for as the client's own record of one: a world the
         // client has not left still holds a player, and could not unload.
@@ -547,24 +551,33 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
                 Reply.of(arrange("stellurgytest space reload " + slot + " deep").raw()).bool("present"));
 
         scenario().asserting("the ship re-loads live after the slot rebind");
-        int loadedAfter = enterSlotOnShipAndAwaitLoad(serverLog, slot, "the ship must RE-LOAD live after the slot rebind");
-        assertTrue("the ship must RE-LOAD live after the slot rebind: loadedAfter=" + loadedAfter, loadedAfter >= 1);
+        String loadedAfter = enterSlotOnShipAndAwaitLoad(serverLog, slot, shipUuid,
+                "the ship must RE-LOAD live after the slot rebind");
+        assertTrue("the ship must RE-LOAD live after the slot rebind: " + loadedAfter,
+                ShipInfo.isLoaded(loadedAfter));
+        // Disposed of while the client still holds its slot world loaded: once he leaves, nothing
+        // keeps that world up for the end-of-scenario disposal to reach it.
+        Disposal.ship(c -> arrange(c).raw(), serverLog, slot, shipUuid);
         arrange("stellurgytest tp 0");
     }
 
     /**
      * Enter the pool slot on the ship (assembled around 0..2, 64..66) and wait for production's own
-     * record that a ship in it became USABLE ({@code ship_usable}, carrying the dimension), from a mark
-     * taken before the move. The slot is fresh and holds one ship, so the dimension names it. Then ONE
-     * read of the loaded count, for the caller's message.
+     * record that THIS ship became USABLE in it ({@code ship_usable} for its id and the slot, later
+     * than every unload of it), from a mark taken before the move. Then ONE read of the ship by its
+     * id, for the caller's verdict and message.
      */
-    private int enterSlotOnShipAndAwaitLoad(Events serverLog, int slot, String what) throws Exception {
+    private String enterSlotOnShipAndAwaitLoad(Events serverLog, int slot, String shipUuid, String what)
+            throws Exception {
         long loadMark = serverLog.markInstrumented();
         arrange("stellurgytest tp " + slot);
         arrange("tp @a 1 68 1");
-        serverLog.awaitField(loadMark, "ship_usable", "dim", slot, what, 300);
-        // absence is the answer: a reply with no count reads -1, which every caller's assertion refuses.
-        return Reply.of(read("stellurgytest vs ship-count " + slot).raw()).integerOr("count", -1);
+        serverLog.awaitMatching(loadMark, "ship_usable",
+                usable -> ShipIdentity.endsUsable(usable, serverLog.since(loadMark, "ship_unloaded"), shipUuid,
+                        slot),
+                "carrying ship " + shipUuid + " in dim " + slot + ", later than every unload of it",
+                what, 300);
+        return read("stellurgytest vs ship-info " + slot + " id " + shipUuid).raw();
     }
 
     private long clientClock() throws Exception {

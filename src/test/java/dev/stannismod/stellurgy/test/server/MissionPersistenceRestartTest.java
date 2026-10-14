@@ -4,10 +4,12 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
@@ -83,18 +85,18 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
         return String.join("\n", resp);
     }
 
+    /** The rocket this boot's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(RealDedicatedServerHarness boot, int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        RocketFixture.assembleBuilt(site, cmd -> ok(boot.client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(boot.client().arrange(cmd)), "simple", 2, 10,
-                "the craft whose mission must survive the restart is built in this volume"));
-        String list = ok(boot.client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        int[] builder = RocketFixture.placeAt(site, cmd -> ok(boot.client().arrange(cmd)), "simple", 2, 10,
+                "the craft whose mission must survive the restart is built in this volume");
+        Events events = new Events(cmd -> ok(boot.client().read(cmd)),
+                t -> GameTicks.advance(boot.client(), GameTicks.server(), t), new EvictionReports());
+        long mark = events.markInstrumented();
+        RocketFixture.assembleBuilt(site, cmd -> ok(boot.client().act(cmd)), builder);
+        return RocketFixture.rocketBornAt(events, mark, builder);
     }
 
     /** Pins INV-MSN-03 (A gas/ore mission survives a full server restart with its type and duration intact and not dead). */

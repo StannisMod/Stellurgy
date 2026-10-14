@@ -4,10 +4,8 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -76,10 +74,15 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
     /** Each config key this scenario set, with the value it held before the scenario touched it. */
     private final Map<String, String> configBefore = new LinkedHashMap<>();
 
-    /** Whatever craft an earlier scenario left ticking in this world is not this one's to share. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), DIM));
+    /** The physics id of the hull this scenario assembled, once it has one; disposed of when it ends. */
+    private String builtHull;
+
+    @After
+    public void disposeOfTheBuiltHull() throws Exception {
+        if (builtHull != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, DIM, builtHull);
+            builtHull = null;
+        }
     }
 
     @LegacyWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
@@ -124,16 +127,17 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         holdChunksAround(sensor, air);
 
         // The two premises, read from the substrate's own containment (VSBridge.shipIdsAt — the very
-        // test TacticalScan.isAboard makes): the deck spot is inside this hull's box, the open-air
-        // spot inside no hull's box.
-        Reply onDeck = read("stellurgytest vs ships-at " + DIM + " " + deck[0] + " " + deck[1] + " " + deck[2])
-                .requireOk("ask which hulls contain the deck spot");
+        // test TacticalScan.isAboard makes), asked of THIS hull: the deck spot is inside its box, the
+        // open-air spot outside it. This scenario built no other craft, and its base leaves none
+        // from an earlier one.
+        Reply onDeck = read("stellurgytest vs ship-contains " + DIM + " " + hull + " " + deck[0] + " "
+                + deck[1] + " " + deck[2]).requireOk("ask whether the hull's box contains the deck spot");
         requireArranged("the deck spot is not inside hull " + hull + "'s box: " + onDeck,
-                Arrays.asList(onDeck.textArray("ships")).contains(hull));
-        Reply inAir = read("stellurgytest vs ships-at " + DIM + " " + air[0] + " " + air[1] + " " + air[2])
-                .requireOk("ask which hulls contain the open-air spot");
-        requireArranged("the open-air spot is inside a hull's box, so it is not off the ship: " + inAir,
-                inAir.integer("count") == 0);
+                onDeck.bool("contains"));
+        Reply inAir = read("stellurgytest vs ship-contains " + DIM + " " + hull + " " + air[0] + " "
+                + air[1] + " " + air[2]).requireOk("ask whether the hull's box contains the open-air spot");
+        requireArranged("the open-air spot is inside hull " + hull + "'s box, so it is not off the ship: "
+                + inAir, !inAir.bool("contains"));
 
         long mark = events.markInstrumented();
         // The deck body first, so any sweep that holds the open-air one began with both in the world.
@@ -200,13 +204,15 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         int[] builder = fixture.blockPos("builderPos");
         Reply assembled = act("stellurgytest rocket assemble " + DIM + " " + builder[0] + " " + builder[1]
                 + " " + builder[2]).requireOk("assemble the fixture");
-        requireArranged("the build did not become one ship (rockets " + assembled.integer("rocketCount")
+        java.util.List<String> rockets = RocketFixture.rocketsBornAt(events, mark, builder);
+        requireArranged("the build did not become one ship (rockets born " + rockets
                         + ", flight computers " + assembled.integer("afcCount") + "): " + assembled,
-                assembled.integer("rocketCount") == 0 && assembled.integer("afcCount") == 1);
+                rockets.isEmpty() && assembled.integer("afcCount") == 1);
         String durable = assembled.text("shipId");
         String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durable,
                 "the assembly never registered a hull named " + durable, ASSEMBLY_LINK_TICKS);
         String hull = Events.text(spawned, "vsShip");
+        builtHull = hull;
         events.awaitField(mark, "ship_loaded", "vsShip", hull,
                 "hull " + hull + " was registered and never got a physics object", ASSEMBLY_LINK_TICKS);
         return hull;

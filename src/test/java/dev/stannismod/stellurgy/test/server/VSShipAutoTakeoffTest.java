@@ -52,18 +52,20 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Build + assemble a piloted ship in the overworld.
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("AFC build must route to a ship: " + asm, (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("source ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft the autopilot flies");
+        builtDurable = birth.durable;
+        assertTrue("AFC build must route to a ship: " + birth, birth.rocketsBorn.isEmpty());
 
         // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
-        // mints the durable id on the pad and hands it back, and `vs ship-uuid` crosses from that
-        // name to the physics id every `vs` verb is keyed on. Nothing here asks the world what is
-        // standing at a coordinate — the shared overworld holds every other scenario's craft too,
-        // and a proximity answer is indistinguishable from the right one.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // mints the durable id on the pad and hands it back, and the physics id every `vs` verb is
+        // keyed on is resolved from it once the craft's own announcement says it is usable.
+        String durableId = birth.durable;
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
@@ -117,12 +119,23 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         // durable id — "somebody settled" is a different question, and a slot the entry stack has
         // ledgered twice used to answer it with a neighbour's row.
         awaitEnteredSpace(events, climbMark, durableId,
-                "auto-takeoff must climb the ship into space", CLIMB_TICKS,
-                () -> loadAllEntrySlots(setup));
+                "auto-takeoff must climb the ship into space", CLIMB_TICKS, null);
     }
 
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 
@@ -131,17 +144,6 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
 
     /**
@@ -157,10 +159,9 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

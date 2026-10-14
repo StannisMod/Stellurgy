@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test;
 
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * BUILD a rocket fixture at a site and assemble it — the one copy of a sequence that had twenty-seven.
@@ -32,8 +34,9 @@ public final class RocketFixture {
 
     /** Where the fixture reports the builder block it just laid. */
     private static final String BUILDER_POS = "builderPos";
-    /** Where an assembled rocket reports its entity. */
-    private static final String ENTITY_ID = "entityId";
+    /** The record an assembler writes when it makes a rocket entity, and the field naming that entity. */
+    private static final String ROCKET_BORN = "rocket_born";
+    private static final String ENTITY_ID = "e";
 
     private RocketFixture() {
     }
@@ -89,22 +92,28 @@ public final class RocketFixture {
     }
 
     /**
-     * The ROCKET ENTITY an assemble reply produced, for a scenario whose subject is a rocket rather
-     * than a ship.
+     * The ROCKET ENTITY the assembler at {@code builderPos} made since {@code mark}, for a scenario
+     * whose subject is a rocket rather than a ship — read off the assembler's own {@code rocket_born}
+     * record, never off what stands on the pad.
      *
-     * <p>Separate from {@link #assembleAt} rather than an alternative return type on it: a build
-     * that routes to a VS ship reports no entity at all, so asking for one is a statement about
-     * what this scenario expects to have built, and it fails saying so.</p>
+     * <p>The press is synchronous: the assembler spawns the rocket inside the probe call that pressed
+     * it, so the record exists by the time that call has answered, and none is waited for. A build that
+     * routed to a VS ship makes no rocket entity, so asking for one is a statement about what this
+     * scenario expects to have built, and it fails saying so.</p>
      */
-    public static int rocketEntityId(String assembleReply) {
-        ArrangementFailure.requireArranged("rocket assemble failed: " + assembleReply,
-                assembleReply != null && Reply.of(assembleReply).ok());
-        Reply reply = Reply.of(assembleReply);
-        ArrangementFailure.requireArranged("the assembled build reports no " + ENTITY_ID + ", so it"
-                + " did not route to a rocket entity: " + assembleReply, reply.has(ENTITY_ID));
-        int id = Integer.parseInt(reply.text(ENTITY_ID));
-        ArrangementFailure.requireArranged("rocket " + ENTITY_ID + " is negative, which no live"
-                + " entity has: " + assembleReply, id >= 0);
-        return id;
+    public static int rocketBornAt(Events events, long mark, int[] builderPos) throws Exception {
+        List<String> born = rocketsBornAt(events, mark, builderPos);
+        ArrangementFailure.requireArranged("the assembler at " + Arrays.toString(builderPos)
+                + " made " + born.size() + " rocket(s) since the mark, not one: " + born, born.size() == 1);
+        return (int) Events.number(born.get(0), ENTITY_ID);
+    }
+
+    /**
+     * Every {@code rocket_born} record of the assembler at {@code builderPos} since {@code mark}: how
+     * many rockets that assembler made, which a scenario reads instead of counting entities.
+     */
+    public static List<String> rocketsBornAt(Events events, long mark, int[] builderPos) throws Exception {
+        return Events.recordsWhere(events.since(mark, ROCKET_BORN), "pos",
+                builderPos[0] + "," + builderPos[1] + "," + builderPos[2]);
     }
 }

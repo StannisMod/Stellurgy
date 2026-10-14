@@ -766,7 +766,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // them would mean force-loading a shipyard to delete blocks nobody can reach. What has to
         // stop is the ship EXISTING as a ship in a permanently loaded world; the caller retires the
         // lane so nothing is ever pasted on top of what is left.
-        return VSIntegration.releaseShipIfNothingLoaded(hyper, uuid);
+        return VSIntegration.discardShip(hyper, uuid);
     }
 
     @Override

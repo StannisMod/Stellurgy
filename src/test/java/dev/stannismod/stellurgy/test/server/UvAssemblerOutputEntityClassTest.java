@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -57,15 +58,9 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
         // does this; replicate inline because we don't want that helper's package coupling". The
         // copy came over and the reason stayed behind, which is how the pit reached two dozen
         // files. There is a shared builder now and no package to couple to.
-        String assemble = dev.stannismod.stellurgy.test.RocketFixture.assembleBuilt(dev.stannismod.stellurgy.test.FixtureSite.openAir(0, CX_ROCKET, CZ),
-                c -> act(c).raw(), dev.stannismod.stellurgy.test.RocketFixture.placeAt(
-                dev.stannismod.stellurgy.test.FixtureSite.openAir(0, CX_ROCKET, CZ),
-                c -> arrange(c).raw(), "simple", 2, 10,
-                "the craft whose assembled entity class this scenario reads"));
-        assertTrue("rocket assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-
-        int entityId = lastRocketId();
+        // The rocket is the one the press's own `rocket_born` record names.
+        int entityId = rockets.assembleAt(FixtureSite.openAir(0, CX_ROCKET, CZ), c -> act(c).raw(),
+                "simple", 2, 10, "the craft whose assembled entity class this scenario reads");
         // The reader REFUSES a report with no entityClass, which is what the null check asserted.
         String entityClass = RocketInfo.byId(c -> read(c).raw(), entityId).entityClass;
         assertTrue("rocket assembler must spawn EntityRocket "
@@ -85,12 +80,13 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 Reply.of(fixture).ok());
         int[] builder = parseBuilder(fixture);
 
+        long mark = rockets.mark();
         String assemble = act("stellurgytest rocket assemble 0 " + builder[0] + " "
                 + builder[1] + " " + builder[2]).raw();
         assertTrue("UV assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
 
-        int entityId = lastRocketId();
+        int entityId = rockets.bornAt(mark, builder);
         String entityClass = RocketInfo.byId(c -> read(c).raw(), entityId).entityClass;
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
@@ -145,10 +141,10 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 m[2]};
     }
 
-    private int lastRocketId() throws Exception {
-        String list = read("stellurgytest rocket list 0").raw();
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket ids in list: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 }

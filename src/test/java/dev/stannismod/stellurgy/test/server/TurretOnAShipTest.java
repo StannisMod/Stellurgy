@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
@@ -49,10 +48,15 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
+    /** Every craft this scenario built, by its own id; disposed of when the scenario ends. */
+    private final java.util.List<WarShip> built = new java.util.ArrayList<>();
+
+    @org.junit.After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (WarShip ship : built) {
+            ship.dispose();
+        }
+        built.clear();
     }
 
     /**
@@ -79,6 +83,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
 
         WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft the gun is bolted to");
+        built.add(ship);
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
         // A block of this ship whose SUBSPACE address we know: its pilot seat. The gun goes beside it.
@@ -175,6 +180,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
 
         WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, MOVING_SRC_X, MOVING_SRC_Z),
                 null, "the hull the gun is bolted to");
+        built.add(ship);
         ship.parkAt(MOVING_X, MOVING_Y, MOVING_Z, ON_THE_HULL);
 
         int[] seat = ship.seat();
@@ -280,9 +286,11 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         int srcZ = SRC_LANE_Z + lane * LANE_STEP;
         WarShip shooter = WarShip.build(events, commands(), FixtureSite.openAir(0, SHOOTER_SRC_X, srcZ),
                 null, "the hull the battery stands on");
+        built.add(shooter);
         shooter.parkAt(ENGAGE_X, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
         WarShip quarry = WarShip.build(events, commands(), FixtureSite.openAir(0, QUARRY_SRC_X, srcZ),
                 null, "the hull the battery is told to engage");
+        built.add(quarry);
         quarry.parkAt(ENGAGE_X + QUARRY_OFFSET, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
 
         int[] seat = shooter.seat();

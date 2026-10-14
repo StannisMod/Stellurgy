@@ -104,7 +104,6 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
                 + after, 1, feedBodyCount(after, slotDim));
         assertEquals("and it must not have invented a second feed dimension; " + after,
                 1, jsonInt(after, "feedDims"));
-        assertEquals("no ship was ledgered by any of this; " + after, 0, jsonInt(after, "shipCount"));
     }
 
     /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
@@ -135,10 +134,10 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         assertTrue("ledger-transit must record the ship as in transit: " + transit,
                 "IN_TRANSIT".equals(Reply.of(transit).text("state")));
 
-        String bodies = read("stellurgytest space bodies").raw();
-        // THIS scenario's ship, by the uuid it was ledgered under, and its state read off that row.
-        // Addressing the row by the STATE asks the feed "is anything in transit", which every other
-        // scenario's leftover jump answers — and would answer with this ship missing entirely.
+        String bodies = read("stellurgytest space bodies id " + shipId).raw();
+        // THIS scenario's ship, asked for by the uuid it was ledgered under, and its state read off
+        // that row. Addressing the row by the STATE asks the feed "is anything in transit", which
+        // every other scenario's leftover jump answers — and would answer with this ship missing.
         assertEquals("the feed must carry this ship as the one in transit: " + bodies,
                 "IN_TRANSIT",
                 Reply.of("stellurgytest space bodies", bodies)

@@ -67,6 +67,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinRocketInventoryHelperEvents", "MixinPlanetEventHandlerEvents", "MixinServerDisconnectEvents",
             "MixinSatelliteBiomeChangerEvents", "MixinSatelliteRegistryEvents", "MixinVSBridgeEvents",
             "MixinBasicTeleporterEvents", "MixinEntityRocketEvents", "MixinEntityRocketLaunchGate",
+            "MixinRocketBirthEvents", "MixinShipBackgroundLoadEvents",
             "MixinItemAtmosphereAnalzerEvents", "MixinAtmosphereNeedsSuitEvents", "MixinPoisoningEvents",
             "MixinAtmosphereChangeEvents", "MixinItemSpaceChestEvents", "MixinItemAirUtilsEvents",
             "MixinDelayedActionBarEvents", "MixinEntityPlayerMPEvents", "MixinTileEntityFieldGeneratorEvents",

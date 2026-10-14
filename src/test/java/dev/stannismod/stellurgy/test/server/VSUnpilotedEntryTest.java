@@ -56,8 +56,20 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
     /** Where the ship is built — its own region, clear of every other server-tier fixture. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
 
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 
@@ -67,23 +79,29 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
         String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
-        EntryStatus control = EntryStatus.wholeLedger(c -> read(c).raw());
-        assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
-                0, control.ships);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft that climbs with nobody at the controls");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        String durableId = birth.durable;
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        // Witness sensitivity control, asked of THIS craft: it has no ledger row before the climb, so
+        // the row read after it is the climb's.
+        EntryStatus control = EntryStatus.forShip(c -> read(c).raw(), durableId);
+        assertTrue("witness sensitivity control — this craft must not be ledgered before the climb: "
+                + control, !control.found);
 
         String launch = read("stellurgytest space launch-cell 0").raw();
         assertTrue("launch-cell resolve failed: " + launch, Reply.of(launch).ok());
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        String vsId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, vsId);
         double sx = src.x, sy = src.y, sz = src.z;
@@ -111,7 +129,7 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
         // check whose hands are on the stick.
         awaitEnteredSpace(events, entryMark, durableId,
                 "a ship with NOBODY at the controls must still cross out of the atmosphere",
-                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
+                SETTLE_TICKS, null);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
@@ -124,16 +142,6 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
 
 
     /**
@@ -149,10 +157,9 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

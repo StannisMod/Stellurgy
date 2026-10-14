@@ -582,26 +582,6 @@ final class VSBridge {
         return blocks != 0;
     }
 
-    static int loadedShipCount(World world) {
-        return ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe().size();
-    }
-
-    /**
-     * The identities of every LOADED ship in {@code world} — what {@link #loadedShipCount} counted,
-     * named.
-     *
-     * <p>A count says how many; a caller that has established "exactly one" still cannot say WHICH
-     * without this, and "the only one" plus a nearest-lookup is how a cell that briefly held two
-     * ships produced a confident answer about the wrong one.</p>
-     */
-    static java.util.List<String> loadedShipIds(World world) {
-        java.util.List<String> out = new java.util.ArrayList<>();
-        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
-            out.add(physo.getShipData().getUuid().toString());
-        }
-        return out;
-    }
-
     /**
      * Every LOADED ship in {@code world} as identity → world bounding box, in one pass.
      *
@@ -630,31 +610,6 @@ final class VSBridge {
      * long as it means it — which is exactly what the collision module does while two hulls
      * overlap.</p>
      */
-    /**
-     * Mark every registered ship in {@code world} for collection, and answer how many were marked.
-     *
-     * <p>Through {@code ShipData.markDead()}, which is the substrate's own "this craft is finished"
-     * — it collects on its next tick, copying nothing back for a blockless hull and deleting the
-     * ship chunks. The alternative, deregistering by hand, requires the caller to know the
-     * substrate's ordering; that knowledge belongs where it is understood.</p>
-     *
-     * <p><b>A scenario's cleanup verb, not a game mechanic.</b> A craft marked here is gone for good
-     * — nothing revives a ship somebody declared finished. Its blocks are DISCARDED, not pasted back
-     * into the world: {@code PhysicsObject.destroyShip} guards the copy-back on {@code !isDead()},
-     * precisely so that retiring a hull does not print a whole craft into the world where it was
-     * floating. Deconstruction is the other disposition and it is a different flag.</p>
-     */
-    static int markAllShipsDead(World world) {
-        int marked = 0;
-        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
-            if (!ship.isDead()) {
-                ship.markDead();
-                marked++;
-            }
-        }
-        return marked;
-    }
-
     static boolean haltShipById(World world, String shipId) {
         PhysicsObject physo = shipById(world, shipId);
         if (physo == null) {
@@ -697,17 +652,9 @@ final class VSBridge {
     }
 
     /**
-     * Total Valkyrien Skies ships known in {@code world}, loaded or not — the queryable
-     * ship registry, which includes a freshly-spawned ship whose shipyard chunks are
-     * not yet loaded. Distinguishes "ship created but not loaded" from "never created".
-     */
-    static int queryableShipCount(World world) {
-        return ValkyrienUtils.getQueryableData(world).getShips().size();
-    }
-
-    /**
      * TEST-ONLY FAULT INJECTION: put a registered, blockless, unloaded ship record into {@code world}
-     * and answer with its uuid and the registry size measured immediately after, on this same call.
+     * and answer with its uuid and whether the registry holds THAT record, read immediately after, on
+     * this same call.
      *
      * <p>This plants exactly the garbage the manager's registry sweep exists to collect: a record in
      * the registry, owning no blocks, with no physics object and no queue holding it. Production
@@ -716,28 +663,17 @@ final class VSBridge {
      * cutting a ship and unloading it inside the same tick — and a garbage collector's test should
      * be able to state its arrangement rather than hope for it.</p>
      *
-     * <p><b>The count is taken here, not by a later probe call.</b> Two probe commands are separated
-     * by a complete world pass, so the sweep can have run in between: a test that planted garbage and
-     * then asked a second command how many ships there are would read the state AFTER collection and
-     * could not tell a working sweep from a plant that never happened. The number returned here is
-     * the one that proves the arrangement.</p>
+     * <p><b>The registration is read here, not by a later probe call.</b> Two probe commands are
+     * separated by a complete world pass, so the sweep can have run in between: a test that planted
+     * garbage and then asked a second command whether the record is registered would read the state
+     * AFTER collection and could not tell a working sweep from a plant that never happened. The
+     * answer returned here is the one that proves the arrangement.</p>
      */
     static String[] strandBlocklessRecord(World world, BlockPos anchor) {
         ShipData stranded = ValkyrienUtils.createNewShip(world, anchor);
         ValkyrienUtils.getQueryableData(world).addShip(stranded);
         return new String[] {stranded.getUuid().toString(),
-                Integer.toString(ValkyrienUtils.getQueryableData(world).getShips().size())};
-    }
-
-    /**
-     * DIAGNOSTIC: the identity of the ship-registry object {@code world} answers with, as the same
-     * hex the physics mod's own save/load log lines print. A count says how many ships a registry
-     * holds; only the identity says whether the registry a reader is being answered from is the one
-     * that gets written to disk.
-     */
-    static String queryableIdentity(World world) {
-        return Integer.toHexString(
-                System.identityHashCode(ValkyrienUtils.getQueryableData(world)));
+                Boolean.toString(shipByUuid(world, stranded.getUuid()) != null)};
     }
 
     /**
@@ -758,6 +694,26 @@ final class VSBridge {
      * stopped being the day the server began holding ships loaded and the honest answer became
      * zero.</p>
      */
+    /**
+     * Enable physics on the registered ship {@code uuid} and queue its load unless it is loaded:
+     * {@code -1} when {@code world} registers no such ship, {@code 0} when it was already loaded,
+     * {@code 1} when a load was requested. Not {@code isShipInUse}, for the reason
+     * {@link #loadAllShipsCounted} gives.
+     */
+    static int loadShip(World world, UUID uuid) {
+        ShipData ship = shipByUuid(world, uuid);
+        if (ship == null) {
+            return -1;
+        }
+        ship.setPhysicsEnabled(true);
+        WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
+        if (manager.getPhysObjectFromUUID(uuid) != null) {
+            return 0;
+        }
+        manager.queueShipLoad(uuid);
+        return 1;
+    }
+
     static int[] loadAllShipsCounted(World world) {
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
         int requested = 0;
@@ -952,7 +908,7 @@ final class VSBridge {
         }
     }
 
-    static boolean releaseShipIfNothingLoaded(World world, UUID uuid) {
+    static boolean discardShip(World world, UUID uuid) {
         if (uuid == null) {
             return false;
         }
@@ -972,17 +928,19 @@ final class VSBridge {
      * containment-matched lookup had just failed to resolve, which is how that lookup was found wrong.
      * Empty string when VS holds no ships here.
      */
-    static String queryableShipPositions(World world) {
-        StringBuilder out = new StringBuilder();
-        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
-            Vec3d p = ship.getShipTransform().getShipPositionVec3d();
-            if (out.length() > 0) {
-                out.append(';');
-            }
-            out.append((long) p.x).append(',').append((long) p.y).append(',').append((long) p.z);
+    /**
+     * The transform position of the REGISTERED ship {@code uuid} in {@code world} — loaded or not, read
+     * off its registry record — or {@code null} when this world registers no such ship.
+     */
+    static double[] registeredShipPosition(World world, UUID uuid) {
+        ShipData ship = world == null ? null : shipByUuid(world, uuid);
+        if (ship == null) {
+            return null;
         }
-        return out.toString();
+        Vec3d p = ship.getShipTransform().getShipPositionVec3d();
+        return new double[] {p.x, p.y, p.z};
     }
+
 
     /**
      * The ship in {@code world}'s QUERYABLE registry (loaded OR not) whose transform position is nearest
@@ -1060,25 +1018,8 @@ final class VSBridge {
     }
 
     /**
-     * RIGID-TELEPORT the ship nearest to {@code (x,y,z)}: rewrite its transform position to
-     * {@code (dstX,dstY,dstZ)} — rotation and subspace centre kept — shift its world AABB by the same
-     * delta, and mirror the transform into the loaded physics object when there is one. The subspace
-     * shipyard blocks do not move; only the world-frame pose does (entities are NOT capped by the 256
-     * build height — vanilla's only hard Y line is the void-kill below −64). VS's per-tick world-Y
-     * clamp (the destination world's {@code ShipAltitudeBand}) is widened when the destination
-     * lies outside it, or the physics tick would immediately drag the ship back. The ship should be
-     * PARKED across the write ({@link #parkShipAt}) so the physics thread is not concurrently
-     * rewriting the transform; unpark after. Returns false when no ship is near the source.
-     */
-    static boolean teleportShipTo(World world, double x, double y, double z,
-                                  double dstX, double dstY, double dstZ) {
-        return teleportShip(world, nearestQueryableShip(world, x, y, z), dstX, dstY, dstZ);
-    }
-
-    /**
-     * RIGID-TELEPORT the ship NAMED by {@code uuid}. The identity-keyed twin of
-     * {@link #teleportShipTo}: same write, but a caller that knows which ship it crossed can never
-     * move a stranger that happens to be parked nearer to the probe point.
+     * RIGID-TELEPORT the ship NAMED by {@code uuid}: rewrite its transform position to
+     * {@code (dstX,dstY,dstZ)}, rotation and subspace centre kept, via {@link #teleportShip}.
      */
     static boolean teleportShipToByUuid(World world, UUID uuid,
                                         double dstX, double dstY, double dstZ) {

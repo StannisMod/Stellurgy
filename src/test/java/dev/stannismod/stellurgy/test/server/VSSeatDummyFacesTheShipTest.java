@@ -74,16 +74,19 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
                     + " loosen.")
     public void theSeatMountTurnsWithItsShip() throws Exception {
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        long buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft whose seat mount must turn with it");
+        builtShip = birth.physicsId;
+        assertTrue("the pilot-seat build must route to a ship, not a rocket: " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The craft this scenario built, by the name its assembler minted, and the physics id that
-        // name maps to. The build site is in a world every server-tier class shares.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // name maps to once its own announcement says it is usable.
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or nothing below is measured");
@@ -129,9 +132,23 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
                 Math.abs(wrapDegrees(mountYawAfter - shipYawAfter)) <= YAW_TOLERANCE_DEG);
     }
 
+    /** The physics id of the craft this scenario built; turning it keeps the id. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
+
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     // --- observation --------------------------------------------------------------------------------
 
@@ -160,12 +177,6 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
         return d;
     }
 
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
-
 
     /**
      * WHERE this scenario's craft stands, and the first link that says the volume is empty.
@@ -180,10 +191,9 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String extractString(String json, String key) {

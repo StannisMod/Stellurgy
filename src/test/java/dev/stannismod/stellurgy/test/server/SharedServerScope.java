@@ -4,7 +4,13 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.CraftCensus;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Assume;
 
@@ -29,6 +35,8 @@ public final class SharedServerScope extends TestClassScope {
     private RuntimeException bootFailure;
     private final Map<String, Plot> plots = new HashMap<>();
     private int nextPlotIndex;
+    /** The eviction announcements made by the census's reader of this server's log. */
+    private final EvictionReports evictions = new EvictionReports();
 
     @Override
     protected void open(Class<?> testClass) {
@@ -74,6 +82,25 @@ public final class SharedServerScope extends TestClassScope {
             }
         }
         return harness;
+    }
+
+    /**
+     * After every scenario the class's server holds no craft — see {@link CraftCensus}. A scenario that
+     * reached no server (a boot that failed, or one not yet asked for) left nothing to judge.
+     */
+    @Override
+    protected void afterScenario(String scenario) throws Exception {
+        RealDedicatedServerHarness booted;
+        synchronized (this) {
+            booted = harness;
+        }
+        if (booted == null) {
+            return;
+        }
+        TestClient server = booted.client();
+        Events events = new Events(c -> Reply.answering(c, server.read(c)).raw(),
+                ticks -> GameTicks.advance(server, GameTicks.server(), ticks), evictions);
+        CraftCensus.requireNoneLeft(scenario, server, events);
     }
 
     /** {@code key}'s own plot on {@code lane}, allocated once in this class run, never recycled. */

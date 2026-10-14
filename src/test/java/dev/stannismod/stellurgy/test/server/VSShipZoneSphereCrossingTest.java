@@ -571,11 +571,16 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
         int[] pad = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-seat", 4, 12,
                 "the craft this scenario builds stands in this volume");
+        buildMark = events.mark();
         String asm = act("stellurgytest rocket assemble 0 " + pad[0] + " " + pad[1] + " " + pad[2]).raw();
-        assertEquals("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                0, Reply.of(asm).integer("rocketCount"));
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String padVsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, pad, asm, USABLE_TICKS,
+                "the craft that visits the moon");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        String durableId = birth.durable;
+        String padVsId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
         ShipInfo onPad = ShipInfo.byId(c -> read(c).raw(), 0, padVsId);
 
         String held = arrange("stellurgytest vs ff-input-by-id 0 " + padVsId + " 0 1 0 0 0 0").raw();
@@ -587,8 +592,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         long entryMark = events.mark();
         arrange("stellurgytest vs unpark-by-id 0 " + padVsId);
         awaitEnteredSpace(events, entryMark, durableId,
-                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS,
-                () -> EntrySlots.loadAll(c -> arrange(c).raw(), setup));
+                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS, null);
         EntryStatus launched = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the entry was announced, so the ledger must hold this craft's row");
 
@@ -919,8 +923,20 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 + " left in its zone: " + outside, outside.bool("carried"));
     }
 
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         arrange("stellurgytest space entry-clear");
     }
 

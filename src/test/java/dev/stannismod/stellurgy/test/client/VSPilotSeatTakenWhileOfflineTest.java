@@ -108,9 +108,10 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // this wait is gone with it — it was a machine-shaped number standing in for a deadline.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
         // assembly), and every question below has to name that craft rather than whichever one a
         // world-wide scan lists first.
@@ -303,14 +304,14 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         return new double[]{at.posX(), at.posY(), at.posZ()};
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // it raises an ArrangementFailure, the same type scenario().requireArranged does.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the hull whose seat is taken and re-taken across a relog"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
+                "the hull whose seat is taken and re-taken across a relog");
     }
 
     private static boolean isRiding(JsonObject riding) {

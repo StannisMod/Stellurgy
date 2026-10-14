@@ -80,6 +80,40 @@ public class ClassScopeRunner extends BlockJUnit4ClassRunner {
         };
     }
 
+    /**
+     * The scenario's whole statement, then the scope's {@link TestClassScope#afterScenario} — outside
+     * every rule, so a rule that reports or cleans up has finished before the scope judges.
+     */
+    @Override
+    protected Statement methodBlock(final FrameworkMethod method) {
+        final Statement inner = super.methodBlock(method);
+        return new Statement() {
+            @Override
+            public void evaluate() throws Throwable {
+                Throwable failure = null;
+                try {
+                    inner.evaluate();
+                } catch (Throwable t) {
+                    failure = t;
+                }
+                TestClassScope judging = scope;
+                if (judging == null) {
+                    throw new IllegalStateException("no class scope is open after " + method.getName()
+                            + " — a test of a scoped class ran outside its class run");
+                }
+                try {
+                    judging.afterScenario(method.getName());
+                } catch (Throwable t) {
+                    failure = failure == null ? t
+                            : new MultipleFailureException(java.util.Arrays.asList(failure, t));
+                }
+                if (failure != null) {
+                    throw failure;
+                }
+            }
+        };
+    }
+
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     protected Object createTest(FrameworkMethod method) throws Exception {

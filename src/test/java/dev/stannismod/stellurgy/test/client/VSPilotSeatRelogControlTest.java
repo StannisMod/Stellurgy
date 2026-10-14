@@ -114,9 +114,9 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
         int budget = 40;
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly built = assembleFixture(site);
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         long approachMark = clientEvents().mark();
@@ -335,9 +335,9 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
      * <p>The chunk warmup that stood beside the old pre-clear is gone with it: the air fill
      * force-loads every chunk in its own box, so the first link was already doing that job.</p>
      */
-    private String assembleFixture(FixtureSite site) throws Exception {
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
-                "the hull, and the first blocks of the climb the relogged pilot commands"));
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
+                "the hull, and the first blocks of the climb the relogged pilot commands");
     }
 
 }

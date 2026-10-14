@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -29,27 +30,28 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTest {
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String THROWN = "thrown";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 760);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume"));
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
     }
 
     /** Bug A: confirming a destination on a rocket with no guidance computer

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -42,9 +43,15 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      */
     private static final double MIN_PROGRESS_AFTER_ADVANCE = 2.0;
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String MISSION_ID = "missionId";
     private static final String PROGRESS = "progress";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -52,26 +59,19 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
     private long buildRocketAndStartGasMission(int baseX, long duration) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 500);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume"));
-
-        String list = ok(client().read("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
+        int rocketId = rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
 
         String start = ok(client().arrange(
-                "stellurgytest mission start-gas 0 " + lastId + " " + duration + " water"));
+                "stellurgytest mission start-gas 0 " + rocketId + " " + duration + " water"));
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
-        return Long.parseLong(mmReply.text(MISSION_ID));
+        return rockets.missionStarted(0, Long.parseLong(mmReply.text(MISSION_ID)));
     }
 
     private double progressFromAdvance(long missionId, long ticks) throws Exception {
@@ -135,8 +135,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);
-        MissionCompletion resp = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
+        MissionCompletion resp = MissionCompletion.now(commands(), rockets, mid);
         assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp.raw(),
                 !resp.wasDeadBefore);
         assertTrue("complete-now must mark mission dead: " + resp.raw(),
@@ -156,8 +155,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionPrunesMissionFromSatelliteRegistry() throws Exception {
         long mid = buildRocketAndStartGasMission(7400, 1000);
-        MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().arrange(cmd)), mid);
+        MissionCompletion complete = MissionCompletion.now(commands(), rockets, mid);
         assertTrue("complete-now must succeed: " + complete.raw(),
                 complete.completed);
 

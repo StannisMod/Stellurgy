@@ -2991,9 +2991,10 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // the identity from a nearest-ship lookup at the build site.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // IDENTITY, and the async-VS assembly barrier in the same link: the physics mod assembles on
         // its own thread and its queue lags behind a loaded machine, so this AWAITS the registry's own
@@ -3028,7 +3029,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         return where;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // THE PIT IS GONE, AND THIS IS THE DEFECT IT COST. What stood here was a fill of
@@ -3051,8 +3052,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // jump ~1.25 more, and several scenarios here hover, roll or invert the craft and drop a
         // body onto it from a few blocks above that. A floor check, or a check sized to the hull,
         // is exactly what was green throughout the failure above.
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
-                "the hull, the deck a crew member walks and jumps on, and the air above it"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
+                "the hull, the deck a crew member walks and jumps on, and the air above it");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

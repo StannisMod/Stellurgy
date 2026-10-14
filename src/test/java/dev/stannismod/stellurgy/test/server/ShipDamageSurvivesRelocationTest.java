@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import org.junit.Before;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -70,10 +70,18 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
+    /**
+     * The physics id this scenario's craft is registered under NOW — its assembly's, then the
+     * relocation's — or null before it is built. Disposed of when the scenario ends.
+     */
+    private String craftNow;
+
+    @After
+    public void disposeOfTheCraft() throws Exception {
+        if (craftNow != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, craftNow);
+            craftNow = null;
+        }
     }
 
     /**
@@ -93,6 +101,7 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
         FixtureSite site = FixtureSite.openAir(0, SRC_X, SRC_Z);
         WarShip ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
                 "the craft whose damage is carried");
+        craftNow = ship.vsShip;
 
         // A block of this ship whose subspace address we know, used only as the anchor the yard is
         // read around. The shot below is aimed away from it so that it survives to be that anchor.
@@ -118,6 +127,7 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
         String spawned = events.awaitRecordWithField(moved, "ship_spawned", "stellurgyShip", ship.durable,
                 "the relocated ship never re-registered: " + repack, LINK_TICKS);
         String movedShip = Events.text(spawned, "vsShip");
+        craftNow = movedShip;
         Reply movedSeat = Reply.of(read("stellurgytest vs find-seat 0 id " + movedShip).raw());
         assertTrue("could not locate the relocated ship's seat: " + movedSeat, movedSeat.bool("seatFound"));
         int[] newSeat = {movedSeat.integer("seatX"), movedSeat.integer("seatY"), movedSeat.integer("seatZ")};
@@ -161,6 +171,7 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
         FixtureSite site = FixtureSite.openAir(0, AFC_X, AFC_Z);
         WarShip ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
                 "the craft whose flight computer is swapped");
+        craftNow = ship.vsShip;
         int[] seat = ship.seat();
 
         // The fixture puts the flight computer one block west of and one below the seat, and an

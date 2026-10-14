@@ -161,16 +161,17 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private String gasesAtStart;
 
     /**
-     * Each scenario starts with an empty sky, at standard gravity, and remembers the air it found.
+     * Each scenario starts at standard gravity, remembers the air it found, and marks the log before
+     * its first build so the crafts it builds can be disposed of where they end up.
      *
-     * <p>The craft a previous scenario flew go on moving, so they are cleared here, at the start of
-     * the one that must not meet them. One scenario raises the field; every scenario starts from the
+     * <p>One scenario raises the field; every scenario starts from the
      * standard one, so a scenario that failed with the field raised cannot hand it on. Both are READ
      * back, because the command's own answer is a chat line and not a value.</p>
      */
     @Before
     public void emptySkyAtStandardGravity() throws Exception {
-        ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), DIM);
+        scenarioMark = events.mark();
+        built.clear();
         arrange("ar planet set " + DIM + " gravitationalMultiplier 1");
         Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
         requireArranged("the overworld must be at standard gravity, which every scenario here"
@@ -228,6 +229,42 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return Reply.of(planet.object("gases"));
     }
 
+    /** The mark taken before this scenario's first build, and the durable name of every craft it built. */
+    private long scenarioMark;
+    private final java.util.List<String> built = new java.util.ArrayList<>();
+
+    /** Every craft this scenario built goes when it ends, wherever its latest naming put it. */
+    @After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (String durable : built) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, scenarioMark, durable);
+        }
+        built.clear();
+    }
+
+    /** Keep the craft a press reply names, when it names one, for {@link #disposeOfTheBuiltCraft}. */
+    private void owned(Reply press) {
+        String durable = press.textOr("shipId", null);
+        if (durable != null) {
+            built.add(durable);
+        }
+    }
+
+    /**
+     * Press the assembler at {@code builder} and answer its reply, keeping the craft it made: the press
+     * must name a ship it ASSEMBLED and its assembler must record no rocket born ({@link ShipBirth}).
+     */
+    private String pressShip(FixtureSite site, int[] builder) throws Exception {
+        long mark = events.mark();
+        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
+        owned(Reply.of("stellurgytest rocket assemble", asm));
+        ShipBirth birth = ArrangementFailure.arranged(() -> ShipBirth.ofPress(events, mark, site.dim, builder, asm,
+                LINK_BUDGET_TICKS, "the craft this scenario builds"));
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + birth,
+                birth.rocketsBorn.isEmpty());
+        return asm;
+    }
+
     /** Lay {@code variant} at {@code site} and assemble it ({@link AssembledCraft}). */
     private AssembledCraft assemble(FixtureSite site, String variant, String what) throws Exception {
         return assembleLaid(site, lay(site, variant, what), what);
@@ -246,7 +283,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
     /** {@link AssembledCraft#assemble}: press the assembler the fixture laid and resolve the craft. */
     private AssembledCraft assembleLaid(FixtureSite site, Reply fixture, String what) throws Exception {
-        return AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        built.add(craft.durable);
+        return craft;
     }
 
     /** Command a world-frame velocity on the craft's own flight computer, and require it took. */
@@ -1236,6 +1275,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         Reply hoverFixture = lay(hoverSite, "with-pilot-seat", "the control: a craft that can hover");
         Reply hoverPress = Reply.of(RocketFixture.assembleBuilt(hoverSite, c -> act(c).raw(),
                 hoverFixture.blockPos("builderPos")));
+        owned(hoverPress);
         requireArranged("the control's scan must say it can hover: " + hoverPress,
                 hoverPress.ok() && Reply.of(hoverPress.object("scanReadout")).bool("canHoverLIVE"));
         assertTrue("a craft that can hover must be built on the FIRST press: " + hoverPress,
@@ -1251,6 +1291,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         long mark = events.mark();
         Reply second = Reply.of(RocketFixture.assembleBuilt(heavySite, c -> act(c).raw(), builder));
+        owned(second);
         measured("assembler presses", hoverPress, first, second);
         assertTrue("a second press on the SAME build must build it: " + second,
                 second.ok() && second.bool("built"));
@@ -1327,10 +1368,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // Marked before the assemble: the comparison is made on the tick the craft is first named,
         // and a mark taken after the assembly could land behind it.
         long mark = events.markInstrumented();
-        String asm = RocketFixture.assembleBuilt(site(), c -> act(c).raw(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
                 "with-pilot-seat", 4, 12, "the craft whose hull is weighed stands in this volume"));
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
@@ -1366,10 +1405,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     @Test
     public void anAssembledShipWeighsWhatTheBlockTableSays() throws Exception {
         long mark = events.markInstrumented();
-        String asm = RocketFixture.assembleBuilt(site(), c -> act(c).raw(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
                 "with-pilot-deck", 4, 12, "the decked craft that is weighed stands in this volume"));
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
         // The authoritative frame is written right after this record, on the same tick: the read
@@ -1433,9 +1470,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 + " nothing touches it and the scenario cannot tell a bounded search from an unbounded"
                 + " one", snowed > 0);
 
-        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String asm = pressShip(site, builder);
         // USABLE, not merely named: the block search runs when the spawn is drained, which is before
         // the ship can be usable, so everything it took is gone from the world by the reads below.
         ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, DIM,
@@ -1499,9 +1534,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private void requireItStaysWhereItWasBuilt(FixtureSite site) throws Exception {
         int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", HALO, HEIGHT,
                 "the craft that must stay where it was built stands in this volume");
-        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String asm = pressShip(site, builder);
         int[] built = Reply.of("stellurgytest rocket assemble", asm).blockPos("afcPos");
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
@@ -1570,10 +1603,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     public void aSettledShipIsMeasuredAgainWithNothingHappeningToIt() throws Exception {
 
         long assemblyMark = events.markInstrumented();
-        String asm = RocketFixture.assembleBuilt(site(), c -> act(c).raw(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
                 "with-pilot-seat", 4, 12, "the craft that is re-weighed stands in this volume"));
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
@@ -1909,10 +1940,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                     + " for being watched longer, and a released one clears FELL many times over.")
     public void flightAssistDecidesWhetherAnUnpilotedCraftHoldsOrFalls() throws Exception {
 
-        String asm = RocketFixture.assembleBuilt(site(), c -> act(c).raw(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
                 "with-pilot-seat", 4, 12, "the craft that is held and then released is built here"));
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
                 events, DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
         ShipLift.toAltitude(commands(), events, client(), DIM, shipId, RELEASE_ALTITUDE,
@@ -2082,10 +2111,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         TransitSetup setup = TransitSetup.empty(c -> arrange(c).raw());
         int cellDim = setup.originDim;
         FixtureSite site = plot().inDimension(cellDim).site();
-        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(),
+        String asm = pressShip(site, RocketFixture.placeAt(site, c -> arrange(c).raw(),
                 "with-pilot-seat", 2, 12, "the craft released in the cell stands in this volume"));
-        requireArranged("an AFC-bearing build in the cell must route to a ship, not a rocket: " + asm,
-                Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 cellDim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
@@ -2203,9 +2230,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /** Build a craft at {@code site}, then lift it into clear sky and hand it to physics. */
     private Released buildAndLift(FixtureSite site, String what) throws Exception {
         int dim = site.dim;
-        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 4, 12, what));
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket (dim "
-                + dim + "): " + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String asm = pressShip(site, RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 4, 12, what));
         String id = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 dim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
         ShipLift.toAltitude(commands(), events, client(), dim, id, RELEASE_ALTITUDE,

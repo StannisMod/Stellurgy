@@ -776,9 +776,9 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         // an identity is the only address that keeps working.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
-        assertTrue("a " + VARIANT + " build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly built = assembleFixture(bx, by, bz);
+        assertTrue("a " + VARIANT + " build must route to a ship, making no rocket: " + built,
+                built.madeNoRocket());
         scenarioShipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship in the"
                 + " physics registry (the spawn is queued, so this is a deadline for a discrete event"
                 + " and not a guess at how long a value takes to settle)");
@@ -819,12 +819,12 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      * <p>HEIGHT 12, against the old fill's 10: ~10 blocks of hull, plus the body released on its
      * deck at {@code by+5..by+7} and the headroom a standing body needs above that.</p>
      */
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
+    private ShipAssembly assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
         FixtureSite site = FixtureSite.onGround(0, baseX, baseY, baseZ,
                 "a body stands on real world blocks beside the hull and must be DRAWN standing on"
                         + " them, and its support is resolved against those blocks");
-        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 12,
-                "the hull, and the deck a subject is staged on above this surveyed plot"));
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 12,
+                "the hull, and the deck a subject is staged on above this surveyed plot");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

@@ -41,29 +41,29 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // between probe calls (its physics object drops out of the loaded set). Pin ships loaded so the
         // observations below are stable; reset in @After. (This is the permanentlyLoaded lever.)
 
-        // CONTROL: no ship exists yet, so the seat witness must report a negative. This proves a
-        // later "afcResolved:true" is a real observation, not a stuck-on witness.
-        //
-        // THE ONE SEAT PROBE HERE THAT CANNOT BE ADDRESSED, and the reason is the control itself:
-        // there is no ship yet, so there is no id to name. Every other seat probe in this test asks
-        // by identity.
-        String control = arrange("stellurgytest vs seat-input 0 0 0 0 0 0 0").raw();
-        assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
-                + control, !Reply.of(control).bool("seatFound"));
+        // CONTROL: asked of an id that names no craft, the seat witness must report a negative. This
+        // proves a later "afcResolved:true" is a real observation, not a stuck-on witness.
+        String nobody = java.util.UUID.randomUUID().toString();
+        String control = arrange("stellurgytest vs seat-input-by-id 0 " + nobody + " 0 0 0 0 0 0").raw();
+        assertTrue("witness sensitivity control — the seat probe must report no seat for a craft that"
+                + " does not exist: " + control, !Reply.of(control).boolOr("seatFound", false));
 
         // Build a piloted ship (pilot seat linked to an AFC) at the source and assemble it into a VS ship.
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the piloted craft that crosses");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The SOURCE ship, by the durable name its assembler minted. The crossing below re-assembles
-        // the craft at the destination, which mints a NEW PHYSICS id — so there are two physics
-        // identities in this test on purpose, and neither may stand in for the other. The durable
-        // name is the one thing that spans them, and it is what the destination is found by.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String srcShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // the craft at the destination, so the destination's physics identity is read afresh; the
+        // durable name is the one thing that spans them, and it is what the destination is found by.
+        String durableId = birth.durable;
+        String srcShipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
         assertTrue("source ship not managed by VS before crossing",
                 ShipInfo.loadedIn(c -> read(c).raw(), 0, srcShipId));
 
@@ -98,14 +98,11 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         assertTrue("crossing did not carry the aboard rider: " + cross,
                 extractInt(cross, "ridersCarried") >= 1);
 
-        // The re-assembled ship must load again at the destination.
-        int loadedAfter = loadedShips(0);
-        assertTrue("the crossed VS ship never re-loaded at the destination; crossing=" + cross
-                + " countAll=" + read("stellurgytest vs ship-count-all 0").raw(), loadedAfter >= 1);
-        // The ARRIVED ship, found by the durable name that crossed with it. The physics id is new —
-        // that is what a crossing does — but the name in the flight computer's NBT rode across
-        // verbatim, so the destination is identified rather than approached.
-        String dstShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        // The ARRIVED ship, found by the durable name that crossed with it and linked on its own
+        // announcement that it is usable at the destination: the name in the flight computer's NBT
+        // rode across verbatim, so the destination is identified rather than approached.
+        String dstShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, 0, durableId,
+                USABLE_TICKS);
         assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not"
                 + " re-VS); id=" + dstShipId, ShipInfo.loadedIn(c -> read(c).raw(), 0, dstShipId));
 
@@ -125,19 +122,24 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         assertEquals("seat->AFC relative offset Z changed across the crossing", preOffset[2], postOffset[2]);
     }
 
+    /** Server ticks for the craft to be named and become usable, on either side of the crossing. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
-        // Shared-harness state-leak contract: don't leave "permanently loaded" set for later tests.
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
-    /** Poll for a loaded VS ship (the assembly is deferred to the ship manager's own tick, which
-     *  drains the spawn queue; a headless server also has no player near to auto-load it, so force a
-     *  load each round). Bounded ~10 s. Returns the loaded count. */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
-    }
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
 
     /**
@@ -153,10 +155,9 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int[] seatToAfcOffset(String json) {
