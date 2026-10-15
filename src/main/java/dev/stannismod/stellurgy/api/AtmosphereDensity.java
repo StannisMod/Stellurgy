@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.api;
 
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import net.minecraft.world.World;
 
 /**
  * How much air a world has, in atmospheres, for anything that has to charge a craft for moving

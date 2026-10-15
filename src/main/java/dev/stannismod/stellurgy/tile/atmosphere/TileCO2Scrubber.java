@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
@@ -8,6 +7,7 @@ import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 

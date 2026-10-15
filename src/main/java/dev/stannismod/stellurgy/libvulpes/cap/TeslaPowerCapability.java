@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.cap;
 
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import net.darkhax.tesla.api.ITeslaConsumer;
 import net.darkhax.tesla.api.ITeslaHolder;
 import net.darkhax.tesla.api.ITeslaProducer;
-import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 
 public class TeslaPowerCapability implements ITeslaConsumer, ITeslaProducer, ITeslaHolder {
 	

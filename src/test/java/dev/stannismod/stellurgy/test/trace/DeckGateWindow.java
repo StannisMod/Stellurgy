@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.math.AxisAlignedBB;
+
 import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.math.AxisAlignedBB;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * What the client's deck-capture gate decided about ONE named body, per tick, over a window a test

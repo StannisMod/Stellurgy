@@ -2,20 +2,20 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The material table a player can edit, read back after the mod has grown.
@@ -36,16 +36,15 @@ public class ThermalTableFileTest {
     /**
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
      * so the expected values come from production's own table and none of them is typed here.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}.
-     * RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing
-     * shipped row never enters the table: "a material the file predates must still resolve". FILE
-     * WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped
-     * row goes over the file's own: "a row the file holds keeps the file's density
-     * expected:&lt;7875&gt; but was:&lt;7874&gt;". WRITTEN — at {@code save(file, parsed);} removed: "the added material must be written into the file
-     * … {"materials":{"iron":…}}". The two premises at its head are arrangements and are not
-     * witnessed.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}."
+            + " RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing"
+            + " shipped row never enters the table: \"a material the file predates must still resolve\". FILE"
+            + " WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped"
+            + " row goes over the file's own: \"a row the file holds keeps the file's density"
+            + " expected:&lt;7875&gt; but was:&lt;7874&gt;\". WRITTEN — at {@code save(file, parsed);} removed: \"the added material must be written into the file"
+            + " … {\"materials\":{\"iron\":…}}\". The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aTableWrittenBeforeAMaterialShippedStillKnowsIt() throws Exception {
         Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");
@@ -89,15 +88,15 @@ public class ThermalTableFileTest {
      * A file that cannot be read as a table is refused, and the refusal names the file. The shipped
      * table is not quietly used in its place: a pack author whose edit has a stray comma would
      * otherwise run on every shipped value while believing his own were in force.
-     *
-     * <p>red-witnessed: with {@code ThermalMaterials#read} at {@code throw refusal(file,
-     * String.valueOf(unreadable.getMessage()));} replaced by {@code return defaults();} — the shape
-     * this file had before — "the table must be refused, but it loaded with 24 materials",
-     * 2026-10-05. NAMES THE FILE — {@code ThermalMaterials#refusal} at {@code return new
-     * IllegalStateException(file + " is not a thermal materials table: " + why} building its message
-     * without the file: "the refusal must name the file the pack has to fix: the file is not a
-     * thermal materials table: …", 2026-10-05.</p>
      */
+    @Pins("MECH-HEAT-27d")
+    @RedWitness(verdict = "refused", member = "ThermalMaterials#read",
+            at = "throw refusal(file, String.valueOf(unreadable.getMessage()));", replacedBy = "return defaults();",
+            fails = "the table must be refused, but it loaded with", on = "2026-10-05")
+    @RedWitness(verdict = "names the file", member = "ThermalMaterials#refusal",
+            at = "return new IllegalStateException(file + \" is not a thermal materials table: \" + why",
+            replacedBy = "return new IllegalStateException(\"the file is not a thermal materials table: \" + why",
+            fails = "the refusal must name the file the pack has to fix", on = "2026-10-05")
     @Test
     public void aFileThatIsNotATableIsRefusedByName() throws Exception {
         Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");
@@ -112,14 +111,19 @@ public class ThermalTableFileTest {
      * A row missing one of its three numbers is refused, naming the row and the number. Read as zero
      * it would be a substance that holds no heat or melts at no temperature, which is a stand-in
      * for the value the author meant, not his value.
-     *
-     * <p>red-witnessed: with {@code ThermalMaterials#wholeNumber} at {@code throw refusal(file,
-     * "material \"" + material + "\" has no number \"" + field + "\"");} replaced by {@code return
-     * 0;} — the default the row had before — "the table must be refused, but it loaded with 24
-     * materials", 2026-10-05. NAMES THE ROW — the same line refusing with "a material has no number":
-     * "the refusal must name the row: …", 2026-10-05. NAMES THE FIELD — the same line refusing with
-     * the row but without the field: "and the number it lacks: …", 2026-10-05.</p>
      */
+    @Pins("MECH-HEAT-27d")
+    @RedWitness(verdict = "refused", member = "ThermalMaterials#wholeNumber",
+            at = "throw refusal(file, \"material \\\"\" + material + \"\\\" has no number \\\"\" + field + \"\\\"\");",
+            replacedBy = "return 0;", fails = "the table must be refused, but it loaded with", on = "2026-10-05")
+    @RedWitness(verdict = "names the row", member = "ThermalMaterials#wholeNumber",
+            at = "throw refusal(file, \"material \\\"\" + material + \"\\\" has no number \\\"\" + field + \"\\\"\");",
+            replacedBy = "throw refusal(file, \"a material has no number\");",
+            fails = "the refusal must name the row", on = "2026-10-05")
+    @RedWitness(verdict = "names the field", member = "ThermalMaterials#wholeNumber",
+            at = "throw refusal(file, \"material \\\"\" + material + \"\\\" has no number \\\"\" + field + \"\\\"\");",
+            replacedBy = "throw refusal(file, \"material \\\"\" + material + \"\\\" has no number\");",
+            fails = "and the number it lacks", on = "2026-10-05")
     @Test
     public void aRowMissingANumberIsRefusedByRowAndField() throws Exception {
         Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");

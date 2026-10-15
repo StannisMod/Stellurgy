@@ -1,12 +1,13 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.init.Blocks;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.SealableBlockHandler;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -30,6 +31,8 @@ public class SealableBlockHandlerTest {
         MinecraftBootstrap.ensure();
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void defaultSealableBlocksLoaded() throws Exception {
         handler.loadDefaultData();
@@ -49,6 +52,8 @@ public class SealableBlockHandlerTest {
         assertFalse(handler.isMaterialBanned(Material.ROCK));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void whitelistOverridesDetection() throws Exception {
         Block target = Blocks.LEAVES;
@@ -65,6 +70,8 @@ public class SealableBlockHandlerTest {
                 handler.getOverriddenSealableBlocks().contains(target));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void blacklistOverridesDetection() throws Exception {
         Block target = Blocks.STONE;
@@ -78,6 +85,8 @@ public class SealableBlockHandlerTest {
                 handler.getOverriddenSealableBlocks().contains(target));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void addingSameBlockTwiceDoesNotDuplicate() throws Exception {
         Block target = Blocks.GRAVEL;

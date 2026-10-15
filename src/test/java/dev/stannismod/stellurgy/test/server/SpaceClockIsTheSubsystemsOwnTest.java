@@ -1,22 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * The space subsystem's clock is <b>its own</b>: it advances by itself and at the tick rate, no
@@ -46,7 +45,8 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * simply IS the world clock. Every leg below therefore drives the two apart by a magnitude no
  * elapsed-time slack can cover, and asserts the split it created before concluding anything from it.
  */
-public class SpaceClockIsTheSubsystemsOwnTest {
+@OwnBoot(reason = {OwnBoot.Reason.GLOBAL_MUTATION, OwnBoot.Reason.SERVER_RESTART})
+public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
 
     /**
      * How far a clock is driven in a leg: twenty million ticks, ~11.6 real days at 20 tps. Six orders
@@ -62,7 +62,7 @@ public class SpaceClockIsTheSubsystemsOwnTest {
      */
     private static final long ELAPSED_SLACK_TICKS = 20_000L;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -71,7 +71,7 @@ public class SpaceClockIsTheSubsystemsOwnTest {
                 "Server harness disabled — set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        root = Files.createTempDirectory("forge-server-space-clock-");
+        root = ServerRoot.fresh("forge-server-space-clock-");
     }
 
     @After
@@ -86,34 +86,10 @@ public class SpaceClockIsTheSubsystemsOwnTest {
             // directory to outlive a close — so nobody else deletes it. A whole dedicated-server
             // save per method, times the fork count, times every rerun of a flake hunt, is not
             // something to leave in the system temp dir.
-            deleteRecursively(root);
-        }
-    }
-
-    private static void deleteRecursively(Path dir) throws Exception {
-        if (dir == null || !Files.exists(dir)) {
-            return;
-        }
-        Files.walkFileTree(dir, new java.nio.file.SimpleFileVisitor<Path>() {
-            @Override
-            public java.nio.file.FileVisitResult visitFile(Path file,
-                                                           java.nio.file.attribute.BasicFileAttributes a)
-                    throws java.io.IOException {
-                Files.deleteIfExists(file);
-                return java.nio.file.FileVisitResult.CONTINUE;
+            if (root != null) {
+                root.delete();
             }
-
-            @Override
-            public java.nio.file.FileVisitResult postVisitDirectory(Path d, java.io.IOException failed)
-                    throws java.io.IOException {
-                Files.deleteIfExists(d);
-                return java.nio.file.FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
+        }
     }
 
     /**
@@ -127,21 +103,23 @@ public class SpaceClockIsTheSubsystemsOwnTest {
      *
      * <p>Each direction carries its own arrangement assertion. Without them, a probe that quietly
      * failed to move anything would satisfy every "it did not follow" below.</p>
+     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
+    @Pins("CLOCK-5")
     @Test
     public void neitherClockMovesTheOther() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // ---- DIRECTION 1: move the WORLD clock. The space clock may not follow it. ----
-        long spaceBefore = spaceClock(exec("stellurgytest space clock"));
-        String worldMoved = exec("stellurgytest space set-world-clock " + (worldClock(exec("stellurgytest space clock"))
-                + JUMP_TICKS));
+        long spaceBefore = spaceClock(read("stellurgytest space clock").raw());
+        String worldMoved = arrange("stellurgytest space set-world-clock " + (worldClock(read("stellurgytest space clock").raw())
+                + JUMP_TICKS)).raw();
         assertTrue("the world clock must move: " + worldMoved, Reply.of(worldMoved).ok());
         requireArranged("the overworld's counter must really have jumped, or nothing below is"
                         + " a measurement: " + worldMoved,
                 worldClock(worldMoved) - jsonLong(worldMoved, "before") >= JUMP_TICKS / 2L);
 
-        long spaceAfterWorldMove = spaceClock(exec("stellurgytest space clock"));
+        long spaceAfterWorldMove = spaceClock(read("stellurgytest space clock").raw());
         assertTrue("THE CONTRACT: the space clock is the subsystem's own counter, so a world's clock"
                         + " may not carry it. The overworld jumped " + JUMP_TICKS + " ticks and the"
                         + " space clock moved " + (spaceAfterWorldMove - spaceBefore)
@@ -149,13 +127,13 @@ public class SpaceClockIsTheSubsystemsOwnTest {
                 Math.abs(spaceAfterWorldMove - spaceBefore) <= ELAPSED_SLACK_TICKS);
 
         // ---- DIRECTION 2: move the SPACE clock. No world may follow it. ----
-        long worldBefore = worldClock(exec("stellurgytest space clock"));
-        String spaceMoved = exec("stellurgytest space set-clock " + (spaceAfterWorldMove + JUMP_TICKS));
+        long worldBefore = worldClock(read("stellurgytest space clock").raw());
+        String spaceMoved = arrange("stellurgytest space set-clock " + (spaceAfterWorldMove + JUMP_TICKS)).raw();
         assertTrue("the space clock must move: " + spaceMoved, Reply.of(spaceMoved).ok());
         requireArranged("the space clock must really have jumped: " + spaceMoved,
                 spaceClock(spaceMoved) - spaceAfterWorldMove >= JUMP_TICKS / 2L);
 
-        long worldAfterSpaceMove = worldClock(exec("stellurgytest space clock"));
+        long worldAfterSpaceMove = worldClock(read("stellurgytest space clock").raw());
         assertTrue("THE CONTRACT: aging the space subsystem must cost no world its own clock. The"
                         + " space clock was moved " + JUMP_TICKS + " ticks and the overworld's total"
                         + " time moved " + (worldAfterSpaceMove - worldBefore) + " with it (allowed "
@@ -179,25 +157,27 @@ public class SpaceClockIsTheSubsystemsOwnTest {
      * zero fails rather than passing on the ticks it accumulated since. No explicit save follows the
      * set for the same reason the neighbouring restart tests take none: the SHUTDOWN save is the one
      * that has to work, and asking for an extra pass would hide a snapshot marked dirty too late.</p>
+     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
+    @Pins("CLOCK-5")
     @Test
     public void theClockComesBackWhereItWasAfterAReboot() throws Exception {
         // --- boot 1 --------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
         // A third copy of the same defect stood here: the probe was called and its answer assigned
         // to a local nothing read. Both the verb and the question are gone; the assertion below is
         // what actually decided anything.
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
                         + "what persists the clock, so without it this test would assert nothing: "
                         + status.raw(), status.registered);
 
-        long fresh = spaceClock(exec("stellurgytest space clock"));
+        long fresh = spaceClock(read("stellurgytest space clock").raw());
         requireArranged("a fresh boot's clock must be far below the value set below, or "
                         + "reading that value back afterwards would prove nothing. fresh=" + fresh,
                 fresh < JUMP_TICKS / 2L);
 
-        String moved = exec("stellurgytest space set-clock " + JUMP_TICKS);
+        String moved = arrange("stellurgytest space set-clock " + JUMP_TICKS).raw();
         assertTrue("the clock must be set: " + moved, Reply.of(moved).ok());
         assertEquals("and it must hold the value it was set to: " + moved, JUMP_TICKS,
                 spaceClock(moved));
@@ -207,12 +187,12 @@ public class SpaceClockIsTheSubsystemsOwnTest {
         harness = null;
 
         // --- boot 2: a brand new JVM, same world directory -----------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
-        long restored = spaceClock(exec("stellurgytest space clock"));
+        long restored = spaceClock(read("stellurgytest space clock").raw());
         assertTrue("the subsystem's clock must resume where the last save left it, not restart at"
                         + " zero: every stamp it persisted is dated against this counter, so a reset"
                         + " one ages the whole fleet by the age of the world. set=" + JUMP_TICKS
@@ -263,5 +243,15 @@ public class SpaceClockIsTheSubsystemsOwnTest {
     private static long jsonLong(String json, String field) {
         assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
         return Reply.of(json).integer(field);
+    }
+
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, harness.client().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, harness.client().arrange(command));
     }
 }

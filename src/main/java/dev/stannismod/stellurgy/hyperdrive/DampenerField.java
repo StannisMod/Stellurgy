@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.List;
-
 import net.minecraft.util.math.BlockPos;
+
+import java.util.List;
 
 /**
  * What the gravity dampeners spare the crew when a flight ends badly.

@@ -1,30 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.PlanetTypes;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.*;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for a system's RETINUE — how many bodies it has, where they sit, and what it always
@@ -362,11 +347,9 @@ public class SystemRetinueTest {
         assertTrue(checked > MIN_SYSTEMS_FOR_STAR_COUNTS);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at
-     * twice the blocks per distance unit, this fails with "a companion stands at the separation its
-     * own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;".
-     */
+    @LegacyWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
+            + " twice the blocks per distance unit, this fails with \"a companion stands at the separation its"
+            + " own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;\".")
     @Test
     public void aCompanionIsABodyOfItsSystemStandingAtItsOwnSeparation() {
         // A companion that existed only on the star object would light the worlds here and appear at
@@ -531,6 +514,8 @@ public class SystemRetinueTest {
 
     // ─── E2: moons ─────────────────────────────────────────────────────────────
 
+    /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
+    @Pins("ADDR-17")
     @Test
     public void moonsExistAndGetTheirOwnCellsInsideTheirParentsZone() {
         // Without moons the whole outer system is look-only: nothing out there is landable, because the
@@ -570,6 +555,8 @@ public class SystemRetinueTest {
         assertTrue("a sweep of systems must produce moons", moons > MIN_MOONS);
     }
 
+    /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
+    @Pins("ADDR-17")
     @Test
     public void aMoonIsSomewhereElseThanItsParentAndKeepsMoving() {
         // A moon that stood exactly where its planet does would be one address with two bodies in it,

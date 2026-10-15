@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.List;
-
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.world.World;
+
+import java.util.List;
 
 /**
  * Resolves one tick of an aboard entity's movement in its SHIP's frame instead of the world's.

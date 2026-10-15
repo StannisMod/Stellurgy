@@ -112,24 +112,24 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
     /** Forms a stood reactor, refusing as an arrangement failure when it does not form. */
     private void form(Reactor reactor) throws Exception {
         String cmd = "stellurgytest machine try-complete " + reactor.controller();
-        Reply formed = arrange(cmd);
+        Reply formed = act(cmd);
         requireArranged("the reactor must form before the scenario starts: " + formed, formed.bool("isComplete"));
     }
 
     private boolean isComplete(Reactor reactor) throws Exception {
-        return MachineInfo.at(this::exec, reactor.dim, reactor.cx, reactor.cy, reactor.cz).isComplete();
+        return MachineInfo.at(c -> read(c).raw(), reactor.dim, reactor.cx, reactor.cy, reactor.cz).isComplete();
     }
 
     private int blockMeta(int dim, int[] pos) throws Exception {
-        return ask("stellurgytest block at " + at(dim, pos)).integer("meta");
+        return read("stellurgytest block at " + at(dim, pos)).integer("meta");
     }
 
     private Reply hatchContents(int dim, int[] pos) throws Exception {
-        return ask("stellurgytest hatch read " + at(dim, pos));
+        return read("stellurgytest hatch read " + at(dim, pos));
     }
 
     private FluidStored fluidIn(int dim, int[] pos) throws Exception {
-        return FluidStored.of(exec("stellurgytest fluid stored " + at(dim, pos)));
+        return FluidStored.of(read("stellurgytest fluid stored " + at(dim, pos)).raw());
     }
 
     private int fill(int dim, int[] pos, String fluid, int mb) throws Exception {
@@ -137,11 +137,11 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
     }
 
     private boolean chunkLoaded(int dim, int chunkX, int chunkZ) throws Exception {
-        return arrange("stellurgytest chunk loaded " + dim + " " + chunkX + " " + chunkZ).bool("loaded");
+        return read("stellurgytest chunk loaded " + dim + " " + chunkX + " " + chunkZ).bool("loaded");
     }
 
     private Events events() {
-        return new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks),
+        return new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks),
                 evictionReports());
     }
 
@@ -192,11 +192,11 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
     /** The one reactor recipe naming {@link #FLUID_RECIPE_ITEM}: its fluid and how much of it. */
     private Reply fluidRecipeIngredient() throws Exception {
         String first = "stellurgytest machine recipe-info " + MACHINE_CLASS + " 0";
-        int total = ask(first).integer("totalRecipes");
+        int total = read(first).integer("totalRecipes");
         Reply found = null;
         int matches = 0;
         for (int i = 0; i < total; i++) {
-            Reply recipe = ask("stellurgytest machine recipe-info " + MACHINE_CLASS + " " + i);
+            Reply recipe = read("stellurgytest machine recipe-info " + MACHINE_CLASS + " " + i);
             if (recipe.holdsElement("ingredients", "item", FLUID_RECIPE_ITEM)) {
                 matches++;
                 found = recipe;
@@ -238,7 +238,7 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
         Reply enabled = arrange("stellurgytest machine set-enabled " + reactor.controller() + " true");
         requireArranged("the reactor must switch on: " + enabled, enabled.bool("enabled"));
 
-        MachineInfo info = MachineInfo.at(this::exec, reactor.dim, reactor.cx, reactor.cy, reactor.cz);
+        MachineInfo info = MachineInfo.at(c -> read(c).raw(), reactor.dim, reactor.cx, reactor.cy, reactor.cz);
         assertTrue("switching the reactor on must have started a recipe: " + info,
                 info.reply().bool("isRunning"));
         Reply items = hatchContents(reactor.dim, reactor.input);
@@ -325,7 +325,7 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
         requireArranged("every cell of the etcher must have resolved to a block: " + fixture,
                 fixture.integer("unresolved") == 0);
         int[] input = fixture.requireBlockPos("inputPos");
-        Reply formed = arrange("stellurgytest machine try-complete " + controller);
+        Reply formed = act("stellurgytest machine try-complete " + controller);
         requireArranged("the etcher must form before the scenario starts: " + formed, formed.bool("isComplete"));
 
         arrange("stellurgytest hatch fill " + at(site.dim, input) + " 0 " + LENS + " 1");
@@ -409,7 +409,7 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
             requireArranged("the hatch's chunk must still be out of memory when the controller is asked, or a"
                     + " load below could not be put down to the asking", !chunkLoaded(reactor.dim, chunkX, hatchChunkZ));
 
-            Reply attempt = arrange("stellurgytest machine try-complete " + reactor.controller());
+            Reply attempt = act("stellurgytest machine try-complete " + reactor.controller());
             boolean loadedByTheAttempt = chunkLoaded(reactor.dim, chunkX, hatchChunkZ);
 
             assertTrue("a controller whose part stands in an unloaded chunk must refuse to form, and asking"
@@ -419,11 +419,11 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
 
             Reply reload = arrange("stellurgytest chunk cycle " + reactor.dim + " " + chunkX + " " + hatchChunkZ);
             requireArranged("the hatch's chunk must be back for the control: " + reload, reload.bool("reloaded"));
-            Reply control = arrange("stellurgytest machine try-complete " + reactor.controller());
+            Reply control = act("stellurgytest machine try-complete " + reactor.controller());
             requireArranged("with the part's chunk back the same structure must form, or the refusal above"
                     + " cannot be put down to the unloaded chunk: " + control, control.bool("isComplete"));
         } finally {
-            exec("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
+            arrange("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
         }
     }
 
@@ -469,7 +469,7 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
                     + " have come from the chunk loading back", !chunkLoaded(reactor.dim, chunkX, hatchChunkZ));
             assertFalse("a controller whose part has unloaded must not stand complete", isComplete(reactor));
         } finally {
-            exec("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
+            arrange("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
         }
     }
 
@@ -518,9 +518,9 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
             assertTrue("the machine must stand complete after re-forming, not only have formed once",
                     isComplete(reactor));
         } finally {
-            exec("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
+            arrange("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + controllerChunkZ);
             if (hatchChunkHeld) {
-                exec("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + hatchChunkZ);
+                arrange("stellurgytest chunk release " + reactor.dim + " " + chunkX + " " + hatchChunkZ);
             }
         }
     }

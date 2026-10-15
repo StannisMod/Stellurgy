@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.orbitalLaserDrill;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 public class OrbitalLaserDrillRecipeHandler implements IRecipeHandler<OrbitalLaserDrillWrapper> {
     @Override public Class<OrbitalLaserDrillWrapper> getRecipeClass() { return OrbitalLaserDrillWrapper.class; }

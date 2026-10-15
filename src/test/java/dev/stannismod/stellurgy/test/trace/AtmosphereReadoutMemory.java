@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.lang.ref.WeakReference;
-
 import net.minecraft.world.World;
+
+import java.lang.ref.WeakReference;
 
 /**
  * The last atmosphere readout the CLIENT recorded, and the world it was composed in — the client's,

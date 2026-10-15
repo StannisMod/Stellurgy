@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
-import com.github.stannismod.forge.testing.client.ClientBot;
+import com.github.stannismod.forge.testing.client.ClientReads;
 
 /**
  * The TEST's end of a trace window it opened on the client: the handle the client's factory returned,
@@ -17,19 +17,33 @@ import com.github.stannismod.forge.testing.client.ClientBot;
  */
 public final class ClientWindow {
 
-    private final ClientBot bot;
+    private final ClientReads bot;
     private final String windowClass;
     private final int handle;
     private boolean closed;
 
-    private ClientWindow(ClientBot bot, String windowClass, int handle) {
+    private ClientWindow(ClientReads bot, String windowClass, int handle) {
         this.bot = bot;
         this.windowClass = windowClass;
         this.handle = handle;
     }
 
-    /** Open a window of {@code windowClass} on the client, passing its factory's own arguments. */
-    public static ClientWindow open(ClientBot bot, String windowClass, int... args) throws Exception {
+    /** The only package a window may come from: the test source set's own recorders. */
+    private static final String TRACE_PACKAGE = "dev.stannismod.stellurgy.test.trace.";
+
+    /**
+     * Open a window of {@code windowClass} on the client, passing its factory's own arguments.
+     *
+     * <p>Refuses a class outside {@link #TRACE_PACKAGE}: {@code invokeStaticInt} calls whatever it is
+     * handed, so a window handle is how a test could otherwise reach a decision of the mod by
+     * reflection. (A client in e2e mode refuses such a call itself unless its instrument table names the
+     * window's method — the bridge's {@code ClientInstruments}.)</p>
+     */
+    public static ClientWindow open(ClientReads bot, String windowClass, int... args) throws Exception {
+        if (!windowClass.startsWith(TRACE_PACKAGE)) {
+            throw new IllegalArgumentException("a client window must be a test recorder under "
+                    + TRACE_PACKAGE + ", not " + windowClass);
+        }
         String returned = bot.invokeStaticInt(windowClass, "open", args).get("returned").getAsString();
         return new ClientWindow(bot, windowClass, Integer.parseInt(returned));
     }

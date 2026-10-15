@@ -4,13 +4,13 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * REAL warp-controller behavioural depth.
@@ -59,14 +59,14 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
 
     /** Create a station orbiting the given dim; return its id. */
     private int createStationOrbiting(int orbitingDim) throws Exception {
-        String resp = ok(client().execute("stellurgytest station create " + orbitingDim));
+        String resp = ok(client().arrange("stellurgytest station create " + orbitingDim));
         assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         return parseGroup(STATION_ID, resp, "station id");
     }
 
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(cmd -> ok(client().execute(cmd)), stationId);
+        return StationInfo.byId(cmd -> ok(client().read(cmd)), stationId);
     }
 
     /** Read the station's spawn (x, z) coordinates in spaceDim. */
@@ -79,15 +79,15 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
      *  the given dim and return the warp-state probe response. */
     private String placeAndReadWarpState(int dim, int x, int y, int z) throws Exception {
         // Load the dim if it's not loaded yet (spaceDim isn't kept hot).
-        ok(client().execute("stellurgytest dim load " + dim));
+        ok(client().arrange("stellurgytest dim load " + dim));
         // Pre-clear so we can write the block cleanly.
-        client().execute("stellurgytest place " + dim + " " + x + " " + y + " " + z
+        client().arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z
                 + " minecraft:air");
-        String place = ok(client().execute("stellurgytest place " + dim + " " + x + " " + y
+        String place = ok(client().arrange("stellurgytest place " + dim + " " + x + " " + y
                 + " " + z + " stellurgy:warpMonitor"));
         assertTrue("warp monitor place failed: " + place,
                 Reply.of(place).bool("placed"));
-        return ok(client().execute("stellurgytest tile warp-state " + dim + " " + x + " " + y + " " + z));
+        return ok(client().read("stellurgytest tile warp-state " + dim + " " + x + " " + y + " " + z));
     }
 
     @Test
@@ -110,7 +110,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // regression that null-deref'd inside the tick would hard-crash
         // any modpack player who placed a monitor outside a station.
         placeAndReadWarpState(0, 5100, 80, 5100);
-        String tick = ok(client().execute(
+        String tick = ok(client().act(
                 "stellurgytest tile force-tick 0 5100 80 5100 5"));
         assertTrue("warp controller force-tick must not error: " + tick,
                 Reply.of(tick).ok());
@@ -143,14 +143,14 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
         // Force fuel=0 (set-then-use 0 leaves it empty).
-        ok(client().execute("stellurgytest station fuel " + stationId + " set 0"));
+        ok(client().arrange("stellurgytest station fuel " + stationId + " set 0"));
         // Program a different destination so the dest-not-current gate passes.
         // Use overworld-> destination = a Stellurgy dim other than 0. To keep this
         // test cheap we just verify "station did not move" — regardless of
         // dest, the fuel gate denies the warp.
         int orbBefore = station(stationId).orbitingPlanetId;
 
-        ok(client().execute(
+        ok(client().act(
                 "stellurgytest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
 
         int orbAfter = station(stationId).orbitingPlanetId;
@@ -168,13 +168,13 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
         // Plenty of fuel so the fuel gate doesn't dominate the result.
-        ok(client().execute("stellurgytest station fuel " + stationId + " set 999999"));
+        ok(client().arrange("stellurgytest station fuel " + stationId + " set 999999"));
 
         // Warp trigger: with no destination set (destOrbitingDim is the
         // current orbit by default), the destination-equals-current gate
         // ALSO denies. Verify the result: orbit did not change.
         int orbBefore = station(stationId).orbitingPlanetId;
-        ok(client().execute("stellurgytest tile warp-trigger " + SPACE_DIM
+        ok(client().act("stellurgytest tile warp-trigger " + SPACE_DIM
                 + " " + xz[0] + " 128 " + xz[1]));
         int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("warp with destination==current must NOT move station",
@@ -194,22 +194,22 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         int stationId = createStationOrbiting(0);
         int[] xz = stationSpawnCoords(stationId);
 
-        ok(client().execute("stellurgytest station fuel " + stationId + " set 999999"));
-        ok(client().execute("stellurgytest station set-dest " + stationId + " 1"));
-        ok(client().execute("stellurgytest station set-parent " + stationId + " 0"));
+        ok(client().arrange("stellurgytest station fuel " + stationId + " set 999999"));
+        ok(client().arrange("stellurgytest station set-dest " + stationId + " 1"));
+        ok(client().arrange("stellurgytest station set-parent " + stationId + " 0"));
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
         int orbBefore = station(stationId).orbitingPlanetId;
 
-        String debug = ok(client().execute(
+        String debug = ok(client().read(
                 "stellurgytest tile warp-trigger-debug " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         assertTrue("the station reports that it cannot travel: " + debug,
                 (!Reply.of(debug).bool("canTravel")));
         assertTrue("and that is the ONLY gate standing in the way - fuel, destination and anchor "
                 + "are all satisfied: " + debug, (!Reply.of(debug).bool("allGatesGreen")));
 
-        ok(client().execute(
+        ok(client().act(
                 "stellurgytest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
 
         int orbAfter = station(stationId).orbitingPlanetId;
@@ -225,16 +225,16 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         int stationId = createStationOrbiting(0);
         int[] xz = stationSpawnCoords(stationId);
 
-        ok(client().execute("stellurgytest station fuel " + stationId + " set 999999"));
-        ok(client().execute("stellurgytest station set-dest " + stationId + " 1"));
+        ok(client().arrange("stellurgytest station fuel " + stationId + " set 999999"));
+        ok(client().arrange("stellurgytest station set-dest " + stationId + " 1"));
         // Anchor the station — this is the gate under test.
-        ok(client().execute(
+        ok(client().arrange(
                 "stellurgytest station set-anchor " + stationId + " true"));
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
         int orbBefore = station(stationId).orbitingPlanetId;
-        ok(client().execute(
+        ok(client().act(
                 "stellurgytest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("anchored station's orbit must NOT change despite fuel and destination",
@@ -267,19 +267,21 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
      * <p>What this does not see: the price reaching the GUI's fuel line, and a warp actually spending
      * it — stations no longer depart (see {@link #aFullyFuelledStationStillDoesNotDepart}).</p>
      *
-     * <p>red-witnessed: 2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by
-     * the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: "a warp
-     * from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced
-     * 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:
-     * &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;".</p>
+     * Pins INV-STN-17 (a same-star warp is priced by the in-plane separation in AU).
      */
+    @Pins("INV-STN-17")
+    @LegacyWitness(prose = "2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by"
+            + " the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: \"a warp"
+            + " from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced"
+            + " 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:"
+            + " &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;\".")
     @Test
     public void aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu() throws Exception {
-        DimList.Probe probe = command -> ok(client().execute(command));
+        DimList.Probe probe = command -> ok(client().read(command));
         DimList before = DimList.from(probe);
         String[] generated = {"WarpPriceOrigin", "WarpPriceTarget"};
         for (String name : generated) {
-            ok(client().execute("ar planet generate 0 " + name));
+            ok(client().arrange("ar planet generate 0 " + name));
         }
         int[] added = DimList.from(probe).addedSince(before);
         requireArranged("planet generate must register exactly one new dimension per call: "
@@ -292,17 +294,17 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // quoted the interstellar flat rate before this law is ever reached.
         int stationId = createStationOrbiting(origin);
         int[] xz = stationSpawnCoords(stationId);
-        ok(client().execute("stellurgytest station set-parent " + stationId + " " + origin));
-        ok(client().execute("stellurgytest station set-dest " + stationId + " " + target));
+        ok(client().arrange("stellurgytest station set-parent " + stationId + " " + origin));
+        ok(client().arrange("stellurgytest station set-dest " + stationId + " " + target));
 
         // The two planets are read on BOTH sides of the quote, because they move: the quote was
         // computed at some tick between the two readings, so the expected price lies between the
         // price at the first and the price at the second, and their difference is the drift.
-        Reply fromBefore = Reply.of(ok(client().execute("stellurgytest planet info " + origin)));
-        Reply destBefore = Reply.of(ok(client().execute("stellurgytest planet info " + target)));
+        Reply fromBefore = Reply.of(ok(client().read("stellurgytest planet info " + origin)));
+        Reply destBefore = Reply.of(ok(client().read("stellurgytest planet info " + target)));
         String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
-        Reply fromAfter = Reply.of(ok(client().execute("stellurgytest planet info " + origin)));
-        Reply destAfter = Reply.of(ok(client().execute("stellurgytest planet info " + target)));
+        Reply fromAfter = Reply.of(ok(client().read("stellurgytest planet info " + origin)));
+        Reply destAfter = Reply.of(ok(client().read("stellurgytest planet info " + target)));
 
         requireArranged("both worlds must be planets of one star, or the price is the interstellar flat "
                 + "rate and not the law under test: " + fromBefore + " / " + destBefore,
@@ -377,9 +379,9 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
     @Test
     public void threeStationsArrivingSameTickDoNotThrowConcurrentModification() throws Exception {
         final int warpedStations = 3;
-        ok(client().execute("stellurgytest dim load " + SPACE_DIM));
+        ok(client().arrange("stellurgytest dim load " + SPACE_DIM));
 
-        String r = ok(client().execute("stellurgytest station warp-collision 0 " + warpedStations));
+        String r = ok(client().act("stellurgytest station warp-collision 0 " + warpedStations));
         assertTrue("probe must run: " + r, Reply.of(r).ok());
 
         Reply warped = Reply.of("stellurgytest station warp-collision", r);

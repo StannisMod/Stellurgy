@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.IntFunction;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.ReportOnce;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.IntFunction;
 
 /**
  * The universe ONE test arranges: the generator and the star lookup it wants in force, applied to

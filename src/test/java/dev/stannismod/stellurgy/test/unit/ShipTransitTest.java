@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipTransit;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the automatic transit integrator. A flight is a SCALAR — origin name, target
@@ -89,6 +87,8 @@ public class ShipTransitTest {
         assertTrue(flight(100L).advance(-5).arrived());
     }
 
+    /** Pins ADDR-12 (a mid-transit position is stored as origin name, target name and progress). */
+    @Pins("ADDR-12")
     @Test
     public void bothEndsOfTheFlightSurviveIt() {
         // The names are what the arrival is realized against, so they must be exactly what was set:

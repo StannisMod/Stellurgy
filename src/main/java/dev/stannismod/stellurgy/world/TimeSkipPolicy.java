@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.world;
 
-import net.minecraft.world.World;
-import net.minecraft.world.WorldProvider;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.world.provider.WorldProviderAsteroid;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldProvider;
 
 /**
  * Whether a world's time of day may be SKIPPED — jumped forward by a bed or by {@code /time} —

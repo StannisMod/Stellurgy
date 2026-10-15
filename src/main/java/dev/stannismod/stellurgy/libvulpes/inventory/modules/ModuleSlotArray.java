@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
-import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
-import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 
 import java.util.List;
 

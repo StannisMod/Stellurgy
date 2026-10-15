@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraft.world.DimensionType;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
-import dev.stannismod.stellurgy.Stellurgy;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A fixed pool of pre-registered empty-space worlds ("slots") that are rebound to different

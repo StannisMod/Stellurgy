@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -7,8 +9,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTUtil;
 import net.minecraft.util.ITickable;
 import org.apache.commons.lang3.ArrayUtils;
-import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 
 import java.util.ArrayList;
 import java.util.List;

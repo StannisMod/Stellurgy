@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import net.minecraft.world.World;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-
 import dev.stannismod.stellurgy.block.BlockPilotSeat;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
  * A pilot SAT DOWN, and the seat decided whether his controls would be live: {@code

@@ -1,14 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.UUID;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.network.PacketSlotDimSync;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
@@ -20,10 +14,10 @@ import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.network.PacketSlotDimSync;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import java.util.*;
 
 /**
  * Server-side event wiring for the movable-ship space subsystem: putting a returning player back

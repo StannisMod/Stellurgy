@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 /**
  * A client's key going up or down. It speaks only for the sender, so the one thing the server checks

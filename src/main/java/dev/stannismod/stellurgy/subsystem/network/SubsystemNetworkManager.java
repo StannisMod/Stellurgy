@@ -1,22 +1,13 @@
 package dev.stannismod.stellurgy.subsystem.network;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.util.WrongSideException;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.util.WrongSideException;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 /**
  * The shared subsystem-network primitive: sources, sinks and capacity-limited lines, solved once a

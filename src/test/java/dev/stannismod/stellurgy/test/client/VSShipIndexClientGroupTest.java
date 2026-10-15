@@ -86,10 +86,7 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
         FixtureSite first = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
         FixtureSite second = plot().siteAt(Plot.FIXTURE_INSET + SECOND_CRAFT_DX, Plot.FIXTURE_INSET);
         int px = plot().x(PLAYER_DX), pz = plot().z(PLAYER_DZ);
-        Reply floor = Reply.of(exec("stellurgytest fill " + OVERWORLD + " " + px + " " + first.y + " " + pz
-                + " " + px + " " + first.y + " " + pz + " minecraft:stone"));
-        scenario().requireArranged("the player's floor must be laid into air: " + floor,
-                floor.ok() && floor.integer("placed") == 1);
+        layThePlayersFloor(first, px, pz);
         standOnFloorTheClientHolds(px + 0.5, first.y + 1, pz + 0.5, 0, 0,
                 "the player stands where he watches both craft");
 
@@ -144,10 +141,7 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
         FixtureSite first = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
         FixtureSite second = plot().siteAt(Plot.FIXTURE_INSET + SECOND_CRAFT_DX, Plot.FIXTURE_INSET);
         int px = plot().x(PLAYER_DX), pz = plot().z(PLAYER_DZ);
-        Reply floor = Reply.of(exec("stellurgytest fill " + OVERWORLD + " " + px + " " + first.y + " " + pz
-                + " " + px + " " + first.y + " " + pz + " minecraft:stone"));
-        scenario().requireArranged("the player's floor must be laid into air: " + floor,
-                floor.ok() && floor.integer("placed") == 1);
+        layThePlayersFloor(first, px, pz);
         standOnFloorTheClientHolds(px + 0.5, first.y + 1, pz + 0.5, 0, 0,
                 "the player stands where he watches both craft");
 
@@ -160,9 +154,9 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
                 "vsShip", gone, "remote", "true");
 
         long removedMark = serverEvents().mark();
-        Reply destroyed = Reply.of(exec("stellurgytest vs destroy-ship " + OVERWORLD + " " + gone));
+        Reply destroyed = arrange("stellurgytest vs destroy-ship " + OVERWORLD + " " + gone);
         scenario().requireArranged("the first craft must be marked for collection: " + destroyed,
-                destroyed.bool("marked"));
+                destroyed.bool("found"));
         serverEvents().awaitRecordWithFields(removedMark, "ship_removed",
                 "the substrate must collect the first craft and give its claim back", LINK_TICKS, "vsShip", gone);
 
@@ -177,10 +171,10 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
                 "the client must load the craft built on a claim given back", LINK_TICKS, "vsShip", flown,
                 "remote", "true");
 
-        Reply seat = Reply.of(exec("stellurgytest vs seat-mount " + OVERWORLD + " id " + flown));
+        Reply seat = arrange("stellurgytest vs seat-mount " + OVERWORLD + " id " + flown);
         scenario().requireArranged("the second craft's seat must give a mount: " + seat, seat.bool("seatFound"));
         long seatedMark = clientEvents().mark();
-        Reply mounted = Reply.of(exec("stellurgytest player mount-entity " + seat.integer("dummyId")));
+        Reply mounted = arrange("stellurgytest player mount-entity " + seat.integer("dummyId"));
         scenario().requireArranged("the player must be put on the seat's mount: " + mounted, !mounted.refused());
         awaitClientMount(seatedMark, "the client must seat the pilot on the second craft", LINK_TICKS,
                 "seat " + seat);
@@ -196,15 +190,28 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
         return Events.text(spawned, "claim");
     }
 
-    /** Lay and assemble one tier-2 craft at {@code site}; answer its ship uuid. */
+    /**
+     * Lay and assemble one tier-2 craft at {@code site}; answer its ship uuid, declared for disposal at the
+     * scenario's end (one the scenario destroys itself is skipped there).
+     */
     private String assemble(FixtureSite site, String what) throws Exception {
         long mark = serverEvents().mark();
-        RocketFixture.assembleAt(site, this::exec, SHIP, SHIP_HALO, SHIP_HEIGHT, what);
-        return awaitShipSpawned(serverEvents(), mark, what + " must become a ship");
+        int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), SHIP, SHIP_HALO, SHIP_HEIGHT, what);
+        RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
+        String ship = awaitShipSpawned(serverEvents(), mark, what + " must become a ship");
+        disposeOfShipAtEnd(ship);
+        return ship;
+    }
+
+    private void layThePlayersFloor(FixtureSite site, int px, int pz) throws Exception {
+        Reply floor = arrange("stellurgytest fill " + OVERWORLD + " " + px + " " + site.y + " " + pz
+                + " " + px + " " + site.y + " " + pz + " minecraft:stone");
+        scenario().requireArranged("the player's floor must be laid into air: " + floor,
+                floor.ok() && floor.integer("placed") == 1);
     }
 
     private void sendIndex(int dim, String loadOrUnload, String ship) throws Exception {
-        Reply sent = Reply.of(exec("stellurgytest client vs-index " + dim + " " + loadOrUnload + " " + ship));
+        Reply sent = arrange("stellurgytest client vs-index " + dim + " " + loadOrUnload + " " + ship);
         scenario().requireArranged("the index must have been sent: " + sent, sent.ok());
     }
 }

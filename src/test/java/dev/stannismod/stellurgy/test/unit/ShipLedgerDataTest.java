@@ -1,21 +1,17 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.ShipLedgerData;
 import dev.stannismod.stellurgy.space.TransitRecord;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Pure persistence contract of {@link ShipLedgerData} (the durable backing for the ship ledger): a

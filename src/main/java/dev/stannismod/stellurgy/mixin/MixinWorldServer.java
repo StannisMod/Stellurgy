@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.api.IPlanetaryProvider;
+import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
 import net.minecraft.world.WorldServer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import dev.stannismod.stellurgy.api.IPlanetaryProvider;
-import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
 
 /**
  * Makes beds bring the planet's morning. Vanilla's sleep skip in

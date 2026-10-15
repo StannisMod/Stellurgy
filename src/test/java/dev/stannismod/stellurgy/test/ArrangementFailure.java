@@ -53,4 +53,29 @@ public final class ArrangementFailure extends AssertionError {
             arrangementFailed(message);
         }
     }
+
+    /** One step of an arrangement that fails by throwing — typically a wait on a record. */
+    public interface Step<T> {
+        T run() throws Exception;
+    }
+
+    /**
+     * Run {@code step} as ARRANGEMENT: an {@link AssertionError} it raises — a wait on a record that
+     * never came, say — is re-raised as this type with the same message.
+     *
+     * <p>For the waits a scenario needs before its subject exists. {@code Events} cannot know which of
+     * its waits is a premise and which is the verdict; the caller does, and says so here rather than
+     * in a message prefix.</p>
+     */
+    public static <T> T arranged(Step<T> step) throws Exception {
+        try {
+            return step.run();
+        } catch (ArrangementFailure already) {
+            throw already;
+        } catch (AssertionError refused) {
+            ArrangementFailure typed = new ArrangementFailure(refused.getMessage());
+            typed.initCause(refused);
+            throw typed;
+        }
+    }
 }

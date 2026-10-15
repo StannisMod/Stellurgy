@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -17,8 +19,6 @@ import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
 
 import java.util.LinkedList;
 import java.util.List;

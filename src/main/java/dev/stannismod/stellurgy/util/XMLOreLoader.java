@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
+import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
+import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
 import net.minecraft.block.Block;
 import net.minecraft.util.math.MathHelper;
 import org.w3c.dom.Document;
@@ -7,12 +13,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
-import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;

@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.energy.TileForgePowerInput;
 import dev.stannismod.stellurgy.libvulpes.tile.energy.TileForgePowerOutput;
 import dev.stannismod.stellurgy.libvulpes.util.MultiBattery;
 import dev.stannismod.stellurgy.tile.TilePump;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -50,6 +51,7 @@ public class MachineEnergyBoundaryTest {
      * multiplied by the number of plugs.</p>
      * <p>red-witnessed: with {@code MultiBattery#extractEnergy} at {@code amtExtracted += battery.extractEnergy(amt - amtExtracted, simulate);} asking every battery for {@code amt}, the stop removed, fails: "the aggregate must pay the request once, not once per plug — paid 600, the plugs hold 700 and 700 of 1000 each" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-13")
     @Test
     public void aMachineWithTwoPowerPlugsPaysItsRequestOnceInTotal() {
         TileForgePowerInput first = chargedInputPlug();

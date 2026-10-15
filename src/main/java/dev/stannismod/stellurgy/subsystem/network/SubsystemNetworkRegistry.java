@@ -2,14 +2,7 @@ package dev.stannismod.stellurgy.subsystem.network;
 
 import net.minecraft.world.World;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Which nodes exist, per domain. A tile registers itself when it joins the world and unregisters

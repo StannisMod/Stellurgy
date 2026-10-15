@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.Optional;
-
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.World;
+
+import java.util.Optional;
 
 /**
  * What a brand-new memory crystal already knows.

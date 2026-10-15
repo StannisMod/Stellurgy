@@ -1,5 +1,28 @@
 package dev.stannismod.stellurgy.dimension;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.SatelliteRegistry;
+import dev.stannismod.stellurgy.api.StellurgyBiomes;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+import dev.stannismod.stellurgy.network.PacketDimInfo;
+import dev.stannismod.stellurgy.network.PacketSatellite;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.util.*;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -18,26 +41,7 @@ import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
 import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fml.common.SidedProxy;
 import org.apache.commons.lang3.ArrayUtils;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
-import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
-import dev.stannismod.stellurgy.atmosphere.gas.Gas;
-import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.network.PacketDimInfo;
-import dev.stannismod.stellurgy.network.PacketSatellite;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nullable;
 import java.lang.invoke.MethodHandle;
@@ -47,8 +51,6 @@ import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.util.*;
 
 
 /**

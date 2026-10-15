@@ -1,27 +1,17 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EvictionReports;
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.MaterializedCell;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Server e2e for tier-2 space persistence across a REAL server restart: two separate server JVMs
@@ -45,7 +35,8 @@ import static org.junit.Assert.assertTrue;
  * pool registered twice, a ship the ledger never settled) run in {@code SystemBodiesFeedFollowsTheCellTest}.
  * Probe-driven, so a mechanics test and not a player's path: no {@code E2E} in its name.</p>
  */
-public class SpaceRestartPersistenceTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -78,7 +69,7 @@ public class SpaceRestartPersistenceTest {
      */
     private static final int AUTOSAVE_WAIT_TICKS = 3_000;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -88,7 +79,7 @@ public class SpaceRestartPersistenceTest {
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
 
-        root = Files.createTempDirectory("forge-server-space-restart-");
+        root = ServerRoot.fresh("forge-server-space-restart-");
     }
 
     @After
@@ -99,10 +90,6 @@ public class SpaceRestartPersistenceTest {
         }
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
-    }
-
     /**
      * This boot's reader of the server's ordered event log.
      *
@@ -111,7 +98,7 @@ public class SpaceRestartPersistenceTest {
      * exited.</p>
      */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
@@ -124,17 +111,17 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aSettledShipsGalacticPositionSurvivesAServerReboot() throws Exception {
         // --- boot 1: the production subsystem comes up and records a ship ------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         // If this fails the rest of the test is meaningless rather than wrong: the production wiring
         // never registered, so nothing below would be exercising it. Say so explicitly.
         assertTrue("the production space subsystem must be live on boot 1 (config opt-in) — "
                 + "without it this test would silently assert nothing: " + status.raw(),
                 status.registered);
 
-        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
-                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        String settled = arrange("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0").raw();
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 Reply.of(settled).ok());
 
@@ -154,9 +141,9 @@ public class SpaceRestartPersistenceTest {
         harness = null;
 
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
@@ -195,14 +182,14 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aRestoredShipsSlotDimNamesTheWorldItsCellIsActuallyIn() throws Exception {
         // --- boot 1: settle the ship; its cell is materialized into whatever slot is free first ----
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production space subsystem must be live on boot 1 — without it nothing below "
                 + "is exercising the shipped wiring: " + status.raw(), status.registered);
 
-        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
-                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        String settled = arrange("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0").raw();
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 Reply.of(settled).ok());
         int slotBeforeReboot = jsonInt(settled, "slotDim");
@@ -212,21 +199,21 @@ public class SpaceRestartPersistenceTest {
         harness = null;
 
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
         // Take the ship's old slot with an unrelated cell BEFORE its own cell is made live, so the
         // ship's cell is forced onto a different slot than it held last session.
-        MaterializedCell decoy = MaterializedCell.at(this::exec, "1 1 1")
+        MaterializedCell decoy = MaterializedCell.at(c -> arrange(c).raw(), "1 1 1")
                 .requireMaterialized("the decoy cell must materialize");
         assertEquals("the decoy must land on the slot the ship's cell held before the reboot — that is "
                 + "what makes the ship's own cell move: " + decoy.raw(),
                 slotBeforeReboot, decoy.slotDim());
 
-        MaterializedCell live = MaterializedCell.at(this::exec,
+        MaterializedCell live = MaterializedCell.at(c -> arrange(c).raw(),
                         SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z)
                 .requireMaterialized("the ship's own cell must materialize");
         int liveSlot = live.slotDim();
@@ -274,44 +261,44 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aSavePointThatCannotRecordAFlyingShipKeepsTheFleetItAlreadyPersisted() throws Exception {
         // --- boot 1 -------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
                 status.registered);
 
-        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
-                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        String settled = arrange("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0").raw();
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 Reply.of(settled).ok());
 
         // Lay a good snapshot on disk. Everything below is about what the NEXT save does to it.
-        String saved = exec("stellurgytest space save-now");
+        String saved = act("stellurgytest space save-now").raw();
         assertTrue("the forced save must have run: " + saved, Reply.of(saved).ok());
 
         // Now the state the crash left behind: the ledger says this ship is flying, and no jump carries
         // it. Both halves are asserted, because "the ship is somewhere else" and "the ship is nowhere"
         // are the same reading from the settled list alone.
-        String flying = exec("stellurgytest space ledger-transit " + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z
-                + " " + SHIP_ID);
+        String flying = arrange("stellurgytest space ledger-transit " + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z
+                + " " + SHIP_ID).raw();
         assertTrue("arrangement: the ledger must now call the ship in-flight: " + flying,
                 "IN_TRANSIT".equals(Reply.of(flying).text("state")));
-        SubsystemStatus midStatus = SubsystemStatus.read(this::exec);
+        SubsystemStatus midStatus = SubsystemStatus.read(c -> read(c).raw());
         assertEquals("arrangement: and NO jump may be carrying it — that is the whole condition under "
                         + "test, and with a jump in flight this test would prove nothing: " + midStatus.raw(),
                 0, midStatus.transits);
         assertEquals("arrangement: the subsystem must still hold the ship, or the save has nothing to "
                 + "lose: " + midStatus.raw(), 1, midStatus.ledger);
 
-        String savedAgain = exec("stellurgytest space save-now");
+        String savedAgain = act("stellurgytest space save-now").raw();
         assertTrue("the second save must also have run: " + savedAgain, Reply.of(savedAgain).ok());
 
         // --- the reboot ---------------------------------------------------------------------------
         harness.close();
         harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
@@ -352,24 +339,24 @@ public class SpaceRestartPersistenceTest {
      */
     @Test
     public void aSavePointThatFailsPartWayLeavesBothTheFleetAndTheServerStanding() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
                 status.registered);
 
-        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
-                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        String settled = arrange("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0").raw();
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 Reply.of(settled).ok());
 
         // Marked before the arming: the fire is announced once and the fault does not exist yet.
         long faultMark = serverEvents().mark();
-        String armed = exec("stellurgytest space save-fault-once");
+        String armed = arrange("stellurgytest space save-fault-once").raw();
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
                 + armed, Reply.of(armed).bool("armed"));
-        assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
-                SubsystemStatus.read(this::exec).saveFaultArmed);
+        assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(c -> read(c).raw()).raw(),
+                SubsystemStatus.read(c -> read(c).raw()).saveFaultArmed);
 
         // Wait for the world autosave to walk into the fault, on the record written from inside the
         // throw's own branch. An autosave is scheduled on the SERVER's tick counter (every 900
@@ -388,19 +375,19 @@ public class SpaceRestartPersistenceTest {
 
         // Read AFTER the fault fired, and it is a liveness check as much as a reading: on an
         // unguarded handler the server is gone by now and exec() reports the dead process.
-        SubsystemStatus live = SubsystemStatus.read(this::exec);
+        SubsystemStatus live = SubsystemStatus.read(c -> read(c).raw());
 
         // It fired, from the server tick, and the server is still answering.
         assertTrue("the server must still be running after a save point failed — a failed save costs a "
                 + "stale cycle, not the process: " + live.raw(), live.registered);
 
         // And it is not wedged: an ordinary save still works afterwards.
-        String recovered = exec("stellurgytest space save-now");
+        String recovered = act("stellurgytest space save-now").raw();
         assertTrue("the next save must work normally: " + recovered, Reply.of(recovered).ok());
 
         harness.close();
         harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         LedgerEntry restored = ledger(SHIP_ID);
         assertTrue("and the ship the failing save was holding must still be there: "
@@ -411,12 +398,27 @@ public class SpaceRestartPersistenceTest {
 
     /** What the production ledger holds about one ship, refusing a reply that is not a reading. */
     private LedgerEntry ledger(String shipId) throws Exception {
-        return LedgerEntry.forShip(this::exec, shipId);
+        return LedgerEntry.forShip(c -> read(c).raw(), shipId);
     }
 
     /** The value of a numeric JSON field in a probe response. Fails the test if it is absent. */
     private static int jsonInt(String json, String field) {
         assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
         return Reply.of(json).integer(field);
+    }
+
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, harness.client().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, harness.client().arrange(command));
+    }
+
+    /** A server command that CALLS a production entry a player, a tick or a packet would reach, sent in its role. */
+    private Reply act(String command) throws Exception {
+        return Reply.answering(command, harness.client().act(command));
     }
 }

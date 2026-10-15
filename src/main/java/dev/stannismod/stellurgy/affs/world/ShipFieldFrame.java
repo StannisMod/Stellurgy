@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.affs.world;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * The Valkyrien Skies ship frame (§4.3). The emitters' subspace centres are mapped to their

@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the honest-3D cell&harr;slot-world pose mapping: all three axes realize
@@ -109,7 +107,9 @@ public class CellWorldMapperTest {
      * a pose over a cell face. A ship that renames itself by drifting ends up addressed in a cell
      * nobody loaded: its own cell's bodies vanish from its sky, its descent finds nothing to descend
      * to, and its jumps are refused for being somewhere it is not.</p>
+     * Pins ADDR-8 (a reported pose may not rename the cell).
      */
+    @Pins("ADDR-8")
     @Test
     public void aReportedPosePastTheCellEdgeStaysInItsOwnCell() {
         GalacticCoord cell = at(0, 0, 0, 0, 0, 0);

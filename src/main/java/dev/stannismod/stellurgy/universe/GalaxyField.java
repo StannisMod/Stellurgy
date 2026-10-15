@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
  * Where the galaxies are: the lattice one level above the star lattice, and the same scheme.

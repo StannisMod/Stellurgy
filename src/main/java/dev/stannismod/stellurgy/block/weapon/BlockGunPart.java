@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.block.weapon;
 
+import dev.stannismod.stellurgy.api.weapon.GunSpec;
+import dev.stannismod.stellurgy.api.weapon.IGunPart;
+import dev.stannismod.stellurgy.weapon.GunAssembly;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.weapon.GunSpec;
-import dev.stannismod.stellurgy.api.weapon.IGunPart;
-import dev.stannismod.stellurgy.weapon.GunAssembly;
 
 import java.util.function.Consumer;
 

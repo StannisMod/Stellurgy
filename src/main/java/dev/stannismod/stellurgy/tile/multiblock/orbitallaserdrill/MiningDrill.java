@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.entity.EntityLaserNode;
+import dev.stannismod.stellurgy.event.BlockBreakEvent;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
@@ -10,10 +13,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.MinecraftForge;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.entity.EntityLaserNode;
-import dev.stannismod.stellurgy.event.BlockBreakEvent;
 
 import java.util.ArrayList;
 

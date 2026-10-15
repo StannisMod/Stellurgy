@@ -49,7 +49,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
     @Test
     public void solarEnergySatelliteImplementsEnergyTransmitterMarker() throws Exception {
         long satId = createSat("solarEnergy", 200, 4000, 1000);
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().read(
                 "stellurgytest satellite markers 0 " + satId));
         assertTrue("markers probe failed: " + resp, Reply.of(resp).ok());
         String isTransmitter = stringField(IS_TRANSMITTER, resp, "isUniversalEnergyTransmitter");
@@ -82,11 +82,11 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         // Ensure the chunk is loaded — fill a small region with air;
         // /stellurgytest fill also force-loads the chunk(s).
-        client().execute("stellurgytest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
+        client().arrange("stellurgytest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
                 + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air");
 
         // Read pre-terraform biome for a meaningful "must change" assertion.
-        String pre = String.join("\n", client().execute(
+        String pre = String.join("\n", client().read(
                 "stellurgytest block biome-at 0 " + x + " " + y + " " + z));
         String preBiome = stringField(BIOME_NAME, pre, "biome");
 
@@ -97,22 +97,22 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
         int targetBiomeId = 2; // desert
         if (preBiome.endsWith("desert")) targetBiomeId = 1; // plains fallback
 
-        String setResp = String.join("\n", client().execute(
+        String setResp = String.join("\n", client().arrange(
                 "stellurgytest satellite biome-set 0 " + satId + " " + targetBiomeId));
         assertTrue("biome-set failed: " + setResp, Reply.of(setResp).ok());
 
         // Add one position to the change queue.
-        client().execute("stellurgytest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
+        client().arrange("stellurgytest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
         // Pre-charge battery well above any plausible per-block drain.
-        client().execute("stellurgytest satellite force-charge 0 " + satId + " 5000");
+        client().arrange("stellurgytest satellite force-charge 0 " + satId + " 5000");
         // Force a tick — either we drain the queue, or a background
         // tick already did before this call. Either way the same
         // production tickEntity path ran and the end-state must match.
-        client().execute("stellurgytest satellite tick 0 " + satId + " 1");
+        client().act("stellurgytest satellite tick 0 " + satId + " 1");
 
         // Queue must be drained (entry processed by either our forced
         // tick or a background DimensionManager.tickDimensions tick).
-        String postList = String.join("\n", client().execute(
+        String postList = String.join("\n", client().read(
                 "stellurgytest satellite biome-list-size 0 " + satId));
         long postListSize = longField(LIST_SIZE, postList, "listSize");
         assertEquals("queue must be empty after at least one tick with "
@@ -120,7 +120,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
                 0L, postListSize);
 
         // Biome at pos must now match the configured target.
-        String postBiomeResp = String.join("\n", client().execute(
+        String postBiomeResp = String.join("\n", client().read(
                 "stellurgytest block biome-at 0 " + x + " " + y + " " + z));
         String postBiome = stringField(BIOME_NAME, postBiomeResp, "biome");
         assertTrue("biome at terraformed pos must have changed; "
@@ -140,24 +140,24 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
         int x = 5100, y = 200, z = 5100;
 
         // Ensure pos is air (fill loads the chunk too).
-        client().execute("stellurgytest fill 0 " + x + " " + y + " " + z + " "
+        client().arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " "
                 + x + " " + y + " " + z + " minecraft:air");
-        String preBlock = String.join("\n", client().execute(
+        String preBlock = String.join("\n", client().read(
                 "stellurgytest block at 0 " + x + " " + y + " " + z));
         assertTrue("test setup: pre-block must be air; " + preBlock,
                 stringField(BLOCK_NAME, preBlock, "block").equals("minecraft:air"));
 
         // Lock the controller into mode 0 (the AIR->WATER branch).
-        client().execute("stellurgytest satellite weather-mode 0 " + satId + " 0");
+        client().arrange("stellurgytest satellite weather-mode 0 " + satId + " 0");
         // Queue one pos.
-        client().execute("stellurgytest satellite weather-add-pos 0 " + satId
+        client().arrange("stellurgytest satellite weather-add-pos 0 " + satId
                 + " " + x + " " + y + " " + z);
 
         // One tick.
-        client().execute("stellurgytest satellite tick 0 " + satId + " 1");
+        client().act("stellurgytest satellite tick 0 " + satId + " 1");
 
         // Block must now be water.
-        String postBlock = String.join("\n", client().execute(
+        String postBlock = String.join("\n", client().read(
                 "stellurgytest block at 0 " + x + " " + y + " " + z));
         String b = stringField(BLOCK_NAME, postBlock, "block");
         assertEquals("mode-0 WeatherController tick must replace an air "
@@ -168,7 +168,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
     // -- helpers ----------------------------------------------------------
 
     private long createSat(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,

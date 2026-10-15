@@ -1,11 +1,15 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
 import com.google.common.base.Throwables;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerClient;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerServer;
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.*;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.INetHandler;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
@@ -17,12 +21,9 @@ import net.minecraftforge.fml.common.network.FMLOutboundHandler;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.handshake.NetworkDispatcher;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
-import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleChannelHandlerWrapper;
 import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.Level;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerClient;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerServer;
 
 import java.lang.reflect.Method;
 import java.util.EnumMap;

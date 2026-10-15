@@ -86,31 +86,31 @@ public class ItemUpgradeSlotEligibilityTest extends AbstractSharedServerTest {
         FixtureSite s = site();
         String at = " 0 " + s.x + " " + s.y + " " + s.z;
 
-        String place = exec("stellurgytest place" + at + " stellurgy:suitWorkStation");
+        String place = arrange("stellurgytest place" + at + " stellurgy:suitWorkStation").raw();
         assertTrue("suitWorkStation place failed: " + place, Reply.of(place).bool("placed"));
-        String info0 = exec("stellurgytest machine info" + at);
+        String info0 = read("stellurgytest machine info" + at).raw();
         assertEquals("expected TileSuitWorkStation tile: " + info0,
                 "TileSuitWorkStation", MachineInfo.of(info0).tileSimpleName());
 
         // TileSuitWorkStation.slotArray is populated only when the GUI-open path calls getModules();
         // on a freshly placed server tile it is an array of nulls and setInventorySlotContents(0)
         // NPEs iterating it. The probe invokes getModules(0, null), populating it as a side effect.
-        String initMods = exec("stellurgytest tile init-modules" + at);
+        String initMods = act("stellurgytest tile init-modules" + at).raw();
         assertTrue("init-modules probe failed: " + initMods, Reply.of(initMods).ok());
 
-        String fillArmor = exec("stellurgytest hatch fill" + at + " 0 stellurgy:spaceChestplate 1");
+        String fillArmor = arrange("stellurgytest hatch fill" + at + " 0 stellurgy:spaceChestplate 1").raw();
         assertTrue("chestplate fill failed: " + fillArmor, Reply.of(fillArmor).ok());
 
-        String pre = exec("stellurgytest hatch read" + at + " nbt");
+        String pre = read("stellurgytest hatch read" + at + " nbt").raw();
         assertEquals("slot 0 must hold the chestplate this test placed: " + pre, "stellurgy:spacechestplate",
                 Reply.of("stellurgytest hatch read", pre).element("slots", "slot", "0").text("item"));
         assertTrue("fresh chestplate must not contain jetPack token yet: " + pre,
                 !slotZeroNbt(pre).contains("jetpack"));
 
-        String fillJet = exec("stellurgytest hatch fill" + at + " 1 stellurgy:jetPack 1");
+        String fillJet = arrange("stellurgytest hatch fill" + at + " 1 stellurgy:jetPack 1").raw();
         assertTrue("jetPack fill failed: " + fillJet, Reply.of(fillJet).ok());
 
-        String post = exec("stellurgytest hatch read" + at + " nbt");
+        String post = read("stellurgytest hatch read" + at + " nbt").raw();
         assertEquals("slot 0 must still hold the same chestplate after the dispatch: " + post,
                 "stellurgy:spacechestplate",
                 Reply.of("stellurgytest hatch read", post).element("slots", "slot", "0").text("item"));
@@ -135,7 +135,7 @@ public class ItemUpgradeSlotEligibilityTest extends AbstractSharedServerTest {
 
     private void assertSlots(int meta, boolean head, boolean chest, boolean legs, boolean feet)
             throws Exception {
-        String resp = exec("stellurgytest infra item-armor-slot " + ID + " " + meta + " 1");
+        String resp = read("stellurgytest infra item-armor-slot " + ID + " " + meta + " 1").raw();
         assertTrue("item-armor-slot must succeed: " + resp,
                 Reply.of(resp).ok());
         assertTrue("meta=" + meta + " head expected=" + head + "; resp=" + resp,

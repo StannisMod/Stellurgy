@@ -1,7 +1,13 @@
 package dev.stannismod.stellurgy.world.ore;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.Material;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import net.minecraft.block.Block;
-import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.IChunkProvider;
@@ -13,13 +19,6 @@ import net.minecraftforge.event.terraingen.OreGenEvent;
 import net.minecraftforge.event.terraingen.OreGenEvent.GenerateMinable.EventType;
 import net.minecraftforge.fml.common.IWorldGenerator;
 import net.minecraftforge.fml.common.eventhandler.Event.Result;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
-import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
-import dev.stannismod.stellurgy.libvulpes.api.material.Material;
-import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
 
 import java.util.Random;
 

@@ -1,0 +1,12 @@
+# The methods whose loops broke the wait-loop rule (WaitLoops, run by checkTestBindings) when it was set, each
+# with the number of its loops that did. A loop that advances the clock stands on a line a @Wait of its method
+# names; every loop that waits leaves its body by exactly one edge, and that edge tests only what the loop did
+# not read (its counter, its bound, its cases) -- save a STIMULUS loop's goal exit, admitted when every pass of
+# it sends input that varies with what it read. The list only shrinks: a method breaking the rule more often
+# than its line says fails, and one breaking it less often fails until its line is lowered.
+#
+# The loops listed when the rule was first set were all paid down. Re-listed when the exit rule learned what an
+# exit TESTS (2026-10-13), a method the first list already carried:
+#   the deck aim retries stands and pitches until the crosshair picks the ship -- a wait for the client's copy of
+#   the ship to become pickable, which no record yet publishes.
+dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#standOnTheDeckAndAimAtIt 1

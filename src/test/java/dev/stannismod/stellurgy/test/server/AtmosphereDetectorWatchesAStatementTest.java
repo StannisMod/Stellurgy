@@ -1,15 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The atmosphere detector watches a STATEMENT about the air, not a name.
@@ -56,16 +57,14 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         return cy + 1;
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding
-     * "not breathable" everywhere: "breathable air must not satisfy \"not breathable\" (after a forced
-     * sample): … expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. UNBREATHABLE — the same
-     * line never holding: "air nobody can breathe must satisfy it (after a forced sample): …
-     * expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. OFF AGAIN — {@code TileAtmosphereDetector#statementHolds} at {@code AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());} ({@code statementHolds}) latching true for a statement once it has
-     * held: "and refilling the room must switch it off again (after a forced sample): …
-     * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premises are
-     * arrangements and are not witnessed.</p>
-     */
+    @LegacyWitness(prose = "one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding"
+            + " \"not breathable\" everywhere: \"breathable air must not satisfy \\\"not breathable\\\" (after a forced"
+            + " sample): … expected:&lt;false&gt; but was:&lt;true&gt;\", 2026-09-30. UNBREATHABLE — the same"
+            + " line never holding: \"air nobody can breathe must satisfy it (after a forced sample): …"
+            + " expected:&lt;true&gt; but was:&lt;false&gt;\", 2026-09-30. OFF AGAIN — {@code TileAtmosphereDetector#statementHolds} at {@code AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());} ({@code statementHolds}) latching true for a statement once it has"
+            + " held: \"and refilling the room must switch it off again (after a forced sample): …"
+            + " expected:&lt;false&gt; but was:&lt;true&gt;\", 2026-09-30. The sealed-zone premises are"
+            + " arrangements and are not witnessed.")
     @Test
     public void theDetectorFollowsItsStatementAsTheAirChanges() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"not breathable\"");
@@ -88,14 +87,12 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         assertPowered(cx, false, "and refilling the room must switch it off again");
     }
 
-    /**
-     * <p>red-witnessed: with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: "clean air
-     * must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but
-     * was:&lt;true&gt;", 2026-09-30. POISONOUS — the same line never holding: "a room can be
-     * breathable and poisonous at once, and the detector must be able to wire the second (after a
-     * forced sample): … expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. The sealed-zone
-     * premises are arrangements and are not witnessed.</p>
-     */
+    @LegacyWitness(prose = "with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: \"clean air"
+            + " must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but"
+            + " was:&lt;true&gt;\", 2026-09-30. POISONOUS — the same line never holding: \"a room can be"
+            + " breathable and poisonous at once, and the detector must be able to wire the second (after a"
+            + " forced sample): … expected:&lt;true&gt; but was:&lt;false&gt;\", 2026-09-30. The sealed-zone"
+            + " premises are arrangements and are not witnessed.")
     @Test
     public void theDetectorCanWatchForSomethingNoNamedAtmosphereEverSaid() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"toxic\"");
@@ -123,17 +120,17 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // Fresh territory: the seal is a flood fill over real blocks, and an unloaded chunk is not
         // one. Warmed first so that a room failing to seal means something about the room.
         arrange("stellurgytest chunk warmup 0 " + ((cx - 4) >> 4) + " " + ((cz - 4) >> 4)
-                + " " + ((cx + 4) >> 4) + " " + ((cz + 4) >> 4));
+                + " " + ((cx + 4) >> 4) + " " + ((cz + 4) >> 4)).requireOk();
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + by + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
     }
 
     /**
@@ -141,22 +138,23 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
      * block into the volume leaves the zone covering a different set of cells than the test thinks —
      * which is how this test first failed, silently, by sampling a position in no zone at all.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), SEAL_TICKS);",
+            why = "SEAL_TICKS is a DOSE of the SERVER'S OWN clock, not a budget for this box to be quick. The fill"
+                    + " that makes a room a zone is paced by world time, and a force-ticked tile does not move"
+                    + " world time — which is why ticking the vent alone never seals it, and why an earlier"
+                    + " version of this that force-ticked in a poll loop only worked by accident, on the real"
+                    + " seconds that elapsed between its polls. The clock is advanced explicitly instead, so"
+                    + " the same dose does the same work everywhere, and the state is read ONCE.")
     private void sealRoom(int cx) throws Exception {
         // The vent's own power, under its floor and out of the room, so the detector's signal — which
         // reaches the vent through the floor block beneath the detector — is never the thing that
         // decides whether the room is a zone. See the class note.
         arrange("stellurgytest fill 0 " + cx + " " + (cy - 1) + " " + cz
-                + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block");
-        arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent");
+                + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block").requireOk();
+        arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent").requireOk();
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
-        // EXPERIMENT: SEAL_TICKS is a DOSE of the SERVER'S OWN clock, not a budget for this box to
-        // be quick. The fill that makes a room a zone is paced by world time, and a force-ticked
-        // tile does not move world time — which is why ticking the vent alone never seals it, and
-        // why an earlier version of this that force-ticked in a poll loop only worked by accident,
-        // on the real seconds that elapsed between its polls. The clock is advanced explicitly
-        // instead, so the same dose does the same work everywhere, and the state is read ONCE.
         GameTicks.advance(client(), GameTicks.server(), SEAL_TICKS);
-        Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
+        Reply air = read("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
         assertTrue("premise: the room must actually be a sealed zone with gases in it: " + air,
                 air.has("gases"));
     }
@@ -164,12 +162,12 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     /** Part of the room's shell, with air on the inward side for it to read. */
     private void placeDetector(int cx) throws Exception {
         arrange("stellurgytest place 0 " + (cx + 1) + " " + airY() + " " + cz
-                + " stellurgy:oxygenDetection");
+                + " stellurgy:oxygenDetection").requireOk();
     }
 
     private void setMode(int cx, String assertion) throws Exception {
         arrange("stellurgytest atmosphere detector-set-mode 0 " + (cx + 1) + " " + airY()
-                + " " + cz + " " + assertion);
+                + " " + cz + " " + assertion).requireOk();
     }
 
     private void setAir(int cx, int n2Ppm, int o2Ppm, int co2Ppm, String... extraGases)
@@ -183,7 +181,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     }
 
     private Reply output(int cx) throws Exception {
-        return ask("stellurgytest atmosphere detector-output 0 " + (cx + 1) + " " + airY() + " " + cz);
+        return read("stellurgytest atmosphere detector-output 0 " + (cx + 1) + " " + airY() + " " + cz);
     }
 
     /**
@@ -197,7 +195,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // The air the detector is about to judge must still be the ROOM's: a position that has
         // dropped out of the zone reads the overworld's open air, and a verdict on that is a verdict
         // about whatever unsealed the room.
-        Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
+        Reply air = read("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
         requireArranged("the room must still be a sealed zone when the detector is asked about it: "
                 + air, air.has("gases"));
         // MADE to sample, not waited for. Production gates the detector's sample on
@@ -207,7 +205,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // once, on demand. One call, one read, and no budget anywhere: the answer does not depend
         // on how fast this box is.
         arrange("stellurgytest atmosphere detector-force-sample 0 "
-                + (cx + 1) + " " + airY() + " " + cz);
+                + (cx + 1) + " " + airY() + " " + cz).requireOk();
         Reply out = output(cx);
         assertEquals(why + " (after a forced sample): " + out, expected, out.bool("powered"));
     }

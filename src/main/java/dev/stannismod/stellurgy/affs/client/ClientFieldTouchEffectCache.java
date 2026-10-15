@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.affs.client;
 
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
@@ -12,8 +13,6 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public final class ClientFieldTouchEffectCache {
 

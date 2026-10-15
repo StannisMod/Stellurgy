@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.item.IDataItem;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.item.IDataItem;
 
 import javax.annotation.Nonnull;
 

@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
+import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.test.trace.ClientBeamMemory;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -14,9 +12,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.client.ClientBeamTracker;
-import dev.stannismod.stellurgy.test.trace.ClientBeamMemory;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The client DRAWING a beam, as an event: {@code client_beam_drawn}.
@@ -27,8 +25,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * corner — read off the tracker's own entry after the write, never off the packet. Client log. The
  * edge memory is {@link ClientBeamMemory}, and it forgets a gun whenever the tracker stops holding it
  * (extinguished, gone stale, or a new world's tracker built empty), so a beam that goes out and
- * relights is recorded again. Read by {@code BeamReachesClientE2ETest} and
- * {@code ABentBeamIsDrawnBentE2ETest}.</p>
+ * relights is recorded again. Read by {@code BeamReachesClientTest} and
+ * {@code ABentBeamIsDrawnBentTest}.</p>
  *
  * <p>SILENT about a heartbeat that changes nothing drawn, and about the path's points moving without
  * their count changing.</p>

@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.tile.hatch.TileDataBusBig;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.resources.I18n;
@@ -15,9 +18,6 @@ import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.tile.hatch.TileDataBusBig;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

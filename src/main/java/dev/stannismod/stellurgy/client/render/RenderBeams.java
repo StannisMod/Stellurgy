@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -13,8 +15,6 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.ClientBeamTracker;
-import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 
 /**
  * Draws the beams the client has been told are burning.

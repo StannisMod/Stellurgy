@@ -1,14 +1,10 @@
 package dev.stannismod.stellurgy.affs.world.shield;
 
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
+import dev.stannismod.stellurgy.subsystem.network.*;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
 import java.util.List;
 

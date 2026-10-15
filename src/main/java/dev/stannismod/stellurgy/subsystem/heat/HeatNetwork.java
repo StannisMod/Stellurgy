@@ -1,25 +1,16 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.capability.*;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.subsystem.network.*;
+import dev.stannismod.stellurgy.tile.heat.TileHeatChiller;
+import dev.stannismod.stellurgy.tile.heat.TileHeatIntakeDuct;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
-import dev.stannismod.stellurgy.api.capability.CapabilityHeatPump;
-import dev.stannismod.stellurgy.api.capability.CapabilityHeatSink;
-import dev.stannismod.stellurgy.api.capability.IHeatEmitter;
-import dev.stannismod.stellurgy.api.capability.IHeatPump;
-import dev.stannismod.stellurgy.api.capability.IHeatSink;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.tile.heat.TileHeatChiller;
-import dev.stannismod.stellurgy.tile.heat.TileHeatIntakeDuct;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
 import java.util.ArrayList;
 import java.util.HashSet;

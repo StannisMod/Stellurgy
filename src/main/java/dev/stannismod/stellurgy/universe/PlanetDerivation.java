@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.function.DoubleToIntFunction;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+
+import java.util.function.DoubleToIntFunction;
 
 /**
  * Where a procedural body's PHYSICS comes from, and therefore where its TYPE comes from.

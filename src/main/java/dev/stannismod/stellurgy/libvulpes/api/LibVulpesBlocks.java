@@ -1,11 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.api;
 
 import net.minecraft.block.Block;
-import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
-import net.minecraftforge.client.model.ModelLoader;
-import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.registries.GameData;
 
 import java.lang.reflect.InvocationTargetException;

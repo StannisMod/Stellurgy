@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.api.EntityRocketBase;
+import dev.stannismod.stellurgy.entity.EntityHoverCraft;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraftforge.client.settings.IKeyConflictContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.EntityRocketBase;
-import dev.stannismod.stellurgy.entity.EntityHoverCraft;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
 /**
  * Key-conflict contexts that scope Stellurgy's craft-steering keys to

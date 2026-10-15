@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyBool;
 import net.minecraft.block.state.BlockStateContainer;
@@ -16,8 +18,6 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
-import dev.stannismod.stellurgy.api.Constants;
 
 public class BlockTile extends RotatableBlock {
 

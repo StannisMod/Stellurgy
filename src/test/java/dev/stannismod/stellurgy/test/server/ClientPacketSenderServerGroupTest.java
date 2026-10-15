@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
@@ -151,6 +152,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * container reach of the addressed machine ({@code PacketSenderCheck#withinContainerReach}).</p>
      * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code if (!PacketSenderCheck.withinContainerReach(player, pos))} made {@code if (false)}, fails: "a priority packet from a sender 20 blocks away — beyond the reach any screen of the port can be used from — must not change the port expected:<1> but was:<-1>" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aMachinePacketFromBeyondReachIsNotApplied() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the ventilation port stands in this volume");
@@ -181,6 +183,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * but the sender's own.</p>
      * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code if (!PacketSenderCheck.inSendersWorld(player, dimId))} made {@code if (false)} and {@code World world = player.world;} replaced by {@code DimensionManager.getWorld(dimId)}, fails: "a packet naming the overworld port, sent by a player in the nether, must not reach the overworld port expected:<0> but was:<-1>" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aMachinePacketNamingAnotherWorldIsNotApplied() throws Exception {
         FixtureSite here = clearedSite(0, 1, "the overworld port stands in this volume");
@@ -189,7 +192,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         // scenario.
         standSenderAt(NETHER, vx + NEAR, vy, vz);
         FixtureSite there = plot().inDimension(NETHER).site();
-        there.requireClear(this::exec, 0, 1, "the nether port stands in this volume");
+        there.requireClear(c -> arrange(c).raw(), 0, 1, "the nether port stands in this volume");
         arrange("stellurgytest place " + OVERWORLD + " " + vx + " " + vy + " " + vz + " " + VENT);
         arrange("stellurgytest place " + NETHER + " " + vx + " " + vy + " " + vz + " " + VENT);
 
@@ -214,6 +217,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * client's bytes instead of dropping the packet — or applies what it could not read.</p>
      * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code found.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt);} taken out of its try/catch, fails: "a priority packet with no priority in it must be dropped, not thrown on the server thread: ("error":"IndexOutOfBoundsException: null")" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aMachinePacketWhosePayloadDoesNotDecodeIsDroppedNotThrown() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the ventilation port stands in this volume");
@@ -226,7 +230,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
         String empty = "stellurgytest packet machine " + OVERWORLD + " " + vx + " " + vy + " " + vz + " "
                 + PRIORITY_PACKET;
-        Reply delivered = ask(empty);
+        Reply delivered = act(empty);
         assertTrue("a priority packet with no priority in it must be dropped, not thrown on the server"
                 + " thread: " + delivered, delivered.ok());
         assertEquals("a priority packet the port could not read must leave the priority as it was",
@@ -242,6 +246,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * sender's through.</p>
      * <p>red-witnessed: with {@code PacketEntity#decode} at {@code dimId = in.readInt();} preceded by an unchecked {@code DimensionManager.getWorld(dimId)} dereference outside its try, fails: "an entity packet naming a dimension with no world must be dropped, not thrown: ("error":"NullPointerException: null")" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void anEntityOrItemPacketNamingNoWorldIsDroppedNotThrown() throws Exception {
         FixtureSite site = site();
@@ -249,13 +254,13 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
         // The verdict before the precondition, because the reply that carries the precondition is
         // the one a throw replaces: a decoder that throws answers an error, which names no world.
-        Reply entity = ask("stellurgytest packet entity " + NO_WORLD + " 0 0");
+        Reply entity = act("stellurgytest packet entity " + NO_WORLD + " 0 0");
         assertTrue("an entity packet naming a dimension with no world must be dropped, not thrown: "
                 + entity, entity.ok());
         requireArranged("the named dimension must have no world, or this is not the case it claims: "
                 + entity, !entity.bool("worldLoaded"));
 
-        Reply item = ask("stellurgytest packet item 0 dim=" + NO_WORLD);
+        Reply item = act("stellurgytest packet item 0 dim=" + NO_WORLD);
         assertTrue("a held-item packet naming a dimension with no world must be dropped, not thrown: "
                 + item, item.ok());
         requireArranged("the named dimension must have no world, or this is not the case it claims: "
@@ -273,17 +278,18 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * showed the item's tooltip to throw in turn.</p>
      * <p>red-witnessed: with {@code ItemProjector#useNetworkData} at {@code PacketSenderCheck.refuse(player, describe(id), "there is no machine " + machineId);} never reached (its {@code isMachineId} condition made false), fails: "choosing machine -2, which no machine has, must leave the projector on the machine it had expected:<0> but was:<-2>" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aProjectorTakesOnlyAMachineIdThatExists() throws Exception {
         FixtureSite site = site();
         standSenderAt(OVERWORLD, site.x, site.y + 1, site.z);
         arrange("stellurgytest packet hold " + PROJECTOR);
 
-        arrange("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
+        act("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
         assertEquals("choosing machine " + ARC_FURNACE + ", which exists, must be taken",
                 ARC_FURNACE, heldMachineId());
 
-        Reply refused = ask("stellurgytest packet item " + SELECT_MACHINE + " " + NO_MACHINE);
+        Reply refused = act("stellurgytest packet item " + SELECT_MACHINE + " " + NO_MACHINE);
         assertEquals("choosing machine " + NO_MACHINE + ", which no machine has, must leave the projector"
                 + " on the machine it had", ARC_FURNACE, heldMachineId());
         assertTrue("a machine id the projector refuses must be dropped, not thrown: " + refused,
@@ -297,16 +303,17 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * footprint is out of its holder's reach of a click ({@code PacketSenderCheck#withinItemUseReach}).</p>
      * <p>red-witnessed: with {@code ItemProjector#project} at {@code if(!PacketSenderCheck.withinItemUseReach(player, footprint.grow(1.0D)))} made {@code if(false)}, fails: "a projection thirty blocks from its holder — where he could not have pointed — must lay no ghost expected:<0> but was:<25>" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aProjectorProjectsOnlyWhereItsHolderCouldHavePointed() throws Exception {
         FixtureSite near = clearedSite(0, FURNACE_LAYERS, "the near projection is laid into this volume");
         // Thirty blocks east of the near site, inside this plot: further from the holder than his
         // reach plus the server's tolerance (5 + 3) and the furnace's own five cells together.
         FixtureSite far = plot().siteAt(50, 20);
-        far.requireClear(this::exec, 0, FURNACE_LAYERS, "the far projection would be laid into this volume");
+        far.requireClear(c -> arrange(c).raw(), 0, FURNACE_LAYERS, "the far projection would be laid into this volume");
         standSenderAt(OVERWORLD, near.x, near.y + 1, near.z);
         arrange("stellurgytest packet hold " + PROJECTOR);
-        arrange("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
+        act("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
         requireArranged("the projector must hold the furnace before it is pointed anywhere",
                 heldMachineId() == ARC_FURNACE);
 
@@ -343,10 +350,10 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
         standSenderAt(OVERWORLD, site.x, snow, site.z);
         arrange("stellurgytest packet hold " + PROJECTOR);
-        arrange("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
+        act("stellurgytest packet item " + SELECT_MACHINE + " " + ARC_FURNACE);
         project(site);
 
-        Reply ghosts = ask(ghostsCommand(site));
+        Reply ghosts = read(ghostsCommand(site));
         int[] ghost = null;
         for (int[] at : ghosts.blockPosArray("at")) {
             if (at[1] == snow) {
@@ -357,9 +364,9 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         requireArranged("the furnace's bottom layer must have been projected into the snow: " + ghosts,
                 ghost != null);
 
-        arrange("stellurgytest tile force-tick " + OVERWORLD + " " + ghost[0] + " " + ghost[1] + " " + ghost[2]
+        act("stellurgytest tile force-tick " + OVERWORLD + " " + ghost[0] + " " + ghost[1] + " " + ghost[2]
                 + " " + GHOST_LIFETIME_UPDATES);
-        String after = ask("stellurgytest block at " + OVERWORLD + " " + ghost[0] + " " + ghost[1] + " "
+        String after = read("stellurgytest block at " + OVERWORLD + " " + ghost[0] + " " + ghost[1] + " "
                 + ghost[2]).text("block");
         assertEquals("a ghost that faded where snow lay must leave the snow it was laid over",
                 "minecraft:snow_layer", after);
@@ -451,6 +458,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * <p>red-witnessed: with the same two conditions made {@code return true ? null} and {@code TileStationGravityController#useNetworkData} and {@code TileStationAltitudeController#useNetworkData} at {@code state = RedstoneState.values()[nbt.getByte("state")];} clamping the byte to the last mode instead, fails: "a redstone mode no button press produces changed a controller's mode expected:&lt;{gravity=1, altitude=1}&gt; but was:&lt;{gravity=2, altitude=2}&gt;" (2026-10-07).</p>
      * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} made {@code return false;}, fails: "a mode the button produces, from its screen, must be taken — or the drop above says nothing about the mode expected:&lt;{gravity=2, altitude=2}&gt; but was:&lt;{gravity=1, altitude=1}&gt;" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-05")
     @Test
     public void aRedstoneModeNoButtonProducesIsDroppedNotThrown() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the two redstone-driven controllers stand in this volume");
@@ -524,20 +532,20 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         requireArranged("a placed assembler holds no energy and no progress, so the values below stand"
                 + " apart from it: " + state, state.get("pwr") == 0d && state.get("tik") == 0d);
         openScreen(p);
-        arrange("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + ASSEMBLER_STATE_PACKET + " int:" + SOME_ENERGY + " int:" + SOME_PROGRESS);
         assertEquals("a client's packet set the assembler's stored energy and build progress, which are the"
                 + " server's to send", state, assemblerState(p));
 
         arrange("stellurgytest client close-screen");
         requireArranged("a placed assembler is not building", !building(p));
-        arrange("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + ASSEMBLER_BUILD_PACKET);
         assertFalse("a build press from a sender with no screen open started the assembler building",
                 building(p));
 
         openScreen(p);
-        arrange("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + ASSEMBLER_BUILD_PACKET);
         assertTrue("a build press from a sender with the assembler's screen open must be taken — or the"
                 + " refusal above says nothing about the screen", building(p));
@@ -555,11 +563,11 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      */
     @Test
     public void aWarpMonitorTakesADestinationOnlyFromItsOpenScreen() throws Exception {
-        int spaceDim = ask("stellurgytest client space-dim").integer("spaceDimId");
+        int spaceDim = read("stellurgytest client space-dim").integer("spaceDimId");
         Reply created = arrange("stellurgytest station create " + OVERWORLD);
         int station = created.integer("id");
         arrange("stellurgytest station set-parent " + station + " " + OVERWORLD);
-        Reply info = ask("stellurgytest station info " + station);
+        Reply info = read("stellurgytest station info " + station);
         requireArranged("a created station reports where it stands: " + info, info.has("spawnX"));
         int[] p = {info.integer("spawnX"), info.integer("spawnY"), info.integer("spawnZ")};
         int sol = Constants.STAR_ID_OFFSET + SOL;
@@ -581,20 +589,20 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         requireMonitorLoaded(spaceDim, p);
         sendDestination(spaceDim, p, sol);
         assertEquals("a destination sent by a player with none of the monitor's screens open was taken",
-                dest, ask("stellurgytest station info " + station).integer("destOrbitingBody"));
+                dest, read("stellurgytest station info " + station).integer("destOrbitingBody"));
 
         openScreen(spaceDim, GuiHandler.guiId.MODULARFULLSCREEN.ordinal(), p);
         requireMonitorLoaded(spaceDim, p);
         sendDestination(spaceDim, p, sol);
         assertEquals("a destination sent through the monitor's own selection screen must be taken — or the"
                 + " refusal above says nothing about the screen",
-                sol, ask("stellurgytest station info " + station).integer("destOrbitingBody"));
+                sol, read("stellurgytest station info " + station).integer("destOrbitingBody"));
         arrange("stellurgytest client close-screen");
         arrange("stellurgytest chunk release " + spaceDim + " " + (p[0] >> 4) + " " + (p[2] >> 4));
     }
 
     private void requireMonitorLoaded(int dim, int[] p) throws Exception {
-        Reply chunk = arrange("stellurgytest chunk loaded " + dim + " " + (p[0] >> 4) + " " + (p[2] >> 4));
+        Reply chunk = read("stellurgytest chunk loaded " + dim + " " + (p[0] >> 4) + " " + (p[2] >> 4));
         requireArranged("the monitor's chunk must be loaded, or its packet is dropped before the monitor"
                 + " sees it: " + chunk, chunk.bool("loaded"));
     }
@@ -622,13 +630,13 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
                 + declared, declared == TileEntityFieldGenerator.DEFAULT_RADIUS
                 && declared != TileEntityFieldGenerator.MAX_RADIUS);
 
-        arrange("stellurgytest client affs radius " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client affs radius " + p[0] + " " + p[1] + " " + p[2] + " "
                 + TileEntityFieldGenerator.MAX_RADIUS);
         assertEquals("a radius sent by a player with no screen open changed the generator",
                 declared, declaredRadius(p));
 
         openScreen(OVERWORLD, AffsGuiRouter.AFFS_GUI_BASE + AdvancedForceFieldSystem.GUI_FIELD_GENERATOR, p);
-        arrange("stellurgytest client affs radius " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client affs radius " + p[0] + " " + p[1] + " " + p[2] + " "
                 + TileEntityFieldGenerator.MAX_RADIUS);
         assertEquals("a radius sent through the generator's own screen must be taken — or the refusal above"
                 + " says nothing about the screen", TileEntityFieldGenerator.MAX_RADIUS, declaredRadius(p));
@@ -658,7 +666,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         double bias = consoleBias(p);
         double other = bias < 0.5d ? 1d : 0d;
 
-        arrange("stellurgytest client affs bias " + p[0] + " " + p[1] + " " + p[2] + " " + other);
+        act("stellurgytest client affs bias " + p[0] + " " + p[1] + " " + p[2] + " " + other);
         assertEquals("a bias sent by a player with no screen open changed the console", bias, consoleBias(p), 0d);
 
         int farX = p[0] + FAR_CHUNKS * 16, farZ = p[2] + FAR_CHUNKS * 16;
@@ -666,16 +674,16 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
                 + " load", !chunkLoaded(farX, farZ));
         requireArranged("the sender's own chunk reads as loaded, so the instrument can say loaded at all",
                 chunkLoaded(p[0], p[2]));
-        arrange("stellurgytest client affs bias " + farX + " " + p[1] + " " + farZ + " " + other);
+        act("stellurgytest client affs bias " + farX + " " + p[1] + " " + farZ + " " + other);
         assertFalse("a bias packet naming a far position made the server load the chunk there",
                 chunkLoaded(farX, farZ));
-        arrange("stellurgytest client affs open " + AdvancedForceFieldSystem.GUI_NETWORK_MAP + " " + farX
+        act("stellurgytest client affs open " + AdvancedForceFieldSystem.GUI_NETWORK_MAP + " " + farX
                 + " " + p[1] + " " + farZ);
         assertFalse("a request to open a console's map at a far position made the server load the chunk"
                 + " there", chunkLoaded(farX, farZ));
 
         openScreen(OVERWORLD, AffsGuiRouter.AFFS_GUI_BASE + AdvancedForceFieldSystem.GUI_SHIELD_CONSOLE, p);
-        arrange("stellurgytest client affs bias " + p[0] + " " + p[1] + " " + p[2] + " " + other);
+        act("stellurgytest client affs bias " + p[0] + " " + p[1] + " " + p[2] + " " + other);
         assertEquals("a bias sent through the console's own screen must be taken — or the refusal above says"
                 + " nothing about the screen", other, consoleBias(p), 0d);
         arrange("stellurgytest client close-screen");
@@ -712,17 +720,17 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
                 ? "short:" + target + " short:" + sliderAt(p, 1).integer("progress")
                         + " short:" + sliderAt(p, 2).integer("progress")
                 : "short:" + target;
-        arrange("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + SLIDER_PACKET + " " + words);
     }
 
     private Reply sendMode(int[] p, int mode) throws Exception {
-        return ask("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        return act("stellurgytest client machine " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + REDSTONE_PACKET + " byte:" + mode);
     }
 
     private void sendDestination(int dim, int[] p, int body) throws Exception {
-        arrange("stellurgytest client machine " + dim + " " + p[0] + " " + p[1] + " " + p[2] + " "
+        act("stellurgytest client machine " + dim + " " + p[0] + " " + p[1] + " " + p[2] + " "
                 + WARP_DESTINATION_PACKET + " int:" + body);
     }
 
@@ -748,7 +756,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
     }
 
     private Reply sliderAt(int[] p, int id) throws Exception {
-        return arrange("stellurgytest client slider " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " " + id);
+        return read("stellurgytest client slider " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2] + " " + id);
     }
 
     /** Each controller's redstone mode as its own {@code writeToNBT} saves it. */
@@ -756,7 +764,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
         Map<String, Integer> out = new LinkedHashMap<>();
         for (Map.Entry<String, int[]> controller : at.entrySet()) {
             int[] p = controller.getValue();
-            Reply saved = arrange("stellurgytest client tile-byte " + OVERWORLD + " " + p[0] + " " + p[1] + " "
+            Reply saved = read("stellurgytest client tile-byte " + OVERWORLD + " " + p[0] + " " + p[1] + " "
                     + p[2] + " redstoneState");
             requireArranged("a controller saves its redstone mode: " + saved, saved.bool("present"));
             out.put(controller.getKey(), saved.integer("value"));
@@ -766,7 +774,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
     /** The assembler's stored energy and build progress, as its own writer sends them to a client. */
     private Map<String, Double> assemblerState(int[] p) throws Exception {
-        Reply read = arrange("stellurgytest client machine-state " + OVERWORLD + " " + p[0] + " " + p[1] + " "
+        Reply read = read("stellurgytest client machine-state " + OVERWORLD + " " + p[0] + " " + p[1] + " "
                 + p[2] + " " + ASSEMBLER_STATE_PACKET);
         Map<String, Double> out = new LinkedHashMap<>();
         Reply values = Reply.of(read.object("read"));
@@ -776,47 +784,47 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
     }
 
     private boolean building(int[] p) throws Exception {
-        Reply saved = arrange("stellurgytest client tile-byte " + OVERWORLD + " " + p[0] + " " + p[1] + " "
+        Reply saved = read("stellurgytest client tile-byte " + OVERWORLD + " " + p[0] + " " + p[1] + " "
                 + p[2] + " building");
         requireArranged("an assembler saves whether it is building: " + saved, saved.bool("present"));
         return saved.integer("value") != 0;
     }
 
     private int declaredRadius(int[] p) throws Exception {
-        Reply read = ask("stellurgytest shield read " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2]);
+        Reply read = read("stellurgytest shield read " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2]);
         requireArranged("the block must read as a field generator: " + read, read.has("declaredRadius"));
         return read.integer("declaredRadius");
     }
 
     private double consoleBias(int[] p) throws Exception {
-        return arrange("stellurgytest shield console-info " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2])
+        return read("stellurgytest shield console-info " + OVERWORLD + " " + p[0] + " " + p[1] + " " + p[2])
                 .number("resistanceBias");
     }
 
     /** Whether the overworld chunk holding block {@code (x, z)} is in memory, asked without loading it. */
     private boolean chunkLoaded(int x, int z) throws Exception {
-        return arrange("stellurgytest chunk loaded " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)).bool("loaded");
+        return read("stellurgytest chunk loaded " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)).bool("loaded");
     }
 
     /** Put the headless test player — the sender of every packet here — at a point of a world. */
     private void standSenderAt(int dim, int x, int y, int z) throws Exception {
-        arrange("stellurgytest player ensure-fake " + dim + " " + (x + 0.5) + " " + y + " " + (z + 0.5));
+        act("stellurgytest player ensure-fake " + dim + " " + (x + 0.5) + " " + y + " " + (z + 0.5));
     }
 
     /** The sender's priority packet for the port at {@code (x, y, z)} of {@code dim}, delivered. */
     private void sendPriority(int dim, int x, int y, int z, int priority) throws Exception {
-        arrange("stellurgytest packet machine " + dim + " " + x + " " + y + " " + z + " " + PRIORITY_PACKET
+        act("stellurgytest packet machine " + dim + " " + x + " " + y + " " + z + " " + PRIORITY_PACKET
                 + " " + priority);
     }
 
     /** The zone priority the port at that position holds. */
     private int priorityAt(int dim, int x, int y, int z) throws Exception {
-        return arrange("stellurgytest vent priority " + dim + " " + x + " " + y + " " + z).integer("priority");
+        return act("stellurgytest vent priority " + dim + " " + x + " " + y + " " + z).integer("priority");
     }
 
     /** The machine id on the projector in the sender's hand; refuses when the item carries none. */
     private int heldMachineId() throws Exception {
-        Reply held = arrange("stellurgytest packet held machineId");
+        Reply held = read("stellurgytest packet held machineId");
         requireArranged("the sender must be holding the projector, with a machine id on it: " + held,
                 PROJECTOR.equalsIgnoreCase(held.text("item")) && held.bool("present"));
         return held.integer("value");
@@ -824,13 +832,13 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
     /** Project the furnace facing north with its base at the near corner of {@code site}'s volume. */
     private void project(FixtureSite site) throws Exception {
-        arrange("stellurgytest packet item " + PROJECT + " " + site.x + " " + (site.y + 1) + " "
+        act("stellurgytest packet item " + PROJECT + " " + site.x + " " + (site.y + 1) + " "
                 + (site.z + FURNACE_EDGE - 1) + " " + NORTH);
     }
 
     /** How many ghost blocks stand where the furnace would be laid at {@code site}. */
     private int ghostsIn(FixtureSite site) throws Exception {
-        return arrange(ghostsCommand(site)).integer("count");
+        return read(ghostsCommand(site)).integer("count");
     }
 
     private static String ghostsCommand(FixtureSite site) {

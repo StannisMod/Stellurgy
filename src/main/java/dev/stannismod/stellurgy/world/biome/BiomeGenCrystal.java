@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.world.decoration.MapGenLargeCrystal;
+import dev.stannismod.stellurgy.world.gen.WorldGenLargeCrystal;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.feature.WorldGenerator;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.world.decoration.MapGenLargeCrystal;
-import dev.stannismod.stellurgy.world.gen.WorldGenLargeCrystal;
 
 import javax.annotation.Nonnull;
 import java.util.Random;

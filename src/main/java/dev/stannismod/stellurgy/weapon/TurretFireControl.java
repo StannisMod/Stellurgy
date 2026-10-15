@@ -1,8 +1,5 @@
 package dev.stannismod.stellurgy.weapon;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.projectile.ShotEnvironment;
 import dev.stannismod.stellurgy.api.projectile.ShotSpec;
 import dev.stannismod.stellurgy.api.weapon.GunSpec;
@@ -11,6 +8,9 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.projectile.ShotSubstrate;
 import dev.stannismod.stellurgy.projectile.StructureCrossing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.Random;
 import java.util.UUID;

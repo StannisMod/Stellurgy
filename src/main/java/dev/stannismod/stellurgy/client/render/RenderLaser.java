@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.entity.EntityLaserNode;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -13,8 +15,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.entity.EntityLaserNode;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nullable;
 

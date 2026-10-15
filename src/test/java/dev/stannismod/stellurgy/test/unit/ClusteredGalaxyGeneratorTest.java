@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -7,39 +11,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.BodyDerivationV0;
-import dev.stannismod.stellurgy.universe.BodyProfile;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.Cosmology;
-import dev.stannismod.stellurgy.universe.Galaxy;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.IBodyDerivation;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-import dev.stannismod.stellurgy.universe.UniverseSchemas;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the deterministic clustered galaxy generator. Pure-JUnit; no MC bootstrap.
@@ -551,11 +525,9 @@ public class ClusteredGalaxyGeneratorTest {
         assertTrue(checkedAny);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at
-     * twice the blocks per distance unit, this fails with "body at orbit 104997 of system … must
-     * stand that far from its star expected:&lt;4.19988E7&gt; but was:&lt;8.399759966695575E7&gt;".
-     */
+    @LegacyWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
+            + " twice the blocks per distance unit, this fails with \"body at orbit 104997 of system … must"
+            + " stand that far from its star expected:&lt;4.19988E7&gt; but was:&lt;8.399759966695575E7&gt;\".")
     @Test
     public void aBodyStandsExactlyWhereItsOrbitalDistanceSaysItDoes() {
         // The acceptance the whole scale rework exists for: ONE law, ONE constant. A body at orbital
@@ -1084,12 +1056,11 @@ public class ClusteredGalaxyGeneratorTest {
      *
      * <p>Regenerate deliberately, never to make a red test green:
      * {@code ./gradlew testUnit -Dstellurgy.universe.corpus.write=true}</p>
-     *
-     * <p>red-witnessed: 2026-09-29, against the fixture regenerated for moon zones: with
-     * {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} back to the flat 1024-cell lattice it shipped with, this fails
-     * with "THE WORLD MODEL HAS MOVED. line 14: fixture: body … .1_0_0 kind=MOON … now: body …
-     * .9_0_-2 kind=MOON" — a moon renamed by a lattice regression.</p>
      */
+    @LegacyWitness(prose = "2026-09-29, against the fixture regenerated for moon zones: with"
+            + " {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} back to the flat 1024-cell lattice it shipped with, this fails"
+            + " with \"THE WORLD MODEL HAS MOVED. line 14: fixture: body … .1_0_0 kind=MOON … now: body …"
+            + " .9_0_-2 kind=MOON\" — a moon renamed by a lattice regression.")
     @Test
     public void theGoldenCorpusIsByteIdentical() throws Exception {
         byte[] rendered = UniverseCorpus.render().getBytes(StandardCharsets.UTF_8);

@@ -11,36 +11,27 @@ package dev.stannismod.stellurgy.test;
  */
 public final class ConfigFlag implements AutoCloseable {
 
-    /** How this reader reaches the probe. */
-    @FunctionalInterface
-    public interface Probe {
-        String exec(String command) throws Exception;
-    }
-
-    private final Probe probe;
+    private final ServerCommands commands;
     private final String key;
     private final String found;
 
-    private ConfigFlag(Probe probe, String key, String found) {
-        this.probe = probe;
+    private ConfigFlag(ServerCommands commands, String key, String found) {
+        this.commands = commands;
         this.key = key;
         this.found = found;
     }
 
     /** Set {@code key} to {@code value}, remembering the value it held. */
-    public static ConfigFlag set(Probe probe, String key, Object value) throws Exception {
-        Reply before = Reply.of("stellurgytest config get", probe.exec("stellurgytest config get " + key))
-                .requireOk("config get " + key);
+    public static ConfigFlag set(ServerCommands commands, String key, Object value) throws Exception {
+        Reply before = commands.read("stellurgytest config get " + key).requireOk("config get " + key);
         String found = before.text("value");
-        Reply.of("stellurgytest config set", probe.exec("stellurgytest config set " + key + " " + value))
-                .requireOk("config set " + key);
-        return new ConfigFlag(probe, key, found);
+        commands.arrange("stellurgytest config set " + key + " " + value).requireOk("config set " + key);
+        return new ConfigFlag(commands, key, found);
     }
 
     /** Put the field back to the value it was found at. */
     @Override
     public void close() throws Exception {
-        Reply.of("stellurgytest config set", probe.exec("stellurgytest config set " + key + " " + found))
-                .requireOk("config set " + key + " (restore)");
+        commands.arrange("stellurgytest config set " + key + " " + found).requireOk("config set " + key + " (restore)");
     }
 }

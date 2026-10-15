@@ -1,14 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * EntityElevatorCapsule motion-state and
@@ -83,11 +79,11 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         int cz1 = (BASE_Z - 4) >> 4;
         int cx2 = (x + 4) >> 4;
         int cz2 = (BASE_Z + 4) >> 4;
-        String warmup = join(client().execute(
+        String warmup = join(client().arrange(
                 "stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + warmup,
                 Reply.of(warmup).ok());
-        String spawn = join(client().execute(
+        String spawn = join(client().arrange(
                 "stellurgytest entity spawn 0 " + x + ".5 " + BASE_Y + " " + BASE_Z + ".5"
                         + " stellurgy:StellurgySpaceElevatorCapsule"));
         assertTrue("capsule spawn failed: " + spawn,
@@ -115,12 +111,12 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
     public void setCapsuleMotionAscendingFlipsAscendingAndInMotion() throws Exception {
         int id = spawnCapsule(0);
 
-        String setResp = join(client().execute(
+        String setResp = join(client().arrange(
                 "stellurgytest entity capsule-set-motion 0 " + id + " 1"));
         assertTrue("capsule-set-motion(1) must succeed: " + setResp,
                 Reply.of(setResp).ok());
 
-        String state = join(client().execute(
+        String state = join(client().read(
                 "stellurgytest entity capsule-state 0 " + id));
         assertTrue("motion=+1 must set isAscending=true: " + state,
                 extractBool(state, IS_ASCENDING));
@@ -134,12 +130,12 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
     public void setCapsuleMotionDescendingFlipsDescendingAndInMotion() throws Exception {
         int id = spawnCapsule(20);
 
-        String setResp = join(client().execute(
+        String setResp = join(client().arrange(
                 "stellurgytest entity capsule-set-motion 0 " + id + " -1"));
         assertTrue("capsule-set-motion(-1) must succeed: " + setResp,
                 Reply.of(setResp).ok());
 
-        String state = join(client().execute(
+        String state = join(client().read(
                 "stellurgytest entity capsule-state 0 " + id));
         assertFalse("motion=-1 must NOT set isAscending=true: " + state,
                 extractBool(state, IS_ASCENDING));
@@ -157,7 +153,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         // state that RenderElevatorCapsule paints as stationary.
         int id = spawnCapsule(40);
 
-        String state = join(client().execute(
+        String state = join(client().read(
                 "stellurgytest entity capsule-state 0 " + id));
         assertFalse("freshly-spawned capsule must NOT be ascending: " + state,
                 extractBool(state, IS_ASCENDING));
@@ -175,17 +171,17 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
 
         // Populate motion + dst + src — the three pieces the save
         // format must round-trip per writeEntityToNBT (lines 130-141).
-        assertTrue(Reply.of(join(client().execute(
+        assertTrue(Reply.of(join(client().arrange(
                 "stellurgytest entity capsule-set-motion 0 " + id + " 1"))
                 ).ok());
-        assertTrue(Reply.of(join(client().execute(
+        assertTrue(Reply.of(join(client().arrange(
                 "stellurgytest entity capsule-set-dst 0 " + id + " 1 100 64 200"))
                 ).ok());
-        assertTrue(Reply.of(join(client().execute(
+        assertTrue(Reply.of(join(client().arrange(
                 "stellurgytest entity capsule-set-src 0 " + id + " 0 -50 70 -25"))
                 ).ok());
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest entity capsule-nbt-roundtrip 0 " + id));
         assertTrue("roundtrip probe must succeed: " + rt,
                 Reply.of(rt).ok());
@@ -231,7 +227,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         // readEntityFromNBT must accept the absent keys without NPE.
         int id = spawnCapsule(80);
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest entity capsule-nbt-roundtrip 0 " + id));
         assertTrue("roundtrip must succeed on un-linked capsule: " + rt,
                 Reply.of(rt).ok());

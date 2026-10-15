@@ -1,9 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import java.util.List;
-
 import org.junit.Test;
+
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.Assert.assertTrue;
 
@@ -37,12 +38,19 @@ public class VsVendorSmokeTest extends AbstractSharedServerTest {
     // second copy of the build configuration. What is below asks a question that CAN fail: whether
     // the registry answers, i.e. whether the integration is wired and not merely present.
 
-    /** A ship registry that answers at all — the integration is wired, not merely on the classpath. */
+    /**
+     * A ship registry that answers at all — the integration is wired, not merely on the classpath.
+     * Asked by one id nobody registered, which is a lookup in the overworld's registry and names no
+     * craft: {@code found:false} is the registry answering; no answer, or an error, is not.
+     */
     @Test
     public void theShipRegistryAnswersForALoadedWorld() throws Exception {
-        List<String> lines = client().execute("stellurgytest vs ship-count 0");
+        String nobody = UUID.randomUUID().toString();
+        List<String> lines = client().arrange("stellurgytest vs load-ship 0 " + nobody);
         String resp = String.join("\n", lines);
-        assertTrue("with VS present the ship registry must answer for the overworld (a count of 0 is "
-                + "a fine answer; no answer is not): " + resp, Reply.of(resp).has("count"));
+        Reply reply = Reply.of(resp);
+        assertTrue("with VS present the ship registry must answer for the overworld (no ship by an id"
+                + " nobody registered is a fine answer; no answer is not): " + resp,
+                reply.ok() && reply.has("found") && !reply.bool("found"));
     }
 }

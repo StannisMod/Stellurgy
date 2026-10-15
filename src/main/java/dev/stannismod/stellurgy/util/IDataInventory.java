@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.util;
 
-import net.minecraft.inventory.IInventory;
 import dev.stannismod.stellurgy.api.satellite.IDataHandler;
+import net.minecraft.inventory.IInventory;
 
 public interface IDataInventory extends IInventory, IDataHandler {
 

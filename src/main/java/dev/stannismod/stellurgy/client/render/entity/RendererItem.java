@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.client.render.entity;
 
+import dev.stannismod.stellurgy.entity.EntityItemAbducted;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.renderer.entity.Render;
@@ -10,7 +11,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.entity.EntityItemAbducted;
 
 import javax.annotation.Nullable;
 

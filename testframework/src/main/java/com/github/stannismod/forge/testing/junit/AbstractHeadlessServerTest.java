@@ -32,17 +32,17 @@ import org.junit.Before;
  *   public class WeatherBaselineTest extends AbstractHeadlessServerTest {
  *       @Test
  *       public void rainIsolatedPerDimension() throws Exception {
- *           client().execute("stellurgytest weather set 0 rain 12000");
- *           List<String> after = client().execute("stellurgytest weather get 0");
+ *           client().arrange("stellurgytest weather set 0 rain 12000");
+ *           List<String> after = client().arrange("stellurgytest weather get 0"); // holds the world loaded
  *           assertTrue(String.join("\n", after).contains("\"isRaining\":true"));
  *       }
  *   }
  * }</pre>
  *
  * <p>For scenarios that need to boot two harnesses against the same workDir
- * (e.g. persistence-restart tests), do NOT extend this class — call
- * {@link RealDedicatedServerHarness#startWith} directly from a plain {@code @Test}
- * method, since this base class manages exactly one harness.</p>
+ * (e.g. persistence-restart tests), do NOT extend this class — extend
+ * {@link AbstractMechanicsTest} and call {@link RealDedicatedServerHarness#startWith} with its
+ * {@code harnessBoot()}, since this base class manages exactly one harness.</p>
  */
 public abstract class AbstractHeadlessServerTest {
 
@@ -77,8 +77,8 @@ public abstract class AbstractHeadlessServerTest {
                 "Server harness disabled — set -D" + PROP_HARNESS_ENABLED + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(PROP_HARNESS_ENABLED, "false")));
         harness = requiresFlatTerrain()
-                ? RealDedicatedServerHarness.startWithFlatTerrain()
-                : RealDedicatedServerHarness.start();
+                ? RealDedicatedServerHarness.startWithFlatTerrain(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS))
+                : RealDedicatedServerHarness.start(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS));
     }
 
     @After

@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.api.material;
 
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
+import dev.stannismod.stellurgy.libvulpes.items.ItemOre;
+import dev.stannismod.stellurgy.libvulpes.items.ItemOreProduct;
+import dev.stannismod.stellurgy.libvulpes.util.ItemStackMapping;
+import dev.stannismod.stellurgy.libvulpes.util.OreProductColorizer;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
@@ -15,12 +21,6 @@ import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
-import dev.stannismod.stellurgy.libvulpes.items.ItemOre;
-import dev.stannismod.stellurgy.libvulpes.items.ItemOreProduct;
-import dev.stannismod.stellurgy.libvulpes.util.ItemStackMapping;
-import dev.stannismod.stellurgy.libvulpes.util.OreProductColorizer;
 
 import javax.annotation.Nonnull;
 import java.util.*;

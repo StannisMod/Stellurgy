@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
 import org.junit.Test;
 
 import java.util.List;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -50,8 +49,8 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
 
         // Phase 2: flip. Zero both coils, swap the priorities, and the FED emitter must swap to B — proving
         // priority, not the layout or the solver's traversal order, decides who is fed.
-        exec("stellurgytest shield charge " + DIM + " " + ax + " " + Y + " " + z + " 0");
-        exec("stellurgytest shield charge " + DIM + " " + bx + " " + Y + " " + z + " 0");
+        arrange("stellurgytest shield charge " + DIM + " " + ax + " " + Y + " " + z + " 0").raw();
+        arrange("stellurgytest shield charge " + DIM + " " + bx + " " + Y + " " + z + " 0");
         setPriority(ax, z, 0);
         setPriority(bx, z, 1);
         chargeBoth(gx, z, 9);
@@ -74,24 +73,24 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
 
     private void chargeBoth(int gx, int gz, int iterations) throws Exception {
         for (int i = 0; i < iterations; i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
     }
 
     private void setPriority(int x, int z, int value) throws Exception {
-        String resp = exec("stellurgytest shield priority " + DIM + " " + x + " " + Y + " " + z + " " + value);
+        String resp = arrange("stellurgytest shield priority " + DIM + " " + x + " " + Y + " " + z + " " + value).raw();
         assertTrue("failed to set priority " + value + " at " + x + ": " + resp,
                 String.valueOf(value).equals(Reply.of(resp).text("priority")));
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

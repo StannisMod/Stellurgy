@@ -43,8 +43,8 @@ public class NavigationReadoutServerTest extends AbstractSharedServerTest {
     public void theMassLineCarriesTheBodysMassNotItsGravity() throws Exception {
         int described = 0;
         int massDiffersFromGravity = 0;
-        for (int dim : DimList.from(this::exec).registered()) {
-            Reply view = ask("stellurgytest space nav-body-view " + dim);
+        for (int dim : DimList.from(c -> read(c).raw()).registered()) {
+            Reply view = read("stellurgytest space nav-body-view " + dim);
             if (!view.ok()) {
                 continue;
             }

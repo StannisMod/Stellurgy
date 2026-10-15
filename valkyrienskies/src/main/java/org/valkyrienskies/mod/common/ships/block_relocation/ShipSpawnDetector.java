@@ -10,6 +10,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockPos.MutableBlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 import org.valkyrienskies.mod.common.config.VSConfig;
 
 public class ShipSpawnDetector extends SpatialDetector {
@@ -39,8 +40,9 @@ public class ShipSpawnDetector extends SpatialDetector {
 
     private final MutableBlockPos mutablePos = new MutableBlockPos();
 
-    ShipSpawnDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners) {
-        super(start, worldIn, maximum, checkCorners);
+    ShipSpawnDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners,
+                      StructureBoundingBox footprint) {
+        super(start, worldIn, maximum, checkCorners, footprint);
         // syncWithConfig();
         startDetection();
     }

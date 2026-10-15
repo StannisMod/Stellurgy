@@ -1,16 +1,5 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import net.minecraft.block.Block;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.ResourceLocation;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -18,6 +7,15 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
+import net.minecraft.block.Block;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ResourceLocation;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * The seam where a scanned dot becomes a world: turning a procedural {@link SystemBody} into a real

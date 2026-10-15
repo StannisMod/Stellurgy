@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.projectile;
 
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
 import dev.stannismod.stellurgy.api.projectile.ShotSpec;
 import dev.stannismod.stellurgy.network.PacketShotEnd;
 import dev.stannismod.stellurgy.network.PacketShotSpawn;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.function.Supplier;
 

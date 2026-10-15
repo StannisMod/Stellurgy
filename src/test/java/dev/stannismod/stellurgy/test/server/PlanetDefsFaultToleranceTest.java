@@ -2,16 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -35,12 +28,16 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetDefsFaultToleranceTest.Galaxy.class)
 public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
     private static final int GOOD_DIM = 9401;
     private static final int BAD_DIM = 9402;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {
@@ -83,6 +80,8 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
                 + "        </planet>\n";
     }
 
+    /** Pins INV-XML-01 (a malformed planet definition is skipped, not fatal). */
+    @Pins("INV-XML-01")
     @Test
     public void serverBootsWithMalformedPlanetSkipped() throws Exception {
         // The assertion that matters most is implicit in this line: before the
@@ -94,7 +93,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
         // `dimList.contains("9402")` — and those digits match anywhere in the blob: the negative
         // claim below would fail for a tick time carrying them, and the positive one above would
         // pass with the dimension absent as long as something printed 94010 or 19401.
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         assertTrue("well-formed planet must survive a dirty planetDefs.xml: " + dimList,
                 dimList.holds(GOOD_DIM));
         assertFalse("malformed planet must be skipped, not registered: " + dimList,
@@ -102,7 +101,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
         // The good planet is fully functional, not just listed.
         String info = String.join("\n",
-                client().execute("stellurgytest planet info " + GOOD_DIM));
+                client().read("stellurgytest planet info " + GOOD_DIM));
         assertTrue("good planet must round-trip its config: " + info,
                 "GoodPlanet".equals(Reply.of(info).text("name")));
     }

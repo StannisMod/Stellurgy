@@ -1,17 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.UUID;
-
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipAboardTag;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import java.util.UUID;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the durable "which ship is this player aboard" tag.

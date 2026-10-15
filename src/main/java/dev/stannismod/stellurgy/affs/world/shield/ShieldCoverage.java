@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.affs.world.shield;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import dev.stannismod.stellurgy.affs.world.FieldFrame;
 import dev.stannismod.stellurgy.affs.world.FieldFrames;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.List;
 

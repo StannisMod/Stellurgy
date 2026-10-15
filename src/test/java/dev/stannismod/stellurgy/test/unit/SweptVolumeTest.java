@@ -1,20 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.util.SweptSegment;
+import dev.stannismod.stellurgy.util.SweptVolume;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.util.SweptSegment;
-import dev.stannismod.stellurgy.util.SweptVolume;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What a body with WIDTH sweeps through, as geometry.

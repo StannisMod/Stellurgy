@@ -2,12 +2,14 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The air-intake duct: the block that finally connects the part of a ship people live in to the part
@@ -46,15 +48,17 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * A powered chiller breathing a room cools it, and its hot loop gains what the room lost plus the
      * work that moved it.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}
-     * crediting the heat without taking it out of the air: "the room must actually get colder …
-     * (before=400000 after=400000)". REPORTED — {@code HeatNetwork#runAirCooledPumps} at {@code state.addPumpedIn(delivered);} not recording the delivery
-     * as pumped in: "what the loop received must be reported as arriving from a pump: …
-     * expected:&lt;6240&gt; but was:&lt;0&gt;". PLUS THE WORK — {@code HeatNetwork#runAirCooledPumps} at {@code delivered += taken + workPaid;} delivering
-     * the air's heat without the work: "the hot loop must receive what left the room PLUS the work
-     * (air=6000 work=240 gained=6000)". The two premises at its head and the three before REPORTED
-     * are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-20 (A powered chiller breathing a room cools it and heats its loop, and the loop receives exactly what left the air PLUS the work).
      */
+    @Pins("INV-HEAT-20")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}"
+            + " crediting the heat without taking it out of the air: \"the room must actually get colder …"
+            + " (before=400000 after=400000)\". REPORTED — {@code HeatNetwork#runAirCooledPumps} at {@code state.addPumpedIn(delivered);} not recording the delivery"
+            + " as pumped in: \"what the loop received must be reported as arriving from a pump: …"
+            + " expected:&lt;6240&gt; but was:&lt;0&gt;\". PLUS THE WORK — {@code HeatNetwork#runAirCooledPumps} at {@code delivered += taken + workPaid;} delivering"
+            + " the air's heat without the work: \"the hot loop must receive what left the room PLUS the work"
+            + " (air=6000 work=240 gained=6000)\". The two premises at its head and the three before REPORTED"
+            + " are arrangements and are not witnessed.")
     @Test
     public void aChillerBreathingARoomCoolsItAndHeatsItsLoop() throws Exception {
         int cx = stand("a hot room with a powered chiller breathing it through a duct");
@@ -103,14 +107,15 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * The control. The same rig with no electricity in the chiller must leave the room exactly where
      * it was — a duct is a mouth, not a hole, and heat does not walk out of a room on its own.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: "an unpowered chiller must
-     * move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;". WITH POWER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);} crediting the heat without taking it out of the air: "the same rig with power
-     * must cool the room, or nothing above was measured: … \"airTempMilliK\":400000".</p>
-     *
      * <p>What the loop receives is not asserted here: it is paid only what the room gave up plus paid
      * work, so any fault that feeds it moves the room first, and the conservation between the two is
      * the powered scenario's clause.</p>
+     * Pins INV-HEAT-21 (An unpowered chiller leaves the room exactly where it was, with the same rig powered afterwards as the control).
      */
+    @Pins("INV-HEAT-21")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller must"
+            + " move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;\". WITH POWER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);} crediting the heat without taking it out of the air: \"the same rig with power"
+            + " must cool the room, or nothing above was measured: … \\\"airTempMilliK\\\":400000\".")
     @Test
     public void anUnpoweredChillerLeavesTheRoomAlone() throws Exception {
         int cx = stand("a hot room with an unpowered chiller breathing it through a duct");
@@ -152,13 +157,13 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
         for (int i = 4; i < 8; i++) {
             place(cx + i, cy + 1, "stellurgy:heatPipe", null);
         }
-        Reply solved = arrange("stellurgytest subnet solve heat 0 1");
+        Reply solved = act("stellurgytest subnet solve heat 0 1").requireOk();
         assertEquals("solve failed: " + solved, 1, solved.integer("ticksSolved"));
     }
 
     private Reply cycleHotLoop(int cx, long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + (cx + 4) + " " + (cy + 1) + " " + cz
-                + " " + charge + " 1");
+        Reply cycled = act("stellurgytest heat cycle 0 " + (cx + 4) + " " + (cy + 1) + " " + cz
+                + " " + charge + " 1").requireOk();
         requireArranged("heat cycle found no loop: " + cycled, cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
                 charge, cycled.longInteger("charged"));
@@ -168,34 +173,34 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
     private void buildRoomWithVent(int cx) throws Exception {
         int by = cy, bz = cz;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").requireOk();
 
         place(cx, cy, "stellurgy:oxygenVent", null);
         injectEnergyAt(cx, cy, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5").requireOk();
     }
 
     private void place(int x, int y, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + "," + y + ": " + resp, resp.bool("placed"));
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     private void injectEnergyAt(int x, int y, int amount) throws Exception {
@@ -203,6 +208,6 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 }

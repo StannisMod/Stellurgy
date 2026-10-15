@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.subsystem.network;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.api.Constants;
 
 /**
  * When the running server's {@link SubsystemNetworkManager} works: once per world tick, and once when

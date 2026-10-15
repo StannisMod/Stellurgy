@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -11,8 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * A subsystem network's topology being rebuilt, as an event: {@code subsystem_network_rebuilt}.
@@ -22,7 +20,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * broken — and which is the only place a network's membership changes. Carries the domain's
  * {@code getName()}, the {@code dim}, and how many connected {@code components} the rebuild produced.
  * A reader waits for it after the change it made, then reads the standing state once. Server log.
- * Read by {@code WeaponConsoleE2ETest}.</p>
+ * Read by {@code WeaponConsoleTest}.</p>
  *
  * <p>SILENT about the per-tick max-flow solve, which runs every tick against the cached topology and
  * changes no membership.</p>

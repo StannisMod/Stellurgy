@@ -1,24 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.DimWeather;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * weather baseline / B1 regression.
@@ -31,12 +19,16 @@ import static org.junit.Assert.fail;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(WeatherBaselineTest.Galaxy.class)
 public class WeatherBaselineTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM_A = 9101;
     private static final int FIXTURE_DIM_B = 9102;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {
@@ -79,12 +71,12 @@ public class WeatherBaselineTest extends AbstractSharedServerTest {
     @Test
     public void weatherPropagationMatchesExpectedMode() throws Exception {
 
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         assertTrue("fixture dim A not registered: " + dimList, dimList.holds(FIXTURE_DIM_A));
         assertTrue("fixture dim B not registered: " + dimList, dimList.holds(FIXTURE_DIM_B));
 
-        client().execute("stellurgytest weather set 0 clear 12000");
-        String setOver = String.join("\n", client().execute("stellurgytest weather set 0 rain 12000"));
+        client().arrange("stellurgytest weather set 0 clear 12000");
+        String setOver = String.join("\n", client().arrange("stellurgytest weather set 0 rain 12000"));
         assertTrue("weather set on overworld failed: " + setOver, Reply.of(setOver).ok());
 
         DimWeather w0 = weather(0);
@@ -127,7 +119,7 @@ public class WeatherBaselineTest extends AbstractSharedServerTest {
     }
 
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 }

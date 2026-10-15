@@ -1,11 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import org.junit.After;
 import org.junit.Test;
 import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
 
+import dev.stannismod.stellurgy.test.Disposal;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -46,6 +49,26 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
     private static final int DECK_Y = 100;
 
     /**
+     * Every ship this scenario's assemblies built and nothing has collected since, as {@code {dim, ship}}:
+     * disposed of when the scenario ends, each by its own id.
+     */
+    private final java.util.List<String[]> standing = new java.util.ArrayList<>();
+
+    @After
+    public void disposeOfTheShips() throws Exception {
+        try {
+            for (String[] ship : standing) {
+                int dim = Integer.parseInt(ship[0]);
+                Events events = new Events(c -> read(c).raw(),
+                        ticks -> GameTicks.advance(client(), GameTicks.world(dim), ticks), evictionReports());
+                Disposal.ship(c -> arrange(c).raw(), events, dim, ship[1]);
+            }
+        } finally {
+            standing.clear();
+        }
+    }
+
+    /**
      * A hull standing higher above its flight computer than the shipyard's default placement leaves
      * room for is assembled, and every one of its blocks is copied.
      *
@@ -57,6 +80,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * block position at <19200000,268,51200>} from {@code spawnNewShips}, the server crashed and the wait
      * failed with "Server bridge exchange failed" (2026-10-06).</p>
      */
+    @Pins("INV-VSK-14")
     @Test
     public void aHullStandingFarAboveItsComputerIsAssembledWhole() throws Exception {
         int dim = emptyWorld();
@@ -84,6 +108,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * lowered by one (back to the old 7), this fails with "expected:&lt;257&gt; but was:&lt;240&gt;" — the
      * 16 blocks at x = -128..-113 and the one at x = 128 copied outside the claim (2026-10-06).</p>
      */
+    @Pins("INV-VSK-08")
     @Test
     public void aHullReachingTheFullDetectionReachKeepsEveryBlock() throws Exception {
         int dim = emptyWorld();
@@ -113,6 +138,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * made never to refuse, this fails with "must be REFUSED by the substrate" and the outcome is a
      * {@code ship_spawned} record for the craft (2026-10-06).</p>
      */
+    @Pins("INV-VSK-14")
     @Test
     public void aHullContinuingPastTheReachIsRefusedAndLeftStanding() throws Exception {
         int dim = emptyWorld();
@@ -138,7 +164,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         for (int x : new int[]{1, past}) {
             assertEquals("the refused hull's block at x=" + x + " must still stand where it was built",
                     "minecraft:stone",
-                    ask("stellurgytest space get-block " + dim + " " + x + " " + DECK_Y + " 0").text("block"));
+                    read("stellurgytest space get-block " + dim + " " + x + " " + DECK_Y + " 0").text("block"));
         }
     }
 
@@ -165,7 +191,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         assertSpawned(craft, "the small hull the scenario grows must first be a ship");
 
         // Grow it in its own shipyard, in line with the hull, to one block past the reach.
-        Reply afc = arrange("stellurgytest space yard-afc " + dim + " " + craft.ship);
+        Reply afc = read("stellurgytest space yard-afc " + dim + " " + craft.ship);
         assertTrue("the new ship's flight computer must stand in its shipyard: " + afc, afc.bool("found"));
         int ax = afc.integer("x"), ay = afc.integer("y"), az = afc.integer("z");
         int past = SpatialDetector.MAX_REACH + 1;
@@ -177,7 +203,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
 
         // The crossing, sent to open sky in the same world.
         int dstX = 0, dstY = DECK_Y + 50, dstZ = 400;
-        Reply crossed = ask("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
+        Reply crossed = act("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
                 + " 0 " + dstX + " " + dstY + " " + dstZ);
         assertFalse("a hull reaching " + past + " blocks from its computer must not cross: " + crossed,
                 crossed.bool("ok"));
@@ -187,7 +213,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                 hull, yardBlocks(dim, craft.ship));
         assertEquals("nothing may have been pasted at the destination",
                 "minecraft:air",
-                ask("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
+                read("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
     }
 
     /**
@@ -211,16 +237,16 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         Assembled craft = assemble(dim, 0, DECK_Y, 0, hullEnd, DECK_Y, 0);
         assertSpawned(craft, "the hull whose computer the scenario breaks must first be a ship");
 
-        Reply afc = arrange("stellurgytest space yard-afc " + dim + " " + craft.ship);
+        Reply afc = read("stellurgytest space yard-afc " + dim + " " + craft.ship);
         assertTrue("the new ship's flight computer must stand in its shipyard: " + afc, afc.bool("found"));
         arrange("stellurgytest place " + dim + " " + afc.integer("x") + " " + afc.integer("y") + " "
                 + afc.integer("z") + " minecraft:stone");
         assertFalse("the computer must be gone before the crossing is asked",
-                arrange("stellurgytest space yard-afc " + dim + " " + craft.ship).bool("found"));
+                read("stellurgytest space yard-afc " + dim + " " + craft.ship).bool("found"));
         int hull = yardBlocks(dim, craft.ship);
 
         int dstX = 0, dstY = DECK_Y + 50, dstZ = 400;
-        Reply crossed = ask("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
+        Reply crossed = act("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
                 + " 0 " + dstX + " " + dstY + " " + dstZ);
         assertFalse("a hull with no flight computer must not cross: " + crossed, crossed.bool("ok"));
         assertFalse("the crossing must say it was refused, and why: " + crossed,
@@ -229,7 +255,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                 hull, yardBlocks(dim, craft.ship));
         assertEquals("nothing may have been pasted at the destination",
                 "minecraft:air",
-                ask("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
+                read("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
     }
 
     /**
@@ -251,7 +277,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         arrange("stellurgytest fill " + dim + " 1 " + DECK_Y + " 0 2 " + DECK_Y + " 0 minecraft:stone");
         Assembled first = assemble(dim, 0, DECK_Y, 0, 2, DECK_Y, 0);
         assertSpawned(first, "the first ship must be built");
-        Reply firstAfc = arrange("stellurgytest space yard-afc " + dim + " " + first.ship);
+        Reply firstAfc = read("stellurgytest space yard-afc " + dim + " " + first.ship);
         assertTrue("the first ship's computer must stand in its shipyard: " + firstAfc, firstAfc.bool("found"));
         int ax = firstAfc.integer("x"), ay = firstAfc.integer("y"), az = firstAfc.integer("z");
 
@@ -262,6 +288,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         String removed = first.log.awaitRecordWithFields(gone, "ship_removed",
                 "the emptied first ship must be collected", SPAWN_BUDGET_TICKS, "vsShip", first.ship);
         assertNotNull("the collection must name the first ship: " + removed, removed);
+        standing.removeIf(ship -> ship[1].equals(first.ship));
 
         int secondZ = 20;
         arrange("stellurgytest place " + dim + " 0 " + DECK_Y + " " + secondZ
@@ -270,7 +297,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                 + " minecraft:stone");
         Assembled second = assemble(dim, 0, DECK_Y, secondZ, 2, DECK_Y, secondZ);
         assertSpawned(second, "the second ship must be built");
-        Reply secondAfc = arrange("stellurgytest space yard-afc " + dim + " " + second.ship);
+        Reply secondAfc = read("stellurgytest space yard-afc " + dim + " " + second.ship);
         assertTrue("the second ship's computer must stand in its shipyard: " + secondAfc,
                 secondAfc.bool("found"));
 
@@ -311,7 +338,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * rather than after the spawn budget runs out.
      */
     private Assembled assemble(int dim, int x1, int y1, int z1, int x2, int y2, int z2) throws Exception {
-        Events log = new Events(this::exec,
+        Events log = new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(client(), GameTicks.world(dim), ticks), evictionReports());
         long mark = log.markInstrumented();
         Reply handed = arrange("stellurgytest space assemble-box " + dim + " " + x1 + " " + y1 + " " + z1
@@ -331,6 +358,9 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                 outcome = named.get(named.size() - 1);
             }
         }
+        if ("ship_spawned".equals(Events.text(outcome, "type"))) {
+            standing.add(new String[]{String.valueOf(dim), ship});
+        }
         return new Assembled(ship, handed.integer("built"), mark, log, outcome);
     }
 
@@ -340,7 +370,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
 
     /** The blocks physically standing in the ship's claim chunks. */
     private int yardBlocks(int dim, String ship) throws Exception {
-        Reply yard = arrange("stellurgytest space yard-blocks " + dim + " " + ship);
+        Reply yard = read("stellurgytest space yard-blocks " + dim + " " + ship);
         assertTrue("the registry must know the ship it just announced: " + yard, yard.bool("known"));
         return yard.integer("yardBlocks");
     }

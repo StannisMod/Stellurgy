@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.projectile.ShotRegistry;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.projectile.ShotRegistry;
 
 import java.util.HashSet;
 import java.util.Set;

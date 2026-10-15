@@ -1,14 +1,17 @@
 package dev.stannismod.stellurgy.integration.jei.fuelingStation;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
 import mezz.jei.api.IGuiHelper;
-import mezz.jei.api.gui.*;
+import mezz.jei.api.gui.IDrawable;
+import mezz.jei.api.gui.IGuiFluidStackGroup;
+import mezz.jei.api.gui.IGuiItemStackGroup;
+import mezz.jei.api.gui.IRecipeLayout;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeCategory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
 
 public class FuelingStationCategory implements IRecipeCategory<FuelingStationWrapper> {
 

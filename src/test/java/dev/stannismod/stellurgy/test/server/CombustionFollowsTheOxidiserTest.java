@@ -2,12 +2,12 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.*;
 
 /**
  * Whether a fire can start is asked of the AIR, on the path the game actually uses.
@@ -41,15 +41,17 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
      * The same room twice: too thin to burn, then ordinary air. The label says "combustible" in both,
      * and the game must follow the air.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THIN REFUSES — {@code AtmosphereHandler#allowsCombustionAt} at {@code return air.allowsCombustion();} answering the label's flag instead of the air's: "nothing may light in
-     * air this thin … \"combustible\":true". LABEL — the {@code Atmosphere#LOWOXYGEN} at {@code new Atmosphere(true, false, true, "lowO2")} constant building {@code lowO2}
-     * non-combustible: "the label's own flag is unchanged, and it is WRONG … \"labelCombustible\":false".
-     * ORDINARY BURNS — {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion everywhere: "ordinary air burns: …
-     * \"combustible\":false". BREATHABLE — {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breathability everywhere:
-     * "and is breathable: … \"breathableAir\":false". The premises (the composition arrived, it is
-     * not breathable, the label is {@code lowO2}, the room was refilled) are arrangements and are
-     * not witnessed.</p>
+     * Pins INV-ATM-21 (fire and lungs are two different questions about the same gas).
      */
+    @Pins("INV-ATM-21")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. THIN REFUSES — {@code AtmosphereHandler#allowsCombustionAt} at {@code return air.allowsCombustion();} answering the label's flag instead of the air's: \"nothing may light in"
+            + " air this thin … \\\"combustible\\\":true\". LABEL — the {@code Atmosphere#LOWOXYGEN} at {@code new Atmosphere(true, false, true, \"lowO2\")} constant building {@code lowO2}"
+            + " non-combustible: \"the label's own flag is unchanged, and it is WRONG … \\\"labelCombustible\\\":false\"."
+            + " ORDINARY BURNS — {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion everywhere: \"ordinary air burns: …"
+            + " \\\"combustible\\\":false\". BREATHABLE — {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breathability everywhere:"
+            + " \"and is breathable: … \\\"breathableAir\\\":false\". The premises (the composition arrived, it is"
+            + " not breathable, the label is {@code lowO2}, the room was refilled) are arrangements and are"
+            + " not witnessed.")
     @Test
     public void aRoomTooThinToBurnRefusesFireWhileItsLabelStillSaysOtherwise() throws Exception {
         buildRoomWithVent();
@@ -87,12 +89,12 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
     private void setAir(AirMix mix) throws Exception {
         int oxygen = mix == AirMix.THIN ? THIN_OXYGEN : NORMAL_OXYGEN;
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0");
+                + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0").requireOk();
     }
 
     /** What a person standing in the room breathes, and what the air itself says about burning. */
     private Reply atmosphere() throws Exception {
-        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ);
+        return read("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ);
     }
 
     /** The oxygen in the room's composition — a member of {@code gases}, keyed by gas name. */
@@ -107,23 +109,23 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
-                + " stellurgy:oxygenVent");
+                + " stellurgy:oxygenVent").requireOk();
         assertTrue("vent place failed: " + vent, vent.bool("placed"));
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 }

@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.universe.SystemBody;
+
+import java.util.List;
 
 /**
  * Which body a craft's motion is measured AGAINST at a given moment.

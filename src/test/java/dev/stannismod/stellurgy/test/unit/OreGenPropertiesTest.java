@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.OreGenProperties;
 import dev.stannismod.stellurgy.util.OreGenTable;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;

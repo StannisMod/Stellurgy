@@ -2,12 +2,14 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * A compartment's air as a HEAT reservoir: it has a temperature, it has a capacity, and gas arriving
@@ -52,14 +54,15 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * admitted gas — and the test derives exactly where from the pressures before and after, so the
      * assertion is the law and not a number.</p>
      *
-     * <p>red-witnessed: with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two
-     * temperatures: "the room must end up at the enthalpy-weighted mean … expected 314.648… K …
-     * measured 293.001 K", 2026-09-30. The four premises are arrangements and are not witnessed.</p>
-     *
      * <p>Not asserted: that the room is NOT at the plain average, because the second premise puts the
      * expected value more than twice the bound from the average, so any reading the verdict accepts
      * is already more than the bound from it — the check could not go red on its own.</p>
+     * Pins INV-HEAT-17 (Gas arriving at a different temperature mixes by how much of each there is).
      */
+    @Pins("INV-HEAT-17")
+    @LegacyWitness(prose = "with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two"
+            + " temperatures: \"the room must end up at the enthalpy-weighted mean … expected 314.648… K …"
+            + " measured 293.001 K\", 2026-09-30. The four premises are arrangements and are not witnessed.")
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
         int cx = stand("a hot room with a combining separator in it");
@@ -135,11 +138,13 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * half — without it the assertion would also pass on an implementation where nothing happened at
      * all.</p>
      *
-     * <p>red-witnessed: with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on
-     * every draw: "what is left is the same gas at the same temperature — removing part of a body
-     * does not cool the rest: … \"airTempMilliK\":361749", 2026-09-30. The three premises are
-     * arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-18 (Drawing gas out leaves the temperature alone and lowers the capacity).
      */
+    @Pins("INV-HEAT-18")
+    @LegacyWitness(prose = "with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on"
+            + " every draw: \"what is left is the same gas at the same temperature — removing part of a body"
+            + " does not cool the rest: … \\\"airTempMilliK\\\":361749\", 2026-09-30. The three premises are"
+            + " arrangements and are not witnessed.")
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
         int cx = stand("a hot room with a splitting separator in it");
@@ -174,13 +179,15 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * number it was holding when it still had air in it. A stale reading here would hand the failure
      * ladder a hot compartment where there is nothing to be hot.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: "a zone
-     * holding nothing must read ambient, not what it was at when it still had air: … \"airO2\":0 …
-     * expected:&lt;293000&gt; but was:&lt;400000&gt;". NO HEAT — {@code AirState#getHeatCapacity} at {@code return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;} giving air a
-     * heat capacity whatever its pressure: "and must hold no heat at all: … \"airO2\":0 …
-     * expected:&lt;0&gt; but was:&lt;760&gt;". The hot-room and empty-room premises are arrangements
-     * and are not witnessed.</p>
+     * Pins INV-HEAT-19 (A zone holding no gas reports ambient and no capacity, rather than the temperature it was at when it still had air).
      */
+    @Pins("INV-HEAT-19")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: \"a zone"
+            + " holding nothing must read ambient, not what it was at when it still had air: … \\\"airO2\\\":0 …"
+            + " expected:&lt;293000&gt; but was:&lt;400000&gt;\". NO HEAT — {@code AirState#getHeatCapacity} at {@code return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;} giving air a"
+            + " heat capacity whatever its pressure: \"and must hold no heat at all: … \\\"airO2\\\":0 …"
+            + " expected:&lt;0&gt; but was:&lt;760&gt;\". The hot-room and empty-room premises are arrangements"
+            + " and are not witnessed.")
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {
         int cx = stand("a hot room pumped down to vacuum");
@@ -213,23 +220,23 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     private void buildRoomWithVent(int cx, int ventOxygenMb) throws Exception {
         int by = cy, bz = cz;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").requireOk();
 
         place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
         if (ventOxygenMb > 0) {
-            arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen " + ventOxygenMb);
+            arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen " + ventOxygenMb).requireOk();
         }
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
         forceTick(cx, 5);
     }
 
@@ -237,8 +244,8 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     private void runCombinerInto(int cx) throws Exception {
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cy + " " + cz + " oxygen 8000");
-        Reply flip = ask("stellurgytest block activate 0 " + (cx + 1) + " " + cy + " " + cz + " true");
+        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cy + " " + cz + " oxygen 8000").requireOk();
+        Reply flip = act("stellurgytest block activate 0 " + (cx + 1) + " " + cy + " " + cz + " true");
         assertTrue("sneak-click failed: " + flip, flip.bool("handled"));
         forceTick(cx + 1, COMBINER_TICKS);
     }
@@ -248,14 +255,14 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
@@ -264,14 +271,14 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
 
     /** Force-ticks a machine and CHECKS it was there: a missing tile reads exactly like inaction. */
     private void forceTick(int x, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + x + " " + cy + " " + cz + " " + ticks);
+        act("stellurgytest tile force-tick 0 " + x + " " + cy + " " + cz + " " + ticks).requireOk();
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private int configInt(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).integer("value");
+        return read("stellurgytest config get " + key).requireOk().integer("value");
     }
 }

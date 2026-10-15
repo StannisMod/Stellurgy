@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.integration.jei.gasgiants;
 
-import mezz.jei.api.IJeiHelpers;
-import net.minecraftforge.fluids.FluidStack;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import mezz.jei.api.IJeiHelpers;
+import net.minecraftforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.Arrays;

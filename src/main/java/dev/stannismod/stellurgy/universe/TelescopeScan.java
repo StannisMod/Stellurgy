@@ -1,22 +1,21 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.IntConsumer;
-import java.util.function.IntFunction;
-
-import net.minecraft.item.ItemStack;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.item.ItemMemoryCrystal;
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import net.minecraft.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
 
 /**
  * Turns a pointing into addresses a ship can navigate by.

@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
-import com.github.stannismod.forge.testing.client.ClientBot;
+import com.github.stannismod.forge.testing.client.ClientReads;
 
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
@@ -54,7 +54,7 @@ public final class ClientEvents {
      * a block: a placement above the surface may settle onto it.</p>
      *
      * <p>Static, and here rather than on a base class, because the tier has TWO hierarchies — the
-     * shared Stellurgy bases and the harness's own {@code AbstractClientE2ETest} — and this is the third
+     * shared Stellurgy bases and the harness's own {@code AbstractOwnBootClientTest} — and this is the third
      * time a wait that belongs to both has been solved by copying it into each.</p>
      *
      * @param clientLog the CLIENT's log ({@link #of})
@@ -92,7 +92,7 @@ public final class ClientEvents {
      *
      * <p>Static and here for the reason {@link #awaitPlacedNear} is: both hierarchies need it.</p>
      */
-    public static void placeOntoGroundItHolds(ClientBot bot, Events clientLog, Events.Probe server,
+    public static void placeOntoGroundItHolds(ClientReads bot, Events clientLog, Events.Probe server,
                                               String placeCommand, double x, double y, double z,
                                               String what, int tickBudget) throws Exception {
         int fx = (int) Math.floor(x), fz = (int) Math.floor(z);
@@ -276,11 +276,11 @@ public final class ClientEvents {
      * packets — so a deadline counted in the bot's ticks alone runs out while a lagging server has
      * not sent anything yet.
      */
-    public static Events of(ClientBot bot, Events.Step step, EvictionReports evictions) {
+    public static Events of(ClientReads bot, Events.Step step, EvictionReports evictions) {
         return new Events(probe(bot), step, evictions);
     }
 
-    private static Events.Probe probe(ClientBot bot) {
+    private static Events.Probe probe(ClientReads bot) {
         return command -> {
             if (Events.MARK_COMMAND.equals(command)) {
                 return String.valueOf(bot.eventMark());

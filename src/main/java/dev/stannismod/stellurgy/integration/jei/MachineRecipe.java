@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei;
 
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceItemStack;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.Recipe;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeWrapper;
 import net.minecraft.client.Minecraft;
@@ -7,9 +10,6 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceItemStack;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.Recipe;
 
 import java.awt.*;
 import java.util.ArrayList;

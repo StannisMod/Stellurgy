@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.compat;
 
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.libvulpes.Configuration;
 import dev.stannismod.stellurgy.libvulpes.tile.energy.TilePlugInputGregTech;
 import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
+import net.minecraft.util.EnumFacing;
 
 public class GTEnergyCapability implements gregtech.api.capability.IEnergyContainer {
 

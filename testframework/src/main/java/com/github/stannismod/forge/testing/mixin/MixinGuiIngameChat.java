@@ -1,15 +1,13 @@
 package com.github.stannismod.forge.testing.mixin;
 
+import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
 import net.minecraft.client.gui.GuiIngame;
 import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.ITextComponent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
 
 /**
  * Records {@code client_chat_received}: a chat line, system message or action-bar text has been

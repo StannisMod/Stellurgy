@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * Puts an ABOARD body's EYE where its camera actually renders from.

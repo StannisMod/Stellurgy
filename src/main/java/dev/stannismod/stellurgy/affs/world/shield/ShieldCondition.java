@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.affs.world.shield;
 
 import dev.stannismod.stellurgy.affs.config.ModConfig;
+import dev.stannismod.stellurgy.damage.DamageState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.damage.DamageState;
 
 /**
  * What a shield block's CONDITION does to what it delivers.

@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-
-import dev.stannismod.stellurgy.test.Plot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -62,7 +62,7 @@ import static org.junit.Assert.assertTrue;
  * {@code OreScannerRightClickClientE2ETest}, {@code ItemHovercraftSpawnE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
+public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * How near straight down the client must be looking before the click, in degrees of pitch.
@@ -108,7 +108,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         int cz = z >> 4;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                exec("stellurgytest chunk forceload " + plot().dim + " " + (cx + dx) + " " + (cz + dz));
+                arrange("stellurgytest chunk forceload " + plot().dim + " " + (cx + dx) + " " + (cz + dz));
             }
         }
     }
@@ -240,7 +240,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().arranging("give the atmosphere analyser and wait for the client to render it");
         bot().waitForWorld();
         long equipMark = clientEvents().mark();
-        String give = exec("stellurgytest player give-held stellurgy:atmanalyser");
+        String give = arrange("stellurgytest player give-held stellurgy:atmanalyser").raw();
         scenario().requireArranged("give-held atmanalyser must succeed: " + give,
                 Reply.of(give).ok());
         awaitHeld(equipMark, "stellurgy:atmanalyser");
@@ -294,7 +294,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         bot().waitForWorld();
 
         long equipMark = clientEvents().mark();
-        String equip = exec("stellurgytest player equip-biomechanger " + plot().dim);
+        String equip = arrange("stellurgytest player equip-biomechanger " + plot().dim).raw();
         scenario().requireArranged("equip-biomechanger must succeed: " + equip,
                 Reply.of(equip).ok());
         Reply satMReply = Reply.of(equip);
@@ -307,7 +307,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().measuring("the satellite's queue before the click");
         int posBefore = extractInt(
-                exec("stellurgytest satellite poslist-size " + plot().dim + " " + satId), POSLIST_SIZE);
+                read("stellurgytest satellite poslist-size " + plot().dim + " " + satId).raw(), POSLIST_SIZE);
         scenario().record("posListBefore", posBefore);
 
         scenario().asserting("the right-click queues positions into the satellite's posList");
@@ -326,7 +326,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
                 + queued, Events.anyRecordHas(queued, "remote", "false"));
 
         int posAfter = extractInt(
-                exec("stellurgytest satellite poslist-size " + plot().dim + " " + satId), POSLIST_SIZE);
+                read("stellurgytest satellite poslist-size " + plot().dim + " " + satId).raw(), POSLIST_SIZE);
         assertTrue("right-click must queue positions into the satellite's posList "
                         + "(before=" + posBefore + ", after=" + posAfter + "); the satellite was"
                         + " asked: " + queued,
@@ -351,25 +351,24 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      * both announce themselves from INSIDE the method that is not supposed to run, and a correct
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
-     *
-     * <p>red-witnessed: with the satellite gate of {@code ItemOreScanner#onItemRightClick} at
-     * {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}
-     * removed, so an unbound
-     * scanner opens its GUI: "an unbound ore scanner must never ask the server for a GUI; GUI
-     * requests since the click: …", 2026-09-28. The same inversion first left this test GREEN while
-     * it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}
-     * substitutes {@code null} for a satellite it cannot resolve,
-     * {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at
-     * {@code inv.setSelectedSlot(-1)} dereferences it, and the exception
-     * leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as
-     * "nothing asked". It counts requests now ({@code gui_container_requested}, recorded at HEAD).</p>
      */
+    @LegacyWitness(prose = "with the satellite gate of {@code ItemOreScanner#onItemRightClick} at"
+            + " {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}"
+            + " removed, so an unbound"
+            + " scanner opens its GUI: \"an unbound ore scanner must never ask the server for a GUI; GUI"
+            + " requests since the click: …\", 2026-09-28. The same inversion first left this test GREEN while"
+            + " it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}"
+            + " substitutes {@code null} for a satellite it cannot resolve,"
+            + " {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at"
+            + " {@code inv.setSelectedSlot(-1)} dereferences it, and the exception"
+            + " leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as"
+            + " \"nothing asked\". It counts requests now ({@code gui_container_requested}, recorded at HEAD).")
     @Test
     public void rightClickWithEmptySatelliteIdOpensNoGuiAndDoesNotCrash() throws Exception {
         scenario().arranging("equip an ore scanner with no satellite bound");
         bot().waitForWorld();
         long equipMark = clientEvents().mark();
-        String equip = exec("stellurgytest player equip-orescanner none");
+        String equip = arrange("stellurgytest player equip-orescanner none").raw();
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 Reply.of(equip).ok());
         scenario().requireArranged("empty branch must report hadSatelliteId:false: " + equip,
@@ -416,7 +415,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().arranging("register an ore-mapping satellite and equip a scanner bound to it");
         bot().waitForWorld();
         long equipMark = clientEvents().mark();
-        String equip = exec("stellurgytest player equip-orescanner " + plot().dim);
+        String equip = arrange("stellurgytest player equip-orescanner " + plot().dim).raw();
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 Reply.of(equip).ok());
         scenario().requireArranged("resolved branch must report hadSatelliteId:true: " + equip,
@@ -470,15 +469,19 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      *
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
-     *
-     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick} at
-     * {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:
-     * "a right-click at a block must reach the server and spawn the hovercraft into the world — no
-     * `entity_joined_world` was recorded within 200 ticks", 2026-09-28. (A census of verdicts by call
-     * pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real
-     * verdict after the rewritten wait is this chain.)</p>
      */
+    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick} at"
+            + " {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:"
+            + " \"a right-click at a block must reach the server and spawn the hovercraft into the world — no"
+            + " `entity_joined_world` was recorded within 200 ticks\", 2026-09-28. (A census of verdicts by call"
+            + " pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real"
+            + " verdict after the rewritten wait is this chain.)")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(1);",
+            why = "one client tick — the one in which the client REPORTS the new look. Vanilla sends a changed"
+                    + " rotation from the player's own update, once per tick, and the harness counts a tick at"
+                    + " its END, after that update; the click below leaves on the same connection after it, so"
+                    + " the server has the look when it ray-traces the click.")
     public void rightClickAtTargetBlockSpawnsHovercraftAndConsumesStack() throws Exception {
         int dim = plot().dim;
         int x = plot().x(FIXTURE_DX);
@@ -487,15 +490,15 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().arranging("place the stone target at " + x + "," + Y + "," + z);
         bot().waitForWorld();
         forceLoadAround(x, z);
-        String placeResp = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " minecraft:stone");
+        String placeResp = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " minecraft:stone").raw();
         scenario().requireArranged("place must not error; resp=" + placeResp,
                 !Reply.of(placeResp).has("error"));
 
         scenario().arranging("stand the survival player two blocks above it, holding the item");
         long equipMark = clientEvents().mark();
-        String give = exec("stellurgytest player give-held stellurgy:hovercraft");
+        String give = arrange("stellurgytest player give-held stellurgy:hovercraft").raw();
         scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
-        exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5));
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5));
         // The click below is ray-traced from where the player stands and is dispatched by the
         // CLIENT, so the placement has to have reached the client — which is a link, where the ten
         // ticks that stood here were a guess at a round trip.
@@ -505,10 +508,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         // has been falling through open air in creative, which skips fall damage but not the
         // distance, so switching first and stepping onto the stone afterwards landed every block of
         // it — a death whenever the arrangement ran slowly.
-        String fallReset = exec("stellurgytest player set-fall-distance 0");
+        String fallReset = arrange("stellurgytest player set-fall-distance 0").raw();
         scenario().requireArranged("clearing the fall distance must succeed: " + fallReset,
                 Reply.of(fallReset).ok());
-        exec("gamemode survival @a");
+        arrange("gamemode survival @a");
         awaitHeld(equipMark, "stellurgy:hovercraft");
 
         // The stimulus is ray-traced SERVER-side from the player's look, so the aim has to have
@@ -527,10 +530,6 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("the client must be looking straight down before the click, or"
                 + " the item's 5-block ray traces into empty air; client pitch=" + pitch,
                 pitch > LOOKING_STRAIGHT_DOWN_DEG);
-        // STIMULUS: one client tick — the one in which the client REPORTS the new look. Vanilla sends
-        // a changed rotation from the player's own update, once per tick, and the harness counts a
-        // tick at its END, after that update; the click below leaves on the same connection after
-        // it, so the server has the look when it ray-traces the click.
         bot().waitWorldTicks(1);
 
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
@@ -589,11 +588,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>The absence's positive half is the click itself: {@code right_click_item} carrying the
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
-     *
-     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at
-     * {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: "no hovercraft must be spawned on an empty ray-trace; entities that
-     * joined the server world since the click: …", 2026-09-28.</p>
      */
+    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at"
+            + " {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: \"no hovercraft must be spawned on an empty ray-trace; entities that"
+            + " joined the server world since the click: …\", 2026-09-28.")
     @Test
     public void rightClickIntoEmptyAirReturnsPassWithoutSpawn() throws Exception {
         int x = plot().x(FIXTURE_DX);
@@ -602,13 +600,13 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().arranging("stand the survival player in open sky with the item in hand");
         bot().waitForWorld();
         forceLoadAround(x, z);
-        exec("gamemode survival @a");
+        arrange("gamemode survival @a");
         long equipMark = clientEvents().mark();
-        String give = exec("stellurgytest player give-held stellurgy:hovercraft");
+        String give = arrange("stellurgytest player give-held stellurgy:hovercraft").raw();
         scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
         // 200 is 50 blocks above the plot's own fixture level, and nothing is ever placed there —
         // so the upward ray has nothing to hit that belongs to this scenario or any other.
-        exec("tp @a " + (x + 0.5) + " 200 " + (z + 0.5));
+        arrange("tp @a " + (x + 0.5) + " 200 " + (z + 0.5)).raw();
         awaitClientPlacedNear(equipMark, x + 0.5, z + 0.5,
                 "the player must be up in the empty air ON THE CLIENT before he clicks: the ray"
                         + " this scenario needs to hit nothing is cast from where the client stands");
@@ -675,7 +673,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("hand the player a space station chip");
         long equipMark = clientEvents().mark();
-        String equip = exec("stellurgytest player equip-stationchip");
+        String equip = arrange("stellurgytest player equip-stationchip").raw();
         scenario().requireArranged("equip-stationchip must succeed: " + equip, Reply.of(equip).ok());
         awaitHeld(equipMark, chip);
         try {
@@ -691,6 +689,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         }
     }
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(6);",
+            why = "the sneak is held across client ticks before the use, because the client publishes sneaking"
+                    + " from its own tick; one connection delivers in order, so the server reads the sneak"
+                    + " before the use packet that follows it.")
     private void chipOpensAndReopens(int modularFullScreenId, int leftShift) throws Exception {
         scenario().measuring("sneak-right-click opens the chip's modular GUI");
         Events events = serverEvents();
@@ -698,9 +700,6 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         long openOnClient = clientEvents().mark();
         bot().setKey(leftShift, true);
         try {
-            // STIMULUS: the sneak is held across client ticks before the use, because the client
-            // publishes sneaking from its own tick; one connection delivers in order, so the server
-            // reads the sneak before the use packet that follows it.
             bot().waitWorldTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"

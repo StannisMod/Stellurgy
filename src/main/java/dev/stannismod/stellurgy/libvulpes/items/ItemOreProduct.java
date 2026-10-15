@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.items;
 
+import dev.stannismod.stellurgy.libvulpes.api.material.Material;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
@@ -11,7 +12,6 @@ import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.libvulpes.api.material.Material;
 
 import javax.annotation.Nonnull;
 import java.util.HashMap;

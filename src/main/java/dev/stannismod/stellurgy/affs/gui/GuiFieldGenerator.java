@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.affs.gui;
 
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius;
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import net.minecraft.client.gui.GuiButton;

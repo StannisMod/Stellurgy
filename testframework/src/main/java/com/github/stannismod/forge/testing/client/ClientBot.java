@@ -1,41 +1,36 @@
 package com.github.stannismod.forge.testing.client;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Objects;
 
-public final class ClientBot implements Closeable {
+import static com.github.stannismod.forge.testing.client.ClientChannel.command;
 
-    private final Socket socket;
-    private final BufferedReader reader;
-    private final BufferedWriter writer;
-
-    /**
-     * What the channel was last asked, when it last ANSWERED, and how many answers it has given.
-     *
-     * <p>These exist for one purpose: a read that times out must be able to say something about the
-     * SUBJECT. Measured 2026-09-21 — a full-tier run lost a test to a bare
-     * {@code SocketTimeoutException} whose stack named {@code SocketInputStream.read} and nothing
-     * else, which is indistinguishable from the outside between a busy box and a client wedged by
-     * the very thing under test. Every occurrence then costs a triage that cannot conclude.</p>
-     *
-     * <p>Written and read only under the {@code writer} monitor or immediately around the read that
-     * follows it, on the one thread that owns this channel.</p>
-     */
-    private volatile String lastCommandSent = "(none yet)";
-    private volatile long lastAnswerNanos = System.nanoTime();
-    private volatile long answersReceived;
+/**
+ * The harness's hands and eyes on a real client — ALL of them, for a mechanics test.
+ *
+ * <p><b>What each command IS</b> — an act through the input pipeline, a read, the harness's own, or a
+ * bypass that names its target or writes what a player's input would have produced — is decided in ONE
+ * place, the client bridge's {@code BridgeCommand}, which is what a client in e2e mode refuses by. Until
+ * 2026-10-08 it was a javadoc table here, read by a text scan; a table nothing executes can be flipped
+ * without anything noticing.</p>
+ *
+ * <p><b>Three views of one client.</b> {@link #input()} is a player's input and nothing else
+ * ({@link PlayerInput}); this class is also the client's {@link ClientReads}; and the rest of its verbs
+ * are the shortcuts a mechanics test may take because the input pipeline is not its subject —
+ * {@link #interactBlock}, {@link #useItem}, {@link #sendChat} and the direct screen calls. An e2e is
+ * handed the first two and never this class, so it cannot name a shortcut at all.</p>
+ *
+ * <p>The direct screen verbs here ({@link #setKey}, {@link #clickButtonAt}, {@link #clickSlotAt},
+ * {@link #pressScreenKey}, {@link #typeText}, …) call the screen's or the binding's methods themselves.
+ * Their {@link PlayerInput} namesakes put the same input through the game's own input loop instead.</p>
+ */
+public final class ClientBot implements Closeable, ClientReads {
 
     /**
      * How long the bot waits for a reply — and the OUTER budget of the whole bridge.
@@ -53,17 +48,32 @@ public final class ClientBot implements Closeable {
      */
     public static final long READ_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
 
-    ClientBot(Socket socket) throws IOException {
-        this.socket = socket;
-        this.socket.setTcpNoDelay(true);
-        this.socket.setSoTimeout((int) READ_TIMEOUT_MILLIS);
-        this.reader = new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-        this.writer = new BufferedWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-        awaitReady(Duration.ofMinutes(2));
+    private final ClientChannel channel;
+    private final ReadVerbs reads;
+    private final PlayerInput input;
+
+    /**
+     * @param walkServer the e2e's server, told once that the player's walk has begun before his first input
+     *                   reaches this client ({@link PlayerInput}); {@code null} for a client that serves no e2e
+     */
+    ClientBot(Socket socket, com.github.stannismod.forge.testing.server.TestClient walkServer) throws IOException {
+        this.channel = new ClientChannel(socket);
+        this.reads = new ReadVerbs(channel);
+        this.input = new PlayerInput(channel, walkServer);
+    }
+
+    /** This client's reads alone, as a type that cannot be cast into anything that acts. */
+    public ClientReads reads() {
+        return reads;
+    }
+
+    /** A player's input to this client — see {@link PlayerInput}. */
+    public PlayerInput input() {
+        return input;
     }
 
     public void waitForWorld() throws IOException {
-        assertOk(execute(command("wait_world")));
+        channel.call(command("wait_world"));
     }
 
     /**
@@ -79,7 +89,7 @@ public final class ClientBot implements Closeable {
      * a second client instead.</p>
      */
     public void reconnect() throws IOException {
-        assertOk(execute(command("reconnect")));
+        channel.call(command("reconnect"));
     }
 
     /**
@@ -90,7 +100,7 @@ public final class ClientBot implements Closeable {
      * server address is remembered inside the client for that later connect.
      */
     public void disconnect() throws IOException {
-        assertOk(execute(command("disconnect")));
+        channel.call(command("disconnect"));
     }
 
     /**
@@ -100,29 +110,27 @@ public final class ClientBot implements Closeable {
      * this cannot span a server restart (each harness boot reserves a fresh port).
      */
     public void connect() throws IOException {
-        assertOk(execute(command("connect")));
+        channel.call(command("connect"));
     }
 
+    @Override
     public void waitTicks(int ticks) throws IOException {
-        JsonObject command = command("wait_ticks");
-        command.addProperty("ticks", ticks);
-        assertOk(execute(command));
+        reads.waitTicks(ticks);
     }
 
     /**
      * Only the ticks on which the player can act: {@link #waitTicks} also counts the menu and the
      * terrain screen. Its failure says whether the client stopped ticking or ticked without a world.
      */
+    @Override
     public void waitWorldTicks(int ticks) throws IOException {
-        JsonObject command = command("wait_world_ticks");
-        command.addProperty("ticks", ticks);
-        assertOk(execute(command));
+        reads.waitWorldTicks(ticks);
     }
 
     public void selectHotbar(int slot) throws IOException {
         JsonObject command = command("select_hotbar");
         command.addProperty("slot", slot);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void rightClickBlock(int x, int y, int z, EnumFacing face, EnumHand hand) throws IOException {
@@ -132,28 +140,29 @@ public final class ClientBot implements Closeable {
         command.addProperty("z", z);
         command.addProperty("face", face.name());
         command.addProperty("hand", hand.name());
-        assertOk(execute(command));
+        channel.call(command);
     }
 
+    /** The screen's own {@code mouseClicked} at a point, called directly — a press without a release. */
     public void clickScreenPoint(int x, int y, int button) throws IOException {
         JsonObject command = command("click_screen_point");
         command.addProperty("x", x);
         command.addProperty("y", y);
         command.addProperty("button", button);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void clickButton(int index) throws IOException {
         JsonObject command = command("click_button");
         command.addProperty("index", index);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void clickButtonAtRatio(int index, double ratio) throws IOException {
         JsonObject command = command("click_button_ratio");
         command.addProperty("index", index);
         command.addProperty("ratio", ratio);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     /**
@@ -163,8 +172,9 @@ public final class ClientBot implements Closeable {
      * {@code id} (assigned by the mod, not the list position) to drive
      * {@link #clickButtonById(int)}.
      */
+    @Override
     public JsonObject reportButtons() throws IOException {
-        return assertOk(execute(command("report_buttons")));
+        return reads.reportButtons();
     }
 
     /**
@@ -175,7 +185,42 @@ public final class ClientBot implements Closeable {
     public void clickButtonById(int id) throws IOException {
         JsonObject command = command("click_button_id");
         command.addProperty("id", id);
-        assertOk(execute(command));
+        channel.call(command);
+    }
+
+    /**
+     * Clicks the button whose {@code GuiButton.id} equals {@code id} at its point: the cursor is put at
+     * the button's centre and the screen's own {@code mouseClicked} and {@code mouseReleased} are called
+     * there, so the screen decides what is under the point. The id only FINDS the point. Fails if no such
+     * button exists or it is hidden or disabled. {@link PlayerInput#clickButtonAt} is the same click
+     * through the game's input loop.
+     */
+    public JsonObject clickButtonAt(int id) throws IOException {
+        JsonObject command = command("click_button_at");
+        command.addProperty("id", id);
+        return channel.call(command);
+    }
+
+    /**
+     * Clicks a container slot at the slot's centre on screen, press and release called directly on the
+     * screen, so {@code GuiContainer} decides which slot is hit and what the click does with the held
+     * stack. {@link PlayerInput#clickSlotAt} is the same click through the game's input loop.
+     */
+    public JsonObject clickSlotAt(int slot, int button) throws IOException {
+        JsonObject command = command("click_slot_at");
+        command.addProperty("slot", slot);
+        command.addProperty("button", button);
+        return channel.call(command);
+    }
+
+    /**
+     * Presses a key on the open screen through its own {@code keyTyped}, called directly — escape
+     * ({@code Keyboard.KEY_ESCAPE}) closes it by whatever that screen does with escape.
+     */
+    public void pressScreenKey(int keyCode) throws IOException {
+        JsonObject command = command("press_screen_key");
+        command.addProperty("keyCode", keyCode);
+        channel.call(command);
     }
 
     /**
@@ -184,8 +229,9 @@ public final class ClientBot implements Closeable {
      * {@code y}, {@code playerSlot} (true for the player-inventory portion),
      * {@code hasStack}, {@code item} (registry name) and {@code count}.
      */
+    @Override
     public JsonObject reportSlots() throws IOException {
-        return assertOk(execute(command("report_slots")));
+        return reads.reportSlots();
     }
 
     /**
@@ -199,7 +245,7 @@ public final class ClientBot implements Closeable {
         command.addProperty("slot", slot);
         command.addProperty("button", button);
         command.addProperty("mode", mode);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void dragScreenPoint(int startX, int startY, int endX, int endY, int button) throws IOException {
@@ -209,26 +255,26 @@ public final class ClientBot implements Closeable {
         command.addProperty("endX", endX);
         command.addProperty("endY", endY);
         command.addProperty("button", button);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void focusField(String fieldName) throws IOException {
         JsonObject command = command("focus_field");
         command.addProperty("field", fieldName);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void typeText(String text) throws IOException {
         JsonObject command = command("type_text");
         command.addProperty("text", text);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     public void pressEnterAfterTyping(String text) throws IOException {
         JsonObject command = command("type_text");
         command.addProperty("text", text);
         command.addProperty("pressEnter", true);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     /**
@@ -236,8 +282,9 @@ public final class ClientBot implements Closeable {
      * and — when a world is loaded — the {@code dimension} it renders and that world's
      * {@code worldType} name, as the client learned it from the join/respawn packet.
      */
+    @Override
     public JsonObject reportState() throws IOException {
-        return assertOk(execute(command("report_state")));
+        return reads.reportState();
     }
 
     /**
@@ -248,17 +295,17 @@ public final class ClientBot implements Closeable {
      * CLIENT actually renders — distinct from a server-side entity query — so it
      * catches client-side position-sync / interpolation regressions.
      */
+    @Override
     public JsonObject reportRidingEntity() throws IOException {
-        return assertOk(execute(command("report_riding_entity")));
+        return reads.reportRidingEntity();
     }
 
     /**
-     * Injects a real key-binding press/release on the client, exactly as the
-     * keyboard would. Drives {@code KeyBinding.isKeyDown()} (held movement keys),
-     * a single {@code isPressed()} edge, and Forge's {@code InputEvent.KeyInputEvent}
-     * (fired per key event by the real keyboard loop), so mod input handlers fire
-     * their real packet path whether they poll on {@code ClientTickEvent} or
-     * subscribe to {@code KeyInputEvent} — not a server-side shortcut.
+     * Writes a key-binding's state on the client directly: {@code KeyBinding.isKeyDown()} (held
+     * movement keys), a single {@code isPressed()} edge, and Forge's {@code InputEvent.KeyInputEvent}, so
+     * mod input handlers fire their real packet path whether they poll on {@code ClientTickEvent} or
+     * subscribe to {@code KeyInputEvent}. It does this whether or not a screen is open, which a real key
+     * does not; {@link PlayerInput#setKey} puts the key through the game's own input loop instead.
      *
      * <p>The event carries no key code (it never did): a handler that reads
      * {@code Keyboard.getEventKey()} directly instead of polling its own
@@ -271,7 +318,7 @@ public final class ClientBot implements Closeable {
         JsonObject command = command("set_key");
         command.addProperty("keyCode", keyCode);
         command.addProperty("pressed", pressed);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     /** Convenience: hold a key down ({@link #setKey(int, boolean) setKey(keyCode, true)}). */
@@ -296,10 +343,7 @@ public final class ClientBot implements Closeable {
      * @param pitch absolute pitch in degrees (negative = up, MC convention)
      */
     public void setLook(float yaw, float pitch) throws IOException {
-        JsonObject command = command("set_look");
-        command.addProperty("yaw", yaw);
-        command.addProperty("pitch", pitch);
-        assertOk(execute(command));
+        input.setLook(yaw, pitch);
     }
 
     /**
@@ -314,10 +358,7 @@ public final class ClientBot implements Closeable {
      * pitch clamped to +-90.</p>
      */
     public void turnLook(float deltaYaw, float deltaPitch) throws IOException {
-        JsonObject command = command("turn_look");
-        command.addProperty("deltaYaw", deltaYaw);
-        command.addProperty("deltaPitch", deltaPitch);
-        assertOk(execute(command));
+        input.turnLook(deltaYaw, deltaPitch);
     }
 
     /**
@@ -330,10 +371,7 @@ public final class ClientBot implements Closeable {
      * @param fieldName a static field on that class or a superclass
      */
     public JsonObject readStaticField(String className, String fieldName) throws IOException {
-        JsonObject command = command("read_static_field");
-        command.addProperty("className", className);
-        command.addProperty("fieldName", fieldName);
-        return assertOk(execute(command));
+        return reads.readStaticField(className, fieldName);
     }
 
     /**
@@ -343,32 +381,22 @@ public final class ClientBot implements Closeable {
      * cannot be read from a test, but the state it draws from can. Answers {@code present},
      * {@code tile} (class name) and {@code nbt} (the update tag, stringified).</p>
      */
+    @Override
     public JsonObject tileNbt(int x, int y, int z) throws IOException {
-        JsonObject command = command("tile_nbt");
-        command.addProperty("x", x);
-        command.addProperty("y", y);
-        command.addProperty("z", z);
-        return assertOk(execute(command));
+        return reads.tileNbt(x, y, z);
     }
 
     /**
      * Call a static {@code void}/value method with {@code int} parameters on the CLIENT thread.
      *
-     * <p>The mouse counterpart of {@link #setKey}: a bot has no window, so it cannot feed LWJGL's
-     * mouse queue any more than it can feed the key queue. Pointing this at the mod's own raw-delta
-     * entry point runs exactly the code a real mouse move runs.</p>
+     * <p>Pointing this at the mod's own raw-delta entry point runs exactly the code a real mouse move
+     * runs, and pointing it at a test recorder reads that recorder. It calls whatever it is handed, so a
+     * client in e2e mode refuses it on any class outside the packages the run admits.</p>
      */
+    @Override
     public JsonObject invokeStaticInt(String className, String methodName, int... args)
             throws IOException {
-        JsonObject command = command("invoke_static_int");
-        command.addProperty("className", className);
-        command.addProperty("methodName", methodName);
-        com.google.gson.JsonArray intArgs = new com.google.gson.JsonArray();
-        for (int arg : args) {
-            intArgs.add(arg);
-        }
-        command.add("intArgs", intArgs);
-        return assertOk(execute(command));
+        return reads.invokeStaticInt(className, methodName, args);
     }
 
     /**
@@ -382,10 +410,9 @@ public final class ClientBot implements Closeable {
      * @return {@code path}, {@code exists}, {@code bytes}, {@code width}, {@code height}, and
      *         {@code framebuffer} (whether the FBO capture path was used)
      */
+    @Override
     public JsonObject screenshot(String name) throws IOException {
-        JsonObject command = command("screenshot");
-        command.addProperty("name", name);
-        return assertOk(execute(command));
+        return reads.screenshot(name);
     }
 
     /**
@@ -408,7 +435,7 @@ public final class ClientBot implements Closeable {
     public JsonObject setFramebuffer(boolean enabled) throws IOException {
         JsonObject command = command("set_framebuffer");
         command.addProperty("enabled", enabled);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
@@ -427,7 +454,7 @@ public final class ClientBot implements Closeable {
     public JsonObject setRenderDistance(int chunks) throws IOException {
         JsonObject command = command("set_render_distance");
         command.addProperty("chunks", chunks);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
@@ -446,7 +473,7 @@ public final class ClientBot implements Closeable {
     public JsonObject setFrameRate(int fps) throws IOException {
         JsonObject command = command("set_frame_rate");
         command.addProperty("fps", fps);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
@@ -461,7 +488,7 @@ public final class ClientBot implements Closeable {
     public JsonObject setHudHidden(boolean hidden) throws IOException {
         JsonObject command = command("set_hud_hidden");
         command.addProperty("hidden", hidden);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
@@ -472,7 +499,7 @@ public final class ClientBot implements Closeable {
      * {@code EnumActionResult} name under {@code result}.
      */
     public JsonObject useItem() throws IOException {
-        return assertOk(execute(command("use_item")));
+        return channel.call(command("use_item"));
     }
 
     /**
@@ -483,10 +510,9 @@ public final class ClientBot implements Closeable {
      * / the GAME_INFO chat type, which never enters the chat list) — and
      * {@code overlayTicks} (&gt; 0 while it is still on screen).
      */
+    @Override
     public JsonObject reportChat(int limit) throws IOException {
-        JsonObject command = command("report_chat");
-        command.addProperty("limit", limit);
-        return assertOk(execute(command));
+        return reads.reportChat(limit);
     }
 
     /**
@@ -494,8 +520,9 @@ public final class ClientBot implements Closeable {
      * stacks ({@code id}, {@code count}, {@code nbt} string). This is the
      * synced state the HUD and inventory screen render from.
      */
+    @Override
     public JsonObject reportPlayerItems() throws IOException {
-        return assertOk(execute(command("report_player_items")));
+        return reads.reportPlayerItems();
     }
 
     /**
@@ -504,31 +531,17 @@ public final class ClientBot implements Closeable {
      * client actually sees the entity" — spawn sync, tracking range, render
      * presence — which no server-side query can.
      */
+    @Override
     public JsonObject reportEntities(String classContains, double radius) throws IOException {
-        JsonObject command = command("report_entities");
-        command.addProperty("classContains", classContains);
-        command.addProperty("radius", radius);
-        return assertOk(execute(command));
+        return reads.reportEntities(classContains, radius);
     }
 
     /**
-     * Right-clicks a block exactly as the player would: routes through
-     * {@code PlayerControllerMP.processRightClickBlock} on the client thread,
-     * which sends the real {@code CPacketPlayerTryUseItemOnBlock} — so the
-     * server runs its production interaction path (reach checks,
-     * {@code Block.onBlockActivated}, bed {@code trySleep}, …) with the real
-     * player. Returns the client-side {@code EnumActionResult} name under
-     * {@code result}.
-     */
-    /**
-     * Right-clicks whatever the CROSSHAIR is on, letting vanilla decide what that is.
+     * Right-clicks whatever the CROSSHAIR is on, by calling {@code Minecraft.rightClickMouse} directly.
      *
-     * <p>The difference from {@link #interactBlock} is the whole point of it. That one is TOLD which
-     * block to hit, so it can answer "does interacting with this position work" and can never answer
-     * "is the block the player interacts with the one his crosshair outlines" — the caller supplies
-     * the position under test. This calls {@code Minecraft.rightClickMouse}, which reads
-     * {@code mc.objectMouseOver} itself, so the dispatch under test is vanilla's own rather than a
-     * copy of it living in the harness.</p>
+     * <p>The difference from {@link #interactBlock} is that vanilla decides what is hit, from
+     * {@code mc.objectMouseOver}. The difference from a real use key is that it skips the key's press edge
+     * and its delay timer — {@link PlayerInput#setKey} with the use key (-99) is the player's form.</p>
      *
      * <p>Reports what the crosshair was on AT THE MOMENT OF THE CLICK — {@code aimedAtBlock},
      * {@code blockX}/{@code blockY}/{@code blockZ} and {@code blockBefore} (the registry id there
@@ -537,15 +550,24 @@ public final class ClientBot implements Closeable {
      * position is the ship's own subspace one, as with {@link #reportMouseOver}.</p>
      */
     public JsonObject useMouseOver() throws IOException {
-        return assertOk(execute(command("use_mouse_over")));
+        return channel.call(command("use_mouse_over"));
     }
 
+    /**
+     * Right-clicks a block named by position: routes through
+     * {@code PlayerControllerMP.processRightClickBlock} on the client thread,
+     * which sends the real {@code CPacketPlayerTryUseItemOnBlock} — so the
+     * server runs its production interaction path (reach checks,
+     * {@code Block.onBlockActivated}, bed {@code trySleep}, …) with the real
+     * player. Returns the client-side {@code EnumActionResult} name under
+     * {@code result}.
+     */
     public JsonObject interactBlock(int x, int y, int z) throws IOException {
         JsonObject command = command("interact_block");
         command.addProperty("x", x);
         command.addProperty("y", y);
         command.addProperty("z", z);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
@@ -564,8 +586,9 @@ public final class ClientBot implements Closeable {
      * collision hooks provide, so on a physics-mod ship the reported position is the
      * ship's own block position, not the rendered world one.</p>
      */
+    @Override
     public JsonObject reportMouseOver() throws IOException {
-        return assertOk(execute(command("report_mouse_over")));
+        return reads.reportMouseOver();
     }
 
     /**
@@ -575,8 +598,9 @@ public final class ClientBot implements Closeable {
      * plus {@code loadedModIds}. Lets a test pin loaded/active parity and the
      * presence/absence of specific containers at the layer the player reads.
      */
+    @Override
     public JsonObject reportMods() throws IOException {
-        return assertOk(execute(command("report_mods")));
+        return reads.reportMods();
     }
 
     /**
@@ -591,7 +615,7 @@ public final class ClientBot implements Closeable {
     public void sendChat(String message) throws IOException {
         JsonObject command = command("send_chat");
         command.addProperty("message", message);
-        assertOk(execute(command));
+        channel.call(command);
     }
 
     /**
@@ -601,12 +625,13 @@ public final class ClientBot implements Closeable {
      * {@code rainStrength} (post-SPacketChangeGameState lerp), {@code thunderStrength}.
      * If the client world isn't ready yet, only {@code worldReady=false} is set.
      */
+    @Override
     public JsonObject reportWeather() throws IOException {
-        return assertOk(execute(command("report_weather")));
+        return reads.reportWeather();
     }
 
     /**
-     * Client-side view of the spawn point for the dim the player is currently
+     * Client-side view of the spawn point for the dim the client is currently
      * in: {@code dim}, {@code worldInfoClass}, {@code spawnX/Y/Z} (what
      * {@code NetHandlerPlayClient.handleSpawnPosition} writes into
      * {@code WorldInfo}), {@code worldSpawnX/Y/Z} (the provider + world-border
@@ -619,8 +644,9 @@ public final class ClientBot implements Closeable {
      * so reading that value back means no {@code SPacketSpawnPosition} was
      * applied for the dim the client is in.</p>
      */
+    @Override
     public JsonObject reportSpawn() throws IOException {
-        return assertOk(execute(command("report_spawn")));
+        return reads.reportSpawn();
     }
 
     /**
@@ -636,8 +662,9 @@ public final class ClientBot implements Closeable {
      * {@code Assume.assumeTrue(managerLoaded)} instead of misdiagnosing).
      * Includes vanilla ambience/music — filter on the caller side.
      */
+    @Override
     public JsonObject reportSounds() throws IOException {
-        return assertOk(execute(command("report_sounds")));
+        return reads.reportSounds();
     }
 
     /**
@@ -650,31 +677,26 @@ public final class ClientBot implements Closeable {
      * number of ticks: movement is client-driven, so a client without the blocks simulates a fall
      * and carries the server's player down with it.</p>
      */
+    @Override
     public JsonObject eventMark() throws IOException {
-        return assertOk(execute(command("event_mark")));
+        return reads.eventMark();
     }
 
     /** Client events recorded at or after {@code seq}, in order; {@code type} filters, or null. */
+    @Override
     public JsonObject eventsSince(long seq, String type) throws IOException {
-        JsonObject command = command("event_since");
-        command.addProperty("seq", seq);
-        if (type != null) {
-            command.addProperty("type", type);
-        }
-        return assertOk(execute(command));
+        return reads.eventsSince(seq, type);
     }
 
     /** Resets the played-sound log consumed by {@link #reportSounds()}. */
+    @Override
     public void clearSounds() throws IOException {
-        assertOk(execute(command("clear_sounds")));
+        reads.clearSounds();
     }
 
+    @Override
     public JsonObject blockState(int x, int y, int z) throws IOException {
-        JsonObject command = command("block_state");
-        command.addProperty("x", x);
-        command.addProperty("y", y);
-        command.addProperty("z", z);
-        return assertOk(execute(command));
+        return reads.blockState(x, y, z);
     }
 
     /**
@@ -688,24 +710,25 @@ public final class ClientBot implements Closeable {
         command.addProperty("x", x);
         command.addProperty("y", y);
         command.addProperty("z", z);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     /**
      * Evaluates a no-arg reflective chain on the client (first method static on
      * {@code className}, each next called on the prior result). Reports
      * {@code result} and, when the final value is an array/Collection/Map, its
-     * {@code size}. A framework-agnostic client-state probe.
+     * {@code size}. It calls any public chain it is handed, which no package rule bounds, so a client in
+     * e2e mode refuses it outright.
      */
     public JsonObject invokeStaticChain(String className, String methods) throws IOException {
         JsonObject command = command("invoke_static_chain");
         command.addProperty("class", className);
         command.addProperty("methods", methods);
-        return assertOk(execute(command));
+        return channel.call(command);
     }
 
     public void closeScreen() throws IOException {
-        assertOk(execute(command("close_screen")));
+        channel.call(command("close_screen"));
     }
 
     /**
@@ -725,7 +748,7 @@ public final class ClientBot implements Closeable {
      * {@code clearedOverlayTicks}) so a caller can assert on the reset rather than trust it.</p>
      */
     public JsonObject resetClientState() throws IOException {
-        return assertOk(execute(command("reset_client_state")));
+        return channel.call(command("reset_client_state"));
     }
 
     /**
@@ -737,15 +760,16 @@ public final class ClientBot implements Closeable {
      * OPEN GUI: {@link #resetClientState()} closes the screen, so calling it there would destroy
      * the arrangement it was called to protect.</p>
      */
+    @Override
     public JsonObject clearChat() throws IOException {
-        return assertOk(execute(command("clear_chat")));
+        return reads.clearChat();
     }
 
     /**
      * Is the client still answering? Answers within {@code timeoutMillis} whatever the client does.
      *
      * <p>This exists because the command channel's own read timeout is <b>two minutes</b>
-     * ({@link #ClientBot} sets it). That is right for a command: a starved client thread queue
+     * ({@link #READ_TIMEOUT_MILLIS}). That is right for a command: a starved client thread queue
      * genuinely takes a long time. It is wrong for a
      * liveness question asked on a failure path, and the two death modes are not alike:</p>
      *
@@ -765,36 +789,19 @@ public final class ClientBot implements Closeable {
      *
      * @return true if the client answered a trivial command in time; false on ANY failure
      */
+    @Override
     public boolean isAlive(int timeoutMillis) {
-        int previous;
-        try {
-            previous = socket.getSoTimeout();
-        } catch (Throwable alreadyGone) {
-            return false;
-        }
-        try {
-            socket.setSoTimeout(Math.max(1, timeoutMillis));
-            execute(command("report_state"));
-            return true;
-        } catch (Throwable dead) {
-            return false;
-        } finally {
-            try {
-                socket.setSoTimeout(previous);
-            } catch (Throwable ignored) {
-                // The socket is gone; the caller already has its answer.
-            }
-        }
+        return reads.isAlive(timeoutMillis);
     }
 
     public void shutdown() throws IOException {
-        assertOk(execute(command("shutdown")));
+        channel.call(command("shutdown"));
     }
 
     @Override
     public void close() throws IOException {
         try {
-            if (socket.isConnected() && !socket.isClosed()) {
+            if (channel.isOpen()) {
                 try {
                     shutdown();
                 } catch (IOException ignored) {
@@ -802,132 +809,7 @@ public final class ClientBot implements Closeable {
                 }
             }
         } finally {
-            socket.close();
+            channel.close();
         }
-    }
-
-    private JsonObject execute(JsonObject command) throws IOException {
-        String sent = command.toString();
-        synchronized (writer) {
-            lastCommandSent = sent;
-            writer.write(sent);
-            writer.newLine();
-            writer.flush();
-        }
-
-        String line;
-        try {
-            line = reader.readLine();
-        } catch (java.net.SocketTimeoutException timedOut) {
-            throw new IOException(describeTimeout(sent), timedOut);
-        }
-        if (line == null) {
-            throw new IOException("Client bridge closed unexpectedly after " + answersReceived
-                    + " answered command(s); the last one asked was " + abbreviate(sent), null);
-        }
-        lastAnswerNanos = System.nanoTime();
-        answersReceived++;
-
-        JsonElement parsed = new JsonParser().parse(line);
-        if (!parsed.isJsonObject()) {
-            throw new IOException("Malformed client bridge response: " + line);
-        }
-        return parsed.getAsJsonObject();
-    }
-
-    /**
-     * What to say when the command channel stops answering.
-     *
-     * <p><b>It names the subject, because the exception cannot.</b> A bare
-     * {@code SocketTimeoutException} says only that a socket read expired: the same stack is
-     * produced by a loaded box, by a client that crashed mid-command, and by a client wedged by the
-     * behaviour the test is about. This prints what distinguishes them — the command that was
-     * outstanding, how long this read was allowed, how long the channel had been answering happily
-     * before it, and how many commands it had answered.</p>
-     *
-     * <p><b>Nothing is probed here, deliberately.</b> {@link #isAlive} would write to the same
-     * channel and read the next line — and after a timeout the next line may be the LATE reply to
-     * the command that just expired, which the probe would then read as its own answer. So the
-     * diagnosis is built from what is already known, and the caller is told plainly that the
-     * channel is now out of step and must not be reused.</p>
-     */
-    private String describeTimeout(String sent) {
-        long idleMillis = (System.nanoTime() - lastAnswerNanos) / 1_000_000L;
-        int budgetMillis;
-        try {
-            budgetMillis = socket.getSoTimeout();
-        } catch (IOException unreadable) {
-            budgetMillis = -1;
-        }
-        // idleMillis is taken HERE, at the timeout, so it CONTAINS this wait. Saying "before the
-        // read began" would overstate the silence by the whole budget — measured 2026-09-22 on a
-        // real timeout that printed 120012 ms against a 120000 ms budget, i.e. the channel had in
-        // fact answered 12 ms before the command went out and was healthy until it.
-        return "the client bridge did not answer within " + budgetMillis + " ms."
-                + " Outstanding command: " + abbreviate(sent) + "."
-                + " It had answered " + answersReceived + " command(s), and had been silent for "
-                + idleMillis + " ms when this read gave up — that figure INCLUDES this wait, so"
-                + " subtract the budget to see how long the channel had been quiet before the"
-                + " command went out (a small remainder means it was healthy until this one)."
-                + " THE CHANNEL IS NOW OUT OF STEP: a late reply to this command would be read as"
-                + " the answer to the next one, so this bot must not be reused."
-                + " Three things produce this and they want different fixes — a client killed or"
-                + " crashed mid-command (look for its process and its log tail), a client wedged by"
-                + " the behaviour under test (the outstanding command above says which), and a box"
-                + " so loaded that " + budgetMillis + " ms was not enough (the answered count and"
-                + " the idle time above say whether it had been keeping up).";
-    }
-
-    /** A command line, short enough to read in a stack trace and long enough to name the verb. */
-    private static String abbreviate(String line) {
-        return line.length() <= 300 ? line : line.substring(0, 300) + "… (" + line.length() + " chars)";
-    }
-
-    private JsonObject assertOk(JsonObject response) throws IOException {
-        if (!response.has("ok") || !response.get("ok").getAsBoolean()) {
-            String message = response.has("error") ? response.get("error").getAsString() : "unknown client bridge error";
-            throw new IOException(message);
-        }
-        return response;
-    }
-
-    /**
-     * Wait for the client bridge's {@code READY}.
-     *
-     * <p>{@code timeout} is APPLIED, and used to be ignored: the parameter was accepted and the
-     * read ran on whatever the socket's own timeout happened to be, so a caller asking for thirty
-     * seconds waited two minutes. The old code also reported a non-{@code READY} first line as
-     * "Timed out waiting for readiness", which is a different fault wearing the timeout's name —
-     * the two are separated here.</p>
-     */
-    private void awaitReady(Duration timeout) throws IOException {
-        int previous = socket.getSoTimeout();
-        String line;
-        try {
-            socket.setSoTimeout((int) Math.max(1L, timeout.toMillis()));
-            line = reader.readLine();
-        } catch (java.net.SocketTimeoutException timedOut) {
-            throw new IOException("the client bridge never signalled READY within "
-                    + timeout.toMillis() + " ms. Nothing has been asked of it yet, so this is the"
-                    + " client failing to come up rather than a command wedging it: look at the"
-                    + " client's own log for how far its start got.", timedOut);
-        } finally {
-            socket.setSoTimeout(previous);
-        }
-        if (line == null) {
-            throw new IOException("Client bridge disconnected before signaling readiness");
-        }
-        if ("READY".equals(line)) {
-            return;
-        }
-        throw new IOException("the client bridge's first line was not READY but "
-                + abbreviate(line) + " — the channel is speaking, and saying something else");
-    }
-
-    private static JsonObject command(String command) {
-        JsonObject object = new JsonObject();
-        object.addProperty("command", Objects.requireNonNull(command, "command"));
-        return object;
     }
 }
-

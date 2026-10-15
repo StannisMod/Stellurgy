@@ -1,24 +1,24 @@
 package dev.stannismod.stellurgy.tile.heat;
 
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraftforge.common.capabilities.Capability;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.capability.CapabilityHeatPump;
 import dev.stannismod.stellurgy.api.capability.IHeatPump;
-import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
-import dev.stannismod.stellurgy.subsystem.heat.IHeatNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
 import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
+import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
+import dev.stannismod.stellurgy.subsystem.heat.IHeatNode;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraftforge.common.capabilities.Capability;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -1,9 +1,7 @@
 package dev.stannismod.stellurgy.item;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.util.ITooltipFlag;
@@ -20,8 +18,9 @@ import net.minecraft.world.World;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.util.SealableBlockHandler;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 /**
  * Detects if a block can be used to seal a room.

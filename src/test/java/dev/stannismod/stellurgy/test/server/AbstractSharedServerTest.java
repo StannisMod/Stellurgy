@@ -6,16 +6,11 @@ import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
 import com.github.stannismod.forge.testing.junit.ScopedTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
-
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.EvictionReports;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
 
 /**
  * class-scoped harness lifecycle base class.
@@ -79,22 +74,12 @@ import dev.stannismod.stellurgy.test.Reply;
  *
  * <h2>When NOT to use this base</h2>
  *
- * <ul>
- *   <li>Persistence-restart tests (a fresh workDir / a multi-boot
- *       sequence): stay on the per-method {@link AbstractHeadlessServerTest}
- *       or manage the harness manually. <b>Such a class is a candidate for
- *       SPLITTING, never for merging</b> — the restart is its subject.</li>
- *   <li>Tests with global mutations (atmosphere density, weather state)
- *       that are hard to clean up between methods.</li>
- *   <li>Tests that depend on the server's initial registry being pristine
- *       (e.g. counting fresh registry entries). <b>The precondition is
- *       ASSERTED, not obtained by ordering</b>: JUnit 4 promises no method
- *       order, so "it runs first" is not a property a test may hold.</li>
- *   <li>A reading that only ever INCREASES. A cumulative counter cannot be
- *       reset by any {@code @Before}, so a threshold on one is satisfied by
- *       whatever ran before you, and moving the counter test-side does not
- *       help — it is cumulative because of what it COUNTS.</li>
- * </ul>
+ * <p>When a reason on the closed list
+ * {@link dev.stannismod.stellurgy.test.contract.OwnBoot.Reason} forces a boot
+ * of its own. The class then declares it with
+ * {@link dev.stannismod.stellurgy.test.contract.OwnBoot}, and the build holds
+ * the declaration. A class whose restart is its subject is a candidate for
+ * SPLITTING, never for merging.</p>
  *
  * <p><b>"It has its own config / workDir" is NOT on that list, and never
  * was an axis.</b> When seven client classes were audited for staying off
@@ -141,39 +126,71 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         return evictions;
     }
 
+    /**
+     * The game directory this class's server boots over — declared as keys and texts, not as a file.
+     *
+     * <p>Default: nothing, a bare directory. Override it when the class's premise is a galaxy declared in
+     * {@code planetDefs.xml} or a config read at boot; every scenario of the class stands in it, so
+     * scenarios needing two premises are two classes. Asked once, of the first scenario that reaches the
+     * server.</p>
+     */
+    protected void seedGameDirectory(GameDirSeed seed) throws Exception {
+        // declared by subclasses that need one; empty is the common case
+    }
+
     /** The shared server's command client. */
     protected final TestClient client() {
-        return scope.harness().client();
+        return scope.harness(this).client();
     }
 
     /** The shared harness. Available for the few cases that need the
      *  RealDedicatedServerHarness API beyond `client()`. */
     protected final RealDedicatedServerHarness harness() {
-        return scope.harness();
-    }
-
-    /** Send a command to the shared server and return the concatenated console response. */
-    protected final String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
-    /** Send a command and read its reply as DATA — refusing, naming the command, if the verb did
-     *  not answer one JSON object. */
-    protected final Reply ask(String cmd) throws Exception {
-        return Reply.of(cmd, exec(cmd));
+        return scope.harness(this);
     }
 
     /**
-     * Send a command that is a STEP OF THE ARRANGEMENT, and refuse as an arrangement failure unless
-     * the verb reported {@code ok}.
+     * Send a command that OBSERVES to the shared server, and read its reply: a probe verb's object, refusing
+     * (naming the command) if the verb did not answer one, or any other command's text. Every command is sent
+     * in a role — this, {@link #arrange} or {@link #act}; the server refuses a command its role does not admit.
      *
-     * <p>A reply dropped on the floor cannot say that the step did not happen: a fill into an
-     * unloaded world, a force-tick of a tile that is not there and an energy inject into the wrong
-     * block all answer an {@code error}, and an unread one lets the scenario go on to measure a world
-     * that was never built — and report what it measures as the mechanic.</p>
+     * <p>Where the call is a step of the arrangement, say so with {@link Reply#requireOk()}: a reply dropped
+     * on the floor cannot say that the step did not happen — a fill into an unloaded world, a force-tick of a
+     * tile that is not there and an energy inject into the wrong block all answer an {@code error}, and an
+     * unread one lets the scenario go on to measure a world that was never built.</p>
      */
+    protected final Reply read(String cmd) throws Exception {
+        return Reply.answering(cmd, client().read(cmd));
+    }
+
+    /** Send a command that SETS THE SCENE (an arrangement, a build, a decided outcome) — see {@link #read}. */
     protected final Reply arrange(String cmd) throws Exception {
-        return ask(cmd).requireOk(cmd);
+        return Reply.answering(cmd, client().arrange(cmd));
+    }
+
+    /** Send a command that CALLS a production entry a player, a tick or a packet would reach — see {@link #read}. */
+    protected final Reply act(String cmd) throws Exception {
+        return Reply.answering(cmd, client().act(cmd));
+    }
+
+    /** This test's {@link #read}, {@link #arrange} and {@link #act}, for a helper that sends in more than one role. */
+    protected final ServerCommands commands() {
+        return new ServerCommands() {
+            @Override
+            public Reply read(String command) throws Exception {
+                return AbstractSharedServerTest.this.read(command);
+            }
+
+            @Override
+            public Reply arrange(String command) throws Exception {
+                return AbstractSharedServerTest.this.arrange(command);
+            }
+
+            @Override
+            public Reply act(String command) throws Exception {
+                return AbstractSharedServerTest.this.act(command);
+            }
+        };
     }
 
     /**
@@ -210,7 +227,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         // `stellurgytest dim list` reports `DimensionManager.getRegisteredDimensions()`, the very
         // collection `/ar planet list` iterates, as a list of integers — so `DIM9` cannot match
         // `DIM90` the way a chat line could.
-        return DimList.from(this::exec).holds(dim);
+        return DimList.from(c -> read(c).raw()).holds(dim);
     }
 
     /**
@@ -218,7 +235,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
      * CALLER's: this verb is handed a field name, so it cannot know what a missing one means.
      */
     private String planetInfoField(int dim, String field) throws Exception {
-        String src = exec("stellurgytest planet info " + dim);
+        String src = read("stellurgytest planet info " + dim).raw();
         String value = Reply.of("stellurgytest planet info", src).textOr(field, null);
         if (value == null) {
             throw new AssertionError("field \"" + field + "\" not found in: " + src);
@@ -272,7 +289,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
      */
     protected final FixtureSite clearedSite(int halo, int height, String what) throws Exception {
         FixtureSite site = site();
-        site.requireClear(this::exec, halo, height, what);
+        site.requireClear(c -> arrange(c).raw(), halo, height, what);
         return site;
     }
 }

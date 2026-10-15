@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.RocketFlightMode;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.RocketFlightMode;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 /**
@@ -20,11 +19,15 @@ import static org.junit.Assert.assertSame;
  */
 public class RocketFlightModeNbtTest {
 
+    /** Pins INV-RKT-04 (RocketFlightMode DEFAULT is CLASSIC_LAUNCH so a legacy save with no flightMode key loads onto the classic path). */
+    @Pins("INV-RKT-04")
     @Test
     public void defaultIsClassicLaunch() {
         assertSame(RocketFlightMode.CLASSIC_LAUNCH, RocketFlightMode.DEFAULT);
     }
 
+    /** Pins INV-RKT-04 (RocketFlightMode DEFAULT is CLASSIC_LAUNCH so a legacy save with no flightMode key loads onto the classic path). */
+    @Pins("INV-RKT-04")
     @Test
     public void missingNbtKeyReadsDefault() {
         NBTTagCompound nbt = new NBTTagCompound();

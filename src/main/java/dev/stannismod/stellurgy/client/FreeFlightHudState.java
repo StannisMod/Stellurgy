@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.client;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.world.World;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 /**
  * A backend-agnostic snapshot of the Free Flight craft the client is piloting, so the FF HUD is
@@ -62,6 +61,11 @@ public final class FreeFlightHudState {
     public final int spoolTicks;
     /** The coarse jump phase ({@code ShipTransitManager.Phase} ordinal); 0 = not in flight. */
     public final int transitPhase;
+    /**
+     * The ship's flight computer on this client, whose last received readout the HUD's flight slice
+     * is drawn from; {@code null} for a rocket, which has no such readout.
+     */
+    public final TileAdvancedFlightComputer flightComputer;
 
     /**
      * @param cruiseReference the speed the bars are scaled against while the craft is no faster than
@@ -71,7 +75,9 @@ public final class FreeFlightHudState {
     private FreeFlightHudState(int tier, boolean inFlight, boolean flightAssistOn, boolean hasVelocity,
                               double bodyForward, double bodyRight, double bodyUp,
                               double faForward, double faRight, double faUp, double cruiseReference,
-                              int driveState, float driveCharge, int spoolTicks, int transitPhase) {
+                              int driveState, float driveCharge, int spoolTicks, int transitPhase,
+                              TileAdvancedFlightComputer flightComputer) {
+        this.flightComputer = flightComputer;
         this.driveState = driveState;
         this.driveCharge = driveCharge;
         this.spoolTicks = spoolTicks;
@@ -131,7 +137,7 @@ public final class FreeFlightHudState {
                     act[0], act[1], act[2],
                     rocket.getFaSetpointForward(), rocket.getFaSetpointRight(), rocket.getFaSetpointUp(),
                     FreeFlightPhysics.FA_SETPOINT_MAX_SPEED,
-                    0, 0f, 0, 0);
+                    0, 0f, 0, 0, null);
         }
         // The link alone is NOT evidence that a ship exists — it is a build-time intention that
         // survives a rejected assembly, so on its own it lit this entire panel (velocity readout,
@@ -150,7 +156,7 @@ public final class FreeFlightHudState {
                     setpoint[0], setpoint[1], setpoint[2],
                     TileAdvancedFlightComputer.SHIP_MAX_SPEED / 20.0,
                     dummy.getDriveState(), dummy.getDriveCharge(),
-                    dummy.getSpoolTicks(), dummy.getTransitPhase());
+                    dummy.getSpoolTicks(), dummy.getTransitPhase(), seat.getFlightComputer());
         }
         return null;
     }

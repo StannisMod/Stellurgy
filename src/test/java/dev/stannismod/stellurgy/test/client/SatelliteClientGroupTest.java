@@ -1,8 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
-import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -18,11 +19,12 @@ import static org.junit.Assert.assertTrue;
  * were single-scenario classes, each paying its own client boot.</p>
  *
  * <p>What each scenario leaves in the shared world: the deploy scenario spawns a rocket at the player
- * and seats him in it, and dismounts him before it ends; the rocket stays on its plot, which nothing
- * else visits. Every observation is scoped by a mark taken before its stimulus.</p>
+ * and seats him in it, and dismounts him before it ends; the rocket, named by the probe's reply, is
+ * disposed of by that id when the scenario ends. Every observation is scoped by a mark taken before
+ * its stimulus.</p>
  */
 @org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
-public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
+public class SatelliteClientGroupTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {
@@ -44,6 +46,11 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
      * because a disconnect and a reconnect between two samples read as a client that never left.</p>
      */
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndAllClientTicks(settleTicks);",
+            why = "a disconnect is the event that must NOT happen, so there is no record to link on; the pre-fix"
+                    + " NPE disconnected a tick or two after the decode, well inside this window. The client"
+                    + " half counts every tick, world or not: a disconnect is exactly what would take the world"
+                    + " away.")
     public void unknownSatelliteTypeOnWireDoesNotCrashClient() throws Exception {
         // The type the probe puts on the wire when none is given — nothing is registered under it.
         final String bogusType = "stellurgy:unregistered.satellite.type.repro";
@@ -55,7 +62,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("an unresolvable satellite type on the wire is dropped by the client");
         long clientMark = clientEvents().mark();
-        String announce = exec("stellurgytest satellite announce-unknown 0");
+        String announce = act("stellurgytest satellite announce-unknown 0").raw();
         assertTrue("announce-unknown probe must succeed: " + announce, Reply.of(announce).ok());
 
         // BOTH fields on ONE record: the type alone is satisfied by a lookup that RESOLVED, the
@@ -67,10 +74,6 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
                         + " unresolved — that is the branch readClient must then drop",
                 decodeBudgetTicks);
 
-        // WINDOW: a disconnect is the event that must NOT happen, so there is no record to link on;
-        // the pre-fix NPE disconnected a tick or two after the decode, well inside this window. The
-        // client half counts every tick, world or not: a disconnect is exactly what would take the
-        // world away.
         advanceServerAndAllClientTicks(settleTicks);
 
         // SILENCE-IS-THE-ANSWER: the disconnect seam runs only on a disconnect, so no instrument check
@@ -119,8 +122,9 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
         long serverMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         try {
-            String resp = exec("stellurgytest satellite deploy-unresolved");
+            String resp = act("stellurgytest satellite deploy-unresolved").raw();
             assertTrue("deploy-unresolved probe must succeed: " + resp, Reply.of(resp).ok());
+            disposeOfRocketAtEnd(Reply.of("stellurgytest satellite deploy-unresolved", resp).integer("rocketId"));
             assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted"));
 
             // Carrying the key, not the type alone: any other message in the window would satisfy a
@@ -136,7 +140,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
                     "the notice production sent must reach the pilot's chat as readable text",
                     messageBudgetTicks);
         } finally {
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount");
         }
     }
 }

@@ -1,35 +1,19 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderBody;
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.CellFrames;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.SystemBodiesProducer;
+import dev.stannismod.stellurgy.space.*;
 import dev.stannismod.stellurgy.space.SystemBodiesProducer.BodyLookup;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Pure contract of the render-body producer {@link SystemBodiesProducer#buildByDim}: it maps every
@@ -62,6 +46,8 @@ public class SystemBodiesProducerTest {
         };
     }
 
+    /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
+    @Pins("CON-C14-09")
     @Test
     public void aBodyAtTheCellCentreIsCarriedAsTheDirectionFromTheShipThatIsThere() {
         // Ship parked OFF the cell centre; a planet sitting AT the cell centre (local 0,0,0).
@@ -91,6 +77,8 @@ public class SystemBodiesProducerTest {
         assertTrue("a planet with a real dim is a descend target", rb.descendTarget);
     }
 
+    /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
+    @Pins("CON-C14-09")
     @Test
     public void crossCellBodyDirectionIncludesTheSectorTerm() {
         // A body one whole cell away in +X: the direction must carry the CELL-sized sector step, not
@@ -128,6 +116,8 @@ public class SystemBodiesProducerTest {
         assertFalse("a belt with no real dim is not a descend target", rb.descendTarget);
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpStillShowsItsBodies() {
         // The measured shape of the blank-sky report: a pilot sitting in a live cell world whose ship
@@ -269,6 +259,8 @@ public class SystemBodiesProducerTest {
         assertEquals(4, byDim.get(200).get(0).dimId);
     }
 
+    /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
+    @Pins("CON-C14-07")
     @Test
     public void aShipWhoseCellIsInNoSlotContributesNothing() {
         // A ship can be settled — the server knows exactly where it is — while its cell is bound to no
@@ -291,6 +283,8 @@ public class SystemBodiesProducerTest {
         assertTrue("a ship whose cell is in no slot keys no dimension at all", byDim.isEmpty());
     }
 
+    /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
+    @Pins("CON-C14-07")
     @Test
     public void anUnboundOrMalformedBindingIsNeverKeyed() {
         // The "no world" sentinel must never become a dimension key, and neither must a cell key the
@@ -330,7 +324,10 @@ public class SystemBodiesProducerTest {
      * BOTH frames at the broadcast tick, so its length is the real distance right then — which is
      * what makes "the planet is receding" something the sky can show at all. Over the static grid
      * the same two names are the same distance apart forever.
+     * Pins ADDR-13 (the distance between two moving frames changes with time).
+     * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
      */
+    @Pins({"ADDR-13", "CON-C14-15"})
     @Test
     public void aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays() {
         GalacticCoord here = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L);
@@ -350,7 +347,11 @@ public class SystemBodiesProducerTest {
         assertEquals("...and onto +Z", 1_000_000L, late.localZ);
     }
 
-    /** The observer's OWN cell moves too, so a body in it stays exactly where it was relative to him. */
+    /**
+     * The observer's OWN cell moves too, so a body in it stays exactly where it was relative to him.
+     * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
+     */
+    @Pins("CON-C14-15")
     @Test
     public void aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim() {
         final GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);

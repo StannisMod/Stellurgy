@@ -1,18 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.satellite.SatelliteComposition;
-import dev.stannismod.stellurgy.satellite.SatelliteDensity;
-import dev.stannismod.stellurgy.satellite.SatelliteMassScanner;
-import dev.stannismod.stellurgy.satellite.SatelliteOptical;
-import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
+import dev.stannismod.stellurgy.satellite.*;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Scanning satellites' unit-tier contracts.

@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import net.minecraft.entity.EnumCreatureType;
 import net.minecraft.world.biome.Biome;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;

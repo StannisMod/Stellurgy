@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.StellurgyBiomes;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.entity.fx.FxSystemElectricArc;
+import dev.stannismod.stellurgy.util.AudioRegistry;
 import net.minecraft.block.BlockMushroom;
 import net.minecraft.block.IGrowable;
 import net.minecraft.block.state.IBlockState;
@@ -15,10 +19,6 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBiomes;
-import dev.stannismod.stellurgy.entity.fx.FxSystemElectricArc;
-import dev.stannismod.stellurgy.util.AudioRegistry;
 
 import java.util.Random;
 

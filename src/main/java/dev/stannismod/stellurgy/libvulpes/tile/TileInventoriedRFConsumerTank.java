@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
+import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
@@ -9,7 +10,6 @@ import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
-import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
 
 public abstract class TileInventoriedRFConsumerTank extends TileInventoriedRFConsumer implements IFluidHandler {
 

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -35,10 +36,12 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
     private static final int Y = 150;
     private static final int Z = 6400;
 
+    /** Pins INV-MBM-04 (mining mode breaks the target block and yields its drop). */
+    @Pins("INV-MBM-04")
     @Test
     public void miningModeBreaksTargetBlockAndYieldsItsDrop() throws Exception {
-        String resp = exec("stellurgytest infra laserdrill-mine 0 "
-                + X + " " + Y + " " + Z + " minecraft:iron_ore");
+        String resp = act("stellurgytest infra laserdrill-mine 0 "
+                + X + " " + Y + " " + Z + " minecraft:iron_ore").raw();
 
         assertTrue("probe must succeed: " + resp, Reply.of(resp).ok());
 

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.block.multiblock;
 
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyInteger;
@@ -10,8 +12,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 /**
  * Block which is integrated into the multiblock structure.  When a structure is formed the block

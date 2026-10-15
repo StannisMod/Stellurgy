@@ -1,14 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -60,30 +56,28 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         return Reply.of(json).text(key);
     }
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
-                "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     @Test
     public void freeFlightStateSurvivesNbtRoundTrip() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 700));
 
-        String r = ok(client().execute("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
+        String r = ok(client().arrange("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
         assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // Flight mode survives.
@@ -114,7 +108,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
     public void legacySaveMissingFreeFlightKeysDefaultsSafely() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3340, 700));
 
-        String r = ok(client().execute("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
+        String r = ok(client().arrange("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
         assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // A save with no ffQuat* keys must load as the upright identity attitude.
@@ -145,23 +139,24 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
      * not arrange mod state. No client e2e: the factory has no caller inside Stellurgy and no player
      * surface; it is offered to dependent mods through the API package.</p>
      *
-     * red-witnessed: with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}
-     * handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this
-     * fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and
-     * {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},
-     * {@code weight:7.049999f} and the seat (2026-10-02).
+     * Pins INV-API-10 (writeToNBT wraps in rocketStats).
      */
+    @Pins("INV-API-10")
+    @LegacyWitness(prose = "with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}"
+            + " handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this"
+            + " fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and"
+            + " {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},"
+            + " {@code weight:7.049999f} and the seat (2026-10-02).")
     @Test
     public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {
-        String assemble = RocketFixture.assembleAt(site(), cmd -> ok(client().execute(cmd)),
+        int rocket = rockets.assembleAt(site(), cmd -> ok(client().act(cmd)),
                 "simple", 0, 255 - site().y, "the craft whose stats are written stands here");
-        int rocket = RocketFixture.rocketEntityId(assemble);
-        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), rocket);
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().read(cmd)), rocket);
         ArrangementFailure.requireArranged("the craft's stats must not be the defaults, or an equal"
                 + " pair would say nothing: thrust " + info.thrust, info.thrust > 0);
 
         Reply roundTrip = Reply.of("stellurgytest rocket stats-from-nbt",
-                ok(client().execute("stellurgytest rocket stats-from-nbt " + rocket)));
+                ok(client().read("stellurgytest rocket stats-from-nbt " + rocket)));
         ArrangementFailure.requireArranged("the factory round trip must run: " + roundTrip,
                 roundTrip.ok());
         assertEquals("StatsRocket.createFromNBT must give back the stats the rocket wrote, so that"

@@ -1,11 +1,9 @@
 package dev.stannismod.stellurgy.space;
 
-import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 
 /**
  * The movable-ship space subsystem's STATE OBJECT: the six services are its fields, wired by its one

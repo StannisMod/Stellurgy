@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.util.RocketInventoryHelper;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import dev.stannismod.stellurgy.util.RocketInventoryHelper;
 
 /**
  * Lets a player keep a rocket-inventory GUI open even when the rocket entity

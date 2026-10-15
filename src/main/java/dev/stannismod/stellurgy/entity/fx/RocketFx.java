@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.entity.fx;
 
+import dev.stannismod.stellurgy.client.render.DelayedParticleRenderingEventHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -14,8 +15,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.DelayedParticleRenderingEventHandler;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 
 import java.util.List;
 

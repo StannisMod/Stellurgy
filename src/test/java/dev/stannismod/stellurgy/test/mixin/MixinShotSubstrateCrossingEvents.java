@@ -1,17 +1,15 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.projectile.LayerCrossing;
 import dev.stannismod.stellurgy.projectile.Shot;
 import dev.stannismod.stellurgy.projectile.ShotSubstrate;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
  * What one crossing of a shot's step FOUND, before anything is decided from it.

@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -21,17 +28,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
-import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
-import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.util.List;
 
 public class ItemBeaconFinder extends Item implements IArmorComponent {

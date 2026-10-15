@@ -1,8 +1,7 @@
 package dev.stannismod.stellurgy.universe;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * The patch of sky one pointing covers: a CONE with its apex at the instrument, a direction and a

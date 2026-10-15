@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.world.gen.WorldGenNoTree;
 import net.minecraft.block.BlockFlower.EnumFlowerType;
 import net.minecraft.block.material.Material;
 import net.minecraft.entity.monster.EntitySlime;
@@ -11,7 +12,6 @@ import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.world.gen.WorldGenNoTree;
 
 import javax.annotation.Nonnull;
 import java.util.Random;

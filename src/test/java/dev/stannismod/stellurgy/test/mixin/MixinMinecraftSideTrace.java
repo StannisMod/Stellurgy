@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import net.minecraft.client.Minecraft;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
-
 import dev.stannismod.stellurgy.test.trace.SideTrace;
 import dev.stannismod.stellurgy.test.trace.SideTraceOwner;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 
 /**
  * Gives the CLIENT its {@link SideTrace}: an instance field of the client object, created with it and

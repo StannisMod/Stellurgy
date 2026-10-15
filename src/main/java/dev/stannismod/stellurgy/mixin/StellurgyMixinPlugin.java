@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraftforge.common.config.Configuration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
-import dev.stannismod.stellurgy.api.Constants;
 
 import java.io.File;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.Set;
 /**
  * Mixin config plugin for {@code mixins.stellurgy.json}.
  *
- * <p>Its only job today: gate the three per-dimension WorldInfo mixins
+ * <p>Its only job: gate the three per-dimension WorldInfo mixins
  * ({@link MixinWorldServerMulti} wrapper install, {@code MixinWorldServer}
  * per-dim time / sleep, {@link MixinPlayerList} weather sync) on the
  * {@code perDimWorldInfo} MASTER config flag, so that with the per-dimension

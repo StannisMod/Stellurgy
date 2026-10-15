@@ -1,21 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EvictionReports;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -40,7 +30,6 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetWeatherGateTest.Galaxy.class)
 public class PlanetWeatherGateTest extends AbstractSharedServerTest {
 
     /**
@@ -58,6 +47,11 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
     private static final int DIM_THICK_RAIN  = 9112; // density 100, rainMarker 1  -> must rain
     private static final int DIM_DRY_THUNDER = 9113; // density 100, thunder 1 / rain -1 -> no thunder
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {
@@ -103,7 +97,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
     @Test
     public void atmosphereGatesRainAndThunderRequiresRain() throws Exception {
 
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         for (int dim : new int[]{DIM_THIN_RAIN, DIM_THICK_RAIN, DIM_DRY_THUNDER}) {
             assertTrue("fixture dim " + dim + " not registered: " + dimList,
                     dimList.holds(dim));
@@ -205,13 +199,13 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 
     /** This boot's reader of the server's ordered event log — the harness is this class's own. */
     private Events serverEvents() {
-        return new Events(cmd -> String.join("\n", client().execute(cmd)),
+        return new Events(cmd -> String.join("\n", client().read(cmd)),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 }

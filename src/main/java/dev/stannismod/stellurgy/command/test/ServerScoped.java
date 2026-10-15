@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.command.test;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The bus subscriptions that belong to ONE server's life, and the thing that takes them off again.

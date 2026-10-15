@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.IFuelTank;
+import dev.stannismod.stellurgy.api.IRocketEngine;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyEnum;
 import net.minecraft.block.state.BlockStateContainer;
@@ -11,9 +14,6 @@ import net.minecraft.util.IStringSerializable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.IFuelTank;
-import dev.stannismod.stellurgy.api.IRocketEngine;
-import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

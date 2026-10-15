@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
-
 import org.joml.Matrix4dc;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Watches the one call that rewrites a body's VELOCITY by a ship's transform.

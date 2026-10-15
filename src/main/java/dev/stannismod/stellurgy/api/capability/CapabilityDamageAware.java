@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.api.capability;
 
+import dev.stannismod.stellurgy.api.damage.DamageOccurrence;
+import dev.stannismod.stellurgy.api.damage.IDamageAware;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityInject;
 import net.minecraftforge.common.capabilities.CapabilityManager;
-
-import dev.stannismod.stellurgy.api.damage.DamageOccurrence;
-import dev.stannismod.stellurgy.api.damage.IDamageAware;
 
 import javax.annotation.Nullable;
 

@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.client.model.ModelRocket;
 import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.client.model.ICustomModelLoader;
 import net.minecraftforge.client.model.IModel;
 import net.minecraftforge.client.model.ModelLoaderRegistry;
-import dev.stannismod.stellurgy.client.model.ModelRocket;
 
 import javax.annotation.Nonnull;
 

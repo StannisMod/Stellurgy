@@ -1,16 +1,8 @@
 package dev.stannismod.stellurgy.tile.satellite;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.EnumFacing;
-import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.satellite.IDataHandler;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -19,21 +11,27 @@ import dev.stannismod.stellurgy.inventory.modules.ModuleData;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSatellite;
 import dev.stannismod.stellurgy.item.IDataItem;
 import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
-import dev.stannismod.stellurgy.satellite.SatelliteData;
-import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
-import dev.stannismod.stellurgy.util.IDataInventory;
-import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
-
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.satellite.SatelliteData;
+import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
+import dev.stannismod.stellurgy.util.IDataInventory;
+import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraftforge.fml.relauncher.Side;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
 

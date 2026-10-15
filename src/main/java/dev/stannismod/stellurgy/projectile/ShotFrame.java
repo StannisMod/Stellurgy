@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.damage.StructureDamageEngine;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.damage.StructureDamageEngine;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * The one place a shot changes coordinate frames.

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
  * Where the nebulae are — which is: wherever a star cluster still has gas.

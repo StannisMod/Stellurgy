@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -7,9 +10,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class PacketBiomeIDChange extends BasePacket {
 

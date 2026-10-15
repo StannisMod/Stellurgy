@@ -1,11 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.satellite.SatelliteMicrowaveEnergy;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.lang.reflect.Field;
 
@@ -46,6 +47,8 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
 
     // ── SatelliteWeatherController ──────────────────────────────────────
 
+    /** Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT). */
+    @Pins("INV-SAT-03")
     @Test
     public void weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel() {
         SatelliteWeatherController src = new SatelliteWeatherController();
@@ -74,6 +77,10 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
         assertEquals("floodlevel must round-trip", 80, peer.floodlevel);
     }
 
+    /**
+     * Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT).
+     */
+    @Pins("INV-SAT-03")
     @Test
     public void weatherControllerNbtRoundTripPreservesFreshDefaults() {
         // A fresh satellite has mode_id=0, last_mode_id=0, floodlevel=-1
@@ -103,6 +110,8 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
 
     // ── SatelliteMicrowaveEnergy ────────────────────────────────────────
 
+    /** Pins INV-SAT-04 (Microwave teir byte round-trips through NBT). */
+    @Pins("INV-SAT-04")
     @Test
     public void microwaveEnergyTeirByteRoundTripsAcrossNbt() throws Exception {
         SatelliteMicrowaveEnergy src = new SatelliteMicrowaveEnergy();

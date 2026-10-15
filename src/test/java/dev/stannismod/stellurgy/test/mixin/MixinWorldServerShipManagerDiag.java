@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.LinkedHashSet;
-
+import dev.stannismod.stellurgy.test.trace.SpawnMemory;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -14,11 +16,7 @@ import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
 import org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraft.world.WorldServer;
-
-import dev.stannismod.stellurgy.test.trace.SpawnMemory;
+import java.util.LinkedHashSet;
 
 /**
  * Reads WHERE a queued tier-2 ship dies inside Valkyrien Skies' own spawn pass — from the tests,
@@ -74,12 +72,12 @@ public abstract class MixinWorldServerShipManagerDiag {
      */
     @Inject(method = "refuseSpawn", at = @At("HEAD"), require = 1)
     private void stellurgyTest$spawnRefused(org.valkyrienskies.mod.common.ships.ShipData toSpawn,
-                                            BlockPos anchor, String reason, CallbackInfo ci) {
+                                            BlockPos anchor, WorldServerShipManager.SpawnRefusal reason,
+                                            CallbackInfo ci) {
         dev.stannismod.stellurgy.test.trace.TestTrace.instrumentHere(SPAWN_INSTRUMENT);
         dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_refused",
                 "\"vsShip\":\"" + toSpawn.getUuid() + "\",\"stellurgyShip\":\""
-                        + toSpawn.getStellurgyDurableId() + "\",\"reason\":\""
-                        + dev.stannismod.stellurgy.test.trace.TestTrace.json(reason) + "\",\"x\":"
+                        + toSpawn.getStellurgyDurableId() + "\",\"reason\":\"" + reason.name() + "\",\"x\":"
                         + anchor.getX() + ",\"y\":" + anchor.getY() + ",\"z\":" + anchor.getZ()
                         + ",\"dim\":" + world.provider.getDimension());
     }
@@ -100,23 +98,29 @@ public abstract class MixinWorldServerShipManagerDiag {
      * flag are the two inputs to VS's "Ship too big or bedrock detected!" abort. A huge found set
      * means the flood escaped the craft into terrain; a true {@code cleanHouse} means it hit bedrock.
      */
-    @Redirect(method = "detectShip",
+    @Redirect(method = "spawnNewShips",
             at = @At(value = "INVOKE",
                     target = "Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder;"
                             + "getBlockFinderFor(Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder$BlockFinderType;"
-                            + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/World;IZ)"
+                            + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/World;IZ"
+                            + "Lnet/minecraft/world/gen/structure/StructureBoundingBox;)"
                             + "Lorg/valkyrienskies/mod/common/ships/block_relocation/SpatialDetector;"),
             require = 0)
-    private static SpatialDetector stellurgyTest$recordFloodResult(BlockFinder.BlockFinderType type, BlockPos pos,
-                                                     World floodWorld, int maxSize, boolean corners) {
-        SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners);
+    private SpatialDetector stellurgyTest$recordFloodResult(BlockFinder.BlockFinderType type, BlockPos pos,
+                                                     World floodWorld, int maxSize, boolean corners,
+                                                     net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
+        SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners,
+                footprint);
         if (detector != null) {
             // The flood's INPUTS as a record. Whether VS refuses the spawn on them is VS's decision,
-            // recorded where it is taken (`ship_spawn_refused`, below) rather than re-derived here: a
+            // recorded where it is taken (`ship_spawn_refused`, above) rather than re-derived here: a
             // copy of the rule in this file had already fallen behind it once.
             dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_flood",
                     "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
                             + ",\"dim\":" + floodWorld.provider.getDimension()
+                            + ",\"footprint\":\"" + footprint.minX + "," + footprint.minY + ","
+                            + footprint.minZ + ".." + footprint.maxX + "," + footprint.maxY + ","
+                            + footprint.maxZ + "\""
                             + ",\"found\":" + detector.foundSet.size()
                             + ",\"bedrock\":" + detector.cleanHouse
                             + ",\"reachExceeded\":" + detector.reachExceeded);

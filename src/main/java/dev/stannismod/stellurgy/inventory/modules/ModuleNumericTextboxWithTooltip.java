@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleNumericTextbox;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleNumericTextbox;
 
 import java.util.Arrays;
 import java.util.List;

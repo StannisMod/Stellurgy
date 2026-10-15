@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 
 public class RenderComponents {
 

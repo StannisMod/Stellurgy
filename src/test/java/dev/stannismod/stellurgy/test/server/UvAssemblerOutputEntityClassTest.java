@@ -1,19 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.MachineInfo;
-import dev.stannismod.stellurgy.test.Plot;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The two assemblers diverge: distinct tile classes, and distinct entity classes out of
@@ -57,6 +49,8 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     private static final int CX_ROCKET = 5500;
     private static final int CX_UV     = 5700;
 
+    /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
+    @Pins("INV-RASM-04")
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
         // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here
@@ -64,16 +58,11 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
         // does this; replicate inline because we don't want that helper's package coupling". The
         // copy came over and the reason stayed behind, which is how the pit reached two dozen
         // files. There is a shared builder now and no package to couple to.
-        String assemble = dev.stannismod.stellurgy.test.RocketFixture.assembleAt(
-                dev.stannismod.stellurgy.test.FixtureSite.openAir(0, CX_ROCKET, CZ),
-                cmd -> exec(cmd), "simple", 2, 10,
-                "the craft whose assembled entity class this scenario reads");
-        assertTrue("rocket assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-
-        int entityId = lastRocketId();
+        // The rocket is the one the press's own `rocket_born` record names.
+        int entityId = rockets.assembleAt(FixtureSite.openAir(0, CX_ROCKET, CZ), c -> act(c).raw(),
+                "simple", 2, 10, "the craft whose assembled entity class this scenario reads");
         // The reader REFUSES a report with no entityClass, which is what the null check asserted.
-        String entityClass = RocketInfo.byId(this::exec, entityId).entityClass;
+        String entityClass = RocketInfo.byId(c -> read(c).raw(), entityId).entityClass;
         assertTrue("rocket assembler must spawn EntityRocket "
                         + "(not EntityStationDeployedRocket); got " + entityClass,
                 entityClass.endsWith(".EntityRocket"));
@@ -82,20 +71,23 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 entityClass.contains("StationDeployedRocket"));
     }
 
+    /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
+    @Pins("INV-RASM-04")
     @Test
     public void uvAssemblerProducesEntityStationDeployedRocket() throws Exception {
-        String fixture = exec("stellurgytest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ).raw();
         assertTrue("uv-rocket fixture must build: " + fixture,
                 Reply.of(fixture).ok());
         int[] builder = parseBuilder(fixture);
 
-        String assemble = exec("stellurgytest rocket assemble 0 " + builder[0] + " "
-                + builder[1] + " " + builder[2]);
+        long mark = rockets.mark();
+        String assemble = act("stellurgytest rocket assemble 0 " + builder[0] + " "
+                + builder[1] + " " + builder[2]).raw();
         assertTrue("UV assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
 
-        int entityId = lastRocketId();
-        String entityClass = RocketInfo.byId(this::exec, entityId).entityClass;
+        int entityId = rockets.bornAt(mark, builder);
+        String entityClass = RocketInfo.byId(c -> read(c).raw(), entityId).entityClass;
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));
@@ -113,15 +105,15 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
         String rocketAt = " 0 " + rocket.x + " " + rocket.y + " " + rocket.z;
         String uvAt = " 0 " + uv.x + " " + uv.y + " " + uv.z;
 
-        String placeRocket = exec("stellurgytest place" + rocketAt + " stellurgy:rocketBuilder");
+        String placeRocket = arrange("stellurgytest place" + rocketAt + " stellurgy:rocketBuilder").raw();
         assertTrue("rocketBuilder place failed: " + placeRocket, Reply.of(placeRocket).bool("placed"));
-        String rocketInfo = exec("stellurgytest machine info" + rocketAt);
+        String rocketInfo = read("stellurgytest machine info" + rocketAt).raw();
         assertEquals("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
                 "TileRocketAssemblingMachine", MachineInfo.of(rocketInfo).tileSimpleName());
 
-        String placeUv = exec("stellurgytest place" + uvAt + " stellurgy:deployableRocketBuilder");
+        String placeUv = arrange("stellurgytest place" + uvAt + " stellurgy:deployableRocketBuilder").raw();
         assertTrue("deployableRocketBuilder place failed: " + placeUv, Reply.of(placeUv).bool("placed"));
-        String uvInfo = exec("stellurgytest machine info" + uvAt);
+        String uvInfo = read("stellurgytest machine info" + uvAt).raw();
         assertEquals("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
                 "TileUnmannedVehicleAssembler", MachineInfo.of(uvInfo).tileSimpleName());
 
@@ -133,7 +125,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                         + "tile classes; rocketInfo=" + rocketInfo + " uvInfo=" + uvInfo,
                 rocketClass, uvClass);
 
-        String rocketRefetch = exec("stellurgytest machine info" + rocketAt);
+        String rocketRefetch = read("stellurgytest machine info" + rocketAt).raw();
         assertEquals("rocketBuilder must remain itself after UV placement: " + rocketRefetch,
                 "TileRocketAssemblingMachine", MachineInfo.of(rocketRefetch).tileSimpleName());
     }
@@ -149,10 +141,10 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 m[2]};
     }
 
-    private int lastRocketId() throws Exception {
-        String list = exec("stellurgytest rocket list 0");
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket ids in list: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 }

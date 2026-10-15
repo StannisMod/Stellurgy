@@ -4,14 +4,13 @@ import dev.stannismod.stellurgy.affs.world.FieldFrame;
 import dev.stannismod.stellurgy.affs.world.FieldFrames;
 import dev.stannismod.stellurgy.affs.world.FieldSource;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public final class ClientForceFieldRenderCache {
 

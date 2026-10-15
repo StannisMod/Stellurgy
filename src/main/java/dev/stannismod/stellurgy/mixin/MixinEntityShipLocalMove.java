@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipLocalMove;
+import dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MoverType;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.integration.vs.ShipLocalMove;
-import dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl;
 
 /**
  * Claims {@link Entity#move} before the physics mod does, so an entity aboard a ship can have its

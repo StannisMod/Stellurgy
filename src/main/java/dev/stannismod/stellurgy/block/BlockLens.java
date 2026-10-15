@@ -1,9 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.client.TooltipInjector;
 import net.minecraft.block.BlockGlass;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.material.Material;
@@ -12,7 +9,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.TooltipInjector;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 /**
  * Yes, this class may seem useless, but setSoundType can't be run in the registry, only by a subclass of Block.

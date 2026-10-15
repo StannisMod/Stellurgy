@@ -1,0 +1,270 @@
+package dev.stannismod.stellurgy.test.client;
+
+import com.github.stannismod.forge.testing.client.ClientBot;
+import com.github.stannismod.forge.testing.client.ClientCommandRefused;
+import com.github.stannismod.forge.testing.client.RealClientHarness;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerCommandFailed;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.assertTrue;
+
+/**
+ * A pair launched for a MECHANICS test refuses, at the call, the two channels a mechanics test may not
+ * use — a static call on anything but a named mechanics instrument, and tile, entity or item NBT written by
+ * command — and still answers the arrangements, reads and instruments a mechanics test is made of.
+ *
+ * <p><b>The subject</b> is the decision each judge takes when a command arrives in MECHANICS mode: the
+ * server gate's ({@code E2EModeGate#mechanicsRefusalOf}, against the {@code MechanicsInstrument} table) and
+ * the client bridge's ({@code ForgeTestClientBootstrap#refusedInMechanics}, against
+ * {@code ClientInstruments#mechanicsRows}). Each form below is EXECUTED against the booted pair, so what is
+ * judged is the command that arrives. A refusal is read as data: the server's by the thrown class and its
+ * refusal object, the client's by the {@code refusedCommand} / {@code refusedKind} of its reply.</p>
+ *
+ * <p><b>What it does not see.</b> Whether an admitted instrument's body only reads (the build walks it for
+ * writes); whether an admitted probe verb arranges or acts (no mechanics verb is classified yet); the static
+ * FIELD read the client also refuses (no test may write that call at all); a tag-writing command this
+ * list does not send; and whether each row of the role gate's table ({@code E2EModeGate#rootKind}) is the
+ * kind its handler is — only the forms sent here are judged, one read and one write of each root whose
+ * arguments choose between the two.</p>
+ *
+ * <p>SEPARATE-BOOT: a judge's refusal is the subject, and the planted calls leave things behind (an item in
+ * his hand) that a shared pair would hand to every other scenario.</p>
+ */
+@OwnBoot(reason = OwnBoot.Reason.GLOBAL_MUTATION)
+public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
+
+    /** The server gate's refusal, as the bridge names the thrown class. */
+    private static final String SERVER_REFUSAL =
+            "dev.stannismod.stellurgy.command.test.E2EModeGate$E2EModeRefusal";
+    /** The harness client's player name. */
+    private static final String PLAYER = "ForgeTestClient";
+    /** A recorder of the test source set on the server — a row of the mechanics table. */
+    private static final String SERVER_LOG = "dev.stannismod.stellurgy.test.trace.ServerEventLog";
+    /** A recorder of the test source set on the client — a row of the mechanics table. */
+    private static final String CLIENT_WINDOW = "dev.stannismod.stellurgy.test.trace.SeatGateWindow";
+
+    private RealDedicatedServerHarness server;
+    private RealClientHarness client;
+
+    @Before
+    public void bootBothInMechanicsMode() throws Exception {
+        Assume.assumeTrue("Server harness disabled",
+                Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
+        Assume.assumeTrue("Client harness disabled",
+                Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
+        server = RealDedicatedServerHarness.start(harnessBoot());
+        try {
+            client = RealClientHarness.start(harnessBoot(), server);
+        } catch (Exception startFailed) {
+            server.close();
+            server = null;
+            throw startFailed;
+        }
+    }
+
+    @After
+    public void closeBoth() throws Exception {
+        try {
+            if (client != null) {
+                client.close();
+            }
+        } finally {
+            if (server != null) {
+                server.close();
+            }
+        }
+    }
+
+    /**
+     * Every planted static call and tag-writing command is refused at the call with the kind its judge gives
+     * it, and every arrangement, read and named instrument a mechanics test is made of is answered.
+     */
+    @Pins("INV-ART-10")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#roleRefusalOf",
+            at = "if (role.admits(kind)) {", replacedBy = "if (true) {",
+            fails = "these were not: [`stellurgytest chunk forceload 0 0 0` RAN", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#timeKind",
+            at = "case \"add\": return ProbeVerbKind.ARRANGE;", replacedBy = "case \"add\": return ProbeVerbKind.READ;",
+            fails = "these were not: [`time set 6000` RAN, `time add 0` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#rootKind",
+            at = "return args.length < 2 ? ProbeVerbKind.READ : ProbeVerbKind.ARRANGE;",
+            replacedBy = "return ProbeVerbKind.READ;",
+            fails = "these were not: [`gamerule doMobSpawning false` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#modLeafKind",
+            at = "|| leaf instanceof DumpBiomesCommand) { return ProbeVerbKind.ARRANGE;",
+            replacedBy = "|| leaf instanceof DumpBiomesCommand) { return ProbeVerbKind.READ;",
+            fails = "these were not: [`ar planet set 0 atmosphereDensity 100` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#modCommandKind",
+            at = "if (node == null) { return ProbeVerbKind.UNCLASSIFIED;",
+            replacedBy = "if (node == null) { return ProbeVerbKind.READ;",
+            fails = "these were not: [`ar definitelyNotARealSubcommand` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "answered", member = "E2EModeGate#modLeafKind",
+            at = "|| leaf instanceof UniverseStatusCommand) { return ProbeVerbKind.READ;",
+            replacedBy = "|| leaf instanceof UniverseStatusCommand) { return ProbeVerbKind.TRIGGER;",
+            fails = "these were not: [`ar planet list` was refused", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
+            at = "if (ProbeVerbKind.of(args) == ProbeVerbKind.UNCLASSIFIED) {", replacedBy = "if (false) {",
+            fails = "these were not: [`stellurgytest no-such-group no-such-action` RAN", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
+            at = "if (MechanicsInstrument.named(className, methodName) == null) {", replacedBy = "if (false) {",
+            fails = "these were not: [`stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager",
+            on = "2026-10-12")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
+            at = "if (arg.indexOf('{') >= 0) {", replacedBy = "if (false) {",
+            fails = "these were not: [`give ForgeTestClient minecraft:stone 1 0 {display", on = "2026-10-12")
+    @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#refusedInMechanics",
+            at = "if (ClientInstruments.mechanicsKindOf(className, methodName) == null) {", replacedBy = "if (false) {",
+            fails = "these were not: [invoke_static_int RAN", on = "2026-10-12")
+    @Test
+    public void aMechanicsPairRefusesStaticCallsAndTagWritesAtTheCallAndAnswersItsArrangements() throws Exception {
+        ClientBot bot = client.bot();
+        List<String> notRefused = new ArrayList<>();
+
+        // ---- the server: a verb nobody classified, static calls on no named instrument, NBT by command ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest clock-skew 5", "UNCLASSIFIED");
+        // ---- a command sent in a role that does not admit its kind; a root with no kind ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest chunk forceload 0 0 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ACT, "stellurgytest config set rocketRequireFuel true", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest tile force-tick 0 0 0 0 1", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "tp " + PLAYER + " 0 100 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "forge tps", "UNCLASSIFIED");
+        // ---- a root whose arguments choose between a read and a write: each form is the one kind it is, so the
+        // write form is refused in `read` and the read form in `arrange`; a word the mod's tree does not know
+        // has no kind ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "time set 6000", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "time add 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "time query daytime", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "gamerule doMobSpawning false", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "gamerule doMobSpawning", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet set 0 atmosphereDensity 100", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet list", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar definitelyNotARealSubcommand", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
+                + " getInstance", "STATIC_CALL");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
+                + " forgeRegisteredOnClient 0", "STATIC_CALL");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "blockdata 0 64 0 {storedMomentumY:1.0d}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "entitydata @e[type=minecraft:item] {Age:0}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give " + PLAYER + " minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "summon minecraft:zombie 0 80 0 {NoAI:1b}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill 0 90 0 0 90 0 minecraft:chest 0 replace {Lock:\"k\"}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "clear " + PLAYER + " minecraft:stone 0 1 {display:{}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "replaceitem entity " + PLAYER + " slot.hotbar.0 minecraft:stone 1 0 {display:{}}",
+                "COMMAND");
+
+        // ---- the client: a chain, a static call on no named instrument ----
+        expectClientRefusal(notRefused, "invoke_static_chain", "STATIC_CHAIN",
+                () -> bot.invokeStaticChain("dev.stannismod.stellurgy.client.ServerView", "current,clock,now"));
+        expectClientRefusal(notRefused, "invoke_static_int", "STATIC_TARGET",
+                () -> bot.invokeStaticInt("dev.stannismod.stellurgy.client.ClientProxy", "currentClientDimension", 0));
+
+        assertTrue("every probe verb or root with no kind, every command sent in a role that does not admit its"
+                + " kind, every static call on no named instrument, and every tile,"
+                + " entity or item tag written by"
+                + " command, must be refused at the call in mechanics mode with the kind its judge gives it;"
+                + " these were not: " + notRefused, notRefused.isEmpty());
+
+        // ---- the positive half, on the same judges ----
+        List<String> notAnswered = new ArrayList<>();
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static " + SERVER_LOG + " markReply");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give " + PLAYER + " minecraft:stone 1");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest clock");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 1000");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "time query daytime");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "time set 6000");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "gamerule doMobSpawning");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "gamerule doMobSpawning true");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet list");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet set 0 atmosphereDensity 100");
+        try {
+            JsonObject opened = bot.invokeStaticInt(CLIENT_WINDOW, "open");
+            bot.invokeStaticInt(CLIENT_WINDOW, "close", Integer.parseInt(opened.get("returned").getAsString()));
+            bot.reads().reportState();
+        } catch (ClientCommandRefused refused) {
+            notAnswered.add("the client refused an admitted command: " + refused.reply());
+        }
+        assertTrue("every arrangement, read and named instrument a mechanics test is made of must be answered;"
+                + " these were not: " + notAnswered, notAnswered.isEmpty());
+    }
+
+    private interface Act {
+        void run() throws Exception;
+    }
+
+    /**
+     * {@code command} sent in {@code role} — one that ADMITS what the command is, so that the refusal judged is
+     * the mode's and not the role's.
+     */
+    private List<String> sent(com.github.stannismod.forge.testing.server.CommandRole role, String command)
+            throws Exception {
+        switch (role) {
+            case READ:
+                return server.client().read(command);
+            case ARRANGE:
+                return server.client().arrange(command);
+            default:
+                return server.client().act(command);
+        }
+    }
+
+    private void expectServerRefusal(List<String> notRefused, com.github.stannismod.forge.testing.server.CommandRole role,
+                                     String command, String kind) throws Exception {
+        try {
+            sent(role, command);
+            notRefused.add("`" + command + "` RAN");
+        } catch (ServerCommandFailed failed) {
+            JsonObject reply = failed.reply();
+            if (!reply.has("thrown") || !SERVER_REFUSAL.equals(reply.get("thrown").getAsString())) {
+                notRefused.add("`" + command + "` failed, but not by the mode gate: " + reply);
+                return;
+            }
+            JsonObject refusal = new JsonParser().parse(reply.get("thrownMessage").getAsString()).getAsJsonObject();
+            if (!refusal.get("refused").getAsBoolean() || !kind.equals(refusal.get("kind").getAsString())) {
+                notRefused.add("`" + command + "` refused as " + refusal.get("kind") + ", not " + kind + ": " + refusal);
+            }
+        }
+    }
+
+    private void expectServerAnswered(List<String> notAnswered, com.github.stannismod.forge.testing.server.CommandRole role,
+                                      String command) throws Exception {
+        try {
+            String reply = String.join("\n", sent(role, command));
+            if (reply.contains("\"error\"")) {
+                notAnswered.add("`" + command + "` answered an error: " + reply);
+            }
+        } catch (ServerCommandFailed failed) {
+            notAnswered.add("`" + command + "` was refused: " + failed.reply());
+        }
+    }
+
+    private void expectClientRefusal(List<String> notRefused, String command, String kind, Act act) throws Exception {
+        try {
+            act.run();
+            notRefused.add(command + " RAN");
+        } catch (ClientCommandRefused refused) {
+            JsonObject reply = refused.reply();
+            if (!command.equals(reply.get("refusedCommand").getAsString())
+                    || !kind.equals(reply.get("refusedKind").getAsString())) {
+                notRefused.add(command + " refused as " + reply.get("refusedKind") + ", not " + kind + ": " + reply);
+            }
+        } catch (java.io.IOException failed) {
+            notRefused.add(command + " failed, but not by the mechanics judge: " + failed.getMessage());
+        }
+    }
+}

@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
+import dev.stannismod.stellurgy.client.ClientShotTracker;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.Vec3d;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.client.ClientShotTracker;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The client being handed a round to draw, and being told it ended, as events:
@@ -17,7 +15,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * (HEAD of {@code ClientShotTracker.end}), each carrying the round's server id; the end carries the
  * reason and the point the flash is drawn at. Those two methods are the only doors from the spawn
  * and end packets into what the renderer draws, so a round this client was told about is a record
- * here and one it was not told about is not. Client log. Read by {@code ShotReachesClientE2ETest}.
+ * here and one it was not told about is not. Client log. Read by {@code ShotReachesClientTest}.
  *
  * <p>SILENT about a round the client drops on its own because it outlived its declared lifetime —
  * that is the tracker's tick, not a packet.</p>

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.wirelessdata;
 
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
 import dev.stannismod.stellurgy.api.satellite.IDataHandler;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
 
 import java.util.ArrayList;
 import java.util.Collections;

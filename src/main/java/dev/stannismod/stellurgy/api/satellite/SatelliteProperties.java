@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.api.satellite;
 
-import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.util.IWeighted;
+import net.minecraft.nbt.NBTTagCompound;
 
 public class SatelliteProperties implements IWeighted {
 

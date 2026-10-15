@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.io.IOException;
-
+import com.github.stannismod.forge.testing.client.ClientBot;
+import dev.stannismod.stellurgy.api.StellurgyItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemModelMesher;
 import net.minecraft.item.ItemStack;
 
-import com.github.stannismod.forge.testing.client.ClientBot;
-
-import dev.stannismod.stellurgy.api.StellurgyItems;
+import java.io.IOException;
 
 /**
  * What the client would draw a Stellurgy item with: its baked inventory model, compared against the

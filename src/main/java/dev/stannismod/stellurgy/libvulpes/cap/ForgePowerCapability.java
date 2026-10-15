@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.cap;
 
-import net.minecraftforge.energy.IEnergyStorage;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import net.minecraftforge.energy.IEnergyStorage;
 
 public class ForgePowerCapability implements IEnergyStorage {
 

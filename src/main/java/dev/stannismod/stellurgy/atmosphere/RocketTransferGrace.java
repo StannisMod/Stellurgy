@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.atmosphere;
 
+import dev.stannismod.stellurgy.player.CapabilityPlayerBindings;
+import dev.stannismod.stellurgy.player.IPlayerBindings;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
-
-import dev.stannismod.stellurgy.player.CapabilityPlayerBindings;
-import dev.stannismod.stellurgy.player.IPlayerBindings;
 
 /**
  * The short window after a rocket transfer in which an entity is IMMUNE to the suit check.

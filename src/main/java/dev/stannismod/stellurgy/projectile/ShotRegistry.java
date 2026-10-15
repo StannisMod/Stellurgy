@@ -1,19 +1,15 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
+import dev.stannismod.stellurgy.api.projectile.ShotSpec;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.MapStorage;
 import net.minecraft.world.storage.WorldSavedData;
-import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.api.projectile.ShotSpec;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Every shot in flight in one world, and the only thing that owns one.

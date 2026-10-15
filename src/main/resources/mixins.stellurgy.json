@@ -19,7 +19,6 @@
     "MixinEntityPlayerInventoryAccess",
     "MixinEntityPlayerMPInventoryAccess",
     "MixinPlayerList",
-    "MixinTileAdvancedFlightComputer",
     "MixinWorldProvider",
     "MixinWorldServer",
     "MixinWorldServerMulti",

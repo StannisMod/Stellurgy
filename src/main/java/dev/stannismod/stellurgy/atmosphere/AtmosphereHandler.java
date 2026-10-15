@@ -1,10 +1,21 @@
 package dev.stannismod.stellurgy.atmosphere;
 
-import net.minecraft.block.material.Material;
-import net.minecraft.entity.EntityLivingBase;
+import dev.stannismod.stellurgy.api.AreaBlob;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.api.event.AtmosphereEvent;
+import dev.stannismod.stellurgy.api.util.IBlobHandler;
 import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.network.PacketAtmSync;
+import dev.stannismod.stellurgy.util.AtmosphereBlob;
+import dev.stannismod.stellurgy.world.WorldRuntime;
+import net.minecraft.block.material.Material;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.DamageSource;
@@ -15,26 +26,12 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.AreaBlob;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.event.AtmosphereEvent;
-import dev.stannismod.stellurgy.api.util.IBlobHandler;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.network.PacketAtmSync;
-import dev.stannismod.stellurgy.util.AtmosphereBlob;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
-
-import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public class AtmosphereHandler {
     /** The atmosphere damage sources. Effectively final, process lifetime: written only by

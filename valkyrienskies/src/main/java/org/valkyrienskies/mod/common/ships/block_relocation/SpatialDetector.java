@@ -8,6 +8,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockPos.MutableBlockPos;
 import net.minecraft.world.ChunkCache;
 import net.minecraft.world.World;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 
 /**
  * Used to efficiently detect a connected set of blocks TODO: Incorporate a scanline technique to
@@ -42,12 +43,21 @@ public abstract class SpatialDetector {
      * inside it, so it is not the whole structure and must not be taken for one.
      */
     public boolean reachExceeded = false;
+    /**
+     * The region the detection may not leave, inclusive. A block outside it is never reached, so it
+     * neither joins the result nor counts toward {@link #maxSize} — which is the point: without it the
+     * flood ran 26-connected until the size cap, and whatever touched the craft diagonally (snow on a
+     * launch pad's rim, a tree's foliage) carried it into the pad and the terrain.
+     */
+    public final StructureBoundingBox footprint;
 
-    public SpatialDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners) {
+    public SpatialDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners,
+                           StructureBoundingBox footprint) {
         firstBlock = start;
         worldObj = worldIn;
         maxSize = maximum;
         corners = checkCorners;
+        this.footprint = footprint;
         // One block wider than the reach, so the block just past it is READ rather than taken for air.
         BlockPos minPos = new BlockPos(start.getX() - MAX_REACH - 1, 0, start.getZ() - MAX_REACH - 1);
         BlockPos maxPos = new BlockPos(start.getX() + MAX_REACH + 1, 255, start.getZ() + MAX_REACH + 1);
@@ -194,6 +204,12 @@ public abstract class SpatialDetector {
     }
 
     protected void tryExpanding(int x, int y, int z, int hash) {
+        // The footprint first: a block outside it is not part of the craft at all, so it can neither
+        // join the result nor make the craft "continue past the reach".
+        if (x < footprint.minX || x > footprint.maxX || y < footprint.minY || y > footprint.maxY
+            || z < footprint.minZ || z > footprint.maxZ) {
+            return;
+        }
         if (Math.abs(x - firstBlock.getX()) > MAX_REACH || Math.abs(z - firstBlock.getZ()) > MAX_REACH) {
             if (isValidExpansion(x, y, z)) {
                 reachExceeded = true;

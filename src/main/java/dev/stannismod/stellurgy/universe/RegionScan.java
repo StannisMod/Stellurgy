@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.universe;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * A telescope's survey: which sky it covers, how far through it the instrument has got, and when the

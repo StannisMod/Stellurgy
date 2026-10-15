@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.world;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import net.minecraft.crash.CrashReport;
 import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.init.Biomes;
@@ -13,9 +16,6 @@ import net.minecraft.world.gen.ChunkGeneratorSettings;
 import net.minecraft.world.gen.layer.*;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
 import net.minecraftforge.fml.relauncher.ReflectionHelper;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

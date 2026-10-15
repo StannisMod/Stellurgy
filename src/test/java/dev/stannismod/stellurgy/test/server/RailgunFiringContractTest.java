@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -64,14 +63,16 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     /**
      * Same-dimension shot fires: cargo leaves the source input and arrives at
      * the destination output, and the status reads FIRED.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      */
+    @Pins("INV-MBM-20")
     @Test
     public void railgunFiresCargoToLinkedRailgunInSameDimension() throws Exception {
         buildAndComplete(SX, SY, SZ);
         buildAndComplete(DX, DY, DZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + SX + " " + SY + " " + SZ
-                + " 0 " + DX + " " + DY + " " + DZ + " minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + SX + " " + SY + " " + SZ
+                + " 0 " + DX + " " + DY + " " + DZ + " minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -99,19 +100,22 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * the shot still doesn't deliver and reports TARGET_UNAVAILABLE — but the
      * dimension-load branch is proven, which (composed with the same-dimension
      * delivery test) is the cross-planet firing the bug was about.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
+     * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
+    @Pins({"INV-MBM-20", "INV-MBM-21"})
     @Test
     public void railgunLoadsRegisteredButUnloadedDestinationDimension() throws Exception {
         int template = firstNonOverworldStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-asteroid-dim "
-                + FRESH_DIM + " " + template);
+        String create = arrange("stellurgytest worldgen create-asteroid-dim "
+                + FRESH_DIM + " " + template).raw();
         assertTrue("create-asteroid-dim must succeed: " + create,
                 Reply.of(create).ok());
 
         buildAndComplete(LX, SY, XZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + LX + " " + SY + " " + XZ
-                + " " + FRESH_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + LX + " " + SY + " " + XZ
+                + " " + FRESH_DIM + " 0 64 0 minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -137,13 +141,16 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * A genuinely unavailable destination (an unregistered dim that cannot be
      * loaded) does NOT fire and now REPORTS it (TARGET_UNAVAILABLE) instead of
      * the old silent no-op — and the cargo is preserved.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
+     * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
+    @Pins({"INV-MBM-20", "INV-MBM-21"})
     @Test
     public void railgunReportsUnavailableForUnloadableDestination() throws Exception {
         buildAndComplete(UX, SY, XZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + UX + " " + SY + " " + XZ
-                + " " + UNREGISTERED_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + UX + " " + SY + " " + XZ
+                + " " + UNREGISTERED_DIM + " 0 64 0 minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -166,7 +173,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     /** First registered non-overworld Stellurgy dimension, to clone as an asteroid
      *  template; skips the test if none exist on the harness. */
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = exec("stellurgytest dim list");
+        String joined = read("stellurgytest dim list").raw();
         Assume.assumeFalse("No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -179,13 +186,13 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     }
 
     private void buildAndComplete(int x, int y, int z) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock railgun 0 "
-                + x + " " + y + " " + z);
+        String fixture = arrange("stellurgytest fixture multiblock railgun 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("fixture multiblock railgun failed at " + x + "," + y + "," + z
                 + ": " + fixture, Reply.of(fixture).ok());
 
-        String tryComplete = exec("stellurgytest machine try-complete 0 "
-                + x + " " + y + " " + z);
+        String tryComplete = act("stellurgytest machine try-complete 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("railgun must validate at " + x + "," + y + "," + z
                 + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }

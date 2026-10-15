@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
+import dev.stannismod.stellurgy.libvulpes.tile.TileSchematic;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -14,8 +16,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.tile.TileSchematic;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

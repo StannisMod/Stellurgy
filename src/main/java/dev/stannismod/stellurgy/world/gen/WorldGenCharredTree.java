@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.world.gen;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLog;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 import java.util.Random;
 

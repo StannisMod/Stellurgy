@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.world.StellurgyPlanetWorldInfo;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import dev.stannismod.stellurgy.world.StellurgyPlanetWorldInfo;
 
 /**
  * Installs Stellurgy's per-dimension {@link net.minecraft.world.storage.WorldInfo} on a Stellurgy

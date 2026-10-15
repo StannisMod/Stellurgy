@@ -1,12 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.AutoTakeoffPlanner;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.AutoTakeoffPlanner;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the auto-takeoff corridor planner: the climb is a genuine DIAGONAL (gains

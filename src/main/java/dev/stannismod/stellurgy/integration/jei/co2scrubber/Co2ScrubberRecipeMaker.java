@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.co2scrubber;
 
+import dev.stannismod.stellurgy.api.StellurgyItems;
 import mezz.jei.api.IJeiHelpers;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.api.StellurgyItems;
 
 import java.util.ArrayList;
 import java.util.List;

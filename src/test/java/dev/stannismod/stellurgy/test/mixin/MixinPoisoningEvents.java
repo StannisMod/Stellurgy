@@ -1,17 +1,15 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.inventory.EntityEquipmentSlot;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-
 import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure;
 import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.EntityEquipmentSlot;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
  * Every second a PLAYER breathes poisoned air, as an event: whether the suit kept it out, and the dose
