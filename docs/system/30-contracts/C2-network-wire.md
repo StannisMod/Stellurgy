@@ -107,13 +107,13 @@ the server is inert (INV-NW-02).
   Stellurgy's own sync path and per-station in the player-login handler (`Stellurgy.java:1889`) → two
   producers for one client state.
 
-- **CON-C2-09 [V][T] — a client's machine or entity packet is a USE, and the target decides who may.**
+- **CON-C2-09 [V] — a client's machine or entity packet is a USE, and the target decides who may.**
   `PacketMachine` and `PacketEntity` are the C→S channels every GUI button and pilot key rides; their
   address (dimension + position / entity id) is the client's to write. The server reads none of the
   payload unless the target's `INetworkMachine#canBeUsedBy(sender)` holds — the same predicate that
   keeps that machine's screen open — and logs one WARN on a refusal. No packet on these channels is a
   request for state: state is pushed when a player starts seeing the target (network-wire MECH-NW-10,
-  INV-NW-08). `PacketMachine.java:132-145`, `PacketEntity.java:131-144`.
+  INV-NW-08, which the tests pin). `PacketMachine.java:132-145`, `PacketEntity.java:131-144`.
 
 ## `PacketNavBodyInfo` — the redacted nav channel
 

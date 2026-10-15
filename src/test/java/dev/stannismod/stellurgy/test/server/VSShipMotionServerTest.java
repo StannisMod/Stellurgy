@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.contract.Pins;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
@@ -136,18 +137,17 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
      * the hull's: about 1 when it is carried right, about 20 when the per-second value is used as
      * per-tick, about 0 when it is not carried at all — each blurred by at most the port's push over
      * the hull's speed, which the arrangement keeps under a half.</p>
-     *
-     * <p>red-witnessed: 2026-10-07, one inversion per verdict. PER TICK — {@code EjectionPort#eject}
-     * at {@code double carryX = carry == null ? 0.0D : carry[0];} and its Y and Z twins multiplied by
-     * 20 (the per-second velocity the port read before the fix): "it carried 20.0x the hull's 1.5
-     * blocks/tick along its course". CARRIED AT ALL — the same three lines multiplied by 0: "it
-     * carried 0.0x the hull's 1.5 blocks/tick". Healthy: carried 1.0x at 1.5 blocks/tick.</p>
      */
-    @LegacyWitness(prose = "2026-10-07, one inversion per verdict. PER TICK — {@code EjectionPort#eject} at"
-            + " {@code double carryX = carry == null ? 0.0D : carry[0];} and its Y and Z twins multiplied by 20"
-            + " (the per-second velocity the port read before the fix): \"it carried 20.0x the hull's 1.5"
-            + " blocks/tick along its course\". CARRIED AT ALL — the same three lines multiplied by 0: \"it"
-            + " carried 0.0x the hull's 1.5 blocks/tick\". Healthy: carried 1.0x at 1.5 blocks/tick.")
+    @RedWitness(verdict = "per tick, not per second", member = "EjectionPort#eject",
+            at = "double carryX = carry == null ? 0.0D : carry[0];",
+            replacedBy = "double carryX = carry == null ? 0.0D : 20 * carry[0];",
+            fails = "the item must leave with the hull's motion per TICK, not twenty times it",
+            on = "2026-10-15")
+    @RedWitness(verdict = "carried at all", member = "EjectionPort#eject",
+            at = "double carryX = carry == null ? 0.0D : carry[0];",
+            replacedBy = "double carryX = carry == null ? 0.0D : 0 * carry[0];",
+            fails = "the item must leave WITH the hull's motion, or it is back inside the hull a tick later",
+            on = "2026-10-15")
     @Pins("INV-ATM-25")
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SPIN_UP_TICKS);",
             why = "see SPIN_UP_TICKS: nothing records that the cruise is reached. Its far end is not read; the"

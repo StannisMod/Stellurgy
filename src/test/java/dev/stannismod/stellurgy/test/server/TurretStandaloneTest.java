@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import org.junit.Test;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
@@ -329,21 +330,14 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * to fire is read on the manual trigger, after the gun's own fire check PERMITTED the shot, so
      * the refusal is the launch's and nothing earlier.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-10-07. AIM: with {@code TurretFireControl#aimDirection}"
-            + " at {@code worldTarget == null || isRemnant(mountPos, shipId)} losing its {@code isRemnant} term,"
-            + " this fails at \"a gun in the shipyard that no ship owns was commanded onto a world target from its"
-            + " shipyard address\". FIRE: with {@code TurretFireControl#muzzleOf} at"
-            + " {@code if (isRemnant(mountPos, shipId))} never taken, at \"a gun in the shipyard that no ship owns"
-            + " put a round into the world: {\"ok\":true,\"fired\":true}\" (taken before the aim-window assertions"
-            + " were consolidated; the fire half of the method is unchanged). The fire check's positive half: with"
-            + " {@code TileTurret#canFireNow} at {@code return !targetIsFriendly()} also refusing every manual"
-            + " shot, at \"the shipyard gun's own fire check did not permit the shot\". The control's command"
-            + " link: with {@code TurretFireControl#aimDirection} at"
-            + " {@code worldTarget == null || isRemnant(mountPos, shipId)} made always true (null for every gun),"
-            + " at \"the control gun was never commanded onto its target\". The shipyard gun's build link: with"
-            + " the retired gate restored in {@code TileTurret#update} just before"
-            + " {@code SubsystemNetworkManager.of(world).register(this);} (return while the block is in the"
-            + " shipyard and no record claims it), at \"the shipyard gun never counted its build\".")
+    @RedWitness(verdict = "AIM", member = "TurretFireControl#aimDirection",
+            at = "worldTarget == null || isRemnant(mountPos, shipId)", replacedBy = "worldTarget == null",
+            fails = "a gun in the shipyard that no ship owns was commanded onto a world target",
+            on = "2026-10-15")
+    @RedWitness(verdict = "FIRE", member = "TurretFireControl#muzzleOf",
+            at = "if (isRemnant(mountPos, shipId))", replacedBy = "if (false)",
+            fails = "a gun in the shipyard that no ship owns put a round into the world",
+            on = "2026-10-15")
     @Pins("INV-GUN-07")
     @Test
     public void aGunInTheShipyardThatNoShipOwnsNeitherTurnsNorFires() throws Exception {

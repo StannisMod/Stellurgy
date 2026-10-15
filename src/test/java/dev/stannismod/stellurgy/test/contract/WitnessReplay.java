@@ -116,7 +116,7 @@ final class WitnessReplay {
             return "MISSING no type " + cls;
         }
         String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        int[] body = memberBody(src, r.member.substring(r.member.indexOf('#') + 1));
+        int[] body = memberBody(src, r.member.substring(r.member.indexOf('#') + 1), r.at);
         if (body == null) {
             return "MISSING no member " + r.member;
         }
@@ -219,7 +219,7 @@ final class WitnessReplay {
             return "MISSING no type " + cls;
         }
         String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        int[] body = memberBody(src, member);
+        int[] body = memberBody(src, member, r.at);
         if (body == null) {
             return "MISSING no member " + r.member;
         }
@@ -275,22 +275,58 @@ final class WitnessReplay {
         return found.size() == 1 ? found.get(0) : null;
     }
 
-    /** The span inside the braces of the first declaration of {@code member}, or null. */
-    private static int[] memberBody(String src, String member) {
-        // NOT-A-PROBE-REPLY: Java source -- a member's declaration.
-        Matcher m = Pattern.compile("(?<![\\w.])" + Pattern.quote(member)
+    /**
+     * The span inside the braces of the declaration of {@code member} that holds the record's fragment
+     * {@code at}, or null when no declaration of that name exists.
+     *
+     * <p>A DECLARATION, never a call: the name must follow a type or a modifier, so a call followed by a
+     * block — {@code if (isHoldingFire() || x) {}}, {@code for (P p : damagedIn(d, y)) {} } — is not read as
+     * the member. Of several overloads, the one whose body holds the fragment; when none or more than one
+     * does, the first, so the count the caller takes then says MISSING or AMBIGUOUS.</p>
+     */
+    private static int[] memberBody(String src, String member, String at) {
+        // NOT-A-PROBE-REPLY: Java source -- a member's declaration: a type or modifier token, then the name.
+        Matcher m = Pattern.compile("(?<![\\w.])([\\w$<>\\[\\],.?]+)\\s+" + Pattern.quote(member)
                 + "\\s*\\([^;{]*\\)\\s*(?:throws[^{;]*)?\\{").matcher(src);
-        if (!m.find()) {
+        List<int[]> bodies = new ArrayList<>();
+        while (m.find()) {
+            if (notAType(m.group(1))) {
+                continue;
+            }
+            int depth = 1;
+            int i = m.end();
+            while (i < src.length() && depth > 0) {
+                char c = src.charAt(i);
+                depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+                i++;
+            }
+            bodies.add(new int[]{m.end(), i - 1});
+        }
+        if (bodies.isEmpty()) {
             return null;
         }
-        int depth = 1;
-        int i = m.end();
-        while (i < src.length() && depth > 0) {
-            char c = src.charAt(i);
-            depth += c == '{' ? 1 : c == '}' ? -1 : 0;
-            i++;
+        List<int[]> holding = new ArrayList<>();
+        for (int[] body : bodies) {
+            if (occurrences(src, body, at) > 0) {
+                holding.add(body);
+            }
         }
-        return new int[]{m.end(), i - 1};
+        return holding.size() == 1 ? holding.get(0) : bodies.get(0);
+    }
+
+    /** Whether a word that stands before a name and a parenthesis leaves it a call, not a declaration. */
+    private static boolean notAType(String word) {
+        switch (word) {
+            case "return":
+            case "new":
+            case "else":
+            case "throw":
+            case "case":
+            case "assert":
+                return true;
+            default:
+                return false;
+        }
     }
 
     /** The failure message of the record's method with the replaced file compiled first; null if it passed. */
