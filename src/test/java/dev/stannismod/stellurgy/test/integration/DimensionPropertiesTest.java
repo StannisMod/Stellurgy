@@ -1,19 +1,18 @@
 package dev.stannismod.stellurgy.test.integration;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * DimensionProperties domain logic — defaults, NBT round-trip, hierarchy.
@@ -74,6 +73,8 @@ public class DimensionPropertiesTest {
         assertFalse("empty template must not be written", nbt.hasKey("terrainTemplate"));
     }
 
+    /** Pins INV-DIM-06 (realizeAtmosphere does not corrupt id or hierarchy). */
+    @Pins("INV-DIM-06")
     @Test
     public void realizingTheAtmosphereDoesNotCorruptIdOrHierarchy() {
         DimensionProperties props = new DimensionProperties(123, "Mars");
@@ -156,12 +157,11 @@ public class DimensionPropertiesTest {
      *
      * <p>What this does not see: a MOON's placement, which has a law of its own — see
      * {@link #theFreeFlightMapLaysAMoonOutAsItDidWhenLunaStoodAt150}.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code DimensionProperties#getSpacePosition} at {@code : orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the planet
-     * radius — back on {@code 100f * orbitalDist}: "(x, z) at angle 0, then at a quarter turn:
-     * [2.99195808E8, 0.0, 1.8320459429275304E-8, 2.99195808E8]: arrays first differed at element [0];
-     * expected:&lt;20000.0&gt; but was:&lt;2.99195808E8&gt;" — both placements wrong, one verdict.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code DimensionProperties#getSpacePosition} at {@code : orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the planet"
+            + " radius — back on {@code 100f * orbitalDist}: \"(x, z) at angle 0, then at a quarter turn:"
+            + " [2.99195808E8, 0.0, 1.8320459429275304E-8, 2.99195808E8]: arrays first differed at element [0];"
+            + " expected:&lt;20000.0&gt; but was:&lt;2.99195808E8&gt;\" — both placements wrong, one verdict.")
     @Test
     public void theFreeFlightMapLaysAPlanetOutTenThousandUnitsPerAu() {
         DimensionProperties planet = new DimensionProperties(9002, "TwoAuOut");

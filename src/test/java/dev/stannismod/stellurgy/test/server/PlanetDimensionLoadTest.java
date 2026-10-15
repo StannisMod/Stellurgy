@@ -1,18 +1,17 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * planet/dimension lifecycle smoke.
@@ -35,6 +34,8 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private static final String ANGLE_PATTERN = "angle";
 
+    /** Pins INV-DIM-16 (A registered planet uses WorldProviderPlanet). */
+    @Pins("INV-DIM-16")
     @Test
     public void providerClassIsWorldProviderPlanet() throws Exception {
         // Stellurgy registers Earth as dim 0 but keeps its vanilla WorldProviderSurface,
@@ -60,11 +61,11 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     public void celestialAngleProgressesAcrossDifferentWorldTimes() throws Exception {
         int stellurgyDim = firstNonOverworldStellurgyDimOrSkip();
         loadDim(stellurgyDim);
-        double a0 = extractAngle(client().execute(
+        double a0 = extractAngle(client().read(
                 "stellurgytest dim celestial-angle " + stellurgyDim + " 0"));
-        double a6k = extractAngle(client().execute(
+        double a6k = extractAngle(client().read(
                 "stellurgytest dim celestial-angle " + stellurgyDim + " 6000"));
-        double a12k = extractAngle(client().execute(
+        double a12k = extractAngle(client().read(
                 "stellurgytest dim celestial-angle " + stellurgyDim + " 12000"));
 
         // Soft assertion: three meaningfully different world times must not
@@ -81,9 +82,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     /** The nether (-1) and the end (1) are not classified as Stellurgy planets. */
     @Test
     public void netherAndEndAreNotStellurgyPlanets() throws Exception {
-        DimInfo nether = DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), -1);
+        DimInfo nether = DimInfo.forDim(cmd -> String.join("\n", client().read(cmd)), -1);
         assertFalse("nether is mis-classified as a Stellurgy planet: " + nether.raw(), nether.stellurgyPlanet);
-        DimInfo end = DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), 1);
+        DimInfo end = DimInfo.forDim(cmd -> String.join("\n", client().read(cmd)), 1);
         assertFalse("end is mis-classified as a Stellurgy planet: " + end.raw(), end.stellurgyPlanet);
     }
 
@@ -97,7 +98,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         for (int dim : new int[]{0, -1, 1}) {
             // The read refuses a world the probe could not bring up: a negated claim about a world
             // that does not exist would otherwise pass while proving nothing.
-            DimWeather weather = DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+            DimWeather weather = DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                     .requireDim(dim);
             assertFalse("dim " + dim + " must NOT have the Stellurgy weather wrapper installed: " + weather.raw(),
                     weather.usesStellurgyWorldInfo());
@@ -105,7 +106,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest dim list"));
+        String joined = String.join("\n", client().read("stellurgytest dim list"));
         Assume.assumeFalse(
                 "No Stellurgy dimensions registered — skipping (empty galaxy?)",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
@@ -128,13 +129,13 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private DimInfo loadAndInfo(int dim) throws Exception {
         loadDim(dim);
-        return DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), dim);
+        return DimInfo.forDim(cmd -> String.join("\n", client().read(cmd)), dim);
     }
 
     private void loadDim(int dim) throws Exception {
         // Force the dim loaded before any property/angle probe — Stellurgy dims are
         // not in DimensionManager-loaded state on fresh boot.
-        client().execute("stellurgytest dim load " + dim);
+        client().arrange("stellurgytest dim load " + dim);
     }
 
     private static double extractAngle(List<String> response) {

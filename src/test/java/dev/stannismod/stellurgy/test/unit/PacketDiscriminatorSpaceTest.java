@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketRegistry;
 import dev.stannismod.stellurgy.network.PacketSatellite;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;

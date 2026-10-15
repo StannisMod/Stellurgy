@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.VSShipCrosser;
+import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.VSShipCrosser;
+import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 

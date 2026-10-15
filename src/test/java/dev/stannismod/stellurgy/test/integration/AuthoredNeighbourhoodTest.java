@@ -1,19 +1,15 @@
 package dev.stannismod.stellurgy.test.integration;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Before;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.ReportOnce;
-import dev.stannismod.stellurgy.universe.SectorBox;
-import dev.stannismod.stellurgy.universe.TelescopeScan;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -73,14 +69,16 @@ public class AuthoredNeighbourhoodTest {
      * and at least one outside it whose own cells cross into it, so both halves of "reaches" are
      * exercised.</p>
      *
-     * <p>red-witnessed: with {@code UniverseRegistry#anchorsInTerritory} at
-     * {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with "a survey's
-     * territory may not offer a seat that reaches the authored neighbourhood"; with
-     * {@code UniverseRegistry#anchorForCell} at
-     * {@code return seat.isPresent() && clearOfAuthored(seat.get()) ? seat : Optional.<GalacticCoord>empty();}
-     * returning {@code seat}, with "no cell may be attributed to a seat that reaches the authored
-     * neighbourhood" — one inversion per run, 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
+    @Pins("ADDR-23")
+    @LegacyWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
+            + " {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with \"a survey's"
+            + " territory may not offer a seat that reaches the authored neighbourhood\"; with"
+            + " {@code UniverseRegistry#anchorForCell} at"
+            + " {@code return seat.isPresent() && clearOfAuthored(seat.get()) ? seat : Optional.<GalacticCoord>empty();}"
+            + " returning {@code seat}, with \"no cell may be attributed to a seat that reaches the authored"
+            + " neighbourhood\" — one inversion per run, 2026-10-03.")
     @Test
     public void noSeatThatReachesAnAuthoredNeighbourhoodIsASystem() {
         GalacticCoord authored = GalacticCoord.ORIGIN.cellCentre();
@@ -145,10 +143,12 @@ public class AuthoredNeighbourhoodTest {
      * <p>Does NOT see what a pin does to the attribution of the cells INSIDE its box — that is a
      * different question, with an answer of its own.</p>
      *
-     * <p>red-witnessed: with {@code UniverseRegistry#authoredBySuperIndex} at
-     * {@code if (pinnedSystems.containsKey(anchor.cellKey()))} reading {@code if (false)}, this fails
-     * with "a pinned system is not authored and must not clear its sibling" — 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
+    @Pins("ADDR-23")
+    @LegacyWitness(prose = "with {@code UniverseRegistry#authoredBySuperIndex} at"
+            + " {@code if (pinnedSystems.containsKey(anchor.cellKey()))} reading {@code if (false)}, this fails"
+            + " with \"a pinned system is not authored and must not clear its sibling\" — 2026-10-03.")
     @Test
     public void aPinnedSystemClearsNothingAroundIt() {
         long reach = config.minSpacing / 2L;
@@ -190,11 +190,10 @@ public class AuthoredNeighbourhoodTest {
 
     /**
      * What the generator says the system at {@code seat} owns; a seat it handed out always has one.
-     *
-     * <p>red-witnessed: with {@code ClusteredGalaxyGenerator#neighbourhoodOf} at
-     * {@code if (!seated.isPresent() || !seated.get().sameCell(here))} always true, both scenarios fail
-     * here with "the generator must say what its own seat … owns" — 2026-10-03.</p>
      */
+    @LegacyWitness(prose = "with {@code ClusteredGalaxyGenerator#neighbourhoodOf} at"
+            + " {@code if (!seated.isPresent() || !seated.get().sameCell(here))} always true, both scenarios fail"
+            + " here with \"the generator must say what its own seat … owns\" — 2026-10-03.")
     private SectorBox owns(GalacticCoord seat) {
         Optional<SectorBox> box = generator.neighbourhoodOf(SEED, seat);
         assertTrue("the generator must say what its own seat " + seat.cellKey() + " owns", box.isPresent());

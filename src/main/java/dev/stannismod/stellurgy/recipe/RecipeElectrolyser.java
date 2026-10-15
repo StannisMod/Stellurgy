@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.recipe;
 
-import dev.stannismod.stellurgy.tile.multiblock.machine.TileElectrolyser;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.tile.multiblock.machine.TileElectrolyser;
 
 public class RecipeElectrolyser extends RecipeMachineFactory {
 

@@ -1,17 +1,14 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Everything that is true of a booted client before any feature is exercised: the mod list agrees
@@ -36,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  * {@code TestClientSoundMutedE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
+public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
 
     /** A deadline for the mute's own client tick, which is one of the first the client runs. Kept at
      *  the 200 ticks the readback poll it replaces allowed. */
@@ -92,6 +89,24 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
     }
 
     /**
+     * The repair welder has an inventory model on a booted client — it is not drawn as the missing
+     * model's purple-and-black cube. The item ships a model file; what decides whether the client
+     * finds it is the item's mapping in {@code ClientProxy#preInitItems}.
+     */
+    @LegacyWitness(prose = "with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation(\"stellurgy:repairWelder\", \"inventory\")}"
+            + " — its whole line — removed (the shape it shipped with), this fails at \"the repair welder is drawn"
+            + " with the missing model: its item has no model mapping\" (2026-10-06).")
+    @Test
+    public void theRepairWelderHasAnInventoryModel() throws Exception {
+        scenario().asserting("the repair welder's baked inventory model is not the missing model");
+        bot().waitForWorld();
+        scenario().requireArranged("the reader must be able to see a missing model at all — air has none",
+                ItemModelReader.airDrawsMissing(bot()));
+        assertFalse("the repair welder is drawn with the missing model: its item has no model mapping",
+                ItemModelReader.repairWelderDrawsMissing(bot()));
+    }
+
+    /**
      * A declared Stellurgy sound the server plays reaches the real client's {@code SoundManager}.
      *
      * <p>The server plays {@code AudioRegistry.combustionRocket} at the player's feet through the
@@ -101,13 +116,12 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
      * {@code client_sound_played} — a LINK, awaited from a mark. An UNREGISTERED SoundEvent encodes as
      * id -1, decodes to {@code null}, and the client's task executor swallows the NPE: the sound
      * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
-     *
-     * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
-     * ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): "combustionRocket must be present in ForgeRegistries at send time:
-     * … \"registered\":false", 2026-09-28. The probe's own reply answers {@code ok} whenever the
-     * {@code AudioRegistry} field resolves; the registration verdict right after it is the one that
-     * decides.</p>
      */
+    @LegacyWitness(prose = "with {@code combustionRocket} left out of {@code AudioRegistry}'s registration"
+            + " ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): \"combustionRocket must be present in ForgeRegistries at send time:"
+            + " … \\\"registered\\\":false\", 2026-09-28. The probe's own reply answers {@code ok} whenever the"
+            + " {@code AudioRegistry} field resolves; the registration verdict right after it is the one that"
+            + " decides.")
     @Test
     public void serverPlayedStellurgySoundReachesClientSoundManager() throws Exception {
         scenario().asserting("a sound the server plays reaches the client's sound manager");
@@ -128,7 +142,7 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
         // broadcast radius by construction.
         int x = plot().centerX(), y = dev.stannismod.stellurgy.test.Plot.DEFAULT_Y + 1, z = plot().centerZ();
         long soundMark = clientEvents().mark();
-        String played = exec("stellurgytest sound play 0 " + x + " " + y + " " + z + " combustionRocket");
+        String played = read("stellurgytest sound play 0 " + x + " " + y + " " + z + " combustionRocket").raw();
         assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
         assertTrue("combustionRocket must be present in ForgeRegistries at send time: " + played,
                 Reply.of(played).bool("registered"));

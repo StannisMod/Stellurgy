@@ -4,13 +4,12 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Poisoned air, in the open: a world whose air carries a poison past its limit is SAID to be
@@ -38,28 +37,26 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     /** EXPERIMENT: how long the golem breathes each air — the dose is this time. Ten seconds. */
     private static final int EXPOSURE_TICKS = 200;
 
-    /**
-     * red-witnessed: with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the
-     * dose kept, the harm never dealt): "health 100.0 -> 100.0"; with {@code AtmosphereAssertions#holdsAt}
-     * at {@code return around != null && around.isToxic();} reading the zone's air only: "air with carbon
-     * monoxide past its limit is said to be poisonous, outdoors too". Run apart: the statement is
-     * asserted first and would have hidden the harm.
-     */
+    @LegacyWitness(prose = "with {@code Poisoning#tick} at {@code if (toxic && damage > 0.0F)} made unreachable"
+            + " (the dose kept, the harm never dealt): \"health 100.0 -> 100.0\" — taken before 2026-10-06, when the"
+            + " line had no {@code toxic &&}, which {@code enableToxicity}'s default leaves true; with"
+            + " {@code AtmosphereAssertions#holdsAt} at {@code return around != null && around.isToxic();} reading"
+            + " the zone's air only: \"air with carbon monoxide past its limit is said to be poisonous, outdoors"
+            + " too\". Run apart: the statement is asserted first and would have hidden the harm.")
     @Test
     public void aLivingThingBreathingPoisonedAirIsHurtByTheDoseAndNotInCleanAir() throws Exception {
-        PlanetAir.Probe probe = this::exec;
         FixtureSite site = clearedSite(1, 4, "the golem is held in this air");
         int x = site.x, y = site.y + 1, z = site.z;
-        Reply.of(exec("stellurgytest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)))
+        Reply.of(arrange("stellurgytest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)).raw())
                 .requireOk("keep the golem's chunk ticking");
 
         String spawn = "stellurgytest entity spawn " + OVERWORLD + " " + x + " " + y + " " + z
                 + " minecraft:villager_golem";
-        int golem = Reply.of(spawn, exec(spawn)).requireOk(spawn).integer("entityId");
-        Reply.of(exec("stellurgytest entity set-no-gravity " + OVERWORLD + " " + golem + " true"))
+        int golem = arrange(spawn).requireOk(spawn).integer("entityId");
+        Reply.of(arrange("stellurgytest entity set-no-gravity " + OVERWORLD + " " + golem + " true").raw())
                 .requireOk("hold the golem in the open air");
 
-        PlanetAir before = PlanetAir.snapshot(probe, OVERWORLD);
+        PlanetAir before = PlanetAir.snapshot(c -> read(c).raw(), OVERWORLD);
         try {
             // CONTROL: the world's own air, for the same time.
             assertFalse("CONTROL: the world's own air is not said to be poisonous",
@@ -73,7 +70,7 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             assertEquals("CONTROL: clean air does not hurt it", start.number("health"),
                     clean.number("health"), 0.0D);
 
-            Reply.of(exec("stellurgytest planet add-gas " + OVERWORLD + " carbonmonoxide " + MONOXIDE))
+            Reply.of(arrange("stellurgytest planet add-gas " + OVERWORLD + " carbonmonoxide " + MONOXIDE).raw())
                     .requireOk("poison the world's air");
             assertTrue("air with carbon monoxide past its limit is said to be poisonous, outdoors too",
                     statements(x, y, z).contains("TOXIC"));
@@ -85,20 +82,20 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
                     poisoned.number("health") < clean.number("health"));
             assertEquals("and what hurt it last was the poison", "Poison", poisoned.text("lastDamageType"));
         } finally {
-            before.restore(probe);
-            exec("stellurgytest chunk release " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4));
+            before.restore(c -> arrange(c).raw());
+            arrange("stellurgytest chunk release " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4));
         }
     }
 
     private Reply info(int golem) throws Exception {
         String command = "stellurgytest entity info " + OVERWORLD + " " + golem;
-        Reply reply = Reply.of(command, exec(command));
+        Reply reply = read(command);
         assertTrue("the golem must be alive to be read: " + reply, reply.bool("isAlive"));
         return reply;
     }
 
     private java.util.List<String> statements(int x, int y, int z) throws Exception {
         String command = "stellurgytest atmosphere get " + OVERWORLD + " " + x + " " + y + " " + z;
-        return Arrays.asList(Reply.of(command, exec(command)).textArray("statements"));
+        return Arrays.asList(read(command).textArray("statements"));
     }
 }

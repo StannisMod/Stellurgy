@@ -1,13 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -49,21 +45,21 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
     public void solarArrayInSpaceDimOffStationTicksWithoutCrashing() throws Exception {
         int cx = 9100, cy = FixtureSite.OPEN_AIR_Y, cz = 9100;
 
-        ok(client().execute("stellurgytest dim load " + SPACE_DIM));
+        ok(client().arrange("stellurgytest dim load " + SPACE_DIM));
 
-        String fixture = join(client().execute("stellurgytest fixture multiblock solar-array "
+        String fixture = join(client().arrange("stellurgytest fixture multiblock solar-array "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz));
         assertTrue("fixture multiblock solar-array must build in dim " + SPACE_DIM
                 + ": " + fixture, Reply.of(fixture).ok());
 
-        String tryComplete = join(client().execute("stellurgytest machine try-complete "
+        String tryComplete = join(client().act("stellurgytest machine try-complete "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz));
         assertTrue("solar array must validate (isComplete=true) so update() reaches "
                 + "the insolation branch: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
 
         // Fixed: the off-station tick returns 0 insolation instead of NPEing.
-        String tick = join(client().execute("stellurgytest tile force-tick "
+        String tick = join(client().act("stellurgytest tile force-tick "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 5"));
         assertTrue("TileSolarArray.update() off-station in the space dim must tick "
                 + "without throwing (0 insolation, not a crash) after the null-guard "
@@ -78,21 +74,21 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
     public void solarPanelInSpaceDimOffStationTicksWithoutCrashing() throws Exception {
         int x = 9300, y = 200, z = 9300;
 
-        ok(client().execute("stellurgytest dim load " + SPACE_DIM));
+        ok(client().arrange("stellurgytest dim load " + SPACE_DIM));
 
-        ok(client().execute("stellurgytest fill " + SPACE_DIM + " " + (x - 2) + " " + (y - 2)
+        ok(client().arrange("stellurgytest fill " + SPACE_DIM + " " + (x - 2) + " " + (y - 2)
                 + " " + (z - 2) + " " + (x + 2) + " " + (y + 4) + " " + (z + 2)
                 + " minecraft:air"));
 
-        String place = join(client().execute("stellurgytest place " + SPACE_DIM
+        String place = join(client().arrange("stellurgytest place " + SPACE_DIM
                 + " " + x + " " + y + " " + z + " stellurgy:solarGenerator"));
         assertTrue("solar generator must place: " + place,
                 Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
-        client().execute("time set day");
-        client().execute("weather clear 100000");
+        client().arrange("time set day");
+        client().arrange("weather clear 100000");
 
-        String tick = join(client().execute("stellurgytest tile force-tick "
+        String tick = join(client().act("stellurgytest tile force-tick "
                 + SPACE_DIM + " " + x + " " + y + " " + z + " 5"));
         assertTrue("TileSolarPanel.getPowerPerOperation() off-station in the space dim "
                 + "must tick without throwing (0 insolation) after the null-guard fix "
@@ -127,26 +123,25 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * it is unpacked) — no probe registers an uncreated station, and both forms reach the same
      * branch; and the two other consumers of this decision, the solar array and the microwave
      * receiver.</p>
-     *
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * made to dereference the planet unguarded, this fails at the tick step: the world's own tick of
-     * the panel threw, the shared server went down, and the force-tick exchange failed with "Server
-     * bridge exchange failed" (2026-10-02).
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * answering 1.0 on its unresolved branch, this fails at the made-nothing verdict with "expected:<0> but was:<10>"
-     * (2026-10-02).
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * answering 0.0 on its resolved branch, this fails at the
-     * control verdict, the panel on the overworld's station storing 0 (2026-10-02).
      */
+    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " made to dereference the planet unguarded, this fails at the tick step: the world's own tick of"
+            + " the panel threw, the shared server went down, and the force-tick exchange failed with \"Server"
+            + " bridge exchange failed\" (2026-10-02).")
+    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " answering 1.0 on its unresolved branch, this fails at the made-nothing verdict with \"expected:<0> but was:<10>\""
+            + " (2026-10-02).")
+    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " answering 0.0 on its resolved branch, this fails at the"
+            + " control verdict, the panel on the overworld's station storing 0 (2026-10-02).")
     @Test
     public void aSolarPanelOnAStationWithNoResolvedPlanetTicksWithoutThrowingAndMakesNothing()
             throws Exception {
         Reply loaded = Reply.of("stellurgytest dim load",
-                join(client().execute("stellurgytest dim load " + SPACE_DIM)));
+                join(client().arrange("stellurgytest dim load " + SPACE_DIM)));
         ArrangementFailure.requireArranged("the space dimension must be loaded: " + loaded,
                 loaded.bool("loaded"));
 
@@ -154,7 +149,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         int[] unresolved = panelOnANewStation(Constants.INVALID_PLANET,
                 "the panel on a station with no planet");
 
-        String controlTick = join(client().execute("stellurgytest tile force-tick " + SPACE_DIM
+        String controlTick = join(client().act("stellurgytest tile force-tick " + SPACE_DIM
                 + " " + resolved[0] + " " + resolved[1] + " " + resolved[2] + " 1"));
         ArrangementFailure.requireArranged("the control panel must tick: " + controlTick,
                 Reply.of("stellurgytest tile force-tick", controlTick).ok());
@@ -165,7 +160,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
                 + " without that, the zero below would say nothing: stored " + controlStored,
                 controlStored > 0);
 
-        String tick = join(client().execute("stellurgytest tile force-tick " + SPACE_DIM
+        String tick = join(client().act("stellurgytest tile force-tick " + SPACE_DIM
                 + " " + unresolved[0] + " " + unresolved[1] + " " + unresolved[2] + " 1"));
         assertTrue("a panel on a station with no resolved planet must tick without throwing: "
                 + tick, Reply.of("stellurgytest tile force-tick", tick).ok());
@@ -186,32 +181,31 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * <p>The sliver is asked of the reverse lookup DIRECTLY as well as through the panel's power: on
      * this shared server a sibling scenario may have put a station orbiting the overworld into the
      * neighbouring cell, and then a regressed lookup would still hand the panel sunlight.</p>
-     *
-     * <p>red-witnessed: 2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at
-     * {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its
-     * pre-fix form without the offset, this fails with "the +X perimeter sliver (worldX=-1020) must map
-     * back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …
-     * expected:&lt;1&gt; but was:&lt;null&gt;".</p>
      */
+    @LegacyWitness(prose = "2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at"
+            + " {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its"
+            + " pre-fix form without the offset, this fails with \"the +X perimeter sliver (worldX=-1020) must map"
+            + " back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …"
+            + " expected:&lt;1&gt; but was:&lt;null&gt;\".")
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
-        client().execute("stellurgytest dim load " + SPACE_DIM);
+        client().arrange("stellurgytest dim load " + SPACE_DIM);
 
         Reply create = Reply.of("stellurgytest station create",
-                join(client().execute("stellurgytest station create 0")));
+                join(client().arrange("stellurgytest station create 0")));
         assertTrue("station must create: " + create, create.ok());
         int stationId = create.integer("id");
-        String setParent = join(client().execute("stellurgytest station set-parent " + stationId + " 0"));
+        String setParent = join(client().arrange("stellurgytest station set-parent " + stationId + " 0"));
         assertTrue("station set-parent must succeed: " + setParent, Reply.of(setParent).ok());
 
-        StationInfo info = StationInfo.byId(cmd -> join(client().execute(cmd)), stationId);
+        StationInfo info = StationInfo.byId(cmd -> join(client().read(cmd)), stationId);
         int spawnX = info.spawnX();
         int spawnZ = info.spawnZ();
         int gridX = Math.round(spawnX / 2048f);
         int y = 200;
         int sliverX = gridX * 2048 + 1024 + 4;
 
-        String atSliver = join(client().execute("stellurgytest station at " + sliverX + " " + y + " " + spawnZ));
+        String atSliver = join(client().read("stellurgytest station at " + sliverX + " " + y + " " + spawnZ));
         // `station at` writes `stationAtPos` as null when no station owns the coordinates, and
         // absence is the answer there: "no station", the exact regression this pins — so it must
         // fail as the contract, not as a refusal about the reply.
@@ -231,20 +225,20 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
 
     /** Place a solar generator, force-tick 100, return the energyStored delta. */
     private long powerDeltaOver100Ticks(int x, int y, int z) throws Exception {
-        client().execute("stellurgytest fill " + SPACE_DIM + " " + (x - 2) + " " + (y - 2) + " " + (z - 2)
+        client().arrange("stellurgytest fill " + SPACE_DIM + " " + (x - 2) + " " + (y - 2) + " " + (z - 2)
                 + " " + (x + 2) + " " + (y + 4) + " " + (z + 2) + " minecraft:air");
-        String place = join(client().execute("stellurgytest place " + SPACE_DIM + " " + x + " " + y + " " + z
+        String place = join(client().arrange("stellurgytest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " stellurgy:solarGenerator"));
         assertTrue("solar generator must place at " + x + "," + y + "," + z + ": " + place,
                 Reply.of(place).ok() || Reply.of(place).bool("placed"));
         // Through the reader: a panel that is not there answers a well-formed absence, and a delta
         // between two absences is zero — which is exactly the claim the caller makes.
-        long before = EnergyStore.at(cmd -> join(client().execute(cmd)), SPACE_DIM, x, y, z)
+        long before = EnergyStore.at(cmd -> join(client().read(cmd)), SPACE_DIM, x, y, z)
                 .requireEnergy("the placed panel must expose a store")
                 .stored();
-        String tick = join(client().execute("stellurgytest tile force-tick " + SPACE_DIM + " " + x + " " + y + " " + z + " 100"));
+        String tick = join(client().act("stellurgytest tile force-tick " + SPACE_DIM + " " + x + " " + y + " " + z + " 100"));
         assertTrue("force-tick must not throw: " + tick, Reply.of(tick).ok());
-        return EnergyStore.at(cmd -> join(client().execute(cmd)), SPACE_DIM, x, y, z).stored() - before;
+        return EnergyStore.at(cmd -> join(client().read(cmd)), SPACE_DIM, x, y, z).stored() - before;
     }
 
     /**
@@ -253,18 +247,18 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      */
     private int[] panelOnANewStation(int planet, String what) throws Exception {
         Reply station = Reply.of("stellurgytest station create",
-                join(client().execute("stellurgytest station create " + planet)));
+                join(client().arrange("stellurgytest station create " + planet)));
         ArrangementFailure.requireArranged(what + " — the station must be created: " + station,
                 station.ok());
         ArrangementFailure.requireArranged(what + " — the station must orbit " + planet + ": "
                 + station, station.integer("orbitingBody") == planet);
         Reply info = Reply.of("stellurgytest station info",
-                join(client().execute("stellurgytest station info " + station.integer("id"))));
+                join(client().read("stellurgytest station info " + station.integer("id"))));
         FixtureSite site = FixtureSite.openAir(SPACE_DIM, info.integer("spawnX"),
                 info.integer("spawnZ"));
-        site.requireClear(cmd -> join(client().execute(cmd)), 0, 255 - site.y, what);
+        site.requireClear(cmd -> join(client().arrange(cmd)), 0, 255 - site.y, what);
         int[] panel = {site.x, site.y + 1, site.z};
-        Reply placed = Reply.of("stellurgytest place", join(client().execute("stellurgytest place "
+        Reply placed = Reply.of("stellurgytest place", join(client().arrange("stellurgytest place "
                 + SPACE_DIM + " " + panel[0] + " " + panel[1] + " " + panel[2]
                 + " stellurgy:solarGenerator")));
         ArrangementFailure.requireArranged(what + " — the panel must be placed: " + placed,
@@ -274,7 +268,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
 
     /** The energy a panel holds, through its Forge energy capability. */
     private int storedIn(int[] panel) throws Exception {
-        Reply stored = Reply.of("stellurgytest energy stored", join(client().execute(
+        Reply stored = Reply.of("stellurgytest energy stored", join(client().read(
                 "stellurgytest energy stored " + SPACE_DIM + " " + panel[0] + " " + panel[1] + " "
                         + panel[2])));
         ArrangementFailure.requireArranged("the panel must expose stored energy: " + stored,

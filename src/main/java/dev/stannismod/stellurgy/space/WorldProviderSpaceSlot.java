@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.space;
 
+import dev.stannismod.stellurgy.client.render.planet.BoundarySky;
+import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 import net.minecraftforge.client.IRenderHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.render.planet.BoundarySky;
-import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 
 /**
  * Pool-slot space world provider: a reusable empty-space world whose ON-DISK chunk

@@ -1,18 +1,8 @@
 package dev.stannismod.stellurgy.integration.dataloaders;
 
-import java.util.Locale;
-
-import javax.annotation.Nullable;
-
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextFormatting;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
-import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.StatsRocket;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -21,10 +11,19 @@ import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.item.ItemAsteroidChip;
 import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.util.StationLandingLocation;
 import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.util.StationLandingLocation;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.fluids.FluidStack;
+
+import javax.annotation.Nullable;
+import java.util.Locale;
 
 /**
  * Used to load various description strings from objects of type T.

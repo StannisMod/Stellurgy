@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.player;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.space.ShipAboardTag;
+
+import java.util.List;
 
 /**
  * The DURABLE facts this mod holds about one player: what he is aboard, and the one window he is

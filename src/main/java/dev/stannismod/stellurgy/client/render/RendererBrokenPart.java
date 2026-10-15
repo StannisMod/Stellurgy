@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
+import dev.stannismod.stellurgy.util.IBrokenPartBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.GlStateManager;
@@ -8,10 +12,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.Vec3i;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
-import dev.stannismod.stellurgy.util.IBrokenPartBlock;
-import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 import java.util.HashMap;
 import java.util.Map;

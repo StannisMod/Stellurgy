@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
-import net.minecraft.client.gui.GuiButton;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.GuiPlanetButton;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.util.LinkedList;
 import java.util.List;

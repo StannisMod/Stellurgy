@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 public class BlockHalfTile extends BlockTile {
     /** Effectively final, process lifetime: built once at class initialisation. */

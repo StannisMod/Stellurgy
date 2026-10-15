@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.Plot;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-
-import dev.stannismod.stellurgy.test.Plot;
 /**
  * A scenario's own flight recorder, and the thing that makes its failure readable.
  *

@@ -1,20 +1,14 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.Plot;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -61,13 +55,22 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
     private static final double ATTITUDE_MOVED_DOT = 0.98;
 
     /**
-     * How far the CLIENT's rendered rider climb may sit from the SERVER's ship climb, in blocks.
+     * How far the CLIENT may move a seated rider (or his seat) away from where it put him relative
+     * to the ship it shows, over a climb, in blocks — the largest change in that offset, read tick
+     * by tick off one record ({@link SeatCarry#riderDrift}).
      *
-     * <p>The TEST'S OWN replication tolerance: the two are the same climb read on two sides, one
-     * interpolated. Three blocks is under a craft's own height, so a rider left behind still
-     * fails.</p>
+     * <p>The TEST'S OWN: a rider glued to his ship holds the offset exactly, so the honest number is
+     * zero. Three blocks is under a craft's own height, so a rider left behind still fails. It used
+     * to bound the CLIENT rider's climb against the SERVER ship's, read six client ticks apart —
+     * the same number, kept, for a quantity that no longer depends on when it was read.</p>
      */
     private static final double RIDER_TRACKS_SHIP_BLOCKS = 3.0;
+
+    /**
+     * How long the client is given to SHOW a climb the server has already performed, in ticks — a
+     * deadline on pose replication of a move that happened, never a settle.
+     */
+    private static final int SHOWN_CLIMB_LINK_BUDGET_TICKS = 200;
 
     /**
      * How far the camera yaw may move under a hard sideways mouse look, in degrees.
@@ -179,6 +182,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * DOMINANCE assertion still reads a fact the travel bar does not settle: "it moved 2 blocks along
      * Z" says nothing about whether X moved more.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int spent = 0; spent < TRAVEL_DOSE_TICKS; spent += 2) {",
+            why = "the MAXIMUM driven travel and the other axis off the same reply are the measurement; the ship"
+                    + " publishes no per-tick pose. What it cannot see: an excursion inside one 2-tick sample.")
     private double[] travelWindow(String shipId, int key, Axis driven, Axis other,
                                   double drivenBefore, double otherBefore) throws Exception {
         double best = 0.0;
@@ -192,9 +198,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                     seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", "0"),
                     "with input = set in dim 0",
                     "the seated pilot's held key must reach the ship's flight computer", 200);
-            // WINDOW: the MAXIMUM driven travel and the other axis off the same reply are the
-            // measurement; the ship publishes no per-tick pose. What it cannot see: an excursion inside
-            // one 2-tick sample.
             for (int spent = 0; spent < TRAVEL_DOSE_TICKS; spent += 2) {
                 advanceServerAndClient(2);
                 String info = shipInfoById(shipId);
@@ -226,7 +229,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      */
     private static final int TRAVEL_DOSE_TICKS = 30;
 
-    private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
 
     private static final String SEAT_VARIANT = "with-pilot-seat";
@@ -244,15 +246,14 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * FIRST ship's base after the second one has been parked closer to it, must be shown answering
      * with the WRONG ship: without that leg "the id form was right" would be indistinguishable from
      * "any form would have been right here".</p>
-     *
-     * <p>red-witnessed: with the teleport's transform write skipped ({@code VSBridge#teleportShip} at
-     * {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1
-     * fails at "…and it must report where A IS now, not where it was built (posY=153.76)", 2026-09-28.
-     * The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —
-     * the posY verdict's claim; the "still answers" verdict before it stayed green on that inversion,
-     * the ship being loaded either way. Refusing the adoption instead left the test green: the rigid
-     * teleport never re-assembles, so there is no adoption on this path.</p>
      */
+    @LegacyWitness(prose = "with the teleport's transform write skipped ({@code VSBridge#teleportShip} at"
+            + " {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1"
+            + " fails at \"…and it must report where A IS now, not where it was built (posY=153.76)\", 2026-09-28."
+            + " The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —"
+            + " the posY verdict's claim; the \"still answers\" verdict before it stayed green on that inversion,"
+            + " the ship being loaded either way. Refusing the adoption instead left the test green: the rigid"
+            + " teleport never re-assembles, so there is no adoption on this path.")
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
 
@@ -267,7 +268,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         final int bx = siteB.x, by = siteB.y, bz = siteB.z;
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
+        arrange("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
         // The observer has to be away ON THE CLIENT, which is the side that pulls chunks in; the
         // server moving him is a different fact and the one the ten ticks were standing in for.
         awaitClientPlacedNear(awayMark, ax + 600, az + 600,
@@ -281,24 +282,25 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // different ships" would be a claim made by the very instrument under test.
         Events events = serverEvents();
         long spawnMarkA = events.markInstrumented();
-        String assembleA = assembleFixture(siteA, AFC_VARIANT);
-        scenario().requireArranged("ship A must assemble: " + assembleA,
-                (Reply.of(assembleA).integer("rocketCount") == 0));
+        ShipAssembly assembleABuilt = assembleFixture(siteA, AFC_VARIANT);
+        String assembleA = assembleABuilt.reply;
+        scenario().requireArranged("ship A must assemble: " + assembleABuilt,
+                assembleABuilt.madeNoRocket());
         String idA = awaitShipSpawned(events, spawnMarkA,
                 "ship A's assembly must create a VS ship in the queryable registry (async spawn)");
 
         long spawnMarkB = events.markInstrumented();
-        String assembleB = assembleFixture(siteB, AFC_VARIANT);
-        scenario().requireArranged("ship B must assemble: " + assembleB,
-                (Reply.of(assembleB).integer("rocketCount") == 0));
+        ShipAssembly assembleBBuilt = assembleFixture(siteB, AFC_VARIANT);
+        String assembleB = assembleBBuilt.reply;
+        scenario().requireArranged("ship B must assemble: " + assembleBBuilt,
+                assembleBBuilt.madeNoRocket());
         String idB = awaitShipSpawned(events, spawnMarkB,
                 "ship B's assembly must create a VS ship in the queryable registry (async spawn)");
 
         // BOTH stay loaded with one client that cannot stand in two places — the test server holds
         // them, and this leg asks which ship a lookup names, never whether a ship stays loaded.
-        exec("stellurgytest vs load-ships 0");
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
+        arrange("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, ax + 0.5, az + 0.5,
                 "the client must be standing over ship A before anything is asked about it — a"
                         + " client that has not arrived pulls no chunks and loads no ship");
@@ -322,10 +324,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // exists to expose, used to arrange it: the move resolved "nearest to A's base" and the
         // unpark "nearest to A's new pose" — which is 8 blocks from B, so the unpark had two
         // candidates and no way to say which it took.
-        String moved = exec("stellurgytest vs teleport-ship-by-id 0 " + idA
-                + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8));
+        String moved = arrange("stellurgytest vs teleport-ship-by-id 0 " + idA
+                + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8)).raw();
         scenario().record("teleportA", moved);
-        exec("stellurgytest vs unpark-by-id 0 " + idA);
+        arrange("stellurgytest vs unpark-by-id 0 " + idA);
         // No advance before the reads: both verbs run on the server thread before they answer, so
         // the id-keyed report below reads the teleport's own write.
 
@@ -354,7 +356,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // What survives is the half that is still checkable and is the reason the removal happened:
         // the probe must REFUSE the positional spelling rather than quietly answering about
         // somebody's craft.
-        String positional = exec("stellurgytest vs ship-info 0 " + ax + " " + ay + " " + az);
+        String positional = read("stellurgytest vs ship-info 0 " + ax + " " + ay + " " + az).raw();
         scenario().record("positionalRefused", positional);
         // Asked as a FIELD and not as a substring: what makes a reply a ship report is that it
         // carries `managed` at all, so the absence of that field is the claim — and this must not go
@@ -371,22 +373,51 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * Migrated verbatim from {@code VSShipClientLoadE2ETest}. Every {@code ship-info} in the body
      * was a positional nearest query about a ship this scenario had just built; each is now keyed on
      * the id this scenario's own assembly recorded. Nothing else changed.
-     *
-     * <p>red-witnessed: one inversion per rung, 2026-09-28, each red at its own verdict with the rungs
-     * before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by
-     * {@code 0.0}: "maxClimb=0.0". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}
-     * at {@code angAccel = new double[]}) leaving {@code angAccel} null: "min |quat
-     * dot| over the window=1.0". ATTITUDE HOLD — the attitude error passed to
-     * {@code attitudeHoldAngAccel} ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,}) as
-     * {@code 0.0}, a hold that only brakes: "|dot to target|
-     * before=0.707… after 120 ticks=0.7986…". FREE FLIGHT — {@code TileAdvancedFlightComputer#setPilotInput}
-     * at {@code this.pilotInput = input} discarding its input: "max climb over the window=0.0, last=-92.2". That last
-     * inversion first left the method GREEN: the rung accepted any displacement, and a hull with no
-     * throttle falls. It asserts a climb now.</p>
      */
+    @LegacyWitness(prose = "one inversion per rung, 2026-09-28, each red at its own verdict with the rungs"
+            + " before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by"
+            + " {@code 0.0}: \"maxClimb=0.0\". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}"
+            + " at {@code angAccel = new double[]}) leaving {@code angAccel} null: \"min |quat"
+            + " dot| over the window=1.0\". ATTITUDE HOLD — the attitude error passed to"
+            + " {@code attitudeHoldAngAccel} ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,}) as"
+            + " {@code 0.0}, a hold that only brakes: \"|dot to target|"
+            + " before=0.707… after 120 ticks=0.7986…\". FREE FLIGHT — {@code TileAdvancedFlightComputer#setPilotInput}"
+            + " at {@code this.pilotInput = input} discarding its input: \"max climb over the window=0.0, last=-92.2\". That last"
+            + " inversion first left the method GREEN: the rung accepted any displacement, and a hull with no"
+            + " throttle falls. It asserts a climb now.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); ShipInfo info = ShipInfo.of(shipInfoById(shipId));",
+            why = "the MAXIMUM climb over the window is the measurement, not the last sample — a quantity read at"
+                    + " one instant can have come back, and the window's extremum cannot. The link would be a"
+                    + " record of the hull's pose passing yBefore + 1, and none exists: VS integrates the"
+                    + " motion on its physics tick and publishes no per-tick pose. What it cannot see: a climb"
+                    + " that peaked and fell back between two 1-tick samples (it reads low, the strict"
+                    + " direction).")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); double[] qNow = readQuat(shipInfoById(shipId));",
+            why = "the MINIMUM |dot| over the window is the measurement, and here that is not a refinement — it is"
+                    + " the only correct reading. A ship under a held 1 rad/s yaw command passes through every"
+                    + " attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a"
+                    + " last-sample read of a full turn says \"unmoved\", and no record carries the hull's"
+                    + " attitude per physics tick. What it cannot see: an attitude passed through between two"
+                    + " 1-tick samples.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ATTITUDE_WINDOW_TICKS);",
+            why = "the FINAL value is the measurement: the claim is that the controller CONVERGES and HOLDS, so a"
+                    + " maximum along the way would pass on a ship that swung through the target and carried"
+                    + " on. The hold never decides it has arrived, so there is no record to link on.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); ffClimb = readVec(shipInfoById(shipId))[1] - pBefore[1];",
+            why = "the MAXIMUM CLIMB over the window is the measurement — a ship that rises and settles back reads"
+                    + " zero at the end. No record carries the hull's pose per physics tick. What it cannot"
+                    + " see: a peak between two 1-tick samples (it reads low, the strict way). CLIMB, not"
+                    + " displacement, and this is the verdict's whole content. It used to accept any"
+                    + " displacement over a block, and with the flight computer ignoring pilot input entirely"
+                    + " it stayed GREEN: released from the probe command, the hull simply FELL, and a fall is a"
+                    + " displacement. Every rotation above is about world Y (the yaw command and the hold's 90°"
+                    + " turn), so the hull's up is still world up and a full-up throttle must raise it.")
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
 
         final FixtureSite site = site();
@@ -400,7 +431,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // same pass of the ship manager's tick, so once that record is in, there is no spawn
         // left in flight for the approach to collide with.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the whole point of this leg is that NO observer is near the build during the"
                         + " spawn, and the observer being away is a fact about the client");
@@ -410,16 +441,17 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // world is answered by every neighbour that ever assembled one — and it names the ship.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, AFC_VARIANT);
-        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, AFC_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
         // Now walk the client ONTO the ship's projected location. A real client near the
         // ship pulls its chunks in and VS loads it — the thing testServer never does.
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
                         + " is waiting on something only a client that got here can cause");
@@ -444,14 +476,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         double yAfter = yBefore;
         double maxClimb = 0.0;
         double velY = 0.0;
-        String upCmd = exec("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 8 0");
+        String upCmd = arrange("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 8 0").raw();
         assertTrue("force-vel must reach THIS ship's own flight computer: " + upCmd,
                 Reply.of(upCmd).bool("commanded"));
-        // WINDOW: the MAXIMUM climb over the window is the measurement, not the last sample — a
-        // quantity read at one instant can have come back, and the window's extremum cannot. The link
-        // would be a record of the hull's pose passing yBefore + 1, and none exists: VS integrates the
-        // motion on its physics tick and publishes no per-tick pose. What it cannot see: a climb that
-        // peaked and fell back between two 1-tick samples (it reads low, the strict direction).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             ShipInfo info = ShipInfo.of(shipInfoById(shipId));
@@ -474,14 +501,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         double[] qBefore = readQuat(shipInfoById(shipId));
         double dot = 1.0;
         double minDot = 1.0;
-        String turnCmd = exec("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
+        String turnCmd = arrange("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 1.0 0").raw();
         assertTrue("force-rot must reach THIS ship's own flight computer: " + turnCmd,
                 Reply.of(turnCmd).bool("commanded"));
-        // WINDOW: the MINIMUM |dot| over the window is the measurement, and here that is not a
-        // refinement — it is the only correct reading. A ship under a held 1 rad/s yaw command passes
-        // through every attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a
-        // last-sample read of a full turn says "unmoved", and no record carries the hull's attitude
-        // per physics tick. What it cannot see: an attitude passed through between two 1-tick samples.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             double[] qNow = readQuat(shipInfoById(shipId));
@@ -513,13 +535,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                 + qHoldFrom[2] * target[2] + qHoldFrom[3] * target[3]);
         // ONE command: `point-by-id` engages an attitude HOLD that stands until `force-clear` — the
         // re-send each tick was measured unnecessary on 2026-09-23.
-        String pointCmd = exec("stellurgytest vs point-by-id 0 " + shipId
-                + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
+        String pointCmd = arrange("stellurgytest vs point-by-id 0 " + shipId
+                + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]).raw();
         assertTrue("point must reach THIS ship's own flight computer: " + pointCmd,
                 Reply.of(pointCmd).bool("commanded"));
-        // WINDOW: the FINAL value is the measurement: the claim is that the controller CONVERGES and
-        // HOLDS, so a maximum along the way would pass on a ship that swung through the target and
-        // carried on. The hold never decides it has arrived, so there is no record to link on.
         advanceServerAndClient(ATTITUDE_WINDOW_TICKS);
         double[] q = readQuat(shipInfoById(shipId));
         double convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
@@ -538,7 +557,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // computer's PROBE channel, which deliberately outranks the pilot channel — so leaving it in
         // force would make the FF rung measure the attitude hold that is still commanded, not the
         // throttle. Asserted: a release nobody checks is indistinguishable from no release.
-        String released = exec("stellurgytest vs force-clear-by-id 0 " + shipId);
+        String released = arrange("stellurgytest vs force-clear-by-id 0 " + shipId).raw();
         scenario().requireArranged("the probe command must be released before the FF path is measured: "
                 + released, Reply.of(released).bool("cleared"));
 
@@ -548,8 +567,8 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Addressed by SHIP (the input used to go to a server-wide static, which no pilot has), and
         // sent ONCE: the computer keeps a pilot input until it is handed another, so the per-tick
         // re-send added only traffic.
-        String ffCmd = exec("stellurgytest vs ff-input-by-id 0 " + shipId
-                + " 0 1 0 0 0 0"); // throttleVertical = full up
+        String ffCmd = arrange("stellurgytest vs ff-input-by-id 0 " + shipId
+                + " 0 1 0 0 0 0").raw(); // throttleVertical = full up
         // `afcResolved` is missing only from the "world not loaded" reply, and
         // absence is the answer: no computer took the throttle, failed below with that reply.
         if (!Reply.of(ffCmd).boolOr("afcResolved", false)) {
@@ -558,15 +577,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             fail("the throttle must reach this ship's own flight computer: " + ffCmd
                     + " | ship now: " + shipInfoById(shipId));
         }
-        // WINDOW: the MAXIMUM CLIMB over the window is the measurement — a ship that rises and settles
-        // back reads zero at the end. No record carries the hull's pose per physics tick. What it
-        // cannot see: a peak between two 1-tick samples (it reads low, the strict way).
-        //
-        // CLIMB, not displacement, and this is the verdict's whole content. It used to accept any
-        // displacement over a block, and with the flight computer ignoring pilot input entirely it
-        // stayed GREEN: released from the probe command, the hull simply FELL, and a fall is a
-        // displacement. Every rotation above is about world Y (the yaw command and the hold's 90°
-        // turn), so the hull's up is still world up and a full-up throttle must raise it.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             ffClimb = readVec(shipInfoById(shipId))[1] - pBefore[1];
@@ -596,16 +606,17 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Put the observer AT the build site and keep it there through assembly + spawn — the
         // double-load window the sister test avoids. If the guard is absent, VS faults here.
         long standMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(standMark, BX + 0.5, BZ + 0.5,
                 "this leg's whole subject is an observer PRESENT through the spawn, so his being"
                         + " here is the arrangement rather than something to allow time for");
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, AFC_VARIANT);
-        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, AFC_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // The ship must appear in the queryable registry (async spawn did not fault) — its own
         // record, which also NAMES it: the identity every question below is keyed on.
@@ -630,12 +641,15 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
     /**
      * Migrated from {@code VSShipSeatDriveE2ETest}: the server-side bisection of the seat &rarr; AFC
      * &rarr; force path. Body unchanged apart from the ship oracle.
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#setPilotInput} at
-     * {@code this.pilotInput = input} discarding its input, this fails at the climb with "maxClimb=0.0" (the seat still reports {@code afcResolved:true}, so
-     * the red names the computer's intake, not the seat's link) — 2026-09-28.</p>
      */
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
+            + " {@code this.pilotInput = input} discarding its input, this fails at the climb with \"maxClimb=0.0\" (the seat still reports {@code afcResolved:true}, so"
+            + " the red names the computer's intake, not the seat's link) — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {",
+            why = "the MAXIMUM climb over the window is the measurement, so a ship that rises and settles back is"
+                    + " not read as one that never rose. No record carries the hull's pose per physics tick."
+                    + " What it cannot see: a peak between two 1-tick samples (reads low).")
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
 
         final FixtureSite site = site();
@@ -643,21 +657,22 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         // Assemble far from any observer (double-load window), then approach to load.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the assembly below must happen with no observer near it, and the observer is a"
                         + " client");
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, SEAT_VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, SEAT_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, off this scenario's own creation record — not re-derived from the base below.
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the client's arrival is what loads the ship here, so the readiness link below is"
                         + " waiting on something only an arrived client can cause");
@@ -677,15 +692,12 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // `seat-input` takes whichever pilot seat it lists first — a command that answers
         // afcResolved:true from somebody else's ship while this one sits still. Sent ONCE: the seat
         // hands the computer an input the computer keeps until it is handed another.
-        String lastSeat = exec("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
+        String lastSeat = arrange("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0").raw(); // full up
         assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
                 Reply.of(lastSeat).bool("seatFound"));
         assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
                         + "after VS relocation): " + lastSeat,
                 Reply.of(lastSeat).bool("afcResolved"));
-        // WINDOW: the MAXIMUM climb over the window is the measurement, so a ship that rises and
-        // settles back is not read as one that never rose. No record carries the hull's pose per
-        // physics tick. What it cannot see: a peak between two 1-tick samples (reads low).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             yAfter = ShipInfo.of(shipInfoById(shipId)).y;
@@ -712,33 +724,38 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * over the registry. This paragraph claimed it "resolves the seat inside the ship at a given
      * world anchor", which is the guarantee the first {@code @Test} of this very class exists to
      * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat
-     * dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at
-     * {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): "the
-     * CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25". THE CAMERA STAYS
-     * LOCKED — the ship camera-pin lines ({@code KeyBindings#handleShipPilotInput} at
-     * {@code player.rotationYaw = euler[0]} through {@code prevRotationPitch}) removed: "camYawBefore=0.0
-     * camYawAfter=180.0". The two waits before them are arrangement links (the spawn, the client
-     * standing at the build site).</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat"
+            + " dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at"
+            + " {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): \"the"
+            + " CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25\". THE CAMERA STAYS"
+            + " LOCKED — the ship camera-pin lines ({@code KeyBindings#handleShipPilotInput} at"
+            + " {@code player.rotationYaw = euler[0]} through {@code prevRotationPitch}) removed: \"camYawBefore=0.0"
+            + " camYawAfter=180.0\". The two waits before them are arrangement links (the spawn, the client"
+            + " standing at the build site).")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(60);",
+            why = "vertical thrust — the climb clear of the terrain, then cut.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 6; i++) {",
+            why = "the iterations ARE the input — six hard sideways looks, one a tick, each measured from where"
+                    + " the last one left the view. Delete the loop and nothing is steered at all.")
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
 
         final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the assembly below must happen with no observer near it, and the observer is a"
                         + " client");
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site, SEAT_VARIANT);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site, SEAT_VARIANT);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, off this scenario's own creation record. It is fixed HERE, before the ship has
         // moved a block, and it stays valid through the sixty-tick climb below — the flight that no
         // positional bound survives.
@@ -746,7 +763,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         // Approach so the client loads the ship (and its seat/AFC tiles).
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the seat and flight computer reach this client only because it is standing here");
 
@@ -763,13 +780,13 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship this scenario
         // NAMES — the anchored form resolved the yard nearest a point, which is a different ship
         // whenever a neighbour's is nearer — then mount that subspace block.
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("find-seat must resolve THIS ship's subspace seat");
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + dummyId).raw();
         assertTrue("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is the right sentence and ten ticks were the wrong way to say
@@ -778,10 +795,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         awaitClientMount(seatMark, "the client must be riding the seat dummy before its position is"
                 + " baselined — that reading IS the rider's", SEAT_LINK_BUDGET_TICKS, "");
 
-        // Baseline the CLIENT pilot position BEFORE the climb: the mount the bot rides (its dummy)
-        // and the player camera. A pilot glued to the ship rises with it; a detached one stays here.
-        double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
-        double camYBefore = bot().reportState().get("playerY").getAsDouble();
+        // Mark the CLIENT's log BEFORE the climb: every tick from here on, the client records where it
+        // put the seat dummy and the pilot and where it showed the ship, in one call. A pilot glued
+        // to the ship rises with it; a detached one stays where these first records have him.
+        long carryMark = clientEvents().mark();
 
         // Drive REAL keys: hold vertical-up. The client samples it, sends it to the seat, and the
         // AFC lifts the ship. Up isolates from ground friction.
@@ -807,31 +824,23 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                         + " ticks of thrust (null: no longer reporting a position)",
                 climbed != null && climbed > 1.0);
 
-        // --- The seated pilot must TRAVEL with the ship (client-observed). Read the CLIENT rider +
-        // camera again: both must have climbed, and the rider's climb must track the server ship's.
-        // Before the fix that glues the seat dummy to the moving ship, the dummy stays at spawn while
-        // the ship departs, so these client deltas would be ~0 even though the server ship moved.
-        // EXPERIMENT: the comparison is DEFINED six client ticks after the release reached the
-        // flight computer — the offset is part of what is measured (a rider lagging his ship by more
-        // than the bar at six ticks is the failure). The bar, RIDER_TRACKS_SHIP_BLOCKS, is the test's own and was not
-        // measured at this offset; it is not derived from it either.
-        bot().waitWorldTicks(6);
-        String afterSettle = shipInfoById(shipId);
-        double serverYAfter = ShipInfo.of(afterSettle).y;
-        double riderYAfter = bot().reportRidingEntity().get("posY").getAsDouble();
-        double camYAfter = bot().reportState().get("playerY").getAsDouble();
-        scenario().record("shipAfterSettle", afterSettle)
-                .record("riderBeforeAfter", riderYBefore + " -> " + riderYAfter)
-                .record("serverBeforeAfter", yBefore + " -> " + serverYAfter);
-        assertTrue("the CLIENT-rendered rider must climb with the ship (it stayed behind): "
-                        + "riderYBefore=" + riderYBefore + " riderYAfter=" + riderYAfter,
-                riderYAfter - riderYBefore > 1.0);
-        assertTrue("the pilot's CLIENT camera must climb with the ship: camYBefore=" + camYBefore
-                        + " camYAfter=" + camYAfter,
-                camYAfter - camYBefore > 1.0);
-        assertTrue("the client rider climb must TRACK the server ship climb (client="
-                        + (riderYAfter - riderYBefore) + " server=" + (serverYAfter - yBefore) + ")",
-                Math.abs((riderYAfter - riderYBefore) - (serverYAfter - yBefore)) < RIDER_TRACKS_SHIP_BLOCKS);
+        // --- The seated pilot must TRAVEL with the ship (client-observed). Before the fix that glues
+        // the seat dummy to the moving ship, the dummy stays at spawn while the ship departs, so the
+        // client would show the ship climbing and the rider not. Both halves of that come from the
+        // client's own per-tick record, read up to the record in which the client has SHOWN the ship
+        // climbing more than a block — a link, so nothing below depends on how long after the cut
+        // it is read.
+        SeatCarry carry = SeatCarry.awaitShownClimb(clientEvents(), carryMark, shipId, 1.0,
+                "the client must show the climb the server performed, carrying its seated pilot",
+                SHOWN_CLIMB_LINK_BUDGET_TICKS);
+        scenario().record("seatCarry", carry.toString());
+        assertTrue("the CLIENT-rendered rider must climb with the ship (it stayed behind): " + carry
+                + " | " + carry.raw, carry.seatClimb > 1.0);
+        assertTrue("the pilot's CLIENT camera must climb with the ship: " + carry + " | " + carry.raw,
+                carry.riderClimb > 1.0);
+        assertTrue("the client must keep the seat and its pilot where the ship it shows carries them,"
+                + " at every tick of the climb: " + carry + " | " + carry.raw,
+                carry.seatDrift < RIDER_TRACKS_SHIP_BLOCKS && carry.riderDrift < RIDER_TRACKS_SHIP_BLOCKS);
 
         // --- The OTHER TWO translation axes, in world coordinates. The vertical key above proves
         // exactly ONE channel of the pilot path; nose and lateral are separate fields of the same
@@ -852,7 +861,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // releasing the vertical key leaves the ship climbing, and a horizontal leg flown at pad
         // height could be stopped by a hillside rather than by the ship's own controls.
         bot().holdKey(Keyboard.KEY_R);
-        // STIMULUS: vertical thrust — the climb clear of the terrain, then cut.
         advanceServerAndClient(60);
         bot().releaseKey(Keyboard.KEY_R);
         cutAndSettle();
@@ -901,8 +909,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // (unmoved) ship nose every client tick. Read BOTH the client camera and the server ship
         // attitude, converting the latter to a heading with the SAME quat->Euler the lock uses.
         double camYawBefore = bot().reportState().get("playerYaw").getAsDouble();
-        // STIMULUS: the iterations ARE the input — six hard sideways looks, one a tick, each measured
-        // from where the last one left the view. Delete the loop and nothing is steered at all.
         for (int i = 0; i < 6; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat() + 30f, st.get("playerPitch").getAsFloat());
@@ -920,7 +926,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                         + "(camYawAfter=" + camYawAfter + " shipNose=" + shipNoseYaw + ")",
                 angDiff(camYawAfter, shipNoseYaw) < CAMERA_ON_THE_NOSE_DEG);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ── shared helpers ───────────────────────────────────────────────────────
@@ -934,9 +940,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * the release were more of the same brake. They are folded into the hold (40 + 10), which keeps
      * the brake the ship is given unchanged.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(50);",
+            why = "how long the brake-to-hover is applied before the next leg's baseline is read.")
     private void cutAndSettle() throws Exception {
         bot().holdKey(Keyboard.KEY_X);          // throttle cut
-        // STIMULUS: how long the brake-to-hover is applied before the next leg's baseline is read.
         advanceServerAndClient(50);
         bot().releaseKey(Keyboard.KEY_X);
     }
@@ -967,11 +974,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         return Math.abs(((a - b + 540) % 360) - 180);
     }
 
-    private int count(String sub) throws Exception {
-        String command = "stellurgytest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integer(COUNT);
-    }
-
     private double[] readVec(String shipInfoJson) {
         ShipInfo ship = ShipInfo.of(shipInfoJson);
         return new double[]{ship.x, ship.y, ship.z};
@@ -987,13 +989,13 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site, String variant) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // the scenarios below fly, rotate and ride the craft out of this volume.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), variant, 2, 16,
                 "the hull, and the first blocks of the lane it flies and rotates through");
     }
 }

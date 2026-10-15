@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import net.minecraft.world.World;
+
 import java.util.List;
 import java.util.Locale;
-
-import net.minecraft.world.World;
 
 /**
  * Why a pilot's input did or did not reach the ship, gate by gate, on the SERVER — over a window a

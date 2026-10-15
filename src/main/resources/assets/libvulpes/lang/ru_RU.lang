@@ -34,6 +34,8 @@ item.holoProjector.name=Голо-проектор
 msg.linker.error.firstMachine=Это должна быть первая машина, чтобы связать!
 msg.linker.program=Координаты запрограммированны в связывателе
 msg.linker.success=Связано успешно
+msg.linker.aim.boundNotLoaded=Машина, к которой привязан связыватель, здесь не загружена
+msg.linker.aim.nothingInSight=Ничего не видно
 
 type.gem.name=кристалл
 type.dust.name=порошок

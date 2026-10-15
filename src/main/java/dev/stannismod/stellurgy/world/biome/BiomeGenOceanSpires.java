@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.world.decoration.MapGenInvertedPillar;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
 import net.minecraft.world.gen.feature.WorldGenShrub;
-import dev.stannismod.stellurgy.world.decoration.MapGenInvertedPillar;
 
 import java.util.Random;
 

@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.util.StorageChunk;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
@@ -14,10 +18,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.ReflectionHelper;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
 

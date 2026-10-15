@@ -1,11 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import org.junit.Test;
-
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding.PendingSeedDecision;
 
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract pinning for the pending dismount seed's state machine
@@ -124,10 +125,10 @@ public class DismountPendingSeedTest {
      * A seed whose body has since been teleported or has mounted something is VOID: never applied,
      * and never waited out either — a seed that waits through a mount applies the moment he gets off
      * it, on a deck he left.
-     *
-     * <p>red-witnessed: 2026-10-07, with {@code DeckBoarding#pendingSeedDecision} at
-     * {@code if (voided)} made {@code if (false)}: "expected:&lt;VOID&gt; but was:&lt;APPLY&gt;".</p>
      */
+    @RedWitness(member = "DeckBoarding#pendingSeedDecision", at = "if (voided)", replacedBy = "if (false)",
+            fails = "expected:<VOID> but was:<APPLY>", on = "2026-10-07")
+    @Pins({"HOLD-2", "HOLD-7"})
     @Test
     public void aSeedWhoseBodyWasPutElsewhereOrMountedIsVoidAndNeverApplies() {
         assertEquals(PendingSeedDecision.VOID,

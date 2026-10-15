@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertTrue;
 
 /**
  * {@code /time set} obeys the time-skip policy per world: it moves the clocks it is allowed to move,
@@ -34,14 +33,14 @@ public class TimeCommandRespectsTheSkipPolicyTest extends AbstractSharedServerTe
 
     /** A planet dimension the shipped universe actually has, or {@link Integer#MIN_VALUE}. */
     private int findAPlanet() throws Exception {
-        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        CellInfo home = CellInfo.atSector(c -> read(c).raw(), 0, 0, 0, 0);
         if (home.dimCell == null) {
             return Integer.MIN_VALUE;
         }
         // Asked by the registry's OWN key rather than by splitting it into three numbers: the key's
         // shape is the registry's business, and a split that stops matching answers MIN_VALUE, which
         // this method's callers read as "the shipped universe has no such body".
-        CellInfo cell = CellInfo.atKey(this::exec, home.dimCell, 0);
+        CellInfo cell = CellInfo.atKey(c -> read(c).raw(), home.dimCell, 0);
         // Any body with a real dimension behind it that is NOT the overworld. Each body is read as
         // its own object: the regex this replaces matched `dim` and `kind` in one expression and so
         // held only while the producer kept them adjacent and in that order.
@@ -63,11 +62,11 @@ public class TimeCommandRespectsTheSkipPolicyTest extends AbstractSharedServerTe
         long overworldBefore = dimTime(0);
         try {
             // ---- LOCKED: the shipped default. The planet must not move; the overworld must. ----
-            assertTrue(Reply.of(exec("stellurgytest config set allowTimeSkipOnPlanets false")).ok());
-            assertTrue(Reply.of(exec("stellurgytest config set allowTimeSkipOnOverworld true")).ok());
+            assertTrue(Reply.of(arrange("stellurgytest config set allowTimeSkipOnPlanets false").raw()).ok());
+            assertTrue(Reply.of(arrange("stellurgytest config set allowTimeSkipOnOverworld true").raw()).ok());
 
             long planetBefore = dimTime(planet);
-            exec("time set " + LOCKED_PROBE_TIME);
+            arrange("time set " + LOCKED_PROBE_TIME);
 
             long planetAfterLocked = dimTime(planet);
             long overworldAfterLocked = dimTime(0);
@@ -86,8 +85,8 @@ public class TimeCommandRespectsTheSkipPolicyTest extends AbstractSharedServerTe
                     Math.abs(planetAfterLocked - planetBefore) <= DRIFT_ALLOWANCE);
 
             // ---- ALLOWED: opt the arcade mechanic back in. The same command must now reach it. ----
-            assertTrue(Reply.of(exec("stellurgytest config set allowTimeSkipOnPlanets true")).ok());
-            exec("time set " + ALLOWED_PROBE_TIME);
+            assertTrue(Reply.of(arrange("stellurgytest config set allowTimeSkipOnPlanets true").raw()).ok());
+            arrange("time set " + ALLOWED_PROBE_TIME);
 
             assertLandedOn("with the flag on, the same command must reach the planet — this is the"
                             + " half that makes the half above a measurement rather than a build"
@@ -95,9 +94,9 @@ public class TimeCommandRespectsTheSkipPolicyTest extends AbstractSharedServerTe
                     ALLOWED_PROBE_TIME, dimTime(planet));
         } finally {
             // This server is shared with every other test in the fork.
-            exec("stellurgytest config set allowTimeSkipOnPlanets false");
-            exec("stellurgytest config set allowTimeSkipOnOverworld true");
-            exec("time set " + (overworldBefore % 24000L));
+            arrange("stellurgytest config set allowTimeSkipOnPlanets false").raw();
+            arrange("stellurgytest config set allowTimeSkipOnOverworld true");
+            arrange("time set " + (overworldBefore % 24000L));
         }
     }
 
@@ -119,7 +118,7 @@ public class TimeCommandRespectsTheSkipPolicyTest extends AbstractSharedServerTe
 
     /** The per-dimension day-cycle clock, straight off the probe that reads each world's own. */
     private long dimTime(int dim) throws Exception {
-        String raw = exec("stellurgytest dim time " + dim);
+        String raw = arrange("stellurgytest dim time " + dim).raw();
         Reply mReply = Reply.of(raw);
         assertTrue("the dim-time probe reports no worldTime for dim " + dim + ": " + raw, mReply.has("worldTime"));
         return (long) mReply.number("worldTime");

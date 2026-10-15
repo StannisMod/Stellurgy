@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.entity.fx;
 
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import net.minecraft.world.World;
 
 public class FxSystemElectricArc {
     public static void spawnArc(World world, double x, double y, double z, double sizeMult, int numrecursion) {

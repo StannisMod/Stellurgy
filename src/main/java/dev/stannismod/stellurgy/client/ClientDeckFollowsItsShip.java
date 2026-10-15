@@ -8,7 +8,6 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
-
 /**
  * The client half of {@code DeckFollowsItsShip} — the same re-seat, hung on the event the client
  * actually ticks its ships from.

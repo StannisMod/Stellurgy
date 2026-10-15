@@ -1,7 +1,18 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyFluids;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceFluidStack;
 import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
-
+import dev.stannismod.stellurgy.util.AudioRegistry;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -13,18 +24,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyFluids;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceFluidStack;
 
 import java.util.HashMap;
 import java.util.LinkedList;

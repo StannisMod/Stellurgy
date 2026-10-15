@@ -1,27 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.PlayerPosition;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * Login restore for a pilot who was ABOARD when he left: seated in a cell, seated on the ground
@@ -39,6 +27,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * 1032.8 s at 8 forks in ONE gradle fork (2026-08-07) — and a unit nobody can shorten can still be
  * divided.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreClientTest {
 
     /**
@@ -117,7 +106,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
                 arrangedShipId, Reply.of(tag).text("shipId"));
         // He must really be held on the DECK, in the ship's own frame, before the restart: that is
         // what produces the record asserted above.
-        DeckCapture capBefore = DeckCapture.read(this::exec);
+        DeckCapture capBefore = DeckCapture.read(c -> read(c).raw());
         requireArranged("he must be captured ABOARD the deck after standing up, or the record "
                 + "above describes something other than a crew member on his feet: " + capBefore.raw(),
                 capBefore.alreadyTracked);
@@ -125,26 +114,26 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the deck he is captured on must be the ship the STANDING record names");
 
-        PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);
+        PlayerPosition serverBeforeLogout = PlayerPosition.of(c -> read(c).raw(), BOT);
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "
                 + "to disk: " + serverBeforeLogout.raw(), slotDim, serverBeforeLogout.dim);
 
         closeBoth();
         keepBootLog("boot1-standing");
 
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // Both discriminators, BEFORE the client connects. Without them a client reading says
         // nothing about the record: a second boot whose subsystem stood down, or whose ledger did
         // not survive the shutdown save, would leave him at an ordinary spawn for its own reasons.
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
                 + "exercising it: " + statusAfter.raw(), statusAfter.registered);
-        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
+        LedgerEntry ledger = LedgerEntry.forShip(c -> read(c).raw(), arrangedShipId);
         assertTrue("his ship must still be ledgered - there has to be a ship to restore him ONTO: "
                 + ledger.raw(), ledger.found);
 

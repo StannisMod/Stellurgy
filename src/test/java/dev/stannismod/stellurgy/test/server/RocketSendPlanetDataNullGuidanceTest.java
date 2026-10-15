@@ -1,14 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import dev.stannismod.stellurgy.test.ArrangementFailure;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -36,27 +30,28 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTest {
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String THROWN = "thrown";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 760);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     /** Bug A: confirming a destination on a rocket with no guidance computer
@@ -65,12 +60,12 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
     public void sendPlanetDataWithNullGuidanceDoesNotCrash() throws Exception {
         int rid = buildAndAssembleRocket(9500);
 
-        String strip = ok(client().execute("stellurgytest rocket strip-guidance " + rid));
+        String strip = ok(client().arrange("stellurgytest rocket strip-guidance " + rid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
                 (!Reply.of(strip).bool("hasGuidanceComputer")));
 
-        String resp = ok(client().execute("stellurgytest rocket send-planet-data " + rid + " 0"));
+        String resp = ok(client().act("stellurgytest rocket send-planet-data " + rid + " 0"));
         assertTrue("send-planet-data failed: " + resp, Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
@@ -86,7 +81,7 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
     public void sendPlanetDataReaderToleratesEmptyPayload() throws Exception {
         int rid = buildAndAssembleRocket(9550);
 
-        String resp = ok(client().execute("stellurgytest rocket planet-data-read-empty " + rid));
+        String resp = ok(client().read("stellurgytest rocket planet-data-read-empty " + rid));
         assertTrue("planet-data-read-empty failed: " + resp, Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
@@ -113,9 +108,9 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
     @Test
     public void offSlotPlanetLaunchBurnInSpaceDimDegradesToBaseBurn() throws Exception {
         final int spaceDim = -2;
-        exec("stellurgytest dim load " + spaceDim);
+        arrange("stellurgytest dim load " + spaceDim);
 
-        String dims = exec("stellurgytest dim list");
+        String dims = read("stellurgytest dim list").raw();
         int destDim = Integer.MIN_VALUE;
         for (int d : Reply.of("stellurgytest dim list", dims).intArray("stellurgyDimensions")) {
             if (d != 0 && d != -1 && d != spaceDim) {
@@ -129,20 +124,20 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
 
         // A station exists somewhere (models 'the player has a station'); it does NOT occupy the
         // off-slot cell we launch from.
-        String create = exec("stellurgytest station create 0");
+        String create = arrange("stellurgytest station create 0").raw();
         assertTrue("station must create: " + create, Reply.of(create).ok());
 
         // getSpaceStationFromBlockCoords(4608,·,4608) reverse-maps to grid (2,2) → spiral index 18,
         // which no station here occupies. The X and Z are load-bearing; the Y is the open-air band.
         int x = 4608, y = FixtureSite.OPEN_AIR_Y, z = 4608;
-        exec("stellurgytest fill " + spaceDim + " " + (x - 1) + " " + (y - 1) + " " + (z - 1)
+        arrange("stellurgytest fill " + spaceDim + " " + (x - 1) + " " + (y - 1) + " " + (z - 1)
                 + " " + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air");
-        String place = exec("stellurgytest place " + spaceDim + " " + x + " " + y + " " + z
-                + " stellurgy:guidanceComputer");
+        String place = arrange("stellurgytest place " + spaceDim + " " + x + " " + y + " " + z
+                + " stellurgy:guidanceComputer").raw();
         assertTrue("guidance computer must place: " + place,
                 Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
-        String r = exec("stellurgytest guidance launch-seq " + spaceDim + " " + x + " " + y + " " + z + " " + destDim);
+        String r = arrange("stellurgytest guidance launch-seq " + spaceDim + " " + x + " " + y + " " + z + " " + destDim).raw();
         assertTrue("probe must run: " + r, Reply.of(r).ok());
         // `has` is false for an absent field AND for a JSON null, which is the claim.
         assertFalse("launch position must be off any station (proves the null path): " + r,

@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Assume;
-import dev.stannismod.stellurgy.test.GameTicks;
 
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.Assume;
 import org.junit.Test;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Player-event handler wiring &
@@ -68,7 +66,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     }
 
     private int firstStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse(
                 "No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
@@ -86,22 +84,24 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     private static final String WORLD_INFO_CLASS = "worldInfoClass";
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);",
+            why = "both counters are read on each side of this stretch and each assertion below is over the"
+                    + " difference, naming both reads. Not circular: the stretch is measured on"
+                    + " MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and"
+                    + " Stellurgy's own handler time. \"It moved at all\" is the bar, so overshoot cannot let a"
+                    + " frozen counter pass.")
     public void planetEventHandlerTickCounterAdvancesUnderServerTicks() throws Exception {
         // Tick counter advance is the strongest "PlanetEventHandler is
         // subscribed to the event bus" smoke we have at the headless
         // server layer. The counter increments inside ServerTickEvent.END;
         // if @Mod init failed to subscribe, the value freezes at zero.
-        String first = ok(client().execute("stellurgytest event tick-counter"));
+        String first = ok(client().read("stellurgytest event tick-counter"));
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
-        // WINDOW: both counters are read on each side of this stretch and each assertion below is
-        // over the difference, naming both reads. Not circular: the stretch is measured on
-        // MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and Stellurgy's own
-        // handler time. "It moved at all" is the bar, so overshoot cannot let a frozen counter pass.
         GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
-        String second = ok(client().execute("stellurgytest event tick-counter"));
+        String second = ok(client().read("stellurgytest event tick-counter"));
         long t2 = parseGroup(TIME_PATTERN, second, "time");
         long w2 = parseGroup(WORLD_TIME_PATTERN, second, "worldTotalTime");
 
@@ -130,7 +130,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         //   - gravity != 1.0 (a non-default value) — implies the planet
         //     XML was actually parsed and applied
         int dim = firstStellurgyDimOrSkip();
-        String resp = ok(client().execute("stellurgytest event dim-side-effects " + dim));
+        String resp = ok(client().arrange("stellurgytest event dim-side-effects " + dim));
 
         assertTrue("Stellurgy dim must be loaded for side-effect probing: " + resp,
                 Reply.of(resp).bool("loaded"));
@@ -154,7 +154,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // The overworld is registered as Stellurgy planet "Earth" on this dev
         // fixture set, so we can't use dim 0 here; pick the first non-Stellurgy
         // forge dim that's NOT in the stellurgyDimensions array.
-        String dimList = ok(client().execute("stellurgytest dim list"));
+        String dimList = ok(client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", dimList);
         Assume.assumeTrue("dim list missing stellurgyDimensions array", listed.has(AR_DIMS_ARRAY));
         java.util.Set<Integer> stellurgyDims = new java.util.HashSet<>();
@@ -167,7 +167,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         Assume.assumeTrue("no non-Stellurgy vanilla dim available to counter-test against",
                 nonStellurgyDim != Integer.MIN_VALUE);
 
-        String resp = ok(client().execute("stellurgytest event dim-side-effects " + nonStellurgyDim));
+        String resp = ok(client().arrange("stellurgytest event dim-side-effects " + nonStellurgyDim));
         assertTrue("non-Stellurgy dim " + nonStellurgyDim + " must be loaded: " + resp,
                 Reply.of(resp).bool("loaded"));
         assertTrue("non-Stellurgy dim " + nonStellurgyDim + " must NOT be classified as Stellurgy planet: " + resp,

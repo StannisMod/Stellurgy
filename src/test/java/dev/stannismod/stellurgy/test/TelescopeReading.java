@@ -125,7 +125,7 @@ public final class TelescopeReading {
      */
     public static TelescopeReading of(String telescopeReply) {
         String text = String.valueOf(telescopeReply);
-        Reply reply = Reply.of("stellurgytest telescope info|scan|passive|abort", text);
+        Reply reply = Reply.of("the telescope probe (info|scan|passive|abort)", text);
         if (reply.has("error")) {
             ArrangementFailure.arrangementFailed("the telescope probe found no instrument to"
                     + " answer about, so nothing below is a reading of one: " + text);

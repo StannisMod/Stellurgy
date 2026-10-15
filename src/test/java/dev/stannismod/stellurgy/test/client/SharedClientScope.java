@@ -3,25 +3,28 @@ package dev.stannismod.stellurgy.test.client;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.CraftCensus;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.test.Plot;
-
 /**
- * One class run of an {@link AbstractSharedClientE2ETest}: the ONE server JVM and ONE client JVM its
+ * One class run of an {@link AbstractSharedClientTest}: the ONE server JVM and ONE client JVM its
  * scenarios share, whether the pair has died, and the plots handed out in that pair's world.
  *
  * <p>Owned by the runner's run of the class. The pair is booted LAZILY by the class's first scenario
- * ({@link AbstractSharedClientE2ETest#prepareScenario}), because the boot has to ask the test instance
+ * ({@link AbstractSharedClientTest#prepareScenario}), because the boot has to ask the test instance
  * what it needs — its seeded game directory, its framebuffer — and is closed when the class run ends.
  * A boot that failed leaves nothing up, so the next scenario tries again, exactly as before.</p>
  */
 public final class SharedClientScope extends TestClassScope {
-
-    /** The client's start-time framebuffer switch, read by the harness as it launches the child. */
-    private static final String CLIENT_FBO_PROPERTY = "forge.test.client.fbo";
 
     RealDedicatedServerHarness server;
     RealClientHarness client;
@@ -31,13 +34,8 @@ public final class SharedClientScope extends TestClassScope {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     final Map<String, Plot> plots = new HashMap<>();
     int nextPlotIndex;
-    /**
-     * What {@link #CLIENT_FBO_PROPERTY} held before this class claimed it, and whether it claimed it
-     * at all. CLEAR MEANS RESTORE: a null here is a real state (the property was unset), so the flag
-     * is what says "we changed it", never the value.
-     */
-    private String displacedFboProperty;
-    private boolean fboPropertyClaimed;
+    /** The eviction announcements made by the census's reader of the pair's server log. */
+    private final EvictionReports evictions = new EvictionReports();
 
     @Override
     protected void open(Class<?> testClass) {
@@ -49,7 +47,7 @@ public final class SharedClientScope extends TestClassScope {
     }
 
     /** Boot the pair for {@code test}'s class. */
-    void boot(AbstractSharedClientE2ETest test, int plotOffset) throws Exception {
+    void boot(AbstractSharedClientTest test, int plotOffset) throws Exception {
         harnessDead = false;
         firstFailure = null;
         plots.clear();
@@ -59,20 +57,17 @@ public final class SharedClientScope extends TestClassScope {
         test.seedGameDirectory(seed);
 
         long startedNanos = System.nanoTime();
-        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-client-");
-        String seeded = seed.writeInto(root);
-        server = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
-        // The client's start-time options come from system properties the harness reads as it
-        // launches the child, so a class that needs one sets it HERE, around the boot, and the value
-        // it displaced goes back in close(). Set, not assumed: a scenario that measures pixels
-        // asserts the option took (see ClientBot.setFramebuffer's own `previous`).
-        if (test.clientNeedsFramebuffer() && !fboPropertyClaimed) {
-            displacedFboProperty = System.getProperty(CLIENT_FBO_PROPERTY);
-            fboPropertyClaimed = true;
-            System.setProperty(CLIENT_FBO_PROPERTY, "true");
-        }
+        ServerRoot root = ServerRoot.fresh("forge-shared-client-").seed(seed);
+        String seeded = seed.describe();
+        server = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
+        // A class that needs the framebuffer from the first frame asks the harness's start for it, by
+        // name -- never through the launch property the harness also reads, which is the test JVM's and
+        // outlives this class. Asked, not assumed: a scenario that measures pixels asserts the option
+        // took (see ClientBot.setFramebuffer's own `previous`).
         try {
-            client = RealClientHarness.start(server);
+            client = test.clientNeedsFramebuffer()
+                    ? RealClientHarness.startWithFramebuffer(harnessBoot(), server)
+                    : RealClientHarness.start(harnessBoot(), server);
         } catch (Exception startupFailure) {
             try {
                 server.close();
@@ -89,6 +84,21 @@ public final class SharedClientScope extends TestClassScope {
                 + (System.nanoTime() - startedNanos) / 1_000_000L
                 + " — one server JVM + one client JVM for " + test.getClass().getSimpleName()
                 + (seeded.isEmpty() ? " (no seeded game directory)" : " seeded:" + seeded));
+    }
+
+    /**
+     * After every scenario the pair's server holds no craft — see {@link CraftCensus}. A pair that is not
+     * up, or that stopped answering (the scenario that killed it has already failed), is not judged.
+     */
+    @Override
+    protected void afterScenario(String scenario) throws Exception {
+        if (server == null || harnessDead) {
+            return;
+        }
+        TestClient serverClient = server.client();
+        Events events = new Events(c -> Reply.answering(c, serverClient.read(c)).raw(),
+                ticks -> GameTicks.advance(serverClient, GameTicks.server(), ticks), evictions);
+        CraftCensus.requireNoneLeft(scenario, serverClient, events);
     }
 
     @Override
@@ -110,15 +120,6 @@ public final class SharedClientScope extends TestClassScope {
                 else deferred.addSuppressed(e);
             }
             server = null;
-        }
-        if (fboPropertyClaimed) {
-            if (displacedFboProperty == null) {
-                System.clearProperty(CLIENT_FBO_PROPERTY);
-            } else {
-                System.setProperty(CLIENT_FBO_PROPERTY, displacedFboProperty);
-            }
-            displacedFboProperty = null;
-            fboPropertyClaimed = false;
         }
         if (deferred != null) throw deferred;
     }

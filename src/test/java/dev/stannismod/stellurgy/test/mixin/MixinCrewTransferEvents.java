@@ -1,21 +1,19 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.CrewTransfer;
+import dev.stannismod.stellurgy.test.trace.CrewTransferMemory;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.space.CrewTransfer;
-import dev.stannismod.stellurgy.test.trace.CrewTransferMemory;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * The two places a tier-2 crew is put BACK on a ship that was rebuilt underneath it, as events —

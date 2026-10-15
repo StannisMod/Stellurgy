@@ -3,6 +3,11 @@ package dev.stannismod.stellurgy.block;//
 // (powered by FernFlower decompiler)
 //
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.properties.PropertyBool;
@@ -25,18 +30,9 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
-import dev.stannismod.stellurgy.util.TerraformingHelper;
-import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
-import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
-
-import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import dev.stannismod.stellurgy.Stellurgy;
+import java.util.List;
 
 public class BlockTileTerraformer extends RotatableBlock {
     protected Class<? extends TileEntity> tileClass;

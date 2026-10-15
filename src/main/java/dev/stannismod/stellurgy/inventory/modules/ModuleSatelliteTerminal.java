@@ -1,8 +1,14 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
-import java.util.Collections;
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.satellite.SatelliteData;
+import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
+import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
@@ -11,16 +17,8 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
-import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
-import dev.stannismod.stellurgy.satellite.SatelliteData;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
-
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Per-viewer status module for the Satellite Control Center.

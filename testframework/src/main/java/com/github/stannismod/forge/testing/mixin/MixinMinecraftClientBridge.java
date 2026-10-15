@@ -1,12 +1,10 @@
 package com.github.stannismod.forge.testing.mixin;
 
-import net.minecraft.client.Minecraft;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
-
 import com.github.stannismod.forge.testing.client.bridge.ClientBridgeOwner;
 import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 
 /**
  * Gives the CLIENT its test bridge: an instance field of the client object, created with it and

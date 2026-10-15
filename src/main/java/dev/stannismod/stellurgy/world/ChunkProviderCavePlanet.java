@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.world;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.world.decoration.MapGenHighCaves;
+import dev.stannismod.stellurgy.world.decoration.MapGenMassiveRavine;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EnumCreatureType;
@@ -13,10 +17,6 @@ import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.MapGenBase;
 import net.minecraft.world.gen.MapGenCavesHell;
 import net.minecraft.world.gen.NoiseGeneratorOctaves;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.world.decoration.MapGenHighCaves;
-import dev.stannismod.stellurgy.world.decoration.MapGenMassiveRavine;
 
 import java.util.List;
 import java.util.Random;

@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.libvulpes.gui.SlotLimitedItem;
+import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
-import dev.stannismod.stellurgy.libvulpes.gui.SlotLimitedItem;
-import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
+
+import java.util.List;
 
 public class ModuleLimitedSlotArray extends ModuleSlotArray {
 

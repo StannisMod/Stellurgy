@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * What a nav computer is allowed to tell its pilot about a body.

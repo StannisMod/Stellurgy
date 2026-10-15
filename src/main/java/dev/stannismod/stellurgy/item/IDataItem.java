@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.item;
 
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.DataStorage;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 

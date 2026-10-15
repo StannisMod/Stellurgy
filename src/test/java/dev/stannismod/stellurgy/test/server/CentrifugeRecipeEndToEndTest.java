@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -27,6 +28,8 @@ public class CentrifugeRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String FIXTURE_KEY = "centrifuge";
     private static final String TILE_SHORT  = "TileCentrifuge";
 
+    /** Pins INV-MBM-13 (a centrifuge and a crystallizer run a full recipe end to end). */
+    @Pins("INV-MBM-13")
     @Test
     public void centrifugeRunsFirstRegisteredRecipe() throws Exception {
         // F3 mitigation: bypass strict output-identity check from the kit.

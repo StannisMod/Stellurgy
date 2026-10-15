@@ -1,7 +1,19 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.api.StellurgyAPI;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
+import dev.stannismod.stellurgy.libvulpes.recipe.NumberedOreDictStack;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
-
+import dev.stannismod.stellurgy.util.AudioRegistry;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.EntityPlayer;
@@ -17,19 +29,6 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyAPI;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
-import dev.stannismod.stellurgy.libvulpes.recipe.NumberedOreDictStack;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -63,26 +62,24 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
 
     public static void reloadRecipesSpecial() {
         //Chemical Reactor
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            RecipesMachine recipesMachine = RecipesMachine.getInstance();
-            List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
+        RecipesMachine recipesMachine = RecipesMachine.getInstance();
+        List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
 
-            //The special recipes still in the registry: one another mod removed since generation is not
-            List<IRecipe> recipesSpecial = new LinkedList<>();
-            for (IRecipe recipe : recipes) {
-                if (isSealingRecipe(recipe)) {
-                    recipesSpecial.add(recipe);
-                }
+        //The special recipes still in the registry: one another mod removed since generation is not
+        List<IRecipe> recipesSpecial = new LinkedList<>();
+        for (IRecipe recipe : recipes) {
+            if (isSealingRecipe(recipe)) {
+                recipesSpecial.add(recipe);
             }
+        }
 
-            //Clear special recipes from the registry
-            recipes.removeAll(recipesSpecial);
+        //Clear special recipes from the registry
+        recipes.removeAll(recipesSpecial);
 
-            //Regenerate special recipes, but only those that weren't removed by another mod since first generation
-            for (IRecipe recipe : recipesSpecial) {
-                Item item = recipe.getOutput().get(0).getItem();
-                registerRecipe(recipesMachine, item);
-            }
+        //Regenerate special recipes, but only those that weren't removed by another mod since first generation
+        for (IRecipe recipe : recipesSpecial) {
+            Item item = recipe.getOutput().get(0).getItem();
+            registerRecipe(recipesMachine, item);
         }
     }
 
@@ -194,13 +191,11 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
     @Override
     public void registerRecipes() {
         //Chemical Reactor
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            RecipesMachine recipesMachine = RecipesMachine.getInstance();
+        RecipesMachine recipesMachine = RecipesMachine.getInstance();
 
-            for (ResourceLocation key : Item.REGISTRY.getKeys()) {
-                Item item = Item.REGISTRY.getObject(key);
-                registerRecipe(recipesMachine, item);
-            }
+        for (ResourceLocation key : Item.REGISTRY.getKeys()) {
+            Item item = Item.REGISTRY.getObject(key);
+            registerRecipe(recipesMachine, item);
         }
     }
 

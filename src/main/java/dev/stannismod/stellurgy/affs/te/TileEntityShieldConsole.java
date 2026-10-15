@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.gui.NetworkMapMarker;
 import dev.stannismod.stellurgy.affs.world.contour.ContourFrameGeometry;
 import dev.stannismod.stellurgy.affs.world.shield.*;
+import dev.stannismod.stellurgy.subsystem.network.*;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
@@ -18,12 +19,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
 public class TileEntityShieldConsole extends TileEntity implements ITickable, IShieldNetworkController, dev.stannismod.stellurgy.affs.gui.INetworkMapSource {
 
@@ -75,16 +70,16 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
     }
 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -92,8 +87,8 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }
@@ -329,7 +324,7 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
         markDirty();
         if (world != null && !world.isRemote) {
             ShieldNetworkManager.setShieldEnergyResistanceBias(world, pos, clamped);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         queueClientSync();
     }

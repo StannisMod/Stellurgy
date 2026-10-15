@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.item;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
-
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import java.util.List;

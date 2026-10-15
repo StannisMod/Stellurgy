@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.test.server;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -30,7 +29,7 @@ public class WorldCommandPlanetSetGetContractTest extends AbstractSharedServerTe
      *  of {@code DIM0} substring without pinning exact line wording. */
     @Test
     public void planetListIncludesOverworldDim() throws Exception {
-        String resp = exec("ar planet list");
+        String resp = read("ar planet list").raw();
         assertTrue("planet list must include DIM0 — got: " + resp,
                 resp.contains("DIM0"));
     }

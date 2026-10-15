@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.gui;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.audio.SoundHandler;
@@ -11,7 +12,6 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.Constants;
 
 public class GuiImageButton extends GuiButton {
 

@@ -4,7 +4,7 @@ This project contains reusable testing infrastructure for Forge 1.12.2 mod verif
 
 ## Layers
 
-- `com.github.stannismod.forge.testing.junit` — JUnit 4 base classes (`AbstractHeadlessServerTest`, `AbstractClientE2ETest`) that wrap the harness lifecycle in `@Before` / `@After`. Each test method gets a fresh harness; parallelism is delegated to Gradle's `maxParallelForks`.
+- `com.github.stannismod.forge.testing.junit` — JUnit 4 base classes (`AbstractHeadlessServerTest`, `AbstractOwnBootClientTest`) that wrap the harness lifecycle in `@Before` / `@After`. Each test method gets a fresh harness; parallelism is delegated to Gradle's `maxParallelForks`.
 - `com.github.stannismod.forge.testing.server` starts and controls a real dedicated server process.
 - `com.github.stannismod.forge.testing.client` starts and controls a real client process through a socket bridge.
 - `com.github.stannismod.forge.testing.client.bridge` runs inside the client JVM and translates test commands into real client-thread actions.
@@ -17,7 +17,7 @@ discovery, execution, parallelism, filtering and reporting.
 
 `AbstractHeadlessServerTest` provides a single `RealDedicatedServerHarness` for each test method via `@Before` / `@After`. `harness()` and `client()` are exposed to subclass methods. The class is opt-in gated by the `forge.test.harness.enabled` system property — when unset, every test SKIPS via `org.junit.Assume`.
 
-`AbstractClientE2ETest` does the same for a paired server + `RealClientHarness`, exposing `server()`, `serverClient()`, `clientHarness()` and `bot()`. Gated by both `forge.test.harness.enabled` and `forge.test.client.enabled`.
+`AbstractOwnBootClientTest` does the same for a paired server + `RealClientHarness`, exposing `server()`, `serverClient()`, `clientHarness()` and `bot()`. Gated by both `forge.test.harness.enabled` and `forge.test.client.enabled`.
 
 Scenarios that need to manage two harness lifecycles against the same workDir (persistence-restart tests, fixture-write-before-start tests) skip the base classes and call `RealDedicatedServerHarness.startWith(workDir, cleanupOnClose)` directly from a plain `@Test` method with manual `@Before` / `@After`.
 

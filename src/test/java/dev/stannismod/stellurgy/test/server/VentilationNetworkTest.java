@@ -2,11 +2,15 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * Tier 4: a central plant regenerating a room it does not stand in, through ducts.
@@ -38,35 +42,36 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
 
     /**
      * Regeneration arrives from three blocks away, over ducts the plant never has to know about.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CLEARS — {@code TileOxygenVent#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}
-     * regenerating nothing: "the plant must clear the room's CO2 through the ducts (removed 0)". ONE
-     * FOR ONE — the same method drawing back half the oxygen it returned: "and every unit of CO2 it
-     * took must come back to the room as oxygen". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}
-     * no longer turning the carbon into dust: "`slots` holds no element whose `item` is
-     * stellurgy:carbondust — it holds 0". The three network premises are arrangements and are not
-     * witnessed.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, taken while the network's zone sink was"
+            + " the oxygen vent; the method moved unchanged to the port and now stands at {@code"
+            + " TileVentilationPort#receive}. CLEARS — {@code TileVentilationPort#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}"
+            + " regenerating nothing: \"the plant must clear the room's CO2 through the ducts (removed 0)\". ONE"
+            + " FOR ONE — the same method drawing back half the oxygen it returned: \"and every unit of CO2 it"
+            + " took must come back to the room as oxygen\". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}"
+            + " no longer turning the carbon into dust: \"`slots` holds no element whose `item` is"
+            + " stellurgy:carbondust — it holds 0\". The three network premises are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aCentralPlantRegeneratesARoomItDoesNotStandIn() throws Exception {
         int cxPlant = stand("a stale room ducted to a plant that stands outside it");
-        buildStaleRoom(cxPlant);
-        // Sea-level oxygen on top of the carbon dioxide. The room's own vent tops oxygen up only
-        // while it is BELOW sea level (`TileOxygenVent.replenishOxygen`: `missing` is the gap to
-        // `AirState.earthLike()`), so from here on every unit of oxygen that appears is the plant's —
-        // which is what lets the oxygen coming back be read exactly instead of as a floor.
-        arrange("stellurgytest vent setair 0 " + cxPlant + " " + cy + " " + cz
-                + " " + ppm(640_000) + " " + ppm(210_000) + " " + ppm(150_000));
+        buildRoom(cxPlant);
 
-        // Duct run leaving the vent, then the plant at the far end: the plant touches no zone.
+        // Duct run leaving the port, then the plant at the far end: the plant touches no zone.
         placeDuct(cxPlant + 1);
         placeDuct(cxPlant + 2);
         placeDuct(cxPlant + 3);
         placePlant(cxPlant + 4);
         injectEnergyAt(cxPlant + 4, 1_000_000);
+        commission(cxPlant);
+        // Sea-level oxygen on top of the carbon dioxide. Nothing in this room supplies oxygen — the
+        // port has no tank — so every unit of oxygen that appears from here on is the plant's, which
+        // is what lets the oxygen coming back be read exactly instead of as a floor.
+        arrange("stellurgytest vent setair 0 " + cxPlant + " " + cy + " " + cz
+                + " " + ppm(640_000) + " " + ppm(210_000) + " " + ppm(150_000)).requireOk();
 
         Reply net = subnetInfo(cxPlant + 2);
-        assertEquals("premise: the vent must have joined the ventilation network as its zone's sink: "
+        assertEquals("premise: the port must have joined the ventilation network as its zone's sink: "
                 + net, 1, net.integer("sinks"));
         assertEquals("premise: the plant must be its source: " + net, 1, net.integer("sources"));
         assertEquals("premise: three ducts between them: " + net, 3, net.integer("cables"));
@@ -86,13 +91,13 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         assertTrue("the plant must clear the room's CO2 through the ducts (removed " + co2Removed
                 + "): " + before + " → " + after, co2Removed > 0);
         // EXACT: regeneration turns carbon dioxide into oxygen one for one (`AirState.regenerate`),
-        // and nothing else adds or takes oxygen here — no crew, and a vent that tops up only below
-        // sea level. A plant that kept the carbon and voided the oxygen fails this, where a floor
+        // and nothing else adds or takes oxygen here — no crew, and a port that carries no gas. A
+        // plant that kept the carbon and voided the oxygen fails this, where a floor
         // on the oxygen did not.
         assertEquals("and every unit of CO2 it took must come back to the room as oxygen: " + before
                 + " → " + after, co2Removed, o2Returned);
 
-        Reply slot = ask("stellurgytest hatch read 0 " + (cxPlant + 4) + " " + cy + " " + cz);
+        Reply slot = read("stellurgytest hatch read 0 " + (cxPlant + 4) + " " + cy + " " + cz);
         assertTrue("the carbon it took out of that room must appear in the PLANT's slot, not the "
                 + "room's: " + slot + " | air=" + after + " | network=" + subnetInfo(cxPlant + 2),
                 slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
@@ -101,26 +106,29 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     /**
      * INV-NET-01, made falsifiable. The same layout with the middle duct replaced by a shield cable:
      * the two subsystems are laid through one another and must not conduct for each other. The test
-     * above is this one's positive control — without it, "no source on the vent's side" would also be
+     * above is this one's positive control — without it, "no source on the port's side" would also be
      * what a rig whose ducts never joined anything looks like.
      *
      * <p>{@code subnet info} answers {@code sources:0} for a position in no network at all, so the
-     * vent's half is first required to BE a network — a sink with its duct — before "no source on its
+     * port's half is first required to BE a network — a sink with its duct — before "no source on its
      * side" says anything about the cable.</p>
      *
-     * <p>red-witnessed: with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = SubsystemNetworkRegistry.snapshot(domain);} letting other domains' cables into
-     * the life-support graph: "the vent's ventilation network must end at the shield cable, with no
-     * source on its side: … \"sources\":1", 2026-09-30. The sink premise is an arrangement and is not
-     * witnessed.</p>
-     *
      * <p>Not asserted: the room's carbon dioxide and oxygen after a solve, because with no source on
-     * the vent's network nothing can regenerate the room or draw from it through the network, so
+     * the port's network nothing can regenerate the room or draw from it through the network, so
      * neither reading could go red while the verdict above holds.</p>
+     * Pins INV-NET-01 (domains are isolated: a shield cable in a duct run carries no air).
      */
+    @Pins("INV-NET-01")
+    @LegacyWitness(prose = "with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);} letting other domains' cables into"
+            + " the life-support graph: \"the vent's ventilation network must end at the shield cable, with no"
+            + " source on its side: … \\\"sources\\\":1\", 2026-09-30, taken with the oxygen vent as the room's sink."
+            + " The sink premise is an arrangement and is not"
+            + " witnessed. Taken on the pre-merge form {@code SubsystemNetworkRegistry.snapshot(domain)}, the"
+            + " same per-domain snapshot read from the static registry.")
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {
-        int cxIsolation = stand("a stale room whose duct run is broken by a shield cable");
-        buildStaleRoom(cxIsolation);
+        int cxIsolation = stand("a room whose duct run is broken by a shield cable");
+        buildRoom(cxIsolation);
 
         placeDuct(cxIsolation + 1);
         place(cxIsolation + 2, cy, "affs:shield_cable");
@@ -129,9 +137,9 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         injectEnergyAt(cxIsolation + 4, 1_000_000);
 
         Reply net = subnetInfo(cxIsolation + 1);
-        assertEquals("premise: the vent's side must be a network of its own, with the vent as its "
+        assertEquals("premise: the port's side must be a network of its own, with the port as its "
                 + "sink: " + net, 1, net.integer("sinks"));
-        assertEquals("the vent's ventilation network must end at the shield cable, with no source "
+        assertEquals("the port's ventilation network must end at the shield cable, with no source "
                 + "on its side: " + net, 0, net.integer("sources"));
     }
 
@@ -140,22 +148,21 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * screen, every zone equal by default). Two rooms on one plant, and deliberately less supply
      * than either of them alone could absorb: under a real deficit the high-priority room must be
      * served and the normal one must not, rather than both getting half.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SERVED — {@code ComponentTopology#solve} at {@code requested, sink.sink.getPriority()} negating each sink's priority: "the prioritised room must be
-     * served (before=149526317 after=149526317)". NOT A SHARE — a pass before the priority tiers
-     * ({@code ComponentTopology#solve} at {@code int maxFlow = 0;}) that opens every sink to a small fixed share: "and under a
-     * deficit the normal-priority room must get nothing, not a share: … \"airCO2\":133579125".</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SERVED — {@code ComponentTopology#solve} at {@code requested, sink.sink.getPriority()} negating each sink's priority: \"the prioritised room must be"
+            + " served (before=149526317 after=149526317)\". NOT A SHARE — a pass before the priority tiers"
+            + " ({@code ComponentTopology#solve} at {@code int maxFlow = 0;}) that opens every sink to a small fixed share: \"and under a"
+            + " deficit the normal-priority room must get nothing, not a share: … \\\"airCO2\\\":133579125\".")
     @Test
     public void underADeficitTheHigherPriorityZoneIsServedFirst() throws Exception {
         int roomA = stand("two stale rooms on one plant, one of them prioritised");
         int roomB = roomA + SECOND_ROOM_OFFSET;
-        String plantRateBefore = arrange("stellurgytest config get lifeSupportPlantRate").text("value");
+        String plantRateBefore = read("stellurgytest config get lifeSupportPlantRate").requireOk().text("value");
         try {
-            buildStaleRoom(roomA);
-            buildStaleRoom(roomB);
+            buildRoom(roomA);
+            buildRoom(roomB);
 
-            // Duct the two vents together UNDER the floor, so the run never touches either sealed
+            // Duct the two ports together UNDER the floor, so the run never touches either sealed
             // volume, with the plant in the middle of it.
             for (int x = roomA; x <= roomB; x++) {
                 if (x == roomA + 4) {
@@ -165,11 +172,15 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
                 }
             }
             injectEnergyAt(roomA + 4, cy - 1, 1_000_000);
+            commission(roomA);
+            commission(roomB);
+            makeStale(roomA);
+            makeStale(roomB);
 
             // Less than one room can take: 3000 a tick against a duct that would pass 6000.
-            arrange("stellurgytest config set lifeSupportPlantRate 60000");
+            arrange("stellurgytest config set lifeSupportPlantRate 60000").requireOk();
 
-            Reply high = arrange("stellurgytest vent priority 0 " + roomA + " " + cy + " " + cz + " 1");
+            Reply high = act("stellurgytest vent priority 0 " + roomA + " " + cy + " " + cz + " 1");
             assertEquals("priority set failed: " + high, 1, high.integer("priority"));
 
             // Measure from a snapshot taken HERE, not from the value setair wrote: the server ticks
@@ -187,35 +198,80 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
             assertEquals("and under a deficit the normal-priority room must get nothing, not a "
                     + "share: " + b, baseB, b.longInteger("airCO2"));
         } finally {
-            arrange("stellurgytest config set lifeSupportPlantRate " + plantRateBefore);
+            arrange("stellurgytest config set lifeSupportPlantRate " + plantRateBefore).requireOk();
         }
+    }
+
+    /**
+     * A port's power comes through its ducts from a plant, and from nowhere else. The same room is
+     * read twice: ducted to nothing, the port is unpaid and holds no zone however often its seal is
+     * checked; with a powered plant at the end of the duct, the plant pays it and the room becomes a
+     * zone. The second half is what makes the first a reading about power rather than about a room
+     * that could not seal.
+     */
+    @Pins({"CON-C21-22", "MECH-ATM-34"})
+    @RedWitness(verdict = "unpaid", member = "TileVentilationPort#canFormBlob", at = "return isPowered();",
+            replacedBy = "return true;", fails = "a port with no plant on its network must hold no zone",
+            on = "2026-10-05")
+    @RedWitness(verdict = "paid", member = "LifeSupportNetwork#payPortUpkeep", at = "if (supply.payUpkeep(fe))",
+            replacedBy = "if (false)", fails = "with a powered plant on the duct the port must be paid and hold its room",
+            on = "2026-10-05")
+    @Test
+    public void aPortIsPoweredThroughItsDuctsByAPlant() throws Exception {
+        int cx = stand("a room with a port, first with no plant behind it, then with one");
+        buildRoom(cx);
+        placeDuct(cx + 1);
+        solve(1);
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+
+        Reply unpaid = arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        Reply unpaidInfo = ventInfo(cx);
+        assertTrue("a port with no plant on its network must hold no zone: " + unpaid + " | "
+                + unpaidInfo, !unpaid.bool("sealed") && !unpaidInfo.bool("powered"));
+
+        placePlant(cx + 2);
+        injectEnergyAt(cx + 2, 1_000_000);
+        solve(1);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        Reply paid = ventInfo(cx);
+        assertTrue("with a powered plant on the duct the port must be paid and hold its room: " + paid,
+                paid.bool("powered") && paid.bool("isSealed"));
     }
 
     // ─── helpers ───────────────────────────────────────────────────────
 
-    /** A sealed, maintained room whose air has been breathed down. */
-    private void buildStaleRoom(int cx) throws Exception {
+    /** A closed room with a ventilation port in its floor. It is not a zone until it is commissioned. */
+    private void buildRoom(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
-        place(cx, cy, "stellurgy:oxygenVent");
-        injectEnergyAt(cx, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        place(cx, cy, "stellurgy:ventilationPort");
+    }
 
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
+    /**
+     * Make the room a zone: its plant pays the port's running cost through the ducts (one solve),
+     * the port registers its zone on its first tick, and its seal check runs. Only once a plant is on
+     * the port's network — a port nobody pays holds no zone.
+     */
+    private void commission(int cx) throws Exception {
+        solve(1);
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+        Reply sealed = arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        requireArranged("the port must hold its room as a sealed zone: " + sealed, sealed.bool("sealed"));
+    }
 
+    /** A zone whose air has been breathed down. */
+    private void makeStale(int cx) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
     }
 
     private void placeDuct(int x) throws Exception {
@@ -227,7 +283,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, int y, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed at " + x + "," + y + ": " + resp, resp.bool("placed"));
     }
 
@@ -240,15 +296,15 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve lifesupport 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve lifesupport 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private Reply subnetInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
+        return read("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
     }
 }

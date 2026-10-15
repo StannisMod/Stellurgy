@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemCable;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 /**
  * The two-channel duct: stale air one way, fresh the other, as one block.
@@ -40,8 +39,6 @@ public class TileVentilationDuct extends TileEntity implements ISubsystemCable {
 
     @Override
     public int getThroughputPerTick() {
-        if (!StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
-            return 0;
         return LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportDuctThroughput);
     }
 
@@ -59,8 +56,8 @@ public class TileVentilationDuct extends TileEntity implements ISubsystemCable {
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 
@@ -78,8 +75,8 @@ public class TileVentilationDuct extends TileEntity implements ISubsystemCable {
 
     private void leaveNetwork() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 

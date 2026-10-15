@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
-
 import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -58,6 +57,8 @@ public class CapacitorChargeTest {
         assertEquals(5L, capacitor.charge());
     }
 
+    /** Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it). */
+    @Pins("INV-HYP-07")
     @Test
     public void aBankAcceptsNoFasterThanItsThroughputAllows() {
         // Heat sinks are what raise this. They do not make energy — a bank with every sink in the world
@@ -93,6 +94,8 @@ public class CapacitorChargeTest {
         assertEquals("...and must not have taken it", 0L, capacitor.charge());
     }
 
+    /** Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it). */
+    @Pins("INV-HYP-07")
     @Test
     public void theJumpBankIsNOTtheShipsBattery() {
         // Only the drive's own burst may take from it. If the rest of the vessel could pull, a jump
@@ -162,6 +165,8 @@ public class CapacitorChargeTest {
         assertEquals(-1L, CapacitorCharge.ticksToReach(0L, 1_000L, 10L, 5_000L));
     }
 
+    /** Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it). */
+    @Pins("INV-HYP-07")
     @Test
     public void aBankWithNoInflowNeverGetsThere() {
         // The forecast's own statement of the property the first test pins on the tile: a rate of zero

@@ -1,17 +1,5 @@
 package dev.stannismod.stellurgy.tile;
 
-import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
-
-import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
-import net.minecraft.util.EnumFacing;
-import net.minecraftforge.common.util.Constants;
-import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
@@ -23,13 +11,8 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.item.ItemOreScanner;
 import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
-import dev.stannismod.stellurgy.satellite.SatelliteData;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.util.StationLandingLocation;
-
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
@@ -37,6 +20,21 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
+import dev.stannismod.stellurgy.satellite.SatelliteData;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+import dev.stannismod.stellurgy.util.StationLandingLocation;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.util.EnumFacing;
+import net.minecraftforge.common.util.Constants;
+import net.minecraftforge.fml.relauncher.Side;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

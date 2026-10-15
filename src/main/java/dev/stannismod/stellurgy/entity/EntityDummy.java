@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.entity;
 
 import com.google.common.base.Optional;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -12,10 +14,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
@@ -368,6 +366,30 @@ public class EntityDummy extends Entity {
         }
     }
 
+    /**
+     * Whether the seat this dummy serves still stands — asked by a RIDERLESS dummy every server tick, so
+     * a dummy whose seat went away by any path (a discarded ship deletes its chunks and breaks no block)
+     * removes itself, as vanilla's hanging entities check their surface and a sleeping player his bed.
+     *
+     * <p>A ridden dummy never asks: across an assembly the pilot rides a stale mount bound to vacated
+     * coordinates until the rebind moves him off it, and removing it under him would end that rebind.</p>
+     *
+     * <p>A bound seat in an unloaded chunk cannot be read, so it stands while the shipyard position
+     * belongs to a REGISTERED ship — unloaded, and coming back; with no ship claiming it, nothing will
+     * ever load a seat there again.</p>
+     */
+    private boolean seatStands() {
+        BlockPos seat = getSeatPos();
+        if (seat == null) {
+            return world.getBlockState(new BlockPos(this)).getBlock() instanceof dev.stannismod.stellurgy.block.BlockSeat;
+        }
+        if (world.isBlockLoaded(seat)) {
+            return world.getBlockState(seat).getBlock() instanceof dev.stannismod.stellurgy.block.BlockSeat;
+        }
+        return VSIntegration.isBlockInShipyard(seat)
+                && VSIntegration.registeredShipIdManagingBlock(world, seat) != null;
+    }
+
     @Override
     public boolean shouldRiderSit() {
         return true;
@@ -396,6 +418,10 @@ public class EntityDummy extends Entity {
     @Override
     public void onUpdate() {
         super.onUpdate();
+        if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {
+            setDead();
+            return;
+        }
         BlockPos seat = getSeatPos();
         if (seat == null) {
             return;

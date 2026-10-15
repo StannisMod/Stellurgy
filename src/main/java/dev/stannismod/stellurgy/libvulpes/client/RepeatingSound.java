@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.client;
 
+import dev.stannismod.stellurgy.libvulpes.api.IToggleableMachine;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.api.IToggleableMachine;
 
 @SideOnly(Side.CLIENT)
 public class RepeatingSound extends MovingSound {

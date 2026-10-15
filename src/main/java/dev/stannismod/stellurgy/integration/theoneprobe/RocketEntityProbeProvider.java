@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.integration.theoneprobe;
 
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
+import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoaderServer;
 import mcjty.theoneprobe.api.IProbeHitEntityData;
 import mcjty.theoneprobe.api.IProbeInfo;
 import mcjty.theoneprobe.api.IProbeInfoEntityProvider;
@@ -7,9 +10,6 @@ import mcjty.theoneprobe.api.ProbeMode;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
-import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoaderServer;
 
 public class RocketEntityProbeProvider implements IProbeInfoEntityProvider {
 

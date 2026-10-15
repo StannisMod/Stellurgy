@@ -1,21 +1,19 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.client.ShipFrameCamera;
+import dev.stannismod.stellurgy.event.RocketEventHandler;
+import dev.stannismod.stellurgy.test.trace.DeckCameraState;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.client.ShipFrameCamera;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
-import dev.stannismod.stellurgy.test.trace.DeckCameraState;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Everything a test knows about what the client's camera was handed this frame, taken from the

@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.inventory;
 
+import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
+import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -12,11 +17,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
-import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
-import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;

@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EntityState;
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -34,6 +33,11 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private static final String STORED = "shieldStored";
     private static final String ENTITY_ID = "entityId";
 
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+
+    /** Pins INV-SHD-05 (a charged coil absorbs a single impact costing more than its per-tick intake). */
+    @Pins("INV-SHD-05")
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
         int gx = 980, gz = 774;
@@ -44,9 +48,9 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         // Charge the coil well above one bolt's cost, so the coil charge is not the limiter — only the
         // (pre-fix) per-tick extract cap could stand between a full coil and absorbing the bolt.
         for (int i = 0; i < 15; i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
         ShieldTile before = read(ex, gz);
         assertTrue("emitter never powered — cannot test absorption:\n" + before.raw(),
@@ -57,12 +61,12 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
 
         // Spawn an energy projectile in the air just above the powered emitter (inside the influence
         // box, not embedded in a block so it cannot self-destruct on a collision).
-        String spawn = exec("stellurgytest entity spawn " + DIM + " " + (ex + 0.5D) + " " + (Y + 1.5D)
-                + " " + (gz + 0.5D) + " affs:laser_bolt");
+        String spawn = arrange("stellurgytest entity spawn " + DIM + " " + (ex + 0.5D) + " " + (Y + 1.5D)
+                + " " + (gz + 0.5D) + " affs:laser_bolt").raw();
         int boltId = readEntityId(spawn);
 
         // One deterministic emitter tick: containUnauthorizedEntities runs and absorbs the bolt.
-        exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1");
+        act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1").raw();
 
         EntityState boltInfo = entity(boltId);
         assertTrue("the powered coil did not absorb the energy projectile (it survived): a full coil "
@@ -79,6 +83,19 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
                         + "the shield.", drop >= ENERGY_PROJECTILE_COST - 1_000L);
     }
 
+    /**
+     * A powered shield keeps a block it covers through a blast that destroys the same block unshielded,
+     * and pays for it out of its coil.
+     *
+     * <p>The payment is read off the shield's own decision — the coil as the blast is heard and as it
+     * is decided, inside one handler call — and not off two probe reads of the coil a round trip
+     * apart, which a refill from the network could make equal under load.</p>
+     */
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#tryAbsorbExplosionImpact} at"
+            + " {@code return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;} reduced to"
+            + " {@code return impactEnergy > 0;} — the glass still saved, nothing paid — this fails at \"the"
+            + " emitter took the glass out of the blast without paying for it (coil 37689 as the blast was"
+            + " heard, 37689 once decided)\" (2026-10-03).")
     @Test
     public void chargedShieldProtectsBlocksFromExplosion() throws Exception {
         // Control first: an unshielded glass block is destroyed by the blast. Without this the shielded
@@ -86,8 +103,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         // of the shield.
         int cx = 940, cz = 780;
         place("minecraft:glass", cx, cz);
-        exec("stellurgytest shield explode " + DIM + " " + (cx + 0.5D) + " " + (Y + 1.5D) + " " + (cz + 0.5D) + " 4");
-        String controlBlock = exec("stellurgytest block at " + DIM + " " + cx + " " + Y + " " + cz);
+        act("stellurgytest shield explode " + DIM + " " + (cx + 0.5D) + " " + (Y + 1.5D) + " " + (cz + 0.5D) + " 4");
+        String controlBlock = read("stellurgytest block at " + DIM + " " + cx + " " + Y + " " + cz).raw();
         assertTrue("control: the explosion did not destroy an unshielded glass block — the blast is "
                         + "not lethal here, so the shielded case would prove nothing:\n" + controlBlock,
                 Reply.of(controlBlock).bool("isAir"));
@@ -104,10 +121,10 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
 
         int px = ex + 2, pz = gz; // inside the emitter's radius-4 field
         place("minecraft:glass", px, pz);
-        long storedBefore = read(ex, gz).shieldStored();
-        exec("stellurgytest shield explode " + DIM + " " + (px + 0.5D) + " " + (Y + 1.5D) + " " + (pz + 0.5D) + " 4");
+        long blast = events.markInstrumented();
+        act("stellurgytest shield explode " + DIM + " " + (px + 0.5D) + " " + (Y + 1.5D) + " " + (pz + 0.5D) + " 4");
 
-        String shieldedBlock = exec("stellurgytest block at " + DIM + " " + px + " " + Y + " " + pz);
+        String shieldedBlock = read("stellurgytest block at " + DIM + " " + px + " " + Y + " " + pz).raw();
         // The id, compared. `contains("minecraft:glass")` is also satisfied by
         // `minecraft:glass_pane` and by `stained_glass`, so a block the explosion REPLACED with a
         // glass variant would have read as the shield protecting the original.
@@ -116,12 +133,50 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         assertEquals("a glass block inside a powered shield was destroyed by an explosion — the field did "
                         + "not protect it:\n" + shieldedBlock,
                 "minecraft:glass", Reply.of("stellurgytest block at", shieldedBlock).text("block"));
-        long storedAfter = read(ex, gz).shieldStored();
-        assertTrue("shield energy did not drop while absorbing the explosion (before=" + storedBefore
-                        + " after=" + storedAfter + "): the block may have survived for another reason.",
-                storedAfter < storedBefore);
+
+        // That the shield PAID for it, read off the decision itself rather than off two coil samples
+        // taken a probe round-trip apart: the network refills an emitter every tick, so a debit sampled
+        // that way can be paid back before the second read and look like no debit at all. Both records
+        // below are written inside the one handler call that decided the blast, with no tick between.
+        // Read, not awaited: the probe detonates inside its own call and the handler records inside the
+        // detonation (ForceFieldExplosionHandler#onExplosionDetonate, HEAD and RETURN), so both records
+        // exist by the time the command has answered.
+        Reply decided = Reply.of("shield_explosion_decided",
+                oneBlastRecord(events.since(blast, "shield_explosion_decided"), px, pz));
+        Reply heard = Reply.of("shield_explosion_heard",
+                oneBlastRecord(events.since(blast, "shield_explosion_heard"), px, pz));
+        String glass = px + "," + Y + "," + pz;
+        requireArranged("the blast never reached the glass, so its surviving says nothing about the"
+                + " shield: " + heard, heard.holdsText("candidates", glass));
+        String emitter = ex + "," + Y + "," + gz;
+        long storedHeard = heard.element("emitters", "pos", emitter).longInteger("stored");
+        long storedDecided = decided.element("emitters", "pos", emitter).longInteger("stored");
+        System.out.println("FIXTURE shield-explosion: glass " + glass + " emitter " + emitter + " coil heard="
+                + storedHeard + " decided=" + storedDecided + "; heard " + heard + "; decided " + decided);
+        assertTrue("the emitter took the glass out of the blast without paying for it (coil "
+                        + storedHeard + " as the blast was heard, " + storedDecided + " once decided)",
+                storedDecided < storedHeard);
     }
 
+    /**
+     * The one record in {@code since} for the blast centred over {@code (x, Y+1, z)}; fails naming the
+     * reply when the handler wrote none for it, or the recorder never ran.
+     */
+    private static String oneBlastRecord(String since, int x, int z) {
+        Events.assertInstrumentRan(since, "shield_explosion_events", "the shield's decision on the blast");
+        java.util.List<String> here = Events.recordsWhere(since, "at", blastCentre(x, z));
+        requireArranged("the shield's handler did not record exactly one decision for the blast, so"
+                + " there is no decision to read the payment from: " + since, here.size() == 1);
+        return here.get(0);
+    }
+
+    /** The {@code at} the explosion recorder writes for a blast centred over block {@code (x, Y+1, z)}. */
+    private static String blastCentre(int x, int z) {
+        return (x + 0.5D) + "," + (Y + 1.5D) + "," + (z + 0.5D);
+    }
+
+    /** Pins INV-SHD-06 (a kinetic projectile is deflected, not consumed). */
+    @Pins("INV-SHD-06")
     @Test
     public void chargedShieldDeflectsAnArrow() throws Exception {
         int gx = 992, gz = 786;
@@ -137,13 +192,13 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         double radius = 4.0D;
         // An arrow on the +Z shell, aimed straight inward at the emitter.
         double sx = centerX, sy = centerY, sz = centerZ + radius;
-        String spawn = exec("stellurgytest entity spawn " + DIM + " " + sx + " " + sy + " " + sz + " minecraft:arrow");
+        String spawn = arrange("stellurgytest entity spawn " + DIM + " " + sx + " " + sy + " " + sz + " minecraft:arrow").raw();
         int arrowId = readEntityId(spawn);
-        exec("stellurgytest entity set-motion " + DIM + " " + arrowId + " 0 0 -0.3");
+        arrange("stellurgytest entity set-motion " + DIM + " " + arrowId + " 0 0 -0.3");
         // Step the arrow inward once so it physically advances (pos != prevPos): the shield's deflection
         // reads the pos->prevPos sweep, so a stationary arrow with only a motion field is never repelled.
-        exec("stellurgytest entity tick " + DIM + " " + arrowId + " 1");
-        exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1");
+        act("stellurgytest entity tick " + DIM + " " + arrowId + " 1").raw();
+        act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1");
 
         EntityState info = entity(arrowId);
         assertTrue("the arrow is gone (absorbed/dead), not deflected — a kinetic projectile should be "
@@ -157,24 +212,24 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {
-        exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-        exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-        exec("stellurgytest shield tick " + DIM);
+        arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+        act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+        act("stellurgytest shield tick " + DIM);
     }
 
     /** What the server says about one entity in this test's dimension. */
     private EntityState entity(int entityId) throws Exception {
-        return EntityState.byId(this::exec, DIM, entityId);
+        return EntityState.byId(c -> read(c).raw(), DIM, entityId);
     }
 
     private static double sq(double v) {

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.biome.Biome;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 public class BiomeGenBarrenVolcanic extends Biome {
 

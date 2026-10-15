@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotEquals;
@@ -62,21 +63,23 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code finalVel = angVel ± min(|difference|, acc)} with
      * {@code acc = 0.02}. Pin doesn't assert exact 0.02/tick — that's
      * impl — only that the walk is non-zero in the right direction.</p>
+     * Pins INV-STN-10 (the altitude controller walks the station's orbital distance toward its target).
      */
+    @Pins("INV-STN-10")
     @Test
     public void altitudeControllerWalksStationOrbitalDistanceTowardTarget()
             throws Exception {
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
         int stationId = createStation();
         int[] origin = stationSpawn(stationId);
         int cx = origin[0], cy = 128, cz = origin[2];
 
         // Pre-load chunk at the station's coords + place the controller.
-        exec("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
-                + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
-        String place = exec("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " stellurgy:altitudeController");
+        arrange("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
+                + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air").raw();
+        String place = arrange("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " stellurgy:altitudeController").raw();
         assertTrue("altitude controller must place: " + place,
                 Reply.of(place).bool("placed"));
 
@@ -86,8 +89,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         // Set target via the new probe — pick a value definitely
         // different from the current orbital distance.
         int target = (int) (preDist + 50);
-        String setTarget = exec("stellurgytest station controller-set-target "
-                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + target);
+        String setTarget = act("stellurgytest station controller-set-target "
+                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + target).raw();
         assertTrue("controller-set-target must succeed: " + setTarget,
                 Reply.of(setTarget).ok());
 
@@ -101,8 +104,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         // Force-tick the controller. Production walks 0.02 per tick, so
         // 200 ticks -> ≤4.0 movement. Generous budget so even a slow
         // harness sees a non-zero delta.
-        exec("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " 200");
+        act("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " 200").raw();
 
         double postDist = station(stationId).orbitalDistance;
 
@@ -151,33 +154,35 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code setRedstoneState(OFF)} call), this test still passes
      * because {@code setProgress} writes a fresh {@code targetGravity}
      * and the walk eats it.</p>
+     * Pins INV-STN-11 (the gravity controller walks the station's gravity toward its target).
      */
+    @Pins("INV-STN-11")
     @Test
     public void gravityControllerWalksStationGravityTowardTarget() throws Exception {
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
         int stationId = createStation();
         int[] origin = stationSpawn(stationId);
         int cx = origin[0], cy = 130, cz = origin[2];
 
-        exec("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
+        arrange("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
-        String place = exec("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " stellurgy:gravityController");
+        String place = arrange("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " stellurgy:gravityController").raw();
         assertTrue("gravity controller must place: " + place,
                 Reply.of(place).bool("placed"));
 
         // Try setting an explicit target via the controller. This may
         // get reverted by the redstone-default bug, but it's still a
         // valid input even if the production loop fights us.
-        exec("stellurgytest station controller-set-target "
-                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 50");
+        act("stellurgytest station controller-set-target "
+                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 50").raw();
 
         // Force enough ticks to ensure gravity has settled at the
         // controller's effective target (regardless of which write
         // path wins — slider or redstone-bug-induced overwrite).
-        exec("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " 2000");
+        act("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " 2000").raw();
 
         StationInfo postInfo = station(stationId);
         double postGravity = postInfo.gravity();
@@ -203,20 +208,22 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code targetRotationsPerHour[id] = val - 60} (60 = getTotalProgress/2).
      * The update() loop walks {@code deltaRotation} toward
      * {@code targetRPH/72000}.</p>
+     * Pins INV-STN-12 (the orientation controller walks the station's rotation toward its target).
      */
+    @Pins("INV-STN-12")
     @Test
     public void orientationControllerWalksStationRotationTowardTarget()
             throws Exception {
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
         int stationId = createStation();
         int[] origin = stationSpawn(stationId);
         int cx = origin[0], cy = 132, cz = origin[2];
 
-        exec("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
+        arrange("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
-        String place = exec("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " stellurgy:orientationController");
+        String place = arrange("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " stellurgy:orientationController").raw();
         assertTrue("orientation controller must place: " + place,
                 Reply.of(place).bool("placed"));
 
@@ -226,8 +233,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         // -> angular velocity target = 40/72000 ~ 5.5e-4. Default ~0 ->
         // walk at acc per tick.
         int progress = 100;
-        String setTarget = exec("stellurgytest station controller-set-target "
-                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + progress);
+        String setTarget = act("stellurgytest station controller-set-target "
+                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + progress).raw();
         assertTrue("controller-set-target must succeed: " + setTarget,
                 Reply.of(setTarget).ok());
 
@@ -240,8 +247,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
 
         // Force-tick. acc = getMaxRotationalAcceleration() — small but
         // non-zero; 400 ticks should produce a measurable delta.
-        exec("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " 400");
+        act("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " 400").raw();
 
         double postRotEast = station(stationId).rotationEast();
 
@@ -254,7 +261,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
     // ─── helpers ─────────────────────────────────────────────────────────
 
     private int createStation() throws Exception {
-        String create = exec("stellurgytest station create 0");
+        String create = arrange("stellurgytest station create 0").raw();
         assertTrue("station create failed: " + create,
                 Reply.of(create).ok());
         Reply mReply = Reply.of(create);
@@ -264,7 +271,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
 
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(this::exec, stationId);
+        return StationInfo.byId(c -> read(c).raw(), stationId);
     }
 
     private int[] stationSpawn(int stationId) throws Exception {

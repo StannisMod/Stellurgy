@@ -1,13 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.MissionCompletion;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -33,33 +28,35 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
 
     private static final String MISSION_ID = "missionId";
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 720);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     private long startOreMission(int rocketId, float drillingPower) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-ore 0 " + rocketId + " 1000 " + drillingPower));
         assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
-        return Long.parseLong(mmReply.text(MISSION_ID));
+        return rockets.missionStarted(0, Long.parseLong(mmReply.text(MISSION_ID)));
     }
 
     /** The bug: drillingPower == 0 skips the harvest branch (the only null
@@ -70,13 +67,12 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9300);
         long mid = startOreMission(rid, 0.0f);
 
-        String strip = ok(client().execute("stellurgytest mission strip-guidance " + mid));
+        String strip = ok(client().arrange("stellurgytest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
                 (!Reply.of(strip).bool("hasGuidanceComputer")));
 
-        MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+        MissionCompletion complete = MissionCompletion.now(commands(), rockets, mid);
         assertFalse("completing an ore mission with a missing guidance computer "
                         + "must not NPE the server tick (C049): " + complete.raw(),
                 complete.threw("NullPointerException"));
@@ -92,11 +88,10 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9400);
         long mid = startOreMission(rid, 1.0f);
 
-        String strip = ok(client().execute("stellurgytest mission strip-guidance " + mid));
+        String strip = ok(client().arrange("stellurgytest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
 
-        MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+        MissionCompletion complete = MissionCompletion.now(commands(), rockets, mid);
         assertFalse("completing with a missing guidance computer must not NPE: " + complete.raw(),
                 complete.threw("NullPointerException"));
         assertTrue("complete-now must report success: " + complete.raw(),

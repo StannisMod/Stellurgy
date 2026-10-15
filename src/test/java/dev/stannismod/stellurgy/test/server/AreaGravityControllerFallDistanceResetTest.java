@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.EntityState;
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -57,6 +57,8 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5560;
 
+    /** Pins INV-MBM-23 (the area gravity controller zeroes fallDistance inside its radius only). */
+    @Pins("INV-MBM-23")
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
         // 0) Hold the controller + out-of-radius chunks hot so spawned
@@ -68,7 +70,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
 
         // 1) Build + validate the controller multiblock.
         ok("stellurgytest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ);
-        String complete = exec("stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ);
+        String complete = act("stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ).raw();
         assertTrue("controller must validate: " + complete,
                 Reply.of(complete).bool("isComplete"));
 
@@ -94,7 +96,8 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         ok("stellurgytest entity set-fall-distance 0 " + idOut + " 7.5");
 
         // 5) Drive the controller's update() loop deterministically too.
-        ok("stellurgytest tile force-tick 0 " + CX + " " + CY + " " + CZ + " 5");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + CX + " " + CY + " " + CZ + " 5");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // 6) Discriminating assertions. The out-of-radius reading still being
         //    7.5 doubles as proof that set-fall-distance worked at all.
@@ -112,8 +115,8 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     }
 
     private int spawnPinnedStand(double x, double y, double z) throws Exception {
-        String resp = exec("stellurgytest entity spawn 0 " + x + " " + y + " " + z
-                + " minecraft:armor_stand");
+        String resp = arrange("stellurgytest entity spawn 0 " + x + " " + y + " " + z
+                + " minecraft:armor_stand").raw();
         assertTrue("entity spawn must succeed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("spawn must report entityId: " + resp, mReply.has("entityId"));
@@ -132,13 +135,13 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
      * one reading.</p>
      */
     private double readFallDistance(int id) throws Exception {
-        return EntityState.byId(this::exec, 0, id)
+        return EntityState.byId(c -> read(c).raw(), 0, id)
                 .requireAlive("the pinned stand must still exist to have a fall distance")
                 .fallDistance();
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }

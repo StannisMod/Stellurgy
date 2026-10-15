@@ -1,19 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.Test;
-
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 
 /**
  * E2E: does the transit subsystem move a live VS ship between bubble cells? A ship assembled in a fresh
@@ -41,13 +32,16 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        buildMark = events.mark();
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
 
-        // The origin ship must exist + load before we depart it (the departure crossing snapshots it).
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        // The origin ship must exist + load before we depart it (the departure crossing snapshots it):
+        // linked on THIS craft's own announcement that it is usable in the origin cell.
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
 
         // Depart: begin the jump. The ship leaves the origin cell for hyperspace — at a speed that
         // makes it a real flight, because a fast enough jump is performed as a single crossing instead
@@ -55,8 +49,8 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // fixture is a real craft and could take either.
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
-                + " " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+                + " " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // NO PUMP. The fixture now runs on the server's own subsystem, so the jump is advanced by
@@ -67,47 +61,41 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // caught a moment.
         String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the jump never completed; the durable record now reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         // The dimension the arrival event was posted IN, which is the slot holding the target cell.
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
 
-        // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
-        assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // This fixture is a bare cube with no flight computer, so it has no durable name to be
-        // followed by — the one craft in the suite that genuinely cannot be asked for by identity.
-        // What can be done is to stop guessing: the cell's ship count now NAMES what it counted, so
-        // "exactly one ship here" and "and this is it" are one reading instead of a count followed by
-        // a nearest-ship lookup that could answer about the other one.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near
+        // 0,200,0): THIS craft, by the durable name the jump carried, linked on its own announcement
+        // that it is usable there.
+        String arrivedId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                setup.requireDurableId(), USABLE_TICKS);
         assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS);"
-                + " id=" + arrivedId, ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                + " id=" + arrivedId, ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
     }
 
+    /** Server ticks for the craft to become usable where it was built or has arrived. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest) ---------------------------------------------------
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /**
-     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
-     *
-     * <p>Budgeted on the SERVER's clock rather than {@code dim}'s: the world being asked about is
-     * exactly the one that may not have started ticking, so budgeting against it would measure the
-     * wait with the thing the wait is waiting for.</p>
-     */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static int extractInt(String json, String key) {
         return Reply.of(json).integer(key);

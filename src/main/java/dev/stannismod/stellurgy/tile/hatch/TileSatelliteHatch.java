@@ -1,21 +1,21 @@
 package dev.stannismod.stellurgy.tile.hatch;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.item.ItemPackedStructure;
 import dev.stannismod.stellurgy.item.ItemSatellite;
-import dev.stannismod.stellurgy.network.PacketBackToRocketGui;
-import dev.stannismod.stellurgy.util.IWeighted;
-import dev.stannismod.stellurgy.util.RocketGuiNavigation;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.network.PacketBackToRocketGui;
+import dev.stannismod.stellurgy.util.IWeighted;
+import dev.stannismod.stellurgy.util.RocketGuiNavigation;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.util.List;
 

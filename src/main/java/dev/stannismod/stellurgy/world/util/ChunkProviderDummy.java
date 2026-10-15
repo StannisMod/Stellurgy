@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.world.util;
 
+import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
-import dev.stannismod.stellurgy.util.StorageChunk;
 
 public class ChunkProviderDummy implements IChunkProvider {
 

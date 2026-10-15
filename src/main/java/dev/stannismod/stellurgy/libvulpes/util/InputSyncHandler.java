@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
+import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent;
-import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
-import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 
 public class InputSyncHandler {
 

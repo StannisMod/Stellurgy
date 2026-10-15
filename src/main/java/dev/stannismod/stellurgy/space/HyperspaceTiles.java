@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.TreeSet;
-
 import net.minecraft.util.math.BlockPos;
+
+import java.util.TreeSet;
 
 /**
  * Allocates parking "lanes" in the shared hyperspace world for ships in transit ("transit

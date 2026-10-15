@@ -1,21 +1,19 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * wireless transceiver NBT + onLoad-role persistence.
@@ -41,7 +39,8 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class WirelessTransceiverRestartTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
 
     private static final String NET_ID = "networkID";
     private static final String SHARED_ID = "sharedNetworkId";
@@ -50,7 +49,7 @@ public class WirelessTransceiverRestartTest {
     private static final String IS_SOURCE = "isSource";
     private static final String IS_SINK = "isSink";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -66,7 +65,7 @@ public class WirelessTransceiverRestartTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-wireless-restart-");
+        workDir = ServerRoot.fresh("forge-server-wireless-restart-");
     }
 
     @After
@@ -75,9 +74,11 @@ public class WirelessTransceiverRestartTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-WDT-05 (mode, enabled and networkID survive an NBT round-trip and the tile re-registers its role). */
+    @Pins("INV-WDT-05")
     @Test
     public void modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         // Boot 1 — non-default state.
         place(firstBoot, X_A);
@@ -92,7 +93,7 @@ public class WirelessTransceiverRestartTest {
         // Boot 2 — same workDir. The tile must be loaded by virtue of
         // being in a spawn chunk; NBT round-trip and onLoad fire on
         // chunk-load.
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String post = info(secondBoot, X_A);
         assertEquals("mode must survive NBT round-trip",
@@ -103,7 +104,7 @@ public class WirelessTransceiverRestartTest {
         // onLoad re-registers as source for extract mode. Without onLoad
         // running, isSource would be false and the player's pre-restart
         // configuration would be invisible to the network.
-        String role = String.join("\n", secondBoot.client().execute(
+        String role = String.join("\n", secondBoot.client().read(
                 "stellurgytest pipe wireless-role-on-network "
                         + DIM + " " + X_A + " " + Y + " " + Z));
         assertTrue("onLoad must re-register extract-mode tile as source: " + role,
@@ -115,14 +116,14 @@ public class WirelessTransceiverRestartTest {
     // --- helpers -----------------------------------------------------------
 
     private static void place(RealDedicatedServerHarness h, int x) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest place " + DIM + " " + x + " " + Y + " " + Z
                         + " stellurgy:wirelessTransciever"));
         assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed"));
     }
 
     private static int pair(RealDedicatedServerHarness h, int xA, int xB) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-pair " + DIM + " "
                         + xA + " " + Y + " " + Z + " "
                         + xB + " " + Y + " " + Z));
@@ -131,19 +132,19 @@ public class WirelessTransceiverRestartTest {
     }
 
     private static String info(RealDedicatedServerHarness h, int x) throws Exception {
-        return String.join("\n", h.client().execute(
+        return String.join("\n", h.client().read(
                 "stellurgytest pipe wireless-info " + DIM + " " + x + " " + Y + " " + Z));
     }
 
     private static void setMode(RealDedicatedServerHarness h, int x, String mode) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
         assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private static void setEnabled(RealDedicatedServerHarness h, int x, boolean enabled) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
         assertTrue("set-enabled failed: " + r, Reply.of(r).ok());

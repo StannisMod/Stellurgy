@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
  * Void space everywhere: the answer to a pack's {@code <galaxyGen procedural="false"/>}, and what a

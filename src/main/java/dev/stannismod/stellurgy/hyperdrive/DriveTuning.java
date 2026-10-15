@@ -80,8 +80,14 @@ public final class DriveTuning {
      * Half-extent of the window the generator holds up on its own, with no hull emitters at all —
      * so a novice can jump a small ship the moment he has a generator, a capacitor and a navigation
      * computer. Emitters are what make the window big enough for a real hull.
+     *
+     * <p>An 11×11×11 cube centred on the GENERATOR, not on the ship. It was 2 (5×5×5) until
+     * 2026-10-05, which no playable craft fitted: a generator stands at a hull's side, so a 5-wide
+     * cube around it covered half the hull and the air beside it, and every first jump read "does not
+     * fit" (maintainer, playing: ships of a 5×5 cross-section never fitted). Raised to 5 by his ruling
+     * the same day; the milestone's jump craft fits it with no emitter.</p>
      */
-    public static final int GENERATOR_BASELINE_WINDOW_RADIUS = 2; // a 5x5x5 envelope
+    public static final int GENERATOR_BASELINE_WINDOW_RADIUS = 5;
     /** Half-extent of the envelope one hull emitter adds around itself. */
     public static final int EMITTER_WINDOW_RADIUS = 6;
 
@@ -125,7 +131,20 @@ public final class DriveTuning {
      * has said is already acceptable — would have moved without anybody choosing to move it.</p>
      */
     public static final long BASELINE_DRIVE_POWER = powerForCoils(BASELINE_COILS);
-    public static final long BASELINE_SHIP_MASS = 4_000L;
+
+    /**
+     * The mass of the baseline hull, in kilograms — a CALIBRATION of the speed law onto real mass, not
+     * a balance knob: moving it rescales every jump in the game at once.
+     *
+     * <p>Measured, not chosen: it is the mass of the craft the first milestone builds and jumps (the
+     * {@code with-powered-jump-drive} fixture), 326 250 kg by the block table on 2026-10-08 — the
+     * {@code with-jump-drive} hull's 321 250 kg (measured 2026-10-05) plus the power plug on its
+     * capacitor, an iron-material block at 5 000 kg. The baseline is the milestone craft (ruling
+     * 2026-10-05), so it moved with the craft when the milestone began charging its drive from its own
+     * grid (ruling 2026-10-08: "да", to re-measuring). A hull heavier or lighter than it flies slower or
+     * faster by the ratio — the plain {@code with-jump-drive} hull now 1.6 % faster than the baseline.</p>
+     */
+    public static final long BASELINE_SHIP_MASS = 326_250L;
     public static final long BASELINE_SPEED_BLOCKS_PER_TICK = 1_000_000L;
 
     /**
@@ -163,13 +182,4 @@ public final class DriveTuning {
      * confirmation is deliberate, long enough that reading the warning does not run it out.
      */
     public static final int ADVISORY_CONFIRM_TICKS = 100;
-
-    // ─── The mass placeholder ──────────────────────────────────────────────────
-
-    /**
-     * The mass every hull reports until real per-ship mass exists. Deliberately a single number in
-     * a single place: everything downstream of it — the speed formula, its tests, the forecast the
-     * pilot reads — is real and stays real when the number stops being a constant.
-     */
-    public static final long PLACEHOLDER_SHIP_MASS = BASELINE_SHIP_MASS;
 }

@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.inventory.Container;
+
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.function.Supplier;
-
-import net.minecraft.entity.Entity;
-import net.minecraft.inventory.Container;
 
 /**
  * What an edge recorder remembers about ONE body, held by that body — implemented on {@code Entity} by

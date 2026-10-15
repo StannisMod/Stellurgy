@@ -1,16 +1,10 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
+import dev.stannismod.stellurgy.space.GalacticCoord;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
+import java.util.*;
 
 /**
  * The addresses one memory crystal holds — the tier-2 ship's entire galactic knowledge, in an item.

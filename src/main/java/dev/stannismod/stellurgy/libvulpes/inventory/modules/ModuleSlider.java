@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
-import net.minecraft.util.math.MathHelper;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
+import net.minecraft.util.math.MathHelper;
 
 public class ModuleSlider extends ModuleProgress {
 

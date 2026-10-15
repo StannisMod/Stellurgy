@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.api;
 
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
+import dev.stannismod.stellurgy.util.Asteroid;
+import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
@@ -15,13 +21,6 @@ import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.oredict.OreDictionary;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
-import dev.stannismod.stellurgy.util.Asteroid;
-import dev.stannismod.stellurgy.util.SealableBlockHandler;
 
 import java.io.IOException;
 import java.io.InvalidClassException;
@@ -49,6 +48,7 @@ public class StellurgyConfiguration {
     private final static String ENERGY = "Energy Production";
     private final static String HEAT = "Ship Thermal System";
     private final static String MISSION = "Resource Collection Missions";
+    private final static String WEAPONS = "Weapons";
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
     private final static String COMPAT = "Compatibility";
@@ -134,8 +134,16 @@ public class StellurgyConfiguration {
      *  moment it hurts somebody rather than snapshotting it at load. */
     @ConfigProperty
     public int vacuumDamage = 1;
+    /**
+     * What the air's chemistry does to living things. Neither switches a SYSTEM off: zones, machines
+     * and gases run either way. {@code breathingRequiresO2} covers everything about oxygen in a body —
+     * respiration, a suit's tank, suffocation and oxygen toxicity; {@code enableToxicity} covers
+     * poison. Vacuum, pressure and heat are physics and answer to neither.
+     */
     @ConfigProperty
-    public boolean enableOxygen = true;
+    public boolean breathingRequiresO2 = true;
+    @ConfigProperty
+    public boolean enableToxicity = true;
     @ConfigProperty(needsSync = true)
     public boolean launchingDestroysBlocks;
     @ConfigProperty(needsSync = true)
@@ -160,6 +168,7 @@ public class StellurgyConfiguration {
     public int dilithiumPerChunk;
     @ConfigProperty
     public int dilithiumPerChunkMoon;
+    @ConfigProperty
     public int aluminumPerChunk;
     @ConfigProperty
     public int aluminumClumpSize;
@@ -276,8 +285,6 @@ public class StellurgyConfiguration {
     public boolean laserDrillOresBlackList;
     @ConfigProperty
     public int oxygenVentSize;
-    @ConfigProperty
-    public boolean lifeSupportZones;
     /**
      * The oxygen band, the ignition floor and the crew's draw, in the COMPOSITION's own unit rather
      * than the millionths the config file states them in.
@@ -303,6 +310,14 @@ public class StellurgyConfiguration {
     public int lifeSupportRecirculatorPower;
     @ConfigProperty
     public long lifeSupportCarbonPerDust;
+    /**
+     * A scrubber's draw and what one cartridge charge pays for, in the respiration rate's unit: the
+     * composition's unit times the zone volume in blocks, so an amount of gas rather than a pressure.
+     */
+    @ConfigProperty
+    public long lifeSupportScrubberRate;
+    @ConfigProperty
+    public long lifeSupportScrubberCo2PerCharge;
     @ConfigProperty
     public int jettisonPortIntervalTicks;
     @ConfigProperty
@@ -321,6 +336,8 @@ public class StellurgyConfiguration {
     public int lifeSupportPlantCarbonPerDust;
     @ConfigProperty
     public int lifeSupportDuctThroughput;
+    @ConfigProperty
+    public int lifeSupportPortFePerTick;
     @ConfigProperty
     public long lifeSupportBreachVentRate;
     @ConfigProperty
@@ -513,10 +530,13 @@ public class StellurgyConfiguration {
 
     @ConfigProperty
     public boolean advancedWeightSystem;
-    @ConfigProperty
-    public boolean advancedWeightSystemInventories;
+    /**
+     * Multiplier on the mass of what a craft's machines HOLD — items in inventories, fluids in tanks —
+     * and on nothing else: not the blocks, not the people aboard. {@code 0} makes cargo weightless.
+     * Synced because the client prices a rocket's weight too.
+     */
     @ConfigProperty(needsSync = true)
-    public double weightMaterialScale = 1.0;
+    public double contentMassScale = 1.0;
     @ConfigProperty(needsSync = true)
     public double fuelMassScale = 1.0;
     @ConfigProperty(needsSync = true)
@@ -536,6 +556,164 @@ public class StellurgyConfiguration {
     public boolean shipsCollide = true;
     @ConfigProperty(needsSync = true)
     public double serviceStationStandaloneRepairMultiplier = 3.0;
+    /**
+     * Share of a block's own crafting recipe charged to repair it from destroyed-adjacent back to
+     * pristine BY HAND, spread over its stages. 1.0 means a full hand repair costs about what the
+     * block costs — the welder's advantage over simply replacing it is that the block, and whatever
+     * its tile entity holds, stays where it is.
+     */
+    @ConfigProperty(needsSync = true)
+    public double repairCostPerStageFraction = 1.0;
+    @ConfigProperty(needsSync = true)
+    public int repairWelderEnergyPerStage = 2000;
+    @ConfigProperty(needsSync = true)
+    public int repairWelderCapacity = 100000;
+    /**
+     * Below this speed, in blocks per tick, a shot mirrored off a shield is ended at the shell rather
+     * than left alive. A body deflected to nearly nothing has to be somewhere if it is an entity; a
+     * record does not, and a cloud of near-motionless rounds loitering against a shell is both a
+     * simulation cost and a lie about what is in the air.
+     */
+    @ConfigProperty(needsSync = true)
+    public double shotReflectionSpeedFloor = 0.05;
+    @ConfigProperty(needsSync = true)
+    public double shotPenetrationSpeedFloor = 0.05;
+    /**
+     * The widest a shot's body may be treated as, in blocks, however wide it was declared. A body
+     * sweeps a cylinder rather than a line, and the blocks one step examines grow with the SQUARE of
+     * its width, so this is what keeps an absurd calibre from being a way of making the server do
+     * arbitrary work. It caps the geometry only: the declared cross-section still prices the shot.
+     */
+    @ConfigProperty(needsSync = true)
+    public double shotBodyRadiusCap = 2.0;
+    /**
+     * How much dearer a block is to BOIL AWAY than to push through, when nothing has written it its
+     * own ablation row. Both figures are energy per unit of volume removed — the same dimension — and
+     * they are nowhere near the same magnitude: for steel, being pushed through costs of order a
+     * gigajoule per cubic metre while heating, melting and vaporising it costs tens of them. So per
+     * joule a kinetic round removes far more hull than a beam does, and a laser buys precision,
+     * instantaneity and nothing to reload instead of digging power.
+     */
+    @ConfigProperty(needsSync = true)
+    public double ablationResistanceFactor = 20.0;
+    /**
+     * The power density below which a beam does not drill at all — it warms the plate and the energy
+     * is conducted away — as energy per unit of the body's cross-section, in the units an impact
+     * budget is in. <b>Off by default, and the reason is worth reading before turning it on.</b>
+     *
+     * <p>The worry it was written for is real: a linear ablation law would let a faint beam held long
+     * enough cut a battleship. But the law is NOT linear in the way that worry assumes — a stage is
+     * bought whole or not at all, and a beam that cannot afford one keeps its energy and buys nothing
+     * this tick or any other. Since a stage costs `perStage x ablation x area / referenceArea`, "can
+     * this beam afford a stage" is ALREADY the question "is this beam intense enough", with a
+     * threshold of `perStage x ablation / referenceArea` that each block sets for itself. A faint beam
+     * therefore never accumulates, and the battleship is safe without this knob.</p>
+     *
+     * <p>What the knob buys, at a value ABOVE that affordability line, is the thing the pricing does
+     * NOT do: a sub-threshold beam's energy is ABSORBED. Without it a beam too weak to mark a plate
+     * does not warm it — it passes clean through with everything it arrived with, a free x-ray of the
+     * hull. That, rather than the battleship, is why the threshold is set.</p>
+     *
+     * <p><b>The default sits above the affordability line of METAL.</b> The line is
+     * `perStage x ablation / referenceArea`, which each block sets for itself: with the shipped table
+     * that is of order 8 000 for stone and 38 500 for an iron block. At 50 000 a small emitter does
+     * nothing whatever to a metal hull, however long it is held, and its energy stays in the plate —
+     * which is the qualitative gap between a big emitter and a small one, and the reason a pulsed
+     * laser is worth building. Zero disables it and restores the x-ray.</p>
+     */
+    @ConfigProperty(needsSync = true)
+    public double beamAblationIntensityThreshold = 50000.0;
+    /**
+     * How glancing a hit has to be before a solid round skips off METAL instead of digging in, as the
+     * angle between the round and the surface normal in degrees: 0 is square-on, 90 is a pure graze.
+     * Only metal deflects — a round never skips off a plank wall — so a player meets bouncing rounds
+     * where a player expects them. 90 disables ricochet entirely.
+     */
+    @ConfigProperty(needsSync = true)
+    public double ricochetIncidenceDegrees = 65.0;
+    /**
+     * How much of its speed a ricocheting round keeps. Below 1 a bounce costs something, which is what
+     * stops a round skipping between two plates forever; at 1 a graze is free.
+     */
+    @ConfigProperty(needsSync = true)
+    public double ricochetRestitution = 0.75;
+    /**
+     * How many shots one world may carry at once. A refusal, not an eviction: dropping somebody
+     * else's round to make room would turn a burst of cheap fire into a way of deleting incoming fire.
+     */
+    @ConfigProperty(needsSync = true)
+    public int maxShotsPerWorld = 256;
+    /**
+     * How near a player's eye a round's PATH — or a held beam's lit LENGTH — must pass before that
+     * player is told about it, in blocks. Weapon fire is a server record, so being told is the only
+     * way a client can draw any of it; sending every round to everybody in the world would put a
+     * battery's whole rate of fire on every player's connection, including the ones on the far side
+     * of a planet. Zero switches the whole drawing channel off: the mechanics still work and nothing
+     * is drawn. One radius covers both families deliberately — it is the same question about the
+     * same guns, and two knobs would be two answers.
+     */
+    @ConfigProperty(needsSync = true)
+    public int shotVisibilityRadius = 256;
+    /**
+     * Whether the fire-control sensor searches for targets at all. With this off the block still
+     * exists and still says what it is, and it acquires nothing, publishes nothing and draws no
+     * power — so a battery falls back to being pointed by hand, which is exactly what it was before
+     * the sensor existed rather than a broken version of it.
+     */
+    @ConfigProperty(needsSync = true)
+    public boolean enableFireControlSensor = true;
+    /** How far a fire-control sensor can look at all, in blocks. Its envelope, not its lock range. */
+    @ConfigProperty(needsSync = true)
+    public double fireControlSensorRadius = 96.0;
+    /**
+     * Ticks between sweeps. A contact's position is re-read by the gun every tick from the entity
+     * itself, so this is the cadence at which the sensor reconsiders WHICH thing to shoot at, not
+     * the cadence at which the mount is allowed to follow it.
+     */
+    @ConfigProperty(needsSync = true)
+    public int fireControlSensorScanIntervalTicks = 10;
+    /** How many contacts one sensor can hold. A bound on work, and on how much a readout can say. */
+    @ConfigProperty(needsSync = true)
+    public int fireControlSensorMaxTracks = 8;
+    /**
+     * FE per tick an ACTIVE sensor draws. An illuminating sensor is a machine that is running; a
+     * listening one costs nothing, which is what makes going quiet a genuine option rather than a
+     * penalty. A sensor that cannot pay falls back to listening rather than lying about its lock.
+     */
+    @ConfigProperty(needsSync = true)
+    public int fireControlSensorActiveEnergyPerTick = 40;
+    /**
+     * The lock quality an ACTIVE sensor holds a contact at inside its envelope. This is the
+     * passive/active gap: everything a listening sensor gets is bounded by what the target radiates,
+     * and this is what illuminating buys instead.
+     */
+    @ConfigProperty(needsSync = true)
+    public double fireControlSensorActiveLockQuality = 0.95;
+    /**
+     * How well a contact must be resolved before a gun will fire at it, 0..1. Below it a battery
+     * still tracks — knowing something is out there and being unable to hit it is a real state, and
+     * the reason to switch the sensor on.
+     */
+    @ConfigProperty(needsSync = true)
+    public double fireControlSensorLockQualityToFire = 0.25;
+    /**
+     * Whether acquisition is limited to hostile mobs and players. Off, a defence battery opens up on
+     * whatever wanders past, which is a legitimate way to run a perimeter and a poor default.
+     */
+    @ConfigProperty(needsSync = true)
+    public boolean fireControlSensorAcquireHostilesOnly = true;
+    /**
+     * How far gone a turret's own block must be, 0..1, before its traverse slows and then seizes.
+     * The ORDER of the two rungs is the mechanic and is not configurable; where they sit is balance.
+     *
+     * <p>Note what is deliberately absent: no flag disables this. Damage and wear advance the same
+     * stage counter, so a switch here would be a switch that makes ships unkillable — and the
+     * parts-wear flag gates wear where wear ACCRUES, never where a consequence is read.</p>
+     */
+    @ConfigProperty(needsSync = true)
+    public double turretDerateDamageFraction = 0.25;
+    @ConfigProperty(needsSync = true)
+    public double turretJamDamageFraction = 0.75;
     @ConfigProperty(needsSync = true)
     public double wearTankLeakChanceMax = 0.5;
     @ConfigProperty(needsSync = true)
@@ -660,7 +838,8 @@ public class StellurgyConfiguration {
 
 
         //Oxygen
-        stellurgyConfig.enableOxygen = config.get(OXYGEN, "EnableAtmosphericEffects", true, "Enable damage from lack of oxygen and effects from non-standard atmospheres.").getBoolean();
+        stellurgyConfig.breathingRequiresO2 = config.get(OXYGEN, "breathingRequiresO2", true, "Living things need oxygen: they breathe it into CO2, a suit spends its tank, and air with too little or too much of it hurts. When false none of that happens to anybody, but life support still runs — zones keep their gases and machines still move them. Vacuum, pressure and heat are not affected.").getBoolean();
+        stellurgyConfig.enableToxicity = config.get(OXYGEN, "enableToxicity", true, "Poisons in the air build up a dose in whoever breathes them and hurt past it. When false nobody takes a dose or poison damage, and the air still holds and reports its poisons.").getBoolean();
         stellurgyConfig.vacuumDamage = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
         stellurgyConfig.overrideGCAir = config.get(OXYGEN, "OverrideGCAir", true, "Disable Galacticraft air and use Stellurgy oxygen on GC planets.").getBoolean();
         stellurgyConfig.oxygenVentConsumptionMult = config.get(OXYGEN, "oxygenVentConsumptionMultiplier", 1f, "Multiplier for oxygen vent O2 use per tick.").getDouble();
@@ -668,7 +847,6 @@ public class StellurgyConfiguration {
         stellurgyConfig.spaceSuitOxygenTime = config.get(OXYGEN, "spaceSuitO2Buffer", 30, "Maximum suit O2 buffer time in minutes.").getInt();
         stellurgyConfig.suitTankCapacity = (float) config.get(OXYGEN, "suitTankCapacity", 1.0f, "Multiplier for suit extra tank capacity.", 0, Float.MAX_VALUE).getDouble();
         stellurgyConfig.scrubberRequiresCartrige = config.get(OXYGEN, "scrubberRequiresCartrige", true, "Require cartridges for oxygen scrubbers.").getBoolean();
-        stellurgyConfig.lifeSupportZones = config.get(OXYGEN, "lifeSupportZones", true, "Track nitrogen/oxygen/CO2 separately inside a sealed zone: crew consume O2 and exhale CO2, and the breathability of the room follows its oxygen partial pressure. When false a sealed zone behaves exactly as it did before, with a fixed breathable atmosphere.").getBoolean();
         stellurgyConfig.lifeSupportMinPartialO2 = partialPressure(config, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).");
         stellurgyConfig.lifeSupportCombustionMinPartialO2 = partialPressure(config, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.");
         stellurgyConfig.lifeSupportMaxPartialO2 = partialPressure(config, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.");
@@ -677,6 +855,8 @@ public class StellurgyConfiguration {
         stellurgyConfig.lifeSupportRecirculatorRate = partialPressure(config, "lifeSupportRecirculatorRate", 6000, "CO2 a single recirculator turns back into oxygen each second, in millionths of an atmosphere. At the default it keeps up with three crew in a room of any size.");
         stellurgyConfig.lifeSupportRecirculatorPower = config.get(OXYGEN, "lifeSupportRecirculatorPower", 400, "Power a recirculator draws per operation. Reversing combustion is endothermic: the energy cost is the point, not a tax.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportCarbonPerDust = partialPressure(config, "lifeSupportCarbonPerDust", 60000, "CO2 that must be regenerated before one carbon dust is produced, in millionths of an atmosphere. At the defaults a recirculator running flat out yields a dust every ten seconds.");
+        stellurgyConfig.lifeSupportScrubberRate = partialPressure(config, "lifeSupportScrubberRate", 2000, "CO2 a single scrubber beside a sealed oxygen vent absorbs from the vent's room each second, in the same unit as lifeSupportRespirationRate. The default is one crew member's breath, so N scrubbers keep up with N crew; that crew count is a progression choice, not a measurement. The CO2 is gone: a scrubber returns no oxygen, which is what the recirculator is for.");
+        stellurgyConfig.lifeSupportScrubberCo2PerCharge = partialPressure(config, "lifeSupportScrubberCo2PerCharge", 20000, "CO2 one charge of a scrubber cartridge absorbs, in the same unit as lifeSupportScrubberRate. The default is ten seconds at the default rate, which keeps a cartridge's life under full load what it was before scrubbers touched the air: one charge every 200 ticks. A scrubber in a room with nothing to absorb spends nothing.");
         stellurgyConfig.jettisonPortIntervalTicks = config.get(OXYGEN, "jettisonPortIntervalTicks", 20, "How often a jettison port tries to throw its contents overboard, in ticks. This is a duty cycle, not a throttle on how much leaves: the port ejects whatever stack it holds, so a faster port empties a busier scrubber line rather than exporting more per firing.", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.jettisonPortClearance = config.get(OXYGEN, "jettisonPortClearance", 3, "How many blocks in front of a jettison port must be empty before it will fire. The port refuses rather than firing into a wall, and it HOLDS its cargo while blocked instead of voiding it, so the only cost of a badly placed port is that nothing leaves.", 1, 64).getInt();
         stellurgyConfig.lifeSupportFluidPerAtmBlock = config.get(OXYGEN, "lifeSupportFluidPerAtmBlock", 1000, "How many millibuckets of gas one whole atmosphere of partial pressure amounts to in ONE block of room. This is the exchange rate between air in a room and gas in a pipe: at the default, emptying a 20-block cabin of its 0.21 atm of oxygen yields 4200 mB.", 1, Integer.MAX_VALUE).getInt();
@@ -686,6 +866,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.lifeSupportPlantPower = config.get(OXYGEN, "lifeSupportPlantPower", 2000, "Power a central plant draws per second while regenerating at its full rate; a plant running below capacity draws proportionally less. Reversing combustion is endothermic — the energy is the mechanic, and centralising it is what buys the better rate.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportPlantCarbonPerDust = config.get(OXYGEN, "lifeSupportPlantCarbonPerDust", 1200000, "Regeneration work a central plant must do before one carbon dust is produced, in the same millionths-times-blocks unit as lifeSupportPlantRate. The default is the per-room figure scaled to a nominal 20-block cabin, so a plant and a recirculator yield the same dust for the same gas.", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportDuctThroughput = config.get(OXYGEN, "lifeSupportDuctThroughput", 120000, "Regeneration work one ventilation duct block will carry each second, in the same unit as lifeSupportPlantRate. This is a THROUGHPUT, not a gas content: the duct carries a rate, and running a second line is how a ship supports more crew.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportPortFePerTick = config.get(OXYGEN, "lifeSupportPortFePerTick", 1, "Energy a ventilation port draws each tick to hold its zone, in FE per tick. It is not wired to the port: a life-support plant pays it through the ventilation ducts that connect the two, so a port with no plant behind it holds no zone. 0 makes ports free, but they still need a plant on their network.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportBreachVentRate = partialPressure(config, "lifeSupportBreachVentRate", 50000, "How fast a breached zone loses its air to space, in millionths of an atmosphere per second across all three gases. At the default a sea-level room empties in about twenty seconds, which is the window a player has to close a bulkhead or patch the hull. 0 disables venting: a breached room then keeps its air, which is the pre-3.0.0 behaviour.");
         stellurgyConfig.dropExTorches = config.get(OXYGEN, "dropExtinguishedTorches", false, "Drop an extinguished torch instead of a vanilla torch, when breaking an extinguished torch.").getBoolean();
         sealableBlockWhiteList = config.getStringList("sealableBlockWhiteList", OXYGEN, new String[]{}, "Blocks that should count as sealable. Format: modid:block  for example \"minecraft:chest\"");
@@ -821,20 +1002,49 @@ public class StellurgyConfiguration {
         stellurgyConfig.gravityAffectsFuel = config.get(ROCKET, "gravityAffectsFuels", true, "Make fuel use depend on gravity.").getBoolean();
         stellurgyConfig.launchingDestroysBlocks = config.get(ROCKET, "launchBlockDestruction", false, "Allow launches to damage nearby blocks, plants, glass, soil, turn rock into lava, and more").getBoolean();
         blackListRocketBlocksStr = config.getStringList("rocketBlockBlackList", ROCKET, new String[]{"minecraft:portal", "minecraft:bedrock", "minecraft:snow_layer", "minecraft:water", "minecraft:flowing_water", "minecraft:lava", "minecraft:flowing_lava", "minecraft:fire", "stellurgy:rocketfire"}, "Blocks that cannot be part of rocket. Format: modid:block e.g \"minecraft:chest\"");
-        stellurgyConfig.advancedWeightSystem = config.get(ROCKET, "advancedWeightSystem", true, "Enable advanced rocket weight calculation, including the handled inventories. Block weights are stored in weights.json").getBoolean();
-        stellurgyConfig.advancedWeightSystemInventories = config.get(ROCKET, "advancedWeightSystemInventories", true, "Include inventory contents in rocket weight. Note: may not work with modded inventories (eg IE storage chests)").getBoolean();
-        stellurgyConfig.weightMaterialScale = config.get(ROCKET, "weightMaterialScale", 1.0, "Global multiplier applied to material-derived and fallback block weights (does not affect explicit overrides or rocket component parts). Raise to make hulls/structure mass matter more").getDouble();
+        stellurgyConfig.advancedWeightSystem = config.get(ROCKET, "advancedWeightSystem", true, "Tier-1 rockets weigh their blocks in kilograms (weights.json) and launch only above the minimum thrust-to-weight. Off: every block counts as one unit of mass and the launch check is off. What machines hold is scaled by contentMassScale. Tier-2 ships are always weighed").getBoolean();
+        double contentMassScale = config.get(ROCKET, "contentMassScale", 1.0, "Multiplier on the mass of what a craft's machines hold (items in inventories, fluids in tanks); block mass and the people aboard are not scaled. 0 makes cargo weightless. Must not be negative. Note: may not see modded inventories that expose no item or fluid capability").getDouble();
+        if (!(contentMassScale >= 0.0)) {
+            // Refused, loudly: a negative or NaN weight stops a craft's centre of mass being a
+            // weighted mean, and the solver integrates whatever that produces.
+            logger.error("contentMassScale = " + contentMassScale + " is refused (it must be 0 or more); "
+                    + "using 1.0, so cargo weighs what it is");
+            contentMassScale = 1.0;
+        }
+        stellurgyConfig.contentMassScale = contentMassScale;
         stellurgyConfig.fuelMassScale = config.get(ROCKET, "fuelMassScale", 1.0, "Global multiplier applied to the mass of fuel/oxidizer carried by a rocket. Raise to make full tanks weigh more relative to thrust").getDouble();
         stellurgyConfig.minLaunchTWR = config.get(ROCKET, "minLaunchTWR", 1.05, "Minimum thrust-to-weight ratio (thrust / wet weight) a rocket needs before it is allowed to launch. 1.0 means it can barely lift itself; values above 1.0 add a safety margin").getDouble();
-        stellurgyConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses (partsWearSystem). 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty (wear then only affects explosion chance)").getDouble();
+        stellurgyConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses. 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty entirely (condition then only affects the failure roll). Independent of partsWearSystem, which gates only whether wear ACCRUES").getDouble();
         stellurgyConfig.wearWarnProbability = config.get(ROCKET, "wearWarnProbability", 0.05, "Failure probability (0..1) at or above which the pilot is warned before launch that the rocket is worn. Also the threshold that blocks launch when wearCriticalBlocksLaunch is true").getDouble();
         stellurgyConfig.wearCriticalBlocksLaunch = config.get(ROCKET, "wearCriticalBlocksLaunch", false, "If true, a rocket whose failure probability is at/above wearWarnProbability is refused launch (no explosion). If false, the pilot is warned but may still launch and risk the stochastic explosion").getBoolean();
         stellurgyConfig.shipsCollide = config.get(ROCKET, "shipsCollide", true, "If true, two ships whose bounding boxes overlap are both held at rest while they overlap, and a collision event naming both is posted. Crude by design: nothing is conserved, no momentum is transferred and the hulls are compared as boxes rather than blocks. Set false to restore the old behaviour, in which two ships pass through each other").getBoolean();
         stellurgyConfig.serviceStationStandaloneRepairMultiplier = config.get(ROCKET, "serviceStationStandaloneRepairMultiplier", 3.0, "Resource cost multiplier when the service station repairs a worn part WITHOUT a linked PrecisionAssembler (consumes the repair recipe's non-part ingredients times this factor). The assembler-backed path stays at 1x").getDouble();
+        stellurgyConfig.repairCostPerStageFraction = config.get(ROCKET, "repairCostPerStageFraction", 1.0, "Share of a block's own crafting recipe charged for a FULL hand repair with the welder, spread evenly over its damage stages (1.0 = repairing a block from its worst stage costs about what crafting it costs). Ingredient counts round up, so no stage is ever free").getDouble();
+        stellurgyConfig.repairWelderEnergyPerStage = config.get(ROCKET, "repairWelderEnergyPerStage", 2000, "Forge Energy the repair welder spends per stage of damage removed").getInt();
+        stellurgyConfig.repairWelderCapacity = config.get(ROCKET, "repairWelderCapacity", 100000, "Forge Energy the repair welder holds when fully charged").getInt();
         stellurgyConfig.wearTankLeakChanceMax = config.get(ROCKET, "wearTankLeakChanceMax", 0.5, "Chance (0..1) that a fully-worn fuel tank carrying fuel/oxidizer leaks at launch. Scaled by the tank's wear stage. A leak both bleeds fuel and adds to the launch failure (explosion) probability").getDouble();
         stellurgyConfig.wearTankLeakFuelLoss = config.get(ROCKET, "wearTankLeakFuelLoss", 0.25, "Fraction of a fuel type's loaded fuel lost when a worn tank of that type leaks at launch").getDouble();
         stellurgyConfig.wearSeatBlockStageFraction = config.get(ROCKET, "wearSeatBlockStageFraction", 0.7, "Wear fraction (0..1 of max stage) at or above which a worn seat blocks a CREWED launch. Uncrewed/automated rockets ignore seat wear").getDouble();
-        stellurgyConfig.partsWearSystem = config.get(ROCKET, "partsWearSystem", true, "Enable rocket part wear and exploding chance.").getBoolean();
+        stellurgyConfig.shotReflectionSpeedFloor = config.get(WEAPONS, "shotReflectionSpeedFloor", 0.05, "Speed in blocks per tick below which a shot deflected by a shield is ended at the shell instead of continuing. Prevents near-motionless rounds loitering against a shield", 0.0, Double.MAX_VALUE).getDouble();
+        stellurgyConfig.shotPenetrationSpeedFloor = config.get(WEAPONS, "shotPenetrationSpeedFloor", 0.05, "Speed in blocks per tick below which a round boring through a hull is treated as having come to rest inside it. Penetration costs a round its speed, and without a floor a spent one creeps forward forever", 0.0, Double.MAX_VALUE).getDouble();
+        stellurgyConfig.shotBodyRadiusCap = config.get(WEAPONS, "shotBodyRadiusCap", 2.0, "The widest a shot's body is treated as when it sweeps its way through blocks, in blocks. A body sweeps a cylinder rather than a line and the work one step does grows with the square of its width, so this bounds what an absurd calibre can cost the server. The declared cross-section still prices the shot; only the geometry is capped", 0.0, 8.0).getDouble();
+        stellurgyConfig.ricochetIncidenceDegrees = config.get(WEAPONS, "ricochetIncidenceDegrees", 65.0, "How glancing a hit must be before a solid round skips off METAL rather than digging in, in degrees from the surface normal: 0 is square-on, 90 a pure graze. Only metal deflects, so a round never skips off a plank wall. 90 disables ricochet", 0.0, 90.0).getDouble();
+        stellurgyConfig.ricochetRestitution = config.get(WEAPONS, "ricochetRestitution", 0.75, "How much of its speed a ricocheting round keeps. Below 1 a bounce costs something, which is what stops a round skipping between two plates forever", 0.0, 1.0).getDouble();
+        stellurgyConfig.ablationResistanceFactor = config.get(WEAPONS, "ablationResistanceFactor", 20.0, "How much dearer a block is to boil away than to push through, when nothing has written it its own ablation row. Both are energy per unit volume removed; they are nowhere near the same magnitude, which is why a laser buys precision rather than digging power. 1.0 makes a beam dig exactly like a slug", 0.01, 1000.0).getDouble();
+        stellurgyConfig.beamAblationIntensityThreshold = config.get(WEAPONS, "beamAblationIntensityThreshold", 50000.0, "Energy per unit of a beam's cross-section below which it removes nothing and its energy is absorbed as heat instead of being carried onward. The default sits above the affordability line of metal (order 38500 for an iron block), so a small emitter does nothing to a metal hull however long it is held. 0 disables it, and a sub-threshold beam then passes clean through the plate with everything it arrived with", 0.0, Double.MAX_VALUE).getDouble();
+        stellurgyConfig.maxShotsPerWorld = config.get(WEAPONS, "maxShotsPerWorld", 256, "How many shots one world may have in flight at once. Further fire is refused until some land; nothing already in flight is ever dropped to make room", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shotVisibilityRadius = config.get(WEAPONS, "shotVisibilityRadius", 256, "How near a player the path of a fired round, or the lit length of a held beam, must pass before that player is told about it and can see it drawn, in blocks. 0 disables weapon-fire replication entirely — the mechanics still work, nothing is drawn", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.enableFireControlSensor = config.get(WEAPONS, "enableFireControlSensor", true, "Whether fire-control sensors search for targets. Off, a sensor acquires nothing, publishes nothing and draws no power: batteries are pointed by hand, as they were before sensors existed").getBoolean();
+        stellurgyConfig.fireControlSensorRadius = config.get(WEAPONS, "fireControlSensorRadius", 96.0, "How far a fire-control sensor can look, in blocks. Its envelope — a target inside it may still be too poorly resolved to shoot at", 1.0, 1024.0).getDouble();
+        stellurgyConfig.fireControlSensorScanIntervalTicks = config.get(WEAPONS, "fireControlSensorScanIntervalTicks", 10, "Ticks between sweeps. The cadence at which a sensor reconsiders which contact to hand its battery, not the rate at which the guns follow it", 1, 200).getInt();
+        stellurgyConfig.fireControlSensorMaxTracks = config.get(WEAPONS, "fireControlSensorMaxTracks", 8, "How many contacts one sensor holds at once", 1, 64).getInt();
+        stellurgyConfig.fireControlSensorActiveEnergyPerTick = config.get(WEAPONS, "fireControlSensorActiveEnergyPerTick", 40, "FE per tick an actively illuminating sensor draws. Passive listening is free; a sensor that cannot pay falls back to listening", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.fireControlSensorActiveLockQuality = config.get(WEAPONS, "fireControlSensorActiveLockQuality", 0.95, "Lock quality an active sensor holds a contact at inside its envelope, 0..1 — what illuminating buys over listening", 0.0, 1.0).getDouble();
+        stellurgyConfig.fireControlSensorLockQualityToFire = config.get(WEAPONS, "fireControlSensorLockQualityToFire", 0.25, "How well a contact must be resolved, 0..1, before a gun fires at it. Below it the battery tracks without shooting", 0.0, 1.0).getDouble();
+        stellurgyConfig.fireControlSensorAcquireHostilesOnly = config.get(WEAPONS, "fireControlSensorAcquireHostilesOnly", true, "Whether acquisition is limited to hostile mobs and players. Off, a battery engages whatever wanders into range").getBoolean();
+        stellurgyConfig.turretDerateDamageFraction = config.get(WEAPONS, "turretDerateDamageFraction", 0.25, "How far gone a turret's own block must be, 0..1, before its traverse slows down. The order of the rungs is the mechanic; where they sit is balance", 0.0, 1.0).getDouble();
+        stellurgyConfig.turretJamDamageFraction = config.get(WEAPONS, "turretJamDamageFraction", 0.75, "How far gone a turret's own block must be, 0..1, before its traverse seizes entirely. A seized mount still fires down the bearing it stopped at", 0.0, 1.0).getDouble();
+        stellurgyConfig.partsWearSystem = config.get(ROCKET, "partsWearSystem", true, "Whether rocket parts ACCRUE wear: whether a launch advances a seat, tank or motor towards its next stage. It does not gate what a worn part then DOES - a rocket shot up on the pad has to fly like a rocket shot up on the pad whatever this says, because battle damage and a long career put stages on the same axis. Off means a save stops getting worse, not that the damage already on it stops mattering: the launch warning, the critical-wear refusal, the failure roll and the tank leaks all still apply").getBoolean();
         stellurgyConfig.increaseWearIntensityProb = config.get(ROCKET, "increaseWearIntensityProb", 0.025, "Chance for each part to gain wear on launch.").getDouble();
 
         //Ore configuration

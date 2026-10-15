@@ -40,29 +40,29 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
 
     @Test
     public void redstoneOnWithNoSignalSelectsLowAltitudeNotFloored190() throws Exception {
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
-        String create = exec("stellurgytest station create 0");
+        String create = arrange("stellurgytest station create 0").raw();
         assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(STATION_ID, create);
 
         StationInfo info = station(stationId);
         int cx = info.spawnX(), cy = 128, cz = info.spawnZ();
 
-        exec("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
+        arrange("stellurgytest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
-        String place = exec("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " stellurgy:altitudeController");
+        String place = arrange("stellurgytest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
+                + " stellurgy:altitudeController").raw();
         assertTrue("altitude controller must place: " + place, Reply.of(place).bool("placed"));
 
         // Put the controller into redstone-ON mode (default is OFF). With no redstone
         // wiring around it, getStrongPower(pos) == 0.
-        String setRs = exec("stellurgytest station controller-set-redstone " + SPACE_DIM + " "
-                + cx + " " + cy + " " + cz + " ON");
+        String setRs = arrange("stellurgytest station controller-set-redstone " + SPACE_DIM + " "
+                + cx + " " + cy + " " + cz + " ON").raw();
         assertTrue("controller-set-redstone must succeed: " + setRs, Reply.of(setRs).ok());
 
         // A few ticks: the redstone branch writes targetOrbitalDistance = f(power=0) each tick.
-        exec("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 3");
+        act("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 3").raw();
 
         StationInfo postInfo = station(stationId);
         int target = postInfo.targetOrbitalDistance();
@@ -75,7 +75,7 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
 
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(this::exec, stationId);
+        return StationInfo.byId(c -> read(c).raw(), stationId);
     }
 
     private static int extract(String field, String s) {

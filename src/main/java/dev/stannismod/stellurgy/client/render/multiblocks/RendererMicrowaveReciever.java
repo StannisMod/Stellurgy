@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.client.render.multiblocks;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.tile.multiblock.energy.TileMicrowaveReciever;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -11,9 +14,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.tile.multiblock.energy.TileMicrowaveReciever;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RendererMicrowaveReciever extends TileEntitySpecialRenderer {
 

@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.SpaceSlotPool;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract pins for the space-subsystem registration hygiene: the enable-gate decision surface

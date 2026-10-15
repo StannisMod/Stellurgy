@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.player;
 
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.atmosphere.RocketTransferGrace;
+import dev.stannismod.stellurgy.space.HyperspaceVoid;
+import dev.stannismod.stellurgy.space.ShipAboardTag;
+import dev.stannismod.stellurgy.space.SpaceEventHandler;
+import net.minecraft.entity.player.EntityPlayer;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import net.minecraft.entity.player.EntityPlayer;
-
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.atmosphere.RocketTransferGrace;
-import dev.stannismod.stellurgy.integration.vs.DeckHold;
-import dev.stannismod.stellurgy.space.HyperspaceVoid;
-import dev.stannismod.stellurgy.space.ShipAboardTag;
-import dev.stannismod.stellurgy.space.SpaceEventHandler;
 
 /**
  * What a player is bound to, and how he is returned to the plain world.

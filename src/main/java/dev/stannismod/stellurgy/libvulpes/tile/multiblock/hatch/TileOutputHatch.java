@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch;
 
-import net.minecraft.entity.player.EntityPlayer;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleOutputSlotArray;
+import net.minecraft.entity.player.EntityPlayer;
 
 import java.util.LinkedList;
 import java.util.List;

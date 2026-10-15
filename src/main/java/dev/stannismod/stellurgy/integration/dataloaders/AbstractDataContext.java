@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.integration.dataloaders;
 
-import javax.annotation.Nullable;
-
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextFormatting;
+
+import javax.annotation.Nullable;
 
 /**
  * Represents a context such as a Waila/TOP tooltip that data can be added to.

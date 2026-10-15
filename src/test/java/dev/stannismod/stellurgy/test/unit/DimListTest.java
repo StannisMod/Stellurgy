@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -22,11 +23,10 @@ public class DimListTest {
      *
      * <p>Acceptance, stated before the code: {@code [0,2,5]} then {@code [0,5,9,7]} answers
      * {@code [9,7]}.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code DimList#addedSince} at {@code return java.util.Arrays.stream(registered()).filter(dim -> !earlier.holds(dim)).toArray()} — its filter — inverted
-     * ({@code earlier.holds(dim)}): "arrays first differed at element [0]; expected:&lt;9&gt; but
-     * was:&lt;0&gt;".</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code DimList#addedSince} at {@code return java.util.Arrays.stream(registered()).filter(dim -> !earlier.holds(dim)).toArray()} — its filter — inverted"
+            + " ({@code earlier.holds(dim)}): \"arrays first differed at element [0]; expected:&lt;9&gt; but"
+            + " was:&lt;0&gt;\".")
     @Test
     public void addedSinceAnswersOnlyTheDimensionsTheLaterReadingGained() {
         int[] added = reading("0,5,9,7").addedSince(reading("0,2,5"));

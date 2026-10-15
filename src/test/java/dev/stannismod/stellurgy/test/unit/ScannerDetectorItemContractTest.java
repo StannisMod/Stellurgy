@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.item.ItemBeaconFinder;
+import dev.stannismod.stellurgy.item.ItemOreScanner;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.item.ItemBeaconFinder;
-import dev.stannismod.stellurgy.item.ItemOreScanner;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * scanner / detector item contracts (unit tier).

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.api;
 
-import net.minecraft.enchantment.Enchantment;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.atmosphere.IAtmosphereSealHandler;
 import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
+import net.minecraft.enchantment.Enchantment;
 
 /**
  * The mod's services, for anything outside it that needs one.

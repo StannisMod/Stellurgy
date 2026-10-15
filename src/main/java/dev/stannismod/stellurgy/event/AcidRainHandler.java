@@ -1,6 +1,11 @@
 package dev.stannismod.stellurgy.event;
 
 import net.minecraft.entity.EntityLivingBase;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
@@ -9,12 +14,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 
 /**
  * Applies damage to living things caught in acidic rain — planets flagged

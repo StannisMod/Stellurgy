@@ -1,21 +1,16 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.UUID;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.hyperdrive.JumpWindow;
-import dev.stannismod.stellurgy.hyperdrive.ShipDrive;
-import dev.stannismod.stellurgy.hyperdrive.ShipDriveStats;
-import dev.stannismod.stellurgy.hyperdrive.ShipMassProvider;
+import dev.stannismod.stellurgy.hyperdrive.*;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.ShipTransitManager;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.tile.TileNavigationComputer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+
+import java.util.UUID;
 
 /**
  * What one real ship can answer about its ability to jump — the production side of
@@ -35,11 +30,26 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     private final World world;
     private final BlockPos flightComputerPos;
     private final UUID shipId;
+    /** Whether the drive this resolves adopts an unlinked machine in the claim — see {@link ShipDrive}. */
+    private final boolean observing;
 
     public ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId) {
+        this(world, flightComputerPos, shipId, false);
+    }
+
+    private ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId, boolean observing) {
         this.world = world;
         this.flightComputerPos = flightComputerPos;
         this.shipId = shipId;
+        this.observing = observing;
+    }
+
+    /**
+     * The ship's navigation for an OBSERVER: its drive is {@link ShipDrive#observedFrom}, so every answer
+     * is about the machines the ship already holds and asking writes nothing.
+     */
+    public static ShipNavigation observedFrom(World world, BlockPos flightComputerPos, UUID shipId) {
+        return new ShipNavigation(world, flightComputerPos, shipId, true);
     }
 
     @Override
@@ -69,6 +79,13 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     @Override
     public GalacticCoord currentCell() {
         return currentCoord();
+    }
+
+    @Override
+    public boolean destinationCellAvailable() {
+        SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+        GalacticCoord target = target();
+        return stack == null || target == null || stack.manager.canMaterialize(target);
     }
 
     // ─── What the drive answers ────────────────────────────────────────────────
@@ -128,13 +145,19 @@ public final class ShipNavigation implements JumpGate.ShipContext {
 
     /** The ship's drive, resolved fresh — a drive is measured when asked, never remembered. */
     public ShipDrive drive() {
-        return new ShipDrive(world, flightComputerPos);
+        return observing ? ShipDrive.observedFrom(world, flightComputerPos) : new ShipDrive(world, flightComputerPos);
     }
 
-    /** Blocks per tick this ship would fly at, given its drive and its hull. */
+    /**
+     * Blocks per tick this ship would fly at, given its drive and its hull; zero when the hull cannot
+     * be weighed, which is the same "no flight to forecast" a ship without a drive reads.
+     */
     public long plannedSpeed() {
-        return JumpSpeed.blocksPerTick(drive().stats().drivePower(),
-                ShipMassProvider.massOf(world, flightComputerPos, shipId),
+        java.util.OptionalLong mass = ShipMassProvider.massOf(world, shipId);
+        if (!mass.isPresent()) {
+            return 0L;
+        }
+        return JumpSpeed.blocksPerTick(drive().stats().drivePower(), mass.getAsLong(),
                 drive().stats().tier());
     }
 
@@ -153,7 +176,7 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     /**
      * Would this jump be performed as a single crossing rather than flown through hyperspace?
      *
-     * <p>Asked of {@link ShipTransitManager#isDirectCrossing} — the same predicate the departure reads,
+     * <p>Asked of {@link ShipTransitManager#jumpsDirect} — the same predicate the departure reads,
      * never a second copy of the rule. A console that quoted one mechanism while the drive performed
      * the other would be showing the pilot a flight he is not going to get, and he has no way to
      * check.</p>
@@ -161,12 +184,13 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     public boolean plannedJumpIsDirect() {
         GalacticCoord target = target();
         GalacticCoord origin = currentCoord();
-        if (target == null || origin == null) {
+        SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+        if (target == null || origin == null || stack == null) {
             return false;
         }
-        return ShipTransitManager.isDirectCrossing(
+        return stack.transit.jumpsDirect(
                 SpaceSubsystem.frames().distanceBetween(origin, target, SpaceSubsystem.spaceClock()),
-                plannedSpeed());
+                plannedSpeed(), target);
     }
 
     /** Where the ship is now, as the durable ledger records it, or {@code null}. */

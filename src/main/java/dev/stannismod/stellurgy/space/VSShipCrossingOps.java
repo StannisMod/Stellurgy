@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import java.util.List;
 
 /**
  * Production {@link ShipCrossingService.Ops}: carries a crossing state machine's decisions out

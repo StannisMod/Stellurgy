@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
+import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
-import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import java.util.Collections;
 import java.util.EnumSet;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  *
@@ -43,10 +41,8 @@ public class SpaceArmorProtectionContractTest {
         return new ItemStack(armor, 1);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "suit must
-     * protect against HEAT", 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"suit must"
+            + " protect against HEAT\", 2026-09-30.")
     @Test
     public void protectsAgainstEveryKindOfHarmAirCanDo() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
@@ -63,10 +59,8 @@ public class SpaceArmorProtectionContractTest {
         }
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that does
-     * nothing is not a threat", 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that does"
+            + " nothing is not a threat\", 2026-09-30.")
     @Test
     public void doesNotProtectWhereThereIsNothingToProtectAgainst() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);

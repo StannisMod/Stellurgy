@@ -35,9 +35,6 @@ public final class DeckFrameTick {
 
     private DeckFrameTick() {}
 
-    /** One tick, in seconds: turns the craft's velocity into a per-tick carry. */
-    private static final double TICK_SECONDS = 0.05;
-
     /** How far below the feet, in the deck's frame, a floor must be for the deck to take the entity. */
     private static final double SUPPORT_PROBE = 0.30;
 
@@ -519,9 +516,9 @@ public final class DeckFrameTick {
             double[] v = VSIntegration.shipVelocityAtPointFor(world, shipId,
                     entity.posX, entity.posY, entity.posZ);
             if (v != null) {
-                episode.writtenX = v[0] * TICK_SECONDS;
-                episode.writtenY = v[1] * TICK_SECONDS;
-                episode.writtenZ = v[2] * TICK_SECONDS;
+                episode.writtenX = v[0];
+                episode.writtenY = v[1];
+                episode.writtenZ = v[2];
             }
         }
         String shipId = episode.shipId;
@@ -639,9 +636,9 @@ public final class DeckFrameTick {
         episode.localMotionZ = entity.motionZ;
         episode.held = true;
         double[] v = VSIntegration.shipVelocityAtPointFor(world, shipId, pos[0], pos[1], pos[2]);
-        episode.writtenX = motion[0] + (v == null ? 0.0 : v[0] * TICK_SECONDS);
-        episode.writtenY = motion[1] + (v == null ? 0.0 : v[1] * TICK_SECONDS);
-        episode.writtenZ = motion[2] + (v == null ? 0.0 : v[2] * TICK_SECONDS);
+        episode.writtenX = motion[0] + (v == null ? 0.0 : v[0]);
+        episode.writtenY = motion[1] + (v == null ? 0.0 : v[1]);
+        episode.writtenZ = motion[2] + (v == null ? 0.0 : v[2]);
         entity.setPosition(pos[0], pos[1], pos[2]);
         entity.motionX = episode.writtenX;
         entity.motionY = episode.writtenY;
@@ -658,8 +655,8 @@ public final class DeckFrameTick {
         // hull, on top of the carry the deck has just given it.
         VSIntegration.suppressShipDrag(entity);
         noteHeldTick(entity, shipId, episode.localX, episode.localY, episode.localZ,
-                v == null ? 0.0 : v[0] * TICK_SECONDS, v == null ? 0.0 : v[1] * TICK_SECONDS,
-                v == null ? 0.0 : v[2] * TICK_SECONDS, entity.onGround);
+                v == null ? 0.0 : v[0], v == null ? 0.0 : v[1],
+                v == null ? 0.0 : v[2], entity.onGround);
     }
 
     /**
@@ -849,9 +846,9 @@ public final class DeckFrameTick {
         double[] v = VSIntegration.shipVelocityAtPointFor(entity.world, shipId,
                 entity.posX, entity.posY, entity.posZ);
         if (v != null) {
-            entity.motionX += v[0] * TICK_SECONDS;
-            entity.motionY += v[1] * TICK_SECONDS;
-            entity.motionZ += v[2] * TICK_SECONDS;
+            entity.motionX += v[0];
+            entity.motionY += v[1];
+            entity.motionZ += v[2];
         }
     }
 

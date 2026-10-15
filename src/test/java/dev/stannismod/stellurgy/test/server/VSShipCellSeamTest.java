@@ -1,32 +1,18 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * E2E: a ship flown out through its cell's face ARRIVES IN THE NEIGHBOUR, and its ledger row names the
@@ -37,15 +23,20 @@ import static org.junit.Assert.fail;
  * unable to descend, refused its jumps, and no longer protecting the cell it was really in.</p>
  *
  * <p>The arrangement uses the REAL on-ramp to get a ship legitimately settled in a cell (assemble,
- * hold a throttle, climb past the ceiling, let the flight computer's own tick call entry), then moves
- * it past the face and drives {@code SpaceSubsystem.cellCrossings().requestCarry()} — production code, through
- * a probe verb. The crossing itself is the shared one every other crossing uses.</p>
+ * hold a throttle, climb past the ceiling, let the flight computer's own tick call entry), then puts
+ * it a short way INSIDE its cell's +X face and FLIES it across, through its own flight computer —
+ * and the carry is started by that computer's own tick, the trigger production has. The crossing
+ * itself is the shared one every other crossing uses.</p>
  *
- * <p><b>What this test does NOT cover, stated rather than implied:</b> the trigger wiring inside
- * {@code TileAdvancedFlightComputer}. A headless slot world has no player and no ticking chunks, so
- * its tiles do not tick and no e2e here can observe that call — the same limit the descent e2e has
- * (it drives {@code space descent-begin} and says so). WHEN a carry fires is pinned deterministically
- * by {@code CellSeamTest}; the one link neither covers is the two lines in the tile that join them.</p>
+ * <p><b>Why the computer's tick and not a probe verb.</b> This class used to move the ship past the
+ * face and then drive {@code requestCarry} through {@code space seam-carry}, on the premise that a
+ * headless slot world does not tick its tiles. Measured 2026-09-30, that premise holds only for a
+ * craft whose computer is not durable there: the minimal fixture's computer read a fresh object on
+ * each probe call with a census of {@code 0/0}, while the rebuilt fixture's reported one identity and
+ * a census moving 65 → 75 over five ticks — and carried itself across the seam before the
+ * arrangement's own next read, so the verb found nothing to carry. A ship left past its face with a
+ * working computer is carried at once; the only honest arrangement is to let it be, and to fly it
+ * there. WHEN a carry fires on the boundary itself stays pinned by {@code CellSeamTest}.</p>
  *
  * <p>Witnesses, in order: the ledger names the +X neighbour and no other cell; the ship arrives
  * {@code REENTRY_DEPTH} INSIDE that neighbour's opposite face rather than on it; and it stays there —
@@ -122,12 +113,24 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
     private static final double DECK_MUST_TRAVEL = 60.0;
 
     /**
-     * How far past the face the ship is placed: comfortably beyond the carry margin, so the test is
-     * not sitting on the decision boundary — that is {@code CellSeamTest}'s job, on the pure layer,
-     * where a one-block question can be asked without a physics engine in the way.
+     * How far SHORT of the carry threshold ({@code HALF_CELL + CARRY_MARGIN}, the pose
+     * {@code CellSeam.shouldCarry} decides on) the craft is put before it is flown across, in blocks.
+     *
+     * <p>Short enough that a few seconds of flight cross it; long enough that a craft merely sitting
+     * there is not carried, so every pre-carry step (a held chunk, a body put on the deck, the control
+     * reads) happens with the craft provably still in its source cell. The exact boundary is
+     * {@code CellSeamTest}'s job, on the pure layer.</p>
      */
-    private static final long PAST_THE_FACE =
-            GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN + 2_000L;
+    private static final long APPROACH_DEPTH = 20L;
+
+    /**
+     * The world velocity, blocks per second along +X, the craft is flown across the threshold at —
+     * through its own flight computer ({@code vs force-vel-by-id}), a command that lives on that
+     * computer's tile and so ends with it when the crossing cuts the hull out. Two seconds to cover
+     * {@link #APPROACH_DEPTH}; the same order as {@link #DECK_CRUISE_BLOCKS_PER_SECOND}, the speed
+     * the under-way scenario shows a deck keeping its cargo at.
+     */
+    private static final int CROSSING_SPEED = 10;
 
     /**
      * Tolerance on the arrival position. The contract is "inside the face, not on it", and the two
@@ -157,34 +160,32 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         return new Plot.Lane(SRC_X - Plot.FIXTURE_INSET, SRC_Z - Plot.FIXTURE_INSET, Plot.SIZE);
     }
 
+    /**
+     * A craft flown across its cell's +X face is carried into the neighbour by its own computer, and
+     * stays there.
+     *
+     * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
+     */
+    @Pins("ADDR-10")
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#update} at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} (the computer's own"
+            + " {@code requestCarry}) short-circuited to false fails the carry link \"flown across its +X face"
+            + " … THIS ship must be carried into and settle in the neighbouring cell\" with no"
+            + " {@code ship_entered_cell} in 600 ticks, 2026-09-30. That break reddens the link only; the"
+            + " neighbour, arrival-depth and stays-there verdicts after it are not witnessed by it.")
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-seat");
+        ShipAtItsFace arranged = arrangeAShipAtItsFace("with-pilot-seat");
         String setup = arranged.setup;
         String stellurgyShipId = arranged.stellurgyShipId;
         String sourceCell = arranged.sourceCell;
         int sourceSlot = arranged.sourceSlot;
         double mx = arranged.x;
 
-        // Drive the production carry. NOT the flight computer's own tick: a headless slot world has
-        // no player and no ticking chunks, so its tiles do not tick — an earlier revision of this test
-        // waited 30 s for a trigger that cannot fire here and reported the CROSSING as broken. This is
-        // the same split the descent e2e already uses (`space descent-begin`): WHEN a carry fires is
-        // pinned deterministically by `CellSeamTest`, and what a carry DOES is pinned here, on a real
-        // ship. `wouldCarry` is production's own reading of the live pose, so the arrangement is
-        // witnessed by the code under test rather than only by this test's arithmetic.
-        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        // FLY IT ACROSS, and let its own flight computer decide the carry — production's trigger (see
+        // the class note for why a probe-driven carry stopped being possible). Marked BEFORE the flight:
+        // a mark taken afterwards can miss the record it is about.
         long carryMark = events.mark();
-        String carry = exec("stellurgytest space seam-carry " + sourceSlot + " id " + stellurgyShipId);
-        assertTrue("production does not agree the ship has left its cell (its own predicate on the "
-                + "live pose): " + carry, Reply.of(carry).bool("wouldCarry"));
-        assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started"));
-        // The carry moved THIS ship. Without the id the verb takes the slot's first SETTLED row, and
-        // a slot that has held two craft answers `started:true` for the wrong one — after which every
-        // assertion below reads a ledger row nobody moved.
-        assertEquals("the carry named a different ship: " + carry,
-                stellurgyShipId, extractString(carry, "shipId"));
+        flyAcrossTheFace(sourceSlot, arranged.settledVsId);
 
         // --- Assert: carried into the neighbour ---------------------------------------------------
         // Waited for as the EVENT production publishes when the carry completes, not by sampling the
@@ -194,8 +195,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // scenarios' craft across the same seams, and a wait on the type alone is one any of them
         // satisfies.
         events.awaitField(carryMark, "ship_entered_cell","ship", stellurgyShipId,
-                "the carry started (" + carry + "), so THIS ship must settle in the neighbouring"
-                        + " cell it left through; source=" + sourceCell + " shipX=" + mx,
+                "flown across its +X face from x=" + mx + ", THIS ship must be carried into and settle"
+                        + " in the neighbouring cell it left through; source=" + sourceCell,
                 SETTLE_TICKS);
         LedgerEntry afterMove = ledger(stellurgyShipId);
         String carriedCell = afterMove
@@ -214,7 +215,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // world sees it: the expected world X is the local offset itself (XZ realize directly).
         assertTrue("the carried ship has no bound slot: " + afterMove.raw(), afterMove.slotBound);
         int carriedSlot = afterMove.slotDim();
-        assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                carriedSlot, stellurgyShipId, USABLE_TICKS));
         ShipInfo arrived = arrivedShip(carriedSlot, stellurgyShipId);
         double ax = arrived.x;
         assertFalse("the arrived ship's pose could not be read: " + arrived.raw(), Double.isNaN(ax));
@@ -257,10 +259,13 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * an instrument that answers about whatever world it likes — and the previous attempt at this
      * scenario died on exactly that: {@code loose-body-count} walks chunks, no chunk is loaded at a
      * pose 16M blocks out, and it answered 0 for a body production itself had just called aboard.</p>
+     *
+     * Pins JUMP-11 (a body aboard is carried by its ship-relative point).
      */
+    @Pins("JUMP-11")
     @Test
     public void aBodyOnTheDeckIsCarriedAcrossTheSeamWithItsShip() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-deck");
+        ShipAtItsFace arranged = arrangeAShipAtItsFace("with-pilot-deck");
 
         // The SOURCE ship's VS id, captured by the arrangement while the ship was still at its settle
         // pose, and used only here: the crossing replaces the VS body, so this id names nothing on
@@ -272,8 +277,11 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // the pilot holds those chunks, headless nobody does, and vanilla removes the entity with the
         // chunk on the next sweep. Measured: a body production had just called aboard was absent from
         // its world one command later, with the world up and the ship still resolving.
-        String heldSrc = exec("stellurgytest chunk hold " + arranged.sourceSlot + " "
-                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z);
+        // Radius 2 (five chunks a side) and not the verb's default 1: the deck now FLIES from here to
+        // the threshold, {@link #APPROACH_DEPTH} blocks along +X, before anything carries it, and the
+        // body rides it the whole way.
+        String heldSrc = arrange("stellurgytest chunk hold " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z + " 2").raw();
         assertTrue("the deck's chunks could not be held, so the body would be swept away before "
                 + "anything could carry it: " + heldSrc, Reply.of(heldSrc).ok());
 
@@ -286,45 +294,35 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 
         // CONTROL: the instrument can see this body WHERE IT IS, on the ship it was dropped on,
         // before anything moves it. Without this the later reading measures the instrument.
-        String beforeCarry = exec("stellurgytest space loose-body-find " + bodyId + " "
-                + arranged.sourceSlot + " " + settledVsId);
+        String beforeCarry = read("stellurgytest space loose-body-find " + bodyId + " "
+                + arranged.sourceSlot + " " + settledVsId).raw();
         assertTrue("the body cannot be found in the world it was just dropped into: " + beforeCarry,
                 Reply.of(beforeCarry).bool("found"));
         assertTrue("before the carry the body must be ABOARD the source ship, or what follows is not "
                 + "about a carry at all: " + beforeCarry, Reply.of(beforeCarry).bool("aboard"));
 
-        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        // Marked BEFORE the flight: a mark taken afterwards can miss the record it is about. The
+        // ship's own computer carries it once it is past the threshold (see the class note).
         long carryMark = events.mark();
-        String carry = exec("stellurgytest space seam-carry " + arranged.sourceSlot + " id "
-                + arranged.stellurgyShipId);
-        assertTrue("production does not agree the ship has left its cell: " + carry,
-                Reply.of(carry).bool("wouldCarry"));
-        assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started"));
-        // The carry moved the ship this body was dropped on, and not the slot's first settled row.
-        assertEquals("the carry named a different ship: " + carry,
-                arranged.stellurgyShipId, extractString(carry, "shipId"));
+        flyAcrossTheFace(arranged.sourceSlot, settledVsId);
 
-        // HOLD THE ARRIVAL DECK NOW, before the ship gets there. The crossing puts back what it
-        // carried the moment the ship is rebuilt on the far side, and an unheld chunk is swept with
-        // everything standing in it — so a hold placed after the ledger moves is a hold placed after
-        // the only moment that mattered. The carry acquires its destination cell before it cuts, so
-        // the neighbour's slot is already bound and askable here; the arrival X is the seam's own
-        // deterministic re-entry depth inside the opposite face, and Z is carried across unchanged.
-        long[] src = cellSectors(arranged.sourceCell);
-        String destSlotReply = exec("stellurgytest space cell-slot " + (src[0] + 1) + " " + src[1] + " " + src[2]);
-        int destSlot = extractInt(destSlotReply, "slotDim");
-        assertTrue("the carry did not bind the neighbour cell to a slot, so there is nowhere to hold "
-                + "the arrival deck: " + destSlotReply, destSlot > Integer.MIN_VALUE);
+        // HOLD THE ARRIVAL DECK NOW, before the body is put back there. The crossing puts back what it
+        // carried once the ship is rebuilt on the far side, on its own retry loop, and an unheld chunk
+        // is swept with everything standing in it. The destination is the one the crossing itself
+        // names when it begins — `cell_crossing_begun` for THIS ship carries it — so the hold is
+        // placed on the slot the carry bound, not on one this test derived. The arrival X is the
+        // seam's own deterministic re-entry depth inside the opposite face, and Z is carried across
+        // unchanged.
+        int destSlot = crossingDestinationOf(carryMark, arranged.stellurgyShipId);
         // The hold protects the READING, not the landing, and the difference was measured rather than
         // assumed: with this line removed the scenario still PASSES, because the carry now loads the
         // chunk it is about to spawn into. Before that fix it passed only WITH the hold — the test was
         // supplying the one thing production could not do, which is a green about the arrangement.
         // What the hold still buys is the window: nothing pins the arrival chunk afterwards, so an
         // unheld body can be swept between landing and the read below.
-        String heldDst = exec("stellurgytest chunk hold " + destSlot + " "
+        String heldDst = arrange("stellurgytest chunk hold " + destSlot + " "
                 + (long) (-(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH) + " "
-                + (long) arranged.y + " " + (long) arranged.z + " 2");
+                + (long) arranged.y + " " + (long) arranged.z + " 2").raw();
         assertTrue("the arrival deck's chunks could not be held: " + heldDst,
                 Reply.of(heldDst).ok());
 
@@ -338,7 +336,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
                 + afterMove.raw(), arranged.sourceCell, afterMove.cellKey());
         assertTrue("the carried ship has no bound slot: " + afterMove.raw(), afterMove.slotBound);
         int carriedSlot = afterMove.slotDim();
-        assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
 
         // The ARRIVED ship's VS id — a new body, so a new id, traded for the durable one. Asking with
         // the source's would answer "not aboard" for a body sitting perfectly on the deck.
@@ -365,8 +362,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // arrival pose. Linking on the release removes the race from the WAIT; the two readings below
         // are then an assertion about an outcome rather than a sample.
         awaitCargoReleased(carryMark, carriedSlot);
-        String found = exec("stellurgytest space loose-body-find " + bodyId + " "
-                + carriedSlot + " " + dstVsId);
+        String found = read("stellurgytest space loose-body-find " + bodyId + " "
+                + carriedSlot + " " + dstVsId).raw();
         // `found` is missing only from the probe's error replies (world not loaded, bad uuid), and
         // absence is the answer: no body here, which the message below separates further. `aboard`
         // is read bare — with a ship id given the producer writes it on every `found:true` reply.
@@ -381,9 +378,9 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // neighbour" covers both "it was never picked up" (still in the source) and "it was picked up
         // and never put down" (in no world at all). Those are different defects in different halves of
         // the mechanism, so the source is read on the way out and the message says which.
-        String leftBehind = exec("stellurgytest space loose-body-find " + bodyId + " "
-                + arranged.sourceSlot + " " + settledVsId);
-        String stash = exec("stellurgytest space cargo-stash");
+        String leftBehind = read("stellurgytest space loose-body-find " + bodyId + " "
+                + arranged.sourceSlot + " " + settledVsId).raw();
+        String stash = read("stellurgytest space cargo-stash").raw();
         assertTrue("the ship crossed the seam and left its cargo behind: the body was aboard in slot "
                         + arranged.sourceSlot + " and never appeared in the neighbour's slot "
                         + carriedSlot + "; last find=" + found
@@ -404,22 +401,23 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
     }
 
     /**
-     * What one arrangement hands its assertions: a ship settled in a cell and then moved past that
-     * cell's +X face, with everything needed to name it afterwards.
+     * What one arrangement hands its assertions: a ship settled in a cell and then put a short way
+     * inside that cell's +X face, ready to be flown across it, with everything needed to name it
+     * afterwards.
      *
      * <p>Extracted so a second scenario can put something ON that ship before the carry without
      * repeating sixty lines of on-ramp — and so both scenarios are demonstrably arranged the same
      * way, which is what makes the second one's extra witness attributable to the body rather than to
      * a difference in how its ship got there.</p>
      */
-    private static final class ShipPastItsFace {
-        /** The `entry-setup` reply; its slot dims are what {@link #loadAllEntrySlots} pumps. */
+    private static final class ShipAtItsFace {
+        /** The `entry-setup` reply. */
         final String setup;
         /** Stellurgy's DURABLE ship id — what the ledger is keyed by, and what survives the crossing. */
         final String stellurgyShipId;
         final String sourceCell;
         final int sourceSlot;
-        /** The ship's live pose in its slot world, already past the face. */
+        /** The ship's live pose in its slot world, {@link #APPROACH_DEPTH} short of the carry threshold. */
         final double x, y, z;
         /**
          * The PHYSICS mod's id for this ship AS IT STANDS IN ITS CELL — captured at the settle pose,
@@ -437,7 +435,7 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
          */
         final int[] deckCell;
 
-        ShipPastItsFace(String setup, String stellurgyShipId, String sourceCell, int sourceSlot,
+        ShipAtItsFace(String setup, String stellurgyShipId, String sourceCell, int sourceSlot,
                         double x, double y, double z, String settledVsId, int[] deckCell) {
             this.setup = setup;
             this.stellurgyShipId = stellurgyShipId;
@@ -468,22 +466,28 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      *
      * <p>Two things keep cargo on a deck across the seam — the carry's own hold when it puts the body
      * back, and the deck taking whatever lies on it — and this verdict is about the pair: with either
-     * one alone broken it stays green.</p>
+     * one alone broken it stays green. Seen red on 2026-10-04 with both broken ({@code AboardBodies}'s
+     * hold on release, and the deck frame's admission of a body out of liquid) — "the cargo was put
+     * down on the deck and then left behind by its own ship: the craft travelled 186.2987541345107
+     * blocks" — on the arrangement that drove the carry through a probe; not re-taken since the craft
+     * flies itself across.</p>
      *
-     * <p>red-witnessed: 2026-10-04, with {@code AboardBodies#release} at
-     * {@code DeckFrameTick.holdAt(restored, shipId, sub[0], sub[1], sub[2])} and its resolver fallback
-     * replaced by {@code false} AND {@code DeckFrameTick#admissible} at
-     * {@code return !entity.isInWater() && !entity.isInLava()} answering false - "the cargo was put down
-     * on the deck and then left behind by its own ship: the craft travelled 186.2987541345107 blocks",
-     * the body at y -31.0.</p>
+     * Pins JUMP-11 (a body aboard is carried by its ship-relative point).
      */
+    @Pins("JUMP-11")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), carriedSlot, KEEPS_ABOARD_TICKS);",
+            why = "the deck's height is read on both sides of this stretch of its own world, and the control below"
+                    + " is over the difference, naming both reads. Overshoot eases that control, but it also"
+                    + " carries the deck further from a body it does not hold, so the witness after it only"
+                    + " gets harder to pass.")
     public void aShipStillUnderWayCarriesItsCargoAcrossTheSeamAndKeepsIt() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-deck");
+        ShipAtItsFace arranged = arrangeAShipAtItsFace("with-pilot-deck");
         String settledVsId = arranged.settledVsId;
 
-        String heldSrc = exec("stellurgytest chunk hold " + arranged.sourceSlot + " "
-                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z);
+        // Radius 2, as in the sibling: the deck flies to the threshold with the body on it.
+        String heldSrc = arrange("stellurgytest chunk hold " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z + " 2").raw();
         assertTrue("the deck's chunks could not be held, so the body would be swept away before "
                 + "anything could carry it: " + heldSrc, Reply.of(heldSrc).ok());
 
@@ -494,22 +498,11 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         assertTrue("the drop reported no uuid to follow the body by: " + drop, bodyId != null);
 
         long carryMark = events.mark();
-        String carry = exec("stellurgytest space seam-carry " + arranged.sourceSlot + " id "
-                + arranged.stellurgyShipId);
-        assertTrue("production does not agree the ship has left its cell: " + carry,
-                Reply.of(carry).bool("wouldCarry"));
-        assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started"));
-
-        long[] src = cellSectors(arranged.sourceCell);
-        String destSlotReply = exec("stellurgytest space cell-slot " + (src[0] + 1) + " " + src[1] + " "
-                + src[2]);
-        int destSlot = extractInt(destSlotReply, "slotDim");
-        assertTrue("the carry did not bind the neighbour cell to a slot: " + destSlotReply,
-                destSlot > Integer.MIN_VALUE);
-        String heldDst = exec("stellurgytest chunk hold " + destSlot + " "
+        flyAcrossTheFace(arranged.sourceSlot, settledVsId);
+        int destSlot = crossingDestinationOf(carryMark, arranged.stellurgyShipId);
+        String heldDst = arrange("stellurgytest chunk hold " + destSlot + " "
                 + (long) (-(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH) + " "
-                + (long) arranged.y + " " + (long) arranged.z + " 2");
+                + (long) arranged.y + " " + (long) arranged.z + " 2").raw();
         assertTrue("the arrival deck's chunks could not be held: " + heldDst,
                 Reply.of(heldDst).ok());
 
@@ -527,8 +520,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // production has put a body down in this slot, and the two readings that follow are then an
         // assertion about that outcome instead of a sample that might have been taken mid-settle.
         awaitCargoReleased(carryMark, carriedSlot);
-        String found = exec("stellurgytest space loose-body-find " + bodyId + " "
-                + carriedSlot + " " + dstVsId);
+        String found = read("stellurgytest space loose-body-find " + bodyId + " "
+                + carriedSlot + " " + dstVsId).raw();
         // As in the first scenario: absence is the answer for `found`, and `aboard` is read bare.
         boolean landedAboard = Reply.of(found).boolOr("found", false)
                 && Reply.of(found).bool("aboard");
@@ -552,8 +545,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // half-took or an assertion below throws.
         underWaySlot = carriedSlot;
         underWayVsId = dstVsId;
-        String underWay = exec("stellurgytest vs ff-cruise-by-id " + carriedSlot + " " + dstVsId
-                + " 0 0 " + DECK_CRUISE_BLOCKS_PER_SECOND);
+        String underWay = arrange("stellurgytest vs ff-cruise-by-id " + carriedSlot + " " + dstVsId
+                + " 0 0 " + DECK_CRUISE_BLOCKS_PER_SECOND).raw();
         assertTrue("the arrived craft could not be told to get under way, so nothing below is about "
                         + "a moving deck: " + underWay,
                 Math.abs(extractDouble(underWay, "cruiseUp") - DECK_CRUISE_BLOCKS_PER_SECOND)
@@ -561,10 +554,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 
         // Let the craft fly on.
         double beforeY = arrivedShip(carriedSlot, arranged.stellurgyShipId).y;
-        // WINDOW: the deck's height is read on both sides of this stretch of its own world, and the
-        // control below is over the difference, naming both reads. Overshoot eases that control,
-        // but it also carries the deck further from a body it does not hold, so the witness after
-        // it only gets harder to pass.
         GameTicks.advanceWorld(client(), carriedSlot, KEEPS_ABOARD_TICKS);
         ShipInfo shipAfter = arrivedShip(carriedSlot, arranged.stellurgyShipId);
         double afterY = shipAfter.y;
@@ -583,8 +572,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 
         // THE WITNESS. A body that was merely PUT DOWN satisfies the aboard read above and fails
         // this one: the deck has gone, and without a hold the body has not.
-        String still = exec("stellurgytest space loose-body-find " + bodyId + " " + carriedSlot + " "
-                + dstVsId);
+        String still = read("stellurgytest space loose-body-find " + bodyId + " " + carriedSlot + " "
+                + dstVsId).raw();
         if (!(Reply.of(still).bool("found") && Reply.of(still).bool("aboard"))) {
             // Read only on the failing path, after the window: which holder took the body after the
             // carry and why it let go is the question the position alone cannot answer.
@@ -592,9 +581,9 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
                     + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
                     + still + "; ship=" + shipAfter.raw()
                     + " | carry mark seq " + carryMark
-                    + " | arrived deck spot " + exec("stellurgytest vs deck-spot " + carriedSlot + " id "
+                    + " | arrived deck spot " + read("stellurgytest vs deck-spot " + carriedSlot + " id "
                             + dstVsId + " at " + arranged.deckCell[0] + " " + arranged.deckCell[1] + " "
-                            + arranged.deckCell[2])
+                            + arranged.deckCell[2]).raw()
                     + " | deck holds this boot: " + events.since(0L, "deck_entered")
                     + " | deck releases this boot: " + events.since(0L, "deck_released")
                     + " | bodies put back: " + events.since(carryMark, "aboard_bodies_released")
@@ -610,56 +599,75 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * body there is on no deck: these scenarios once dropped their cargo there, and were green only
      * because an earlier hold pinned whatever it was given where it was given it. The deck lets go of
      * a body with no floor under it, so the cargo has to be where a player's cargo would be.</p>
+     *
+     * <p>And it returns only once the deck has TAKEN it. The craft is flown across its face right
+     * after, at {@link #CROSSING_SPEED}; a body the deck does not hold yet is not carried by it, and the
+     * craft leaves it behind in the cell. Measured on the first run with the flight: the item was still
+     * settling onto the floor ({@code decline noFloor}, its feet 0.9 above it and closing) when the
+     * craft flew off under it.</p>
      */
-    private String dropOnTheDeck(ShipPastItsFace arranged) throws Exception {
+    private String dropOnTheDeck(ShipAtItsFace arranged) throws Exception {
         assertTrue("this scenario carries cargo, so its craft must have a deck", arranged.deckCell != null);
-        String spot = exec("stellurgytest vs deck-spot " + arranged.sourceSlot + " id "
+        String spot = read("stellurgytest vs deck-spot " + arranged.sourceSlot + " id "
                 + arranged.settledVsId + " at " + arranged.deckCell[0] + " " + arranged.deckCell[1]
-                + " " + arranged.deckCell[2]);
+                + " " + arranged.deckCell[2]).raw();
         assertTrue("the deck cell surveyed on the pad does not map onto the craft in its slot: " + spot,
                 Reply.of(spot).ok());
-        String drop = exec("stellurgytest space loose-body " + arranged.sourceSlot + " "
+        long dropMark = events.mark();
+        String drop = arrange("stellurgytest space loose-body " + arranged.sourceSlot + " "
                 + Reply.of(spot).number("x") + " " + Reply.of(spot).number("y") + " "
-                + Reply.of(spot).number("z") + " " + arranged.settledVsId);
+                + Reply.of(spot).number("z") + " " + arranged.settledVsId).raw();
         assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
+        int bodyId = extractInt(drop, "entityId");
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(dropMark, "deck_entered",
+                "the deck must take the cargo it was put on before the craft flies off under it",
+                DECK_TAKES_CARGO_TICKS, "e", String.valueOf(bodyId), "ship", arranged.settledVsId));
         return drop;
     }
 
     /**
-     * Build a ship of fixture {@code variant}, fly it into space through the production on-ramp, and
-     * move it past its +X face. A scenario that carries cargo asks for {@code with-pilot-deck}: a
-     * body is held by a DECK, and {@code with-pilot-seat} is a seat over air with no deck to stand on.
+     * Server ticks for the deck to take a body put down on its floor: a deadline on the record, not a
+     * dose. The body is released a hair over the floor and falls the rest of the way first.
      */
-    private ShipPastItsFace arrangeAShipPastItsFace(String variant) throws Exception {
+    private static final int DECK_TAKES_CARGO_TICKS = 200;
+
+    /**
+     * Build a ship of fixture {@code variant}, fly it into space through the production on-ramp, and
+     * put it a short way inside its +X face. A scenario that carries cargo asks for
+     * {@code with-pilot-deck}: a body is held by a DECK, and {@code with-pilot-seat} is a seat over air
+     * with no deck to stand on.
+     */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);",
+            why = "the census is read on both sides of this stretch and the assertion below is that the two"
+                    + " differ, naming both. \"It moved at all\" is the bar, so overshoot cannot make a"
+                    + " computer that never ticks look like one that does.")
+    private ShipAtItsFace arrangeAShipAtItsFace(String variant) throws Exception {
         // Marked at the very top, so a failure below can print every claim THIS scenario caused and
         // nothing from the ones before it — the question is what accumulates, and an unbounded dump
         // answers it with the whole boot.
         long claimMark = events.mark();
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Arrangement: get a ship into a cell through the production on-ramp ------------------
-        String coords = placeFixture(site(), variant);
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
+        int[] bp = placeFixture(site(), variant);
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
 
-        // THIS TEST'S OWN SHIP, named by the assembler that built it. Everything downstream is asked
-        // about THIS id and no other. The identity is not looked up — a lookup ("the first ledgered
-        // ship", "the ship nearest the cell centre") answers with whatever it reaches first, which
-        // stops being this craft the moment a second scenario shares the boot, and reads identically
-        // when it does.
-        String stellurgyShipId = extractString(asm, "shipId");
-        assertTrue("the assembler did not name the ship it built, so this scenario has no way to "
-                + "refer to its own craft: " + asm, stellurgyShipId != null);
-        assertEquals("the pad carried more than one flight computer, so the id names one of several "
-                + "craft: " + asm, 1, extractInt(asm, "afcCount"));
+        // THIS TEST'S OWN SHIP, named by the assembler that built it and by the substrate's naming of
+        // that press. Everything downstream is asked about THIS id and no other.
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft this scenario flies to its cell face");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        String stellurgyShipId = birth.durable;
 
         // CONTROL: this ship is not in the ledger before it climbs, so the settle read below is a
         // real observation and not a first reading of something that was already there.
         LedgerEntry before = ledger(stellurgyShipId);
         assertFalse("this ship is ledgered before it has flown: " + before.raw(), before.found);
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        ArrangementFailure.arranged(() -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         // TWO IDENTITIES, deliberately kept apart, and NEITHER of them is searched for. The DURABLE
         // id came from the assembler that built this craft. The PHYSICS id is minted asynchronously by
@@ -669,29 +677,28 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // being broken.
         String srcVsId = vsIdOf(0, stellurgyShipId);
         // THE DECK, surveyed HERE: on the pad the craft has just been assembled and its blocks are
-        // loaded. Past its face in its slot they are not, and loading them there is not this
-        // scenario's to do.
+        // loaded. In its slot they are not, and loading them there is not this scenario's to do.
         int[] deckCell = null;
         if ("with-pilot-deck".equals(variant)) {
-            String spot = exec("stellurgytest vs deck-spot 0 id " + srcVsId);
+            String spot = read("stellurgytest vs deck-spot 0 id " + srcVsId).raw();
             assertTrue("the craft names no free cell on its deck: " + spot, Reply.of(spot).ok());
             deckCell = new int[]{Reply.of(spot).integer("offX"), Reply.of(spot).integer("offY"),
                     Reply.of(spot).integer("offZ")};
         }
-        ShipInfo srcInfo = ShipInfo.byId(this::exec, 0, srcVsId);
+        ShipInfo srcInfo = ShipInfo.byId(c -> read(c).raw(), 0, srcVsId);
         double sx = srcInfo.x, sy = srcInfo.y, sz = srcInfo.z;
 
-        String heldInput = exec("stellurgytest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0");
+        String heldInput = arrange("stellurgytest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed",
-                Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + srcVsId + " "
-                        + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz)
+                Reply.of(arrange("stellurgytest vs teleport-ship-by-id 0 " + srcVsId + " "
+                        + (int) sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) sz).raw()
                         ).ok());
         // Marked BEFORE the unpark: the unpark is what lets the craft climb, and both the entry
         // decision and the settle below are announced once each.
         long overLineMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + srcVsId);
+        arrange("stellurgytest vs unpark-by-id 0 " + srcVsId);
 
         // THE CLIMB IS ASSERTED, not assumed — the same rule the move past the face already follows
         // fifty lines down, and for the same reason. "The teleport replied ok" is not "the craft is
@@ -733,9 +740,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // since stopped also satisfies.
         String gateBefore = entryGate(srcVsId);
         String censusBefore = extractString(gateBefore, "tickCensus");
-        // WINDOW: the census is read on both sides of this stretch and the assertion below is that
-        // the two differ, naming both. "It moved at all" is the bar, so overshoot cannot make a
-        // computer that never ticks look like one that does.
         GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);
         String gateAfter = entryGate(srcVsId);
         String censusAfter = extractString(gateAfter, "tickCensus");
@@ -807,7 +811,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
             WorldCommandFixtures.awaitEnteredSpace(events, overLineMark, stellurgyShipId,
                     "the ship never reached space through the entry path", SETTLE_TICKS,
                     () -> {
-                        loadAllEntrySlots(setup);
                         if (steps[0]++ % 10 == 0) {
                             gateTrace.append(gateDigest(entryGate(srcVsId))).append(' ');
                         }
@@ -827,7 +830,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         String sourceCell = status.cellKey();
         assertTrue("settled ship has no bound slot: " + status.raw(), status.slotBound);
         int sourceSlot = status.slotDim();
-        assertTrue("the settled ship's cell world is not live", loadedShips(sourceSlot) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                sourceSlot, stellurgyShipId, USABLE_TICKS));
 
         // LET GO OF THE STICK. The climb held full up to get past the entry ceiling, and the flight
         // computer RETAINS a cruise setpoint — so without this the craft is still under thrust for
@@ -843,15 +847,15 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // the crossing in tile NBT and re-engages the moment the rebuilt ship is ready, which is why
         // the ship reads velY=0 at arrival and 0.667 a moment later.
         String settledVsId = vsIdOf(sourceSlot, stellurgyShipId);
-        String released = exec("stellurgytest vs ff-input-by-id " + sourceSlot + " " + settledVsId
-                + " 0 0 0 0 0 0");
+        String released = arrange("stellurgytest vs ff-input-by-id " + sourceSlot + " " + settledVsId
+                + " 0 0 0 0 0 0").raw();
         assertTrue("the throttle could not be released, so the ship stays under power: " + released,
                 Reply.of(released).bool("afcResolved"));
         // ASSERTED ON THE READ-BACK, never on "the command resolved". The reply carries the cruise
         // the computer now holds, and that — not whether a message arrived — is the quantity this
         // step exists to establish.
-        String stopped = exec("stellurgytest vs ff-cruise-by-id " + sourceSlot + " " + settledVsId
-                + " 0 0 0");
+        String stopped = arrange("stellurgytest vs ff-cruise-by-id " + sourceSlot + " " + settledVsId
+                + " 0 0 0").raw();
         assertTrue("the cruise could not be commanded, so the craft keeps flying its last setpoint: "
                 + stopped, Reply.of(stopped).bool("afcResolved"));
         double cruiseF = extractDouble(stopped, "cruiseForward");
@@ -862,45 +866,71 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
                         + "would be about a carry: " + stopped,
                 Math.abs(cruiseF) < EXACTLY_ZERO && Math.abs(cruiseR) < EXACTLY_ZERO && Math.abs(cruiseU) < EXACTLY_ZERO);
 
-        return finishPastTheFace(setup, stellurgyShipId, sourceCell, sourceSlot, settledVsId, deckCell);
+        return finishAtTheFace(setup, stellurgyShipId, sourceCell, sourceSlot, settledVsId, deckCell);
     }
 
     /**
-     * The half both arrangements share: move the craft past its cell's +X face, and PROVE it went.
+     * The half both arrangements share: bring the craft to just inside its cell's +X face, and PROVE
+     * it went there and is still in its cell.
      * Split out when the under-way arrangement appeared, so that the two differ in whether the craft
      * was brought to rest and in NOTHING else — which is what makes the under-way scenario's extra
      * witness attributable to the moving deck rather than to a difference in how its ship got there.
      */
-    private ShipPastItsFace finishPastTheFace(String setup, String stellurgyShipId, String sourceCell,
+    private ShipAtItsFace finishAtTheFace(String setup, String stellurgyShipId, String sourceCell,
                                               int sourceSlot, String settledVsId, int[] deckCell)
             throws Exception {
-        // --- Act: put the ship past the +X face of its cell --------------------------------------
+        // --- Act: put the ship just inside the +X face of its cell -------------------------------
         // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
         // so the body that reached the cell is not the one that was built.
-        ShipInfo inCell = ShipInfo.byId(this::exec, sourceSlot, settledVsId);
+        ShipInfo inCell = ShipInfo.byId(c -> read(c).raw(), sourceSlot, settledVsId);
         double cx = inCell.x, cy = inCell.y, cz = inCell.z;
         assertFalse("the ship's in-cell pose could not be read: " + inCell.raw(),
                 Double.isNaN(cx) || Double.isNaN(cy) || Double.isNaN(cz));
 
-        String outward = exec("stellurgytest vs teleport-ship-by-id " + sourceSlot + " " + settledVsId + " "
-                + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
-        assertTrue("the move past the cell face failed: " + outward, Reply.of(outward).ok());
-        exec("stellurgytest vs unpark-by-id " + sourceSlot + " " + settledVsId);
+        long threshold = GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN;
+        String outward = arrange("stellurgytest vs teleport-ship-by-id " + sourceSlot + " " + settledVsId + " "
+                + (threshold - APPROACH_DEPTH) + " " + (long) cy + " " + (long) cz).raw();
+        requireArranged("the move to the cell face failed: " + outward, Reply.of(outward).ok());
+        arrange("stellurgytest vs unpark-by-id " + sourceSlot + " " + settledVsId);
 
-        // THE ARRANGEMENT IS ASSERTED, not assumed. "the probe returned ok" is not "the ship is past
-        // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
-        // inside its cell, and the carry would then be correctly not firing — a green mechanic
-        // reported as a red one.
-        ShipInfo moved = ShipInfo.byId(this::exec, sourceSlot, settledVsId);
+        // THE ARRANGEMENT IS ASSERTED, not assumed, at BOTH ends: the craft went where it was sent
+        // (a clamp, a refused transform or a Y-limit would all report ok and leave it somewhere else),
+        // and it is still short of the threshold — still in this cell, read by identity in this slot,
+        // with nothing yet due to carry it.
+        ShipInfo moved = ShipInfo.byId(c -> read(c).raw(), sourceSlot, settledVsId);
         double mx = moved.x;
         assertFalse("the moved ship's pose could not be read: " + moved.raw(), Double.isNaN(mx));
-        assertTrue("the ship is not actually past the cell face after the move — it is at x=" + mx
-                        + ", and the carry threshold is " + (GalacticCoord.HALF_CELL
-                        + CellSeam.CARRY_MARGIN) + "; the test moved nothing: " + moved.raw(),
-                mx > GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
+        requireArranged("the ship is not where the arrangement put it, " + APPROACH_DEPTH + " blocks short of"
+                        + " the carry threshold " + threshold + " — it is at x=" + mx + ": " + moved.raw(),
+                mx < threshold && mx > threshold - 2 * APPROACH_DEPTH);
 
-        return new ShipPastItsFace(setup, stellurgyShipId, sourceCell, sourceSlot,
+        return new ShipAtItsFace(setup, stellurgyShipId, sourceCell, sourceSlot,
                 mx, moved.y, moved.z, settledVsId, deckCell);
+    }
+
+    /**
+     * Fly the craft across its +X face through its OWN flight computer: a world velocity of
+     * {@link #CROSSING_SPEED} along +X that the computer realizes as force until the crossing cuts its
+     * tile out. What decides the carry is that computer's tick, reading the pose past the threshold.
+     */
+    private void flyAcrossTheFace(int sourceSlot, String settledVsId) throws Exception {
+        String drive = arrange("stellurgytest vs force-vel-by-id " + sourceSlot + " " + settledVsId + " "
+                + CROSSING_SPEED + " 0 0").raw();
+        requireArranged("the flight across the face must reach THIS ship's own flight computer: " + drive,
+                Reply.of(drive).bool("afcResolved"));
+    }
+
+    /**
+     * The slot the crossing of THIS ship binds as its destination, read off the crossing's own
+     * {@code cell_crossing_begun} — the moment the hull is cut out and pasted into the neighbour —
+     * and required to have succeeded ({@code ok}), from {@code mark}.
+     */
+    private int crossingDestinationOf(long mark, String stellurgyShipId) throws Exception {
+        String begun = events.awaitRecordWithFields(mark, "cell_crossing_begun",
+                "flown past its face, THIS ship must be cut out of its cell and pasted into the"
+                        + " neighbour by its own computer's carry", SETTLE_TICKS,
+                "ship", stellurgyShipId, "ok", "true");
+        return (int) Events.number(begun, "destDim");
     }
 
     /**
@@ -917,14 +947,25 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
     private String underWayVsId;
     private int underWaySlot;
 
+    /** Server ticks for this craft to be named and become usable wherever it is. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @After
     public void cleanup() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
         if (underWayVsId != null) {
-            exec("stellurgytest vs ff-cruise-by-id " + underWaySlot + " " + underWayVsId + " 0 0 0");
+            arrange("stellurgytest vs ff-cruise-by-id " + underWaySlot + " " + underWayVsId + " 0 0 0");
             underWayVsId = null;
         }
-        exec("stellurgytest chunk release");
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest chunk release");
+        arrange("stellurgytest space entry-clear");
     }
 
     /**
@@ -970,7 +1011,7 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 
     private String entryGate(String vsId) {
         try {
-            return exec("stellurgytest space entry-gate 0 " + vsId);
+            return read("stellurgytest space entry-gate 0 " + vsId).raw();
         } catch (Exception unreadable) {
             return "(the entry gate could not be read: " + unreadable + ")";
         }
@@ -1016,11 +1057,11 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** What the production ledger holds about one craft, by its DURABLE id. */
     private LedgerEntry ledger(String stellurgyShipId) throws Exception {
-        return LedgerEntry.forShip(this::exec, stellurgyShipId);
+        return LedgerEntry.forShip(c -> read(c).raw(), stellurgyShipId);
     }
 
     /**
@@ -1042,11 +1083,11 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * this slot".</p>
      */
     private ShipInfo arrivedShip(int slotDim, String durableShipId) throws Exception {
-        return ShipInfo.byId(this::exec, slotDim, vsIdOf(slotDim, durableShipId));
+        return ShipInfo.byId(c -> read(c).raw(), slotDim, vsIdOf(slotDim, durableShipId));
     }
 
     private String vsIdOf(int slotDim, String durableShipId) throws Exception {
-        String reply = exec("stellurgytest vs ship-uuid " + slotDim + " " + durableShipId);
+        String reply = read("stellurgytest vs ship-uuid " + slotDim + " " + durableShipId).raw();
         assertTrue("no physics ship in dim " + slotDim + " carries this test's durable id "
                 + durableShipId + " — the craft is not there, or not assembled yet: " + reply,
                 Reply.of(reply).bool("found"));
@@ -1055,16 +1096,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         return vsId;
     }
 
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
 
 
     /**
@@ -1080,10 +1111,9 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     /** A whole number too wide for an int — an identity hash is one. {@code Long.MIN_VALUE} absent. */

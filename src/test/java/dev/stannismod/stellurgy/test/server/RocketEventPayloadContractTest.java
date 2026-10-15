@@ -1,15 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.After;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,9 +47,8 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> exec(cmd), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    private static final String ENTITY_ID = "entityId";
     private static final String PRELAUNCH_ID = "preLaunchEntityId";
     private static final String PRELAUNCH_DIM = "preLaunchDim";
     private static final String DISMANTLE_ID = "dismantleEntityId";
@@ -83,14 +77,14 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     public void rocketDismantleEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_DISMANTLE);
         // Disarm any leaked PreLaunch cancellation from sibling tests.
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
 
         // Trigger dismantle — fires RocketDismantleEvent synchronously.
-        String dismantle = exec("stellurgytest rocket dismantle " + rocketId);
+        String dismantle = act("stellurgytest rocket dismantle " + rocketId).raw();
         assertTrue("dismantle probe must succeed: " + dismantle,
                 Reply.of(dismantle).ok());
 
-        String payloads = exec("stellurgytest rocket event-payloads");
+        String payloads = read("stellurgytest rocket event-payloads").raw();
         assertEquals("RocketDismantleEvent.getEntity().getEntityId() must equal "
                         + "the dismantled rocket's id: " + payloads,
                 rocketId, extract(payloads, DISMANTLE_ID));
@@ -102,14 +96,14 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     @Test
     public void rocketPreLaunchEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_PRELAUNCH);
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel");
 
         // Call prepareLaunch — fires RocketPreLaunchEvent.
-        String launch = exec("stellurgytest rocket launch " + rocketId + " true prepare");
+        String launch = act("stellurgytest rocket launch " + rocketId + " true prepare").raw();
         assertTrue("rocket launch (prepare) must succeed: " + launch,
                 Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-        String payloads = exec("stellurgytest rocket event-payloads");
+        String payloads = read("stellurgytest rocket event-payloads").raw();
         assertEquals("RocketPreLaunchEvent.getEntity().getEntityId() must equal "
                         + "the rocket's id: " + payloads,
                 rocketId, extract(payloads, PRELAUNCH_ID));
@@ -130,13 +124,12 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * on planet X" achievements) requires both id + dim to be correct;
      * counter pin alone wouldn't catch a regression that swapped entity
      * references.</p>
-     *
-     * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket#onUpdate} at
-     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
-     * ticks", 2026-09-28. The payload verdicts after it read the recorder's last landing and need no
-     * inversion of their own to be reached: they are the same event's fields.</p>
      */
+    @LegacyWitness(prose = "with the landing branch's {@code RocketLandedEvent} post"
+            + " ({@code EntityRocket#onUpdate} at"
+            + " {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: \"no `rocket_landed` carrying e = … was recorded within 100"
+            + " ticks\", 2026-09-28. The payload verdicts after it read the recorder's last landing and need no"
+            + " inversion of their own to be reached: they are the same event's fields.")
     @Test
     public void rocketLandedEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_LANDED);
@@ -146,19 +139,19 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
         // 5x1x5 stone floor at y=CY so move() reports a collision under
         // the falling rocket. CY+2 is the rocket's start posY.
-        exec("stellurgytest fill 0 " + (CX_LANDED - 2) + " " + CY + " " + (CZ - 2)
-                + " " + (CX_LANDED + 2) + " " + CY + " " + (CZ + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (CX_LANDED - 2) + " " + CY + " " + (CZ - 2)
+                + " " + (CX_LANDED + 2) + " " + CY + " " + (CZ + 2) + " minecraft:stone").raw();
 
         // Reset PreLaunch cancel armor inherited from sibling tests.
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
 
-        String countsBefore = exec("stellurgytest rocket event-counts-full");
+        String countsBefore = read("stellurgytest rocket event-counts-full").raw();
         int landedBefore = extract(countsBefore, LANDED_COUNT);
 
         // orbit+flight gate enters the line-1284 landed branch on the
         // first real tick that move() resolves a downward collision.
         long mark = events.mark();
-        exec("stellurgytest rocket set-state " + rocketId
+        arrange("stellurgytest rocket set-state " + rocketId
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (CY + 2) + " motionY=-10");
         // Linked on the landing Forge publishes, narrowed to this rocket: the payload read below is
@@ -167,7 +160,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
                 "the rocket must touch down on the stone floor under real ticking", LANDING_TICKS,
                 "e", String.valueOf(rocketId));
 
-        String countsAfter = exec("stellurgytest rocket event-counts-full");
+        String countsAfter = read("stellurgytest rocket event-counts-full").raw();
         int landedAfter = extract(countsAfter, LANDED_COUNT);
         assertTrue("RocketLandedEvent must fire under the descent+collision "
                         + "pattern (counter pin guards the payload assertion "
@@ -175,7 +168,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
                         + landedBefore + " -> " + landedAfter,
                 landedAfter > landedBefore);
 
-        String payloads = exec("stellurgytest rocket event-payloads");
+        String payloads = read("stellurgytest rocket event-payloads").raw();
         assertEquals("RocketLandedEvent.getEntity().getEntityId() must equal "
                         + "the landed rocket's id: " + payloads,
                 rocketId, extract(payloads, LANDED_ID));
@@ -201,12 +194,18 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * across those ticks.</p>
      */
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(client(), 0, 3);",
+            why = "the dose is the rocket's own counter crossing 20, and 3 ticks of its world carry it from 18"
+                    + " through 20 — one increment per tick of the world it is ticked in. The gate is an"
+                    + " equality, so overshoot adds ticks past 21 where it is shut and cannot fire the event a"
+                    + " second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the"
+                    + " counter read below is what says the dose was delivered.")
     public void rocketDeOrbitingEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_DEORBIT);
         forceLoadChunksAround(0, CX_DEORBIT, CZ);
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel");
 
-        String countsBefore = exec("stellurgytest rocket event-counts-full");
+        String countsBefore = read("stellurgytest rocket event-counts-full").raw();
         int deOrbitBefore = extract(countsBefore, DEORBIT_COUNT);
 
         // ticksExisted=18 + 3 real ticks -> super.onUpdate() advances to
@@ -214,28 +213,23 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // onUpdate as the increment (super first, then body) so the
         // tick that bumps the counter to 20 is the one that posts the
         // event.
-        String set = exec("stellurgytest rocket set-state " + rocketId
-                + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0");
-        // EXPERIMENT: the dose is the rocket's own counter crossing 20, and 3 ticks of its world
-        // carry it from 18 through 20 — one increment per tick of the world it is ticked in. The
-        // gate is an equality, so overshoot adds ticks past 21 where it is shut and cannot fire the
-        // event a second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the
-        // counter read below is what says the dose was delivered.
+        String set = arrange("stellurgytest rocket set-state " + rocketId
+                + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0").raw();
         GameTicks.advanceWorld(client(), 0, 3);
-        int ticksAfter = RocketInfo.byId(cmd -> exec(cmd), rocketId).ticksExisted;
+        int ticksAfter = RocketInfo.byId(c -> read(c).raw(), rocketId).ticksExisted;
         assertTrue("the rocket's counter must have crossed the deorbit gate at 20, or the event had"
                         + " no tick to fire on (ticksExisted " + extract(set, "ticksExisted") + " -> "
                         + ticksAfter + ")",
                 ticksAfter >= 20);
 
-        String countsAfter = exec("stellurgytest rocket event-counts-full");
+        String countsAfter = read("stellurgytest rocket event-counts-full").raw();
         int deOrbitAfter = extract(countsAfter, DEORBIT_COUNT);
         assertTrue("RocketDeOrbitingEvent must fire on the tick "
                         + "ticksExisted == 20 with orbit=true: "
                         + deOrbitBefore + " -> " + deOrbitAfter,
                 deOrbitAfter > deOrbitBefore);
 
-        String payloads = exec("stellurgytest rocket event-payloads");
+        String payloads = read("stellurgytest rocket event-payloads").raw();
         assertEquals("RocketDeOrbitingEvent.getEntity().getEntityId() must "
                         + "equal the rocket's id: " + payloads,
                 rocketId, extract(payloads, DEORBIT_ID));
@@ -262,23 +256,23 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     @Test
     public void rocketReachesOrbitEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_ORBIT_REACHED);
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel");
 
-        String countsBefore = exec("stellurgytest rocket event-counts-full");
+        String countsBefore = read("stellurgytest rocket event-counts-full").raw();
         int orbitBefore = extract(countsBefore, ORBIT_REACHED_COUNT);
 
-        String orbitResp = exec("stellurgytest rocket force-orbit-reached " + rocketId);
+        String orbitResp = arrange("stellurgytest rocket force-orbit-reached " + rocketId).raw();
         assertTrue("force-orbit-reached probe must succeed: " + orbitResp,
                 Reply.of(orbitResp).ok());
 
-        String countsAfter = exec("stellurgytest rocket event-counts-full");
+        String countsAfter = read("stellurgytest rocket event-counts-full").raw();
         int orbitAfter = extract(countsAfter, ORBIT_REACHED_COUNT);
         assertTrue("force-orbit-reached must advance the orbitReached "
                         + "counter (sanity gate for the payload pin): "
                         + orbitBefore + " -> " + orbitAfter,
                 orbitAfter > orbitBefore);
 
-        String payloads = exec("stellurgytest rocket event-payloads");
+        String payloads = read("stellurgytest rocket event-payloads").raw();
         assertEquals("RocketReachesOrbitEvent.getEntity().getEntityId() must "
                         + "equal the rocket's id: " + payloads,
                 rocketId, extract(payloads, ORBIT_REACHED_ID));
@@ -302,7 +296,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         int cz = worldZ >> 4;
         for (int dxc = -1; dxc <= 1; dxc++) {
             for (int dzc = -1; dzc <= 1; dzc++) {
-                exec("stellurgytest chunk forceload " + dim + " " + (cx + dxc) + " " + (cz + dzc));
+                arrange("stellurgytest chunk forceload " + dim + " " + (cx + dxc) + " " + (cz + dzc));
             }
         }
     }
@@ -313,15 +307,16 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // thrown away, and whose two replies were not even read for `ok`. The site is in the band,
         // and the fill inside the shared builder force-loads every chunk in its box, which is what
         // the warmup was for.
-        String assemble = RocketFixture.assembleAt(
-                FixtureSite.openAir(0, baseX, CZ),
-                cmd -> exec(cmd), "simple", 2, 10,
+        // The rocket is the one the press's own `rocket_born` record names.
+        return rockets.assembleAt(FixtureSite.openAir(0, baseX, CZ), c -> act(c).raw(), "simple", 2, 10,
                 "the craft whose launch events this contract reads stands in this volume");
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
-        return Integer.parseInt(eimReply.text(ENTITY_ID));
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private static int extract(String src, String field) {

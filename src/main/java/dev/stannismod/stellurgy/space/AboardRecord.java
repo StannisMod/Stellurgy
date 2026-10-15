@@ -1,10 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.UUID;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -12,11 +10,11 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.util.FakePlayer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import java.util.UUID;
 
 /**
  * The <b>one writer</b> of a player's durable aboard record ({@link ShipAboardTag}).

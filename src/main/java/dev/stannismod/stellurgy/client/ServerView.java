@@ -1,9 +1,5 @@
 package dev.stannismod.stellurgy.client;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -13,6 +9,10 @@ import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import net.minecraft.network.NetworkManager;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * What this client has been told about the server it is connected to: the galaxy (planets, stars,

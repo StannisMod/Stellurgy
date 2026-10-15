@@ -1,18 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.EntityState;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.EntityState;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Plot;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -56,7 +53,7 @@ import static org.junit.Assert.assertTrue;
  * and the hovercraft's keeps the original.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
+public class VehicleRideClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * How far a throttled hovercraft must travel laterally over the window, in blocks.
@@ -120,12 +117,12 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
     private void buildPadAndStand() throws Exception {
         int dim = plot().dim;
         scenario().arranging("build the platform and stand on it");
-        String fill = exec("stellurgytest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
+        String fill = arrange("stellurgytest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
-                + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
+                + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone").raw();
         scenario().requireArranged("platform fill must succeed: " + fill, Reply.of(fill).ok());
         long standMark = clientEvents().mark();
-        exec("tp @a " + (standX() + 0.5) + " " + (PAD_Y + 1) + " " + (standZ() + 0.5));
+        arrange("tp @a " + (standX() + 0.5) + " " + (PAD_Y + 1) + " " + (standZ() + 0.5));
         awaitClientPlacedNear(standMark, standX() + 0.5, standZ() + 0.5,
                 "every scenario here places a vehicle at the player and mounts him from where he"
                         + " stands, which is a fact about the client");
@@ -143,8 +140,8 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
     private int spawnVehicle(String entityId) throws Exception {
         double vx = standX() + 0.5;
         double vz = plot().z(VEHICLE_DZ) + 0.5;
-        String resp = exec("stellurgytest entity spawn " + plot().dim + " " + vx + " " + (PAD_Y + 1)
-                + " " + vz + " " + entityId);
+        String resp = arrange("stellurgytest entity spawn " + plot().dim + " " + vx + " " + (PAD_Y + 1)
+                + " " + vz + " " + entityId).raw();
         scenario().requireArranged(entityId + " spawn must succeed: " + resp,
                 Reply.of(resp).ok() && Reply.of(resp).bool("spawned"));
         Reply spawn = Reply.of("stellurgytest entity spawn", resp);
@@ -160,7 +157,7 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
     /** Mounts through the probe and answers a CLIENT mark taken BEFORE it, for the link below. */
     private long mount(int vehicleId) throws Exception {
         long clientMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + vehicleId);
+        String mount = arrange("stellurgytest player mount-entity " + vehicleId).raw();
         scenario().requireArranged("mount-entity probe must succeed: " + mount,
                 Reply.of(mount).ok());
         scenario().requireArranged("mount-entity must report mounted:true: " + mount,
@@ -219,7 +216,7 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
      * as a craft that did not move.</p>
      */
     private EntityState craft(int craftId) throws Exception {
-        return EntityState.byId(this::exec, plot().dim, craftId)
+        return EntityState.byId(c -> read(c).raw(), plot().dim, craftId)
                 .requireAlive("the craft must still exist to be measured");
     }
 
@@ -240,13 +237,15 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
                 clientRiding.get("entityClass").getAsString().contains("EntityHoverCraft"));
 
         // Leave the shared player on his own feet.
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount").raw();
     }
 
     /** From {@code HovercraftRideE2ETest}: W feeds MovementInput &rarr; CPacketInput &rarr; server
      *  {@code player.moveForward}, which {@code EntityHoverCraft.getPassengerMovingForward()} reads
      *  each tick. */
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(40);",
+            why = "held W — an input, not a wait.")
     public void forwardThrottleMovesHovercraftLaterally() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("stellurgy:StellurgyHoverCraft");
@@ -261,7 +260,6 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().asserting("a held forward key drives the craft laterally");
         bot().setKey(KEY_W, true);
         try {
-            // STIMULUS: held W — an input, not a wait.
             bot().waitWorldTicks(40);
         } finally {
             bot().setKey(KEY_W, false);
@@ -285,7 +283,7 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
         assertTrue("server craft X must agree with the client view: " + postInfo.raw(),
                 Math.abs(postInfo.posX() - xAfter) < CLIENT_SERVER_X_BLOCKS);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ── elevator capsule ──────────────────────────────────────────────────────
@@ -314,7 +312,7 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
         assertTrue("client-side ridden entity class must be EntityElevatorCapsule: " + clientRiding,
                 clientRiding.get("entityClass").getAsString().contains("EntityElevatorCapsule"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
 }

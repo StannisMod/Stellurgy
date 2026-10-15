@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.centrifuge;
 
-import mezz.jei.api.IJeiHelpers;
 import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import mezz.jei.api.IJeiHelpers;
 
 import java.util.LinkedList;
 import java.util.List;

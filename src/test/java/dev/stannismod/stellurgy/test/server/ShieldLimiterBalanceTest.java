@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
-
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -27,14 +27,16 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
 
+    /** Pins INV-SHD-12 (a single cable carries more than a single emitter can absorb). */
+    @Pins("INV-SHD-12")
     @Test
     public void cableCarriesMoreThanASingleEmitterAbsorbs() throws Exception {
         int x = 1070, z = 900;
         place("affs:shield_cable", x, z);
         place("affs:field_generator", x + 1, z);
 
-        ShieldTile cable = ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, x + 1, Y, z);
+        ShieldTile cable = ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, x + 1, Y, z);
         assertTrue("expected a cable at the probed position:\n" + cable.raw(), cable.is(ShieldTile.CABLE));
         assertTrue("expected an emitter at the probed position:\n" + emitter.raw(),
                 emitter.is(ShieldTile.EMITTER));
@@ -50,7 +52,7 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + ": " + resp, Reply.of(resp).bool("placed"));
     }
 

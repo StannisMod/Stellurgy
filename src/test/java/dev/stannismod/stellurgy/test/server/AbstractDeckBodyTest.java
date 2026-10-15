@@ -1,16 +1,19 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Disposal;
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipBirth;
 import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.ShipReadiness;
 
+import org.junit.After;
 import org.junit.Before;
 
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.test.contract.Wait;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
@@ -63,10 +66,27 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
      */
     private static final int HOLD_RADIUS_CHUNKS = 3;
 
+    /** The server's log, read for the disposal of the craft this scenario built. */
+    private final Events serverLog =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+
+    /** Server ticks for the press to name the ship it assembled: a deadline on the record, not a dose. */
+    private static final int BIRTH_LINK_TICKS = 200;
+
+    /** The physics id of the craft {@link #buildCraft} built in this scenario, or null before it has. */
+    private String builtShipId;
+
     @Before
-    public void clearCraft() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, 0);
-        exec("stellurgytest chunk release");
+    public void releaseHeldChunks() throws Exception {
+        arrange("stellurgytest chunk release");
+    }
+
+    /** Dispose of this scenario's craft by its own id, so the shared server holds none afterwards. */
+    @After
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShipId != null) {
+            Disposal.ship(c -> arrange(c).raw(), serverLog, 0, builtShipId);
+        }
     }
 
     protected static final class Craft {
@@ -80,30 +100,35 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
     }
 
     protected Craft buildCraft() throws Exception {
-        int[] bp = RocketFixture.placeAt(site(), this::exec, "with-pilot-deck", 4, 12,
+        int[] bp = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-deck", 4, 12,
                 "the craft whose deck the body lies on stands in this volume");
-        String asm = exec("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
-        requireArranged("the pilot-deck build must route to a ship, not a rocket: " + asm,
-                Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+        long pressMark = serverLog.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(serverLog, pressMark, 0, bp, asm, BIRTH_LINK_TICKS,
+                "the craft whose deck the body lies on");
+        builtShipId = birth.physicsId;
+        requireArranged("the pilot-deck build must route to a ship, not a rocket: " + birth.rocketsBorn,
+                birth.rocketsBorn.isEmpty());
+        String shipId = birth.physicsId;
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("the seat locates the deck in subspace; without it there is nowhere to put a body");
-        Reply held = Reply.of(exec("stellurgytest chunk hold 0 " + seat.shipWorldX + " "
-                + seat.shipWorldY + " " + seat.shipWorldZ + " " + HOLD_RADIUS_CHUNKS));
+        Reply held = Reply.of(arrange("stellurgytest chunk hold 0 " + seat.shipWorldX + " "
+                + seat.shipWorldY + " " + seat.shipWorldZ + " " + HOLD_RADIUS_CHUNKS).raw());
         requireArranged("the chunks around the craft must be held, or the world may not tick what"
                 + " lies on its deck: " + held, held.ok());
         return new Craft(shipId, seat);
     }
 
     /** Hold the craft at {@code rollDeg} about its X axis, and check it got there. */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);",
+            why = "a slew is a converging value and nothing announces its end, so the stretch is spent in full and"
+                    + " the attitude is read once after it; the gate names the reading, so a slow box that did"
+                    + " not finish fails as an arrangement, never as the subject.")
     protected void rollTo(Craft craft, double rollDeg) throws Exception {
         double half = Math.toRadians(rollDeg) / 2.0;
         requireArranged("the attitude hold must accept the roll command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + craft.shipId + " "
-                        + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: a slew is a converging value and nothing announces its end, so the stretch is
-        // spent in full and the attitude is read once after it; the gate names the reading, so a
-        // slow box that did not finish fails as an arrangement, never as the subject.
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + craft.shipId + " "
+                        + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0").raw()).bool("commanded"));
         GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
         double upY = deckUpY(craft);
         double wanted = Math.cos(Math.toRadians(rollDeg));
@@ -112,21 +137,21 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
     }
 
     protected double deckUpY(Craft craft) throws Exception {
-        ShipInfo ship = ShipInfo.byId(this::exec, 0, craft.shipId);
+        ShipInfo ship = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId);
         return new FreeFlightPhysics.Quat(ship.qw, ship.qx, ship.qy, ship.qz).rotate(0.0, 1.0, 0.0)[1];
     }
 
     /** A deck point {@code (dx, dy, dz)} from the seat, expressed in the world through this craft. */
     protected double[] toWorld(Craft craft, double dx, double dy, double dz) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + (craft.seat.seatX + dx) + " " + (craft.seat.seatY + dy) + " " + (craft.seat.seatZ + dz)));
+        Reply r = Reply.of(read("stellurgytest vs to-world 0 id " + craft.shipId + " "
+                + (craft.seat.seatX + dx) + " " + (craft.seat.seatY + dy) + " " + (craft.seat.seatZ + dz)).raw());
         requireArranged("the deck point must map to the world through this ship", r.ok());
         return new double[]{r.number("worldX"), r.number("worldY"), r.number("worldZ")};
     }
 
     /** Gate: the world is ticking the body where it lies - vanilla's own update-area test. */
     protected void requireTicked(Craft craft, int bodyId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId).raw());
         requireArranged("the world must be ticking the body where it lies (vanilla's own update-area"
                 + " test), or nothing below is a reading of what the deck does with it: " + r,
                 r.bool("updateAreaLoaded"));
@@ -140,15 +165,14 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
     protected double[] onTheDeckTop(Craft craft, int bodyId, String deck) throws Exception {
         double[] p = deckPoint(craft, bodyId);
         if (Math.abs(p[1] - craft.seat.seatY) > AT_REST) {
-            Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
+            Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId).raw());
             // What it stands on, in the craft's subspace: a body grounded off the top face is standing
             // on SOMETHING, and a thin block (a snow layer is 0.125) is the first thing to rule out.
-            String under = exec("stellurgytest block at 0 " + (int) Math.floor(p[0]) + " "
-                    + (int) Math.floor(p[1] - 0.01) + " " + (int) Math.floor(p[2]));
+            String under = read("stellurgytest block at 0 " + (int) Math.floor(p[0]) + " "
+                    + (int) Math.floor(p[1] - 0.01) + " " + (int) Math.floor(p[2])).raw();
             requireArranged("the body must have landed ON " + deck + "'s top face (ship-frame Y " + p[1]
-                    + ", deck top " + craft.seat.seatY + "; ticksExisted " + p[3] + "; ships containing it "
-                    + exec("stellurgytest vs ships-at 0 " + r.number("playerX") + " " + r.number("playerY")
-                    + " " + r.number("playerZ")) + "; the block under its feet " + under + "; " + r + ")", false);
+                    + ", deck top " + craft.seat.seatY + "; ticksExisted " + p[3]
+                    + "; the block under its feet " + under + "; " + r + ")", false);
         }
         return p;
     }
@@ -161,7 +185,7 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
      * {@link #simulatedBetween}.</p>
      */
     protected double[] deckPoint(Craft craft, int bodyId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId).raw());
         requireArranged("the body must exist and be readable in the ship's frame: " + r,
                 r.bool("shipResolved"));
         return new double[]{r.number("bodyShipFrameX"), r.number("bodyShipFrameY"),
@@ -189,7 +213,7 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
      * reading: the deck's own frame ({@code deckHeldBy}), or none - the substrate's collision.
      */
     protected String evidence(double[] from, double[] to, Craft craft, int bodyId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId).raw());
         return " from=(" + from[0] + "," + from[1] + "," + from[2] + ") to=(" + to[0] + "," + to[1]
                 + "," + to[2] + ") deckUpY=" + deckUpY(craft) + " deckHeldBy=" + r.textOr("deckHeldBy", "none");
     }
@@ -206,15 +230,15 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
      * craft's gravity" and "the dimension's gravity" give different answers.
      */
     protected void withOverworldGravity(double multiplier, Scenario scenario) throws Exception {
-        double before = Reply.of(exec("stellurgytest planet info 0")).number("gravity");
+        double before = Reply.of(read("stellurgytest planet info 0").raw()).number("gravity");
         try {
-            exec("ar planet set 0 gravitationalMultiplier " + multiplier);
-            double now = Reply.of(exec("stellurgytest planet info 0")).number("gravity");
+            arrange("ar planet set 0 gravitationalMultiplier " + multiplier);
+            double now = Reply.of(read("stellurgytest planet info 0").raw()).number("gravity");
             requireArranged("the overworld's gravity multiplier must read " + multiplier + " (reads " + now
                     + ")", Math.abs(now - multiplier) <= 1e-4);
             scenario.run();
         } finally {
-            exec("ar planet set 0 gravitationalMultiplier " + before);
+            arrange("ar planet set 0 gravitationalMultiplier " + before);
         }
     }
 }

@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
+import dev.stannismod.stellurgy.api.SatelliteRegistry;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.relauncher.Side;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
-
-import dev.stannismod.stellurgy.api.SatelliteRegistry;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A satellite's {@code dataType} was looked up in the registry while loading it from NBT — and

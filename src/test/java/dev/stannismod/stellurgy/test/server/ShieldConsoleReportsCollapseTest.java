@@ -3,12 +3,13 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * A console reports its network as dead once the network dies.
@@ -33,16 +34,22 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     private int y;
 
     /**
-     * <p>red-witnessed: with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}
-     * once it has been true: "a console whose network lost its last source must stop reporting it as
-     * live: … \"networkConnected\":true", 2026-09-30, re-run under the battery arrangement.
-     * STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous
-     * status once the network is no longer connected: "and must report the disconnected status
-     * rather than the previous one (2): … \"networkStatus\":2 … expected:&lt;1&gt; but
-     * was:&lt;2&gt;", 2026-09-30. The two premises at its head are arrangements and are not
-     * witnessed.</p>
+     * Pins INV-NET-04 (a component with no source reports DISCONNECTED to controllers).
      */
+    @Pins("INV-NET-04")
+    @LegacyWitness(prose = "with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}"
+            + " once it has been true: \"a console whose network lost its last source must stop reporting it as"
+            + " live: … \\\"networkConnected\\\":true\", 2026-09-30, re-run under the battery arrangement."
+            + " STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous"
+            + " status once the network is no longer connected: \"and must report the disconnected status"
+            + " rather than the previous one (2): … \\\"networkStatus\\\":2 … expected:&lt;1&gt; but"
+            + " was:&lt;2&gt;\", 2026-09-30. The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), 2);",
+            why = "two server ticks are the dose, not a wait: one for the battery to feed the generator and the"
+                    + " generator to convert, one more for a solve to see it on offer. The network solves at"
+                    + " the END of a server tick, after every tile, so these are real ticks, not forced solves.")
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
         FixtureSite site = clearedSite(2, 2, "a shield source, sink and console in a row");
         y = site.y + 1;
@@ -62,10 +69,6 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
         // Measured: `sourceAvailable:0, networkStatus:1` two ticks after such an inject.
         place("libvulpes:creativePowerBattery", source, z + 1);
 
-        // EXPERIMENT: two server ticks are the dose, not a wait: one for the battery to feed the
-        // generator and the generator to convert, one more for a solve to see it on offer. The network
-        // solves at the END of a server tick, after every tile, so these are real ticks, not forced
-        // solves.
         GameTicks.advance(client(), GameTicks.server(), 2);
         Reply working = consoleInfo(console, z);
         assertTrue("premise: with a source and a sink the console must report a live network: "
@@ -77,8 +80,8 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
 
         // Take the source away. The network can no longer move anything, and the console must say so.
         arrange("stellurgytest fill " + DIM + " " + source + " " + y + " " + z + " "
-                + source + " " + y + " " + z + " minecraft:air");
-        arrange("stellurgytest shield tick " + DIM);
+                + source + " " + y + " " + z + " minecraft:air").requireOk();
+        act("stellurgytest shield tick " + DIM).requireOk();
 
         Reply collapsed = consoleInfo(console, z);
         assertFalse("a console whose network lost its last source must stop reporting it as live: "
@@ -88,11 +91,11 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int z) throws Exception {
-        Reply resp = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply resp = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     private Reply consoleInfo(int x, int z) throws Exception {
-        return ask("stellurgytest shield console-info " + DIM + " " + x + " " + y + " " + z);
+        return read("stellurgytest shield console-info " + DIM + " " + x + " " + y + " " + z);
     }
 }

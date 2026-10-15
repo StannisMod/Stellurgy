@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.waila;
 
+import dev.stannismod.stellurgy.entity.EntityRocket;
 import mcp.mobius.waila.api.IWailaPlugin;
 import mcp.mobius.waila.api.IWailaRegistrar;
 import mcp.mobius.waila.api.WailaPlugin;
 import net.minecraft.block.Block;
-import dev.stannismod.stellurgy.entity.EntityRocket;
 
 @WailaPlugin
 public class WailaIntegration implements IWailaPlugin {

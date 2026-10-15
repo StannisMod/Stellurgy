@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class PacketInvalidLocationNotify extends BasePacket {
 

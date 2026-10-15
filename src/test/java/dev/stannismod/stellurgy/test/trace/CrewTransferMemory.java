@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import dev.stannismod.stellurgy.space.CrewTransfer;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.space.CrewTransfer;
 
 /**
  * What the crew-transfer recorders last wrote, so they write only on a CHANGE — the server's, kept in

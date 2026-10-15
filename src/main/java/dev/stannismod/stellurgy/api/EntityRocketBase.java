@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.api;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.world.World;
-import net.minecraftforge.common.MinecraftForge;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import net.minecraft.entity.Entity;
+import net.minecraft.world.World;
+import net.minecraftforge.common.MinecraftForge;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.entity;
 
+import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumHand;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 
 public class EntityUIButton extends EntityUIPlanet {
 

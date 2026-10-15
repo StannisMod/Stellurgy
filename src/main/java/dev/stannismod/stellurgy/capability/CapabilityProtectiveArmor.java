@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.capability;
 
+import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 
 public class CapabilityProtectiveArmor {
 

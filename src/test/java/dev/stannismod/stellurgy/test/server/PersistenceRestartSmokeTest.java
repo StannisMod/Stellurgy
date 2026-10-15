@@ -1,17 +1,17 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -27,7 +27,8 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class PersistenceRestartSmokeTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class PersistenceRestartSmokeTest extends AbstractMechanicsTest {
 
     /** The station's own id. The regex this replaces anchored on the NEXT field so as not
      *  to match some other `id`; reading by name needs no such anchor. */
@@ -35,7 +36,7 @@ public class PersistenceRestartSmokeTest {
     private static final String SAT_ID_FALLBACK = "id";
     private static final String ATM_DENSITY = "atmosphereDensity";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -45,7 +46,7 @@ public class PersistenceRestartSmokeTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-persistence-restart-");
+        workDir = ServerRoot.fresh("forge-server-persistence-restart-");
     }
 
     @After
@@ -61,36 +62,36 @@ public class PersistenceRestartSmokeTest {
         int targetDensity = 33;
         int[] firstCounts;
 
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        String regSummary = String.join("\n", firstBoot.client().execute("stellurgytest registry summary"));
+        String regSummary = String.join("\n", firstBoot.client().read("stellurgytest registry summary"));
         // No "malformed?" assertion beside this any more: `extractCounts` refuses by field name and
         // prints the reply, so a null it could once return is now unreachable — and a check that
         // cannot fire reads as protection that is not there.
         firstCounts = extractCounts(regSummary, "blocks", "items", "entities", "biomes");
 
         // Mutation A: station orbiting Earth.
-        String createStation = String.join("\n", firstBoot.client().execute("stellurgytest station create 0"));
+        String createStation = String.join("\n", firstBoot.client().arrange("stellurgytest station create 0"));
         Reply created = Reply.of("stellurgytest station create", createStation);
         assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
         stationId = created.integer(STATION_ID);
 
         // Mutation B: satellite on Earth.
-        String createSat = String.join("\n", firstBoot.client().execute(
+        String createSat = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest satellite create 0 mass 300 6000 2048"));
         Reply satReply = Reply.of(createSat);
         assertTrue("could not extract satellite id: " + createSat, satReply.has(SAT_ID_FALLBACK));
         satelliteId = Long.parseLong(satReply.text(SAT_ID_FALLBACK));
 
         // Mutation C: atmosphere density.
-        firstBoot.client().execute("stellurgytest atmosphere set-density 0 " + targetDensity);
+        firstBoot.client().arrange("stellurgytest atmosphere set-density 0 " + targetDensity);
 
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
-        String secondSummary = String.join("\n", secondBoot.client().execute("stellurgytest registry summary"));
+        String secondSummary = String.join("\n", secondBoot.client().read("stellurgytest registry summary"));
         int[] secondCounts = extractCounts(secondSummary, "blocks", "items", "entities", "biomes");
         for (int i = 0; i < firstCounts.length; i++) {
             assertEquals("registry count mismatch at idx " + i,
@@ -98,25 +99,25 @@ public class PersistenceRestartSmokeTest {
         }
 
         DimInfo dimInfo = DimInfo.forDim(
-                cmd -> String.join("\n", secondBoot.client().execute(cmd)), 0);
+                cmd -> String.join("\n", secondBoot.client().read(cmd)), 0);
         assertTrue("Earth lost Stellurgy-managed status after restart: " + dimInfo.raw(),
                 dimInfo.stellurgyPlanet);
 
-        String stations = String.join("\n", secondBoot.client().execute("stellurgytest station list"));
+        String stations = String.join("\n", secondBoot.client().read("stellurgytest station list"));
         Reply.of(stations).element("stations", "id", String.valueOf(stationId));
         StationInfo stationInfo = StationInfo.byId(
-                cmd -> String.join("\n", secondBoot.client().execute(cmd)), (int) stationId);
+                cmd -> String.join("\n", secondBoot.client().read(cmd)), (int) stationId);
         assertEquals("station's orbitingPlanetId did not survive: " + stationInfo.raw(),
                 0, stationInfo.orbitingPlanetId);
 
-        String sats = String.join("\n", secondBoot.client().execute("stellurgytest satellite list 0"));
+        String sats = String.join("\n", secondBoot.client().read("stellurgytest satellite list 0"));
         Reply.of(sats).element("satellites", "id", String.valueOf(satelliteId));
         String satInfo = String.join("\n",
-                secondBoot.client().execute("stellurgytest satellite info 0 " + satelliteId));
+                secondBoot.client().read("stellurgytest satellite info 0 " + satelliteId));
         assertTrue("satellite type did not survive restart: " + satInfo,
                 "mass".equals(Reply.of(satInfo).text("type")));
 
-        String planet = String.join("\n", secondBoot.client().execute("stellurgytest planet info 0"));
+        String planet = String.join("\n", secondBoot.client().read("stellurgytest planet info 0"));
         Reply amReply = Reply.of(planet);
         assertTrue("planet info missing atmosphereDensity: " + planet, amReply.has(ATM_DENSITY));
         assertEquals("atmosphereDensity did not survive",

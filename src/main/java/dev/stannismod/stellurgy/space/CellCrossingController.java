@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.space;
 
+import net.minecraft.util.math.BlockPos;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import net.minecraft.util.math.BlockPos;
 
 /**
  * Moves a settled ship from one cell into another in a SINGLE crossing.

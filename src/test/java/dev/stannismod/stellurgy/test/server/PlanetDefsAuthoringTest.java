@@ -1,28 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.*;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.ClassScope;
-import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
-import com.github.stannismod.forge.testing.junit.ScopedTest;
-import com.github.stannismod.forge.testing.junit.TestClassScope;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -92,10 +85,16 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
     /** The one body the counted star declares by hand, beside the worlds its count asks for. */
     private static final int COUNTED_DECLARED = 9612;
 
+    /** A planet whose one moon states {@link #HELD_TWICE}, an id a planet of the star holds. */
+    private static final int SECUNDUS = 9613;
+    /** A planet whose two moons both state {@link #TERTIUS_MOON}: the first holds it, the second is refused. */
+    private static final int TERTIUS = 9614;
+    private static final int TERTIUS_MOON = 9615;
+
     /** Every DIMID this file states — the ids the allocator must NOT hand the unnumbered body. */
     private final int[] authoredDims = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
             DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH,
-            FIRST_FREE, HELD_TWICE, COUNTED_DECLARED};
+            FIRST_FREE, HELD_TWICE, COUNTED_DECLARED, SECUNDUS, TERTIUS, TERTIUS_MOON};
 
     private static final String UNNUMBERED = "Unnumbered";
 
@@ -144,14 +143,11 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                             + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                     Boolean.parseBoolean(System.getProperty(
                             AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-            Path workDir = Files.createTempDirectory("forge-server-planetdefs-authoring-");
-            // Where production looks for a pack's file: "./config/" + configFolder, relative to the
-            // server's working directory — which the harness sets to the root it is handed.
-            Path configDir = workDir.resolve("config").resolve(
-                    dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder);
-            Files.createDirectories(configDir);
-            Files.write(configDir.resolve("planetDefs.xml"), authoredFile().getBytes(StandardCharsets.UTF_8));
-            harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+            // The pack's file, where production looks for it ("./config/" + configFolder, relative to the
+            // server's working directory — the game directory), written by the harness before the boot.
+            ServerRoot workDir = ServerRoot.fresh("forge-server-planetdefs-authoring-")
+                    .seed(new GameDirSeed().planetDefs(authoredFile(), testClass));
+            harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         }
 
         @Override
@@ -210,6 +206,28 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + "        <planet name=\"" + STATES_THE_SAME_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
                 + "            <mass>1.0</mass>\n"
                 + "            <radius>1.0</radius>\n"
+                + "        </planet>\n"
+                // aRefusedMoonIsNoLongerItsParentsChild: a moon stating an id a planet of the star
+                // holds, and a planet whose two moons state one id between them.
+                + "        <planet name=\"Secundus\" DIMID=\"" + SECUNDUS + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
+                + "            <planet name=\"SecundusMoonOnAHeldId\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
+                + "        </planet>\n"
+                + "        <planet name=\"Tertius\" DIMID=\"" + TERTIUS + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
+                + "            <planet name=\"TertiusFirstMoon\" DIMID=\"" + TERTIUS_MOON + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
+                + "            <planet name=\"TertiusSecondMoon\" DIMID=\"" + TERTIUS_MOON + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
                 + "        </planet>\n"
                 // atmosphereAndGravityOutsideTheirRangeAreClampedIntoIt
                 + "        <planet name=\"Heavy\" DIMID=\"" + HEAVY + "\">\n"
@@ -290,11 +308,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * ends: the parent lists it among its children and the moon names the parent. Either half alone
      * is a broken system — a parent that does not list its moon draws a sky without it, a moon that
      * does not name its parent is laid out as a planet of the star.
-     *
-     * <p>red-witnessed: 2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code properties.addChildPlanet(child);} removed, this fails with both halves wrong —
-     * {@code Primus.children=[]} and {@code PrimusMoon.parent=-2147483647} (the invalid sentinel).</p>
      */
+    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code properties.addChildPlanet(child);} removed, this fails with both halves wrong —"
+            + " {@code Primus.children=[]} and {@code PrimusMoon.parent=-2147483647} (the invalid sentinel).")
     @Test
     public void aNestedPlanetIsMadeAChildOfTheBodyItIsWrittenInside() throws Exception {
         DimList dims = dims();
@@ -325,13 +342,17 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * the regression guard for that defect: one id names one body in the registry and the star alike,
      * a stated id is honoured, and an allocated id is never a stated one.</p>
      *
-     * <p>red-witnessed: 2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code statesADimId(planetNode)} put back to the shipped allocation — every body allocated
-     * {@code getNextFreeDim(offset)} at parse time, before the file's stated ids were known — this
-     * fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and
-     * {@code StatesTheFirstFreeId.dims=[]}. On the shipped tree, before the fix, it failed on
-     * production as it stood (2026-10-02, {@code logs/bugs-b-repro3.log}).</p>
+     * Pins DIMID-1 (a dimension id names at most one body in every holder).
+     * Pins DIMID-2 (a stated id is honoured).
+     * Pins DIMID-3 (an allocated id is never a stated one).
      */
+    @Pins({"DIMID-1", "DIMID-2", "DIMID-3"})
+    @LegacyWitness(prose = "2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code statesADimId(planetNode)} put back to the shipped allocation — every body allocated"
+            + " {@code getNextFreeDim(offset)} at parse time, before the file's stated ids were known — this"
+            + " fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and"
+            + " {@code StatesTheFirstFreeId.dims=[]}. On the shipped tree, before the fix, it failed on"
+            + " production as it stood (2026-10-02, {@code logs/bugs-b-repro3.log}).")
     @Test
     public void aPlanetThatStatesNoDimensionIsGivenAFreeOne() throws Exception {
         Reply named = probe("stellurgytest planet named " + UNNUMBERED);
@@ -392,11 +413,14 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * <p>The WARN naming both bodies is part of the clause and is NOT asserted: a log line is never a
      * test's source.</p>
      *
-     * <p>red-witnessed: 2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at
-     * {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the
-     * shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}
-     * skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.</p>
+     * Pins DIMID-1 (a dimension id names at most one body in every holder).
+     * Pins DIMID-4 (a refused registration is bound to no holder and the load continues).
      */
+    @Pins({"DIMID-1", "DIMID-4"})
+    @LegacyWitness(prose = "2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at"
+            + " {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the"
+            + " shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}"
+            + " skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.")
     @Test
     public void aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar() throws Exception {
         Reply owner = probe("stellurgytest planet authored " + HELD_TWICE);
@@ -434,19 +458,49 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
     }
 
     /**
+     * A moon refused for a held {@code DIMID} is no longer its parent's moon: the parent does not list
+     * that id among its children, since the body under it is not its moon. Unless it IS — two moons of
+     * one planet stating one id leave the first holding it, and that one stays the planet's child.
+     */
+    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
+            + " {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing"
+            + " {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06).")
+    @LegacyWitness(prose = "with {@code DimensionManager#detachFromParseParent} at"
+            + " {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails"
+            + " showing {@code Tertius.children=[]} — the first moon, which holds the id, dropped with the"
+            + " refused second (2026-10-06).")
+    @Test
+    public void aRefusedMoonIsNoLongerItsParentsChild() throws Exception {
+        DimList dims = dims();
+        requireArranged("the two parents and the moon that holds Tertius's id must be registered: " + dims,
+                dims.holds(SECUNDUS) && dims.holds(TERTIUS) && dims.holds(TERTIUS_MOON));
+
+        Reply secundus = authored(SECUNDUS);
+        Reply tertius = authored(TERTIUS);
+        Map<String, String> expected = new LinkedHashMap<>();
+        expected.put("Secundus.children", "[]");
+        expected.put("Tertius.children", Arrays.toString(new int[]{TERTIUS_MOON}));
+        Map<String, String> actual = new LinkedHashMap<>();
+        actual.put("Secundus.children", Arrays.toString(secundus.intArray("children")));
+        actual.put("Tertius.children", Arrays.toString(tertius.intArray("children")));
+        assertEquals("a parent must list exactly the moons that are its own — not the holder of a refused"
+                + " moon's id, and still the first of two moons on one id: " + secundus + " / " + tertius,
+                expected, actual);
+    }
+
+    /**
      * An atmosphere density or a gravity outside what the game models is brought to the nearest
      * bound, from above and from below — not taken as written, and not rejected.
-     *
-     * <p>red-witnessed: 2026-10-02, two runs. With {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()),
-     * DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE)} losing its
-     * ceiling and {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()),
-     * DimensionProperties.MIN_GRAVITY), DimensionProperties.MAX_GRAVITY)} losing its floor, this
-     * fails showing {@code Heavy.atmosphereDensity=5000.0} and {@code Light.gravity=-0.2}; with the
-     * atmosphere's floor and the gravity's ceiling dropped instead, showing
-     * {@code Light.atmosphereDensity=-50.0} and {@code Heavy.gravity=9.0}.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, two runs. With {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()),"
+            + " DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE)} losing its"
+            + " ceiling and {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()),"
+            + " DimensionProperties.MIN_GRAVITY), DimensionProperties.MAX_GRAVITY)} losing its floor, this"
+            + " fails showing {@code Heavy.atmosphereDensity=5000.0} and {@code Light.gravity=-0.2}; with the"
+            + " atmosphere's floor and the gravity's ceiling dropped instead, showing"
+            + " {@code Light.atmosphereDensity=-50.0} and {@code Heavy.gravity=9.0}.")
     @Test
     public void atmosphereAndGravityOutsideTheirRangeAreClampedIntoIt() throws Exception {
         DimList dims = dims();
@@ -474,16 +528,15 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * ore, carries the stated count, and is a COPY of the dictionary's stack: the dictionary's own
      * stack — what every other reader of {@code oreIron} receives — keeps the count it was
      * registered with.
-     *
-     * <p>red-witnessed: 2026-10-02, three inversions, one run each: with
-     * {@code XMLPlanetLoader#readPlanetFromNode} at {@code String oreName = parts[0].trim();}
-     * untrimmed this fails with {@code Driller.laserDrillOres=[]}; with
-     * {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code item.setCount(Integer.parseInt(parts[1].trim()));} untrimmed, with
-     * {@code [minecraft:iron_ore@0x1]}; with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code ItemStack item = ores.get(0).copy();} not copied, with
-     * {@code dictionary.oreIron.count=3}.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, three inversions, one run each: with"
+            + " {@code XMLPlanetLoader#readPlanetFromNode} at {@code String oreName = parts[0].trim();}"
+            + " untrimmed this fails with {@code Driller.laserDrillOres=[]}; with"
+            + " {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code item.setCount(Integer.parseInt(parts[1].trim()));} untrimmed, with"
+            + " {@code [minecraft:iron_ore@0x1]}; with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code ItemStack item = ores.get(0).copy();} not copied, with"
+            + " {@code dictionary.oreIron.count=3}.")
     @Test
     public void aLaserDrillEntryIsTrimmedCountedAndCopiedOffTheDictionary() throws Exception {
         DimList dims = dims();
@@ -513,11 +566,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * mod is not installed — is skipped as an entry; the planet carrying it is still a world and its
      * other entries still resolve. (Before this was decided, the empty lookup threw, and the per-planet
      * isolation dropped the whole planet.)
-     *
-     * <p>red-witnessed: 2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code if (ores.isEmpty())} made never to hold (so the empty list reaches {@code ores.get(0)}),
-     * this fails with {@code DrillerUnresolved.registered=false}: the whole planet was dropped.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code if (ores.isEmpty())} made never to hold (so the empty list reaches {@code ores.get(0)}),"
+            + " this fails with {@code DrillerUnresolved.registered=false}: the whole planet was dropped.")
     @Test
     public void aLaserDrillOreThatResolvesToNothingIsSkippedAndThePlanetKept() throws Exception {
         Reply unresolved = probe("stellurgytest oredict get " + RESERVED_EMPTY_ORE);
@@ -548,16 +600,15 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * A {@code <terrainSource>} is read regardless of case and surrounding whitespace, and its world
      * type without the whitespace around it; a value the game does not know does not cost the pack
      * its planet — the body is kept and generates natively.
-     *
-     * <p>red-witnessed: 2026-10-02, two inversions, one run each: with
-     * {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code properties.setTerrainSource(TerrainSource.byName(planetPropertyNode.getTextContent().trim()));}
-     * calling a strict {@code TerrainSource.valueOf} on the same text, this fails with
-     * {@code ModTerrain.registered=false} and {@code BogusTerrain.registered=false} (both planets
-     * dropped); with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code properties.setTerrainWorldType(planetPropertyNode.getTextContent().trim());} untrimmed,
-     * with {@code ModTerrain.terrainWorldType= flat }.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
+            + " {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code properties.setTerrainSource(TerrainSource.byName(planetPropertyNode.getTextContent().trim()));}"
+            + " calling a strict {@code TerrainSource.valueOf} on the same text, this fails with"
+            + " {@code ModTerrain.registered=false} and {@code BogusTerrain.registered=false} (both planets"
+            + " dropped); with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code properties.setTerrainWorldType(planetPropertyNode.getTextContent().trim());} untrimmed,"
+            + " with {@code ModTerrain.terrainWorldType= flat }.")
     @Test
     public void aTerrainSourceIsReadTolerantlyAndAnUnknownOneKeepsThePlanet() throws Exception {
         DimList dims = dims();
@@ -584,14 +635,13 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * way the stated length can take effect — and a planet whose author states no weather at all
      * keeps the shared one. The flag read is the one {@code WorldProviderPlanet#updateWeather}
      * branches on.
-     *
-     * <p>red-witnessed: 2026-10-02, two inversions, one run each: with
-     * {@code DimensionProperties#updateCustomWorldInfo} at {@code customWorldInfo = !isDefault;}
-     * negated, this fails with {@code StatesAWeatherLength.usesCustomWorldInfo=false} (and
-     * {@code StatesNoWeather} stays false — a planet stating no weather never reaches that method);
-     * with {@code DimensionProperties#usesCustomWorldInfo} at {@code return customWorldInfo;} made to
-     * answer {@code true}, with {@code StatesNoWeather.usesCustomWorldInfo=true}.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
+            + " {@code DimensionProperties#updateCustomWorldInfo} at {@code customWorldInfo = !isDefault;}"
+            + " negated, this fails with {@code StatesAWeatherLength.usesCustomWorldInfo=false} (and"
+            + " {@code StatesNoWeather} stays false — a planet stating no weather never reaches that method);"
+            + " with {@code DimensionProperties#usesCustomWorldInfo} at {@code return customWorldInfo;} made to"
+            + " answer {@code true}, with {@code StatesNoWeather.usesCustomWorldInfo=true}.")
     @Test
     public void aStatedWeatherLengthEngagesThePlanetsOwnCycleAndNoneLeavesItShared() throws Exception {
         DimList dims = dims();
@@ -618,21 +668,20 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * whitespace; a galaxy type that states only some attributes takes every shape attribute it left
      * out from the SHIPPED spiral, and a weight of one; and an attribute the element leaves out takes
      * the shipped default.
-     *
-     * <p>red-witnessed: 2026-10-02, two verdicts. The generator verdict: with
-     * {@code UniverseRegistry#populate} at
-     * {@code reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),}
-     * handed {@code null} for the config, this fails with {@code EmptyGalaxyGenerator}. The
-     * configuration verdict, three runs: with {@code XMLPlanetLoader#readGalaxyType} at
-     * {@code attrInt(node, ATTR_ARMS, stock.armCount)} defaulting to 0 and at
-     * {@code attrInt(node, ATTR_WEIGHT, 1)} defaulting to 7, it fails with {@code Thick} at
-     * {@code armCount=0, weight=7}; with {@code XMLPlanetLoader#readGalaxyGen} at
-     * {@code List<GalaxyGenConfig.StarType> types = new ArrayList<>();} and at
-     * {@code List<GalaxyGenConfig.GalaxyType> galaxyTypes = new ArrayList<>();} seeded with the
-     * stock tables, and at {@code int minSpacing = attrInt(node, ATTR_MINSPACING, defaults.minSpacing);}
-     * defaulting one higher, it fails with the stock star and galaxy types ahead of the authored ones
-     * and {@code minSpacing} one over the shipped default.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, two verdicts. The generator verdict: with"
+            + " {@code UniverseRegistry#populate} at"
+            + " {@code reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),}"
+            + " handed {@code null} for the config, this fails with {@code EmptyGalaxyGenerator}. The"
+            + " configuration verdict, three runs: with {@code XMLPlanetLoader#readGalaxyType} at"
+            + " {@code attrInt(node, ATTR_ARMS, stock.armCount)} defaulting to 0 and at"
+            + " {@code attrInt(node, ATTR_WEIGHT, 1)} defaulting to 7, it fails with {@code Thick} at"
+            + " {@code armCount=0, weight=7}; with {@code XMLPlanetLoader#readGalaxyGen} at"
+            + " {@code List<GalaxyGenConfig.StarType> types = new ArrayList<>();} and at"
+            + " {@code List<GalaxyGenConfig.GalaxyType> galaxyTypes = new ArrayList<>();} seeded with the"
+            + " stock tables, and at {@code int minSpacing = attrInt(node, ATTR_MINSPACING, defaults.minSpacing);}"
+            + " defaulting one higher, it fails with the stock star and galaxy types ahead of the authored ones"
+            + " and {@code minSpacing} one over the shipped default.")
     @Test
     public void aPacksGalaxyGenIsTheConfigurationTheRunningUniverseUses() throws Exception {
         Reply inForce = probe("stellurgytest space gen-config");
@@ -685,14 +734,13 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * A star's {@code galacticCoord} is declared against the HOME galaxy unless the star names
      * another, and every other galaxy an anchor names is RESERVED in the generator's configuration —
      * its cell holds a galaxy under every seed, so the authored system has somewhere to be.
-     *
-     * <p>red-witnessed: 2026-10-02, two inversions, one run each: with
-     * {@code XMLPlanetLoader#readGalaxyKey} at {@code return GalaxyKey.HOME;} (the unstated branch)
-     * answering galaxy {@code 1,0,0}, this fails with {@code Sol.galaxy=1,0,0}; with
-     * {@code XMLPlanetLoader#readAllPlanets} at
-     * {@code if (coupling.galaxyGenConfig != null && !coupling.declaredGalaxies.isEmpty())} negated on
-     * its second half, with {@code reservedGalaxies=[home]}.</p>
      */
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
+            + " {@code XMLPlanetLoader#readGalaxyKey} at {@code return GalaxyKey.HOME;} (the unstated branch)"
+            + " answering galaxy {@code 1,0,0}, this fails with {@code Sol.galaxy=1,0,0}; with"
+            + " {@code XMLPlanetLoader#readAllPlanets} at"
+            + " {@code if (coupling.galaxyGenConfig != null && !coupling.declaredGalaxies.isEmpty())} negated on"
+            + " its second half, with {@code reservedGalaxies=[home]}.")
     @Test
     public void aStarsAnchorIsDeclaredAgainstTheHomeGalaxyUnlessItNamesAnother() throws Exception {
         Reply sol = probe("stellurgytest star get " + STAR_SOL);
@@ -743,14 +791,16 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      *
      * <p>Does NOT see the procedural field around these stars, nor a derived world being realized.</p>
      *
-     * <p>red-witnessed: 2026-10-03, three inversions, one run each: with
-     * {@code UniverseRegistry#withDerivedRetinue} at {@code if (asked <= 0 || generator == null)}
-     * always true, this fails with {@code Counted=… majors=0}; with
-     * {@code int asked = star.getMaxRetinueBodies();} reading {@code Math.max(1, …)}, with
-     * {@code Faraway=… majors=1}; with {@code DimensionManager#createAndLoadDimensions} at
-     * {@code int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);} dropping
-     * the giants, with {@code Counted=… majors=2}.</p>
+     * Pins ADDR-24 (an authored system holds what its pack declares and nothing else).
      */
+    @Pins("ADDR-24")
+    @LegacyWitness(prose = "2026-10-03, three inversions, one run each: with"
+            + " {@code UniverseRegistry#withDerivedRetinue} at {@code if (asked <= 0 || generator == null)}"
+            + " always true, this fails with {@code Counted=… majors=0}; with"
+            + " {@code int asked = star.getMaxRetinueBodies();} reading {@code Math.max(1, …)}, with"
+            + " {@code Faraway=… majors=1}; with {@code DimensionManager#createAndLoadDimensions} at"
+            + " {@code int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);} dropping"
+            + " the giants, with {@code Counted=… majors=2}.")
     @Test
     public void anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse() throws Exception {
         Reply counted = probe("stellurgytest star get " + STAR_COUNTED);
@@ -816,12 +866,13 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + " restIsMoonsAndBelts=" + restIsMoonsAndBelts;
     }
 
+    /** Every caller asks a READ verb of the authored world. */
     private Reply probe(String command) throws Exception {
-        return Reply.of(command, String.join("\n", world.harness.client().execute(command)));
+        return Reply.of(command, String.join("\n", world.harness.client().read(command)));
     }
 
     private DimList dims() throws Exception {
-        return DimList.of(String.join("\n", world.harness.client().execute("stellurgytest dim list")));
+        return DimList.of(String.join("\n", world.harness.client().read("stellurgytest dim list")));
     }
 
     /** A body this file states, which the arrangement requires to exist. */

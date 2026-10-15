@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
-
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.TelescopeReading;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import org.junit.FixMethodOrder;
+import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiByRightClick;
+import static org.junit.Assert.*;
 
 /**
  * The one human act in the tier-1/tier-2 knowledge loop: a player standing at an observatory presses
@@ -27,7 +25,7 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiB
  * that lights up and does nothing would satisfy a screen-scraping test and fail this one.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
+public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
 
     /** The survey tab of the observatory GUI: data, asteroid, region-scan. */
     private static final int TAB_REGION_SCAN = 2;
@@ -46,14 +44,12 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         return "knowledge-deposit";
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —
-     * {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the
-     * button without calling {@code uploadCrystalHere}: "no
-     * `crystal_deposited` carrying pos = … was recorded within 200 ticks". THE WORLD LEARNS —
-     * {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: "after the click a pad here must
-     * be offered that world: … known:false".</p>
-     */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —"
+            + " {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the"
+            + " button without calling {@code uploadCrystalHere}: \"no"
+            + " `crystal_deposited` carrying pos = … was recorded within 200 ticks\". THE WORLD LEARNS —"
+            + " {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: \"after the click a pad here must"
+            + " be offered that world: … known:false\".")
     @Test
     public void pressingDepositTeachesTheWorldTheCrystalsAddresses() throws Exception {
         String where = "0 " + X + " " + Y + " " + Z;
@@ -62,22 +58,22 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         // survey found: a survey teaches the world it is made from as it goes, so a crystal filled
         // by sweeping here would hold only things this world already knows - and the click could
         // then teach nothing and still look successful.
-        exec("stellurgytest config set planetsMustBeDiscovered true");
+        arrange("stellurgytest config set planetsMustBeDiscovered true").raw();
         int fresh;
         try {
-            String installed = exec("stellurgytest space gen-install 0.9 2000000 987654321");
+            String installed = arrange("stellurgytest space gen-install 0.9 2000000 987654321").raw();
             assertTrue("the procedural generator must install: " + installed,
                     Reply.of(installed).ok());
-            String found = exec("stellurgytest space find-procedural 4");
+            String found = read("stellurgytest space find-procedural 4").raw();
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                     Reply.of(found).ok());
-            fresh = RealizedBody.atSectorLocal(this::exec,
+            fresh = RealizedBody.atSectorLocal(c -> act(c).raw(),
                     intOf(found, "sx"), intOf(found, "sy"), intOf(found, "sz")).dim;
         } finally {
-            exec("stellurgytest space gen-reset");
+            arrange("stellurgytest space gen-reset");
         }
 
-        String before = exec("stellurgytest planet knowledge 0 " + fresh);
+        String before = read("stellurgytest planet knowledge 0 " + fresh).raw();
         assertTrue("arrangement: a just-minted world must be unknown here: " + before,
                 (!Reply.of(before).bool("local")));
         assertTrue("arrangement: and unknown to the pack: " + before,
@@ -86,12 +82,12 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         // that opened a half-built one would be measuring the incomplete panel.
         // The COMPLETE multiblock, not a lone block: the survey tab is a machine's GUI, and a test
         // that opened a half-built one would be measuring the incomplete panel.
-        String built = exec("stellurgytest fixture multiblock observatory 0 " + X + " " + Y + " " + Z);
+        String built = arrange("stellurgytest fixture multiblock observatory 0 " + X + " " + Y + " " + Z).raw();
         assertTrue("could not build an observatory: " + built, Reply.of(built).ok());
-        String crystal = exec("stellurgytest telescope crystal " + where + " " + fresh);
+        String crystal = arrange("stellurgytest telescope crystal " + where + " " + fresh).raw();
         assertEquals("the machine must hold a crystal naming exactly that world: " + crystal,
                 1, Reply.of("stellurgytest telescope crystal", crystal).integer("addresses"));
-        TelescopeReading info = TelescopeReading.at(this::exec, where);
+        TelescopeReading info = TelescopeReading.at(c -> read(c).raw(), where);
         assertArrayEquals("and the probe must see it there without depositing anything: "
                 + info.raw(), new int[]{fresh}, info.crystalDims());
 
@@ -99,7 +95,7 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         // dispatched by the CLIENT and reach-checked against where it stands, so the placement is
         // waited for as the packet that applies it.
         long standMark = clientEvents().mark();
-        exec("tp @a " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 2.5) + " 0 30");
+        arrange("tp @a " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 2.5) + " 0 30");
         awaitClientPlacedNear(standMark, X + 0.5, Z + 2.5,
                 "the player must be at the machine before he right-clicks it");
         String screen = openGuiByRightClick(bot(), clientEvents(), X, Y, Z);
@@ -123,7 +119,7 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         // The button's promise, asked of the server: the address the machine held is now something a
         // tier-1 pad standing on this world may be aimed at, and it is known LOCALLY - a deposit may
         // not touch the pack's global floor.
-        String after = exec("stellurgytest planet knowledge 0 " + fresh);
+        String after = read("stellurgytest planet knowledge 0 " + fresh).raw();
         assertTrue("after the click a pad here must be offered that world: " + after
                         + " | the deposit's own record: " + deposited,
                 Reply.of(after).bool("known"));

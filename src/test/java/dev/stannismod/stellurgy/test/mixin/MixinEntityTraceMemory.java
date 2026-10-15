@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
-
+import dev.stannismod.stellurgy.test.trace.EntityTrace;
 import net.minecraft.entity.Entity;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-import dev.stannismod.stellurgy.test.trace.EntityTrace;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Gives every body a slot for what the test recorders remember about it — see {@link EntityTrace}.

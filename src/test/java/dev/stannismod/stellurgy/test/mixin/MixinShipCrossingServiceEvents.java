@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.CrewTransfer;
+import dev.stannismod.stellurgy.space.ShipCrossingService;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.space.CrewTransfer;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * The momentary cell-to-cell crossing every entry, descent and seam carry is performed by, as an

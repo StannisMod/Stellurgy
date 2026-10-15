@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.world.weather;
 
+import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import net.minecraft.command.CommandWeather;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -9,7 +10,6 @@ import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 
 import java.util.StringJoiner;
 

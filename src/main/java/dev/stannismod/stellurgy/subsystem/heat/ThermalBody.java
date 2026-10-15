@@ -1,25 +1,19 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Set;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.tile.heat.TileHeatRadiator;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+
+import java.util.*;
 
 /**
  * The thing a signature is OF: one ship, taken whole.
@@ -133,7 +127,7 @@ public final class ThermalBody {
         if (shipId == null && (hull == null || hull.isEmpty())) {
             return loops;
         }
-        for (ISubsystemNetworkNode node : SubsystemNetworkRegistry.snapshot(HeatNetwork.DOMAIN)) {
+        for (ISubsystemNetworkNode node : SubsystemNetworkManager.of(world).snapshot(HeatNetwork.DOMAIN)) {
             BlockPos pos = node.getNodePos();
             if (pos == null || node.getNodeWorld() != world) {
                 continue;

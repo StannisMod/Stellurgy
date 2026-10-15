@@ -1,31 +1,22 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.Nebula;
+import dev.stannismod.stellurgy.universe.StellarMagnitude;
+import dev.stannismod.stellurgy.universe.UniverseScale;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.Nebula;
-import dev.stannismod.stellurgy.universe.StellarMagnitude;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The observatory's region survey, driven on a real server through the machine itself.
@@ -67,7 +58,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     private static String join(java.util.List<String> response) {
         return String.join("\n", response);
@@ -80,30 +71,30 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      */
     private void surveySetup(boolean research, int cellsPerStep, int ticksPerStep)
             throws Exception {
-        exec("stellurgytest config set planetsMustBeDiscovered " + research);
-        exec("stellurgytest config set telescopeScanBaseTicks " + ticksPerStep);
+        arrange("stellurgytest config set planetsMustBeDiscovered " + research);
+        arrange("stellurgytest config set telescopeScanBaseTicks " + ticksPerStep);
         // An aperture that sees essentially anything, so what a fixture finds is decided by where it
         // put the fixture and never by how bright the sky happened to draw it. What the SHIPPED
         // aperture sees is the subject of the photometry scenarios at the end of this class, which
         // seat stars of a stated luminosity and state their own aperture.
-        exec("stellurgytest config set telescopeLimitingMagnitude 30");
-        exec("stellurgytest config set telescopeConeHalfAngleDegrees 20");
-        exec("stellurgytest config set telescopeScanMaxCells 1000");
-        exec("stellurgytest config set telescopeScanCellsPerStep " + cellsPerStep);
-        exec("stellurgytest config set telescopePassiveRadiusSteps 1");
+        arrange("stellurgytest config set telescopeLimitingMagnitude 30").raw();
+        arrange("stellurgytest config set telescopeConeHalfAngleDegrees 20");
+        arrange("stellurgytest config set telescopeScanMaxCells 1000");
+        arrange("stellurgytest config set telescopeScanCellsPerStep " + cellsPerStep);
+        arrange("stellurgytest config set telescopePassiveRadiusSteps 1");
     }
 
     /** What the instrument is doing right now. */
     private TelescopeReading scope(int x) throws Exception {
-        return TelescopeReading.at(this::exec, where(x));
+        return TelescopeReading.at(c -> read(c).raw(), where(x));
     }
 
     /** How far apart, in cells, the looks of a directed survey stand in THIS server's universe. */
     private long stride(int x) throws Exception {
-        long stride = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 1"))
+        long stride = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 1").raw())
                 .requireOk("could not aim the instrument to read its stride")
                 .stride();
-        exec("stellurgytest telescope abort " + where(x));
+        act("stellurgytest telescope abort " + where(x));
         return stride;
     }
 
@@ -113,9 +104,9 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
     /** An observatory with a blank crystal in it, and the cell it stands in. */
     private long[] observatoryWithCrystal(int x) throws Exception {
-        String placed = exec("stellurgytest telescope place " + where(x));
+        String placed = arrange("stellurgytest telescope place " + where(x)).raw();
         assertTrue("could not place an observatory: " + placed, Reply.of(placed).ok());
-        String crystal = exec("stellurgytest telescope crystal " + where(x));
+        String crystal = arrange("stellurgytest telescope crystal " + where(x)).raw();
         assertEquals("the crystal must start blank, or every count afterwards means nothing",
                 0, Reply.of("stellurgytest telescope crystal", crystal).integer("addresses"));
         return scope(x).originSectors();
@@ -123,7 +114,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
     /** Put a system with a planet in it at a cell, so what the instrument finds is determinate. */
     private void systemAt(long sx, long sy, long sz) throws Exception {
-        String system = exec("stellurgytest telescope system " + sx + " " + sy + " " + sz);
+        String system = arrange("stellurgytest telescope system " + sx + " " + sy + " " + sz).raw();
         assertTrue("could not place a system to be found: " + system, Reply.of(system).ok());
     }
 
@@ -174,7 +165,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         systemNearTheLookAt(x, home, 4);
 
         long scanMark = events.mark();
-        TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 4"))
+        TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 4").raw())
                 .requireOk("the survey did not start");
 
         TelescopeReading done = awaitSurveyComplete(scanMark, x);
@@ -195,7 +186,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         surveySetup(true, 1, 3);
         observatoryWithCrystal(x);
 
-        TelescopeReading started = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 4"))
+        TelescopeReading started = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 4").raw())
                 .requireOk("the survey did not start");
         assertTrue("a region worth sweeping must hold more than one cell: " + started.raw(),
                 started.cells() > 1);
@@ -238,13 +229,13 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         long[] home = observatoryWithCrystal(x);
         systemNearTheLookAt(x, home, 3);
 
-        exec("stellurgytest telescope scan " + where(x) + " 1 0 0 3");
+        act("stellurgytest telescope scan " + where(x) + " 1 0 0 3");
         TelescopeReading before = scope(x);
         assertTrue("the survey must be running before it can be stopped: " + before.raw(),
                 before.scanning);
         long learned = before.addressesOnCrystal();
 
-        TelescopeReading stopped = TelescopeReading.of(exec("stellurgytest telescope abort " + where(x)))
+        TelescopeReading stopped = TelescopeReading.of(act("stellurgytest telescope abort " + where(x)).raw())
                 .requireOk("stopping must be free and immediate");
         assertFalse("the instrument must be idle after a stop: " + stopped.raw(), stopped.scanning);
         assertTrue("stopping must not take back what was already resolved: " + stopped.raw(),
@@ -257,11 +248,11 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         surveySetup(true, 1, 180);
         observatoryWithCrystal(x);
 
-        TelescopeReading first = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 3"))
+        TelescopeReading first = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 3").raw())
                 .requireOk("the first survey did not start");
         long learned = first.addressesOnCrystal();
 
-        TelescopeReading second = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 0 0 1 5"))
+        TelescopeReading second = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 0 0 1 5").raw())
                 .requireOk("re-aiming mid-survey must be allowed");
         // The DIRECTION and not the corners. A pointing's bounding box is its apex plus its reach
         // on every axis, so re-aiming the same instrument leaves min/max exactly where they were —
@@ -279,7 +270,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         long[] home = observatoryWithCrystal(x);
 
         long radarMark = events.mark();
-        TelescopeReading passive = TelescopeReading.of(exec("stellurgytest telescope passive " + where(x)))
+        TelescopeReading passive = TelescopeReading.of(act("stellurgytest telescope passive " + where(x)).raw())
                 .requireOk("the local radar did not start");
         assertTrue("the local radar is a mode of the machine, not a survey of somewhere else: "
                 + passive.raw(), passive.passive);
@@ -303,14 +294,12 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                 done.addressesOnCrystal() >= 1);
     }
 
-    /**
-     * <p>red-witnessed: with the survey written into NEITHER of the two places a save takes it from —
-     * {@code TileObservatory#writeToNBT} at {@code nbt.setTag("regionScan", scan)} and
-     * {@code TileObservatory#writeNetworkData} at {@code nbt.setTag("regionScan", scan)},
-     * which {@code TileMultiBlock.writeToNBT} also calls: "the survey did not come back with the
-     * chunk: … scanning:false", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —
-     * the network copy lands in the same save compound.</p>
-     */
+    @LegacyWitness(prose = "with the survey written into NEITHER of the two places a save takes it from —"
+            + " {@code TileObservatory#writeToNBT} at {@code nbt.setTag(\"regionScan\", scan)} and"
+            + " {@code TileObservatory#writeNetworkData} at {@code nbt.setTag(\"regionScan\", scan)},"
+            + " which {@code TileMultiBlock.writeToNBT} also calls: \"the survey did not come back with the"
+            + " chunk: … scanning:false\", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —"
+            + " the network copy lands in the same save compound.")
     @Test
     public void aSurveyInFlightSurvivesItsChunkBeingUnloaded() throws Exception {
         final int x = 4540;
@@ -320,7 +309,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         observatoryWithCrystal(x);
 
         long scanMark = events.mark();
-        TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 3"))
+        TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 3").raw())
                 .requireOk("the survey did not start");
         // Linked on the survey's first resolved step that did not finish it: that is "mid-region"
         // said by the machine, and it makes the "kept what it had surveyed" claim below one about a
@@ -335,7 +324,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         long doneBefore = before.cellsDone();
         String region = before.regionMin();
 
-        String cycled = exec("stellurgytest chunk cycle 0 " + (x >> 4) + " " + (CZ >> 4));
+        String cycled = arrange("stellurgytest chunk cycle 0 " + (x >> 4) + " " + (CZ >> 4)).raw();
         assertTrue("the chunk was never actually dropped, so nothing was proven: " + cycled,
                 Reply.of(cycled).bool("dropped") && Reply.of(cycled).bool("reloaded"));
 
@@ -348,22 +337,23 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);",
+            why = "the survey's progress is read as it starts and again after this stretch, and the claim is that"
+                    + " it did not move. The stretch is over a dozen steps' worth at this pacing, which a fed"
+                    + " instrument spends resolving cells; overshoot only gives a starved one longer to cheat,"
+                    + " which can turn a green red and never the reverse.")
     public void anUnfedInstrumentStallsInsteadOfSurveyingForFree() throws Exception {
         final int x = 4580;
         surveySetup(true, 1, 3);
         // A price no bare observatory can pay: it has no data buses, so it has no distance data.
-        exec("stellurgytest config set telescopeSurveyDataPerStep 50");
+        arrange("stellurgytest config set telescopeSurveyDataPerStep 50").raw();
         try {
             observatoryWithCrystal(x);
-            TelescopeReading started = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x)
-                    + " 1 0 0 2")).requireOk("the survey did not start");
+            TelescopeReading started = TelescopeReading.of(act("stellurgytest telescope scan " + where(x)
+                    + " 1 0 0 2").raw()).requireOk("the survey did not start");
             assertEquals("a fresh survey has resolved nothing yet: " + started.raw(),
                     0, started.cellsDone());
 
-            // WINDOW: the survey's progress is read as it starts and again after this stretch, and
-            // the claim is that it did not move. The stretch is over a dozen steps' worth at this
-            // pacing, which a fed instrument spends resolving cells; overshoot only gives a starved
-            // one longer to cheat, which can turn a green red and never the reverse.
             GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);
             TelescopeReading after = scope(x);
             assertTrue("an instrument with no data must still be waiting, not finished: "
@@ -372,7 +362,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                             + started.cellsDone() + " -> " + after.cellsDone() + ")",
                     started.cellsDone(), after.cellsDone());
         } finally {
-            exec("stellurgytest config set telescopeSurveyDataPerStep 0");
+            arrange("stellurgytest config set telescopeSurveyDataPerStep 0");
         }
     }
 
@@ -384,23 +374,23 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         systemNearTheLookAt(x, home, 3);
 
         long handoverMark = events.mark();
-        exec("stellurgytest telescope scan " + where(x) + " 1 0 0 3");
+        act("stellurgytest telescope scan " + where(x) + " 1 0 0 3");
         TelescopeReading surveyed = awaitSurveyComplete(handoverMark, x);
         assertTrue("the survey must have written something to hand over: " + surveyed.raw(),
                 surveyed.addressesOnCrystal() >= 1);
 
         // Carry the crystal to a navigation computer, the way a player would.
         int navX = x + 4;
-        String placed = exec("stellurgytest nav place 0 " + navX + " " + CY + " " + CZ);
+        String placed = arrange("stellurgytest nav place 0 " + navX + " " + CY + " " + CZ).raw();
         assertTrue("could not place a navigation computer: " + placed, Reply.of(placed).ok());
-        String handed = exec("stellurgytest telescope handover " + where(x) + " " + navX + " " + CY + " " + CZ);
+        String handed = arrange("stellurgytest telescope handover " + where(x) + " " + navX + " " + CY + " " + CZ).raw();
         assertTrue("the crystal did not reach the console: " + handed, Reply.of(handed).ok());
         // `handover` answers the stack it MOVED, not the instrument's state, so it is read as its
         // own two-field reply rather than as a telescope reading.
         assertTrue("and it must arrive holding what the telescope wrote: " + handed,
                 Reply.of("stellurgytest telescope handover", handed).integer("addresses") >= 1);
 
-        NavStatus status = NavStatus.at(this::exec, 0, navX, CY, CZ);
+        NavStatus status = NavStatus.at(c -> read(c).raw(), 0, navX, CY, CZ);
         assertTrue("the console must read the telescope's own crystal: " + status.raw(),
                 status.shipCrystals >= 1);
     }
@@ -421,12 +411,12 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                 idle.reachSteps >= MORE_THAN_ONE_TERRITORY_STEPS);
 
         TelescopeReading aimed = TelescopeReading.of(
-                        exec("stellurgytest telescope scan " + where(x) + " 1 0 0 " + idle.reachSteps))
+                        act("stellurgytest telescope scan " + where(x) + " 1 0 0 " + idle.reachSteps).raw())
                 .requireOk("the survey did not start");
         assertTrue("an aim at the horizon must land an interstellar distance away: "
                         + aimed.distanceLy() + " ly",
                 aimed.distanceLy() >= INTERSTELLAR_LY);
-        exec("stellurgytest telescope abort " + where(x));
+        act("stellurgytest telescope abort " + where(x));
     }
 
     @Test
@@ -435,15 +425,15 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         surveySetup(true, 2, 40);
         observatoryWithCrystal(x);
 
-        long nearTicks = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 2"))
+        long nearTicks = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 2").raw())
                 .requireOk("the near survey did not start")
                 .estimatedTicks();
-        exec("stellurgytest telescope abort " + where(x));
+        act("stellurgytest telescope abort " + where(x));
 
-        long farTicks = TelescopeReading.of(exec("stellurgytest telescope scan " + where(x) + " 1 0 0 20"))
+        long farTicks = TelescopeReading.of(act("stellurgytest telescope scan " + where(x) + " 1 0 0 20").raw())
                 .requireOk("the far survey did not start")
                 .estimatedTicks();
-        exec("stellurgytest telescope abort " + where(x));
+        act("stellurgytest telescope abort " + where(x));
 
         assertTrue("a farther region must be a longer survey: near=" + nearTicks + " far=" + farTicks,
                 farTicks > nearTicks);
@@ -509,13 +499,13 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
     /** Set a whitelisted config key, refusing the arrangement if the server would not. */
     private void configure(String key, Object value) throws Exception {
-        Reply.of("stellurgytest config set", exec("stellurgytest config set " + key + " " + value))
+        Reply.of("stellurgytest config set", arrange("stellurgytest config set " + key + " " + value).raw())
                 .requireOk("set " + key + " to " + value);
     }
 
     /** A whitelisted config key's value right now, as the server prints it — to be put back. */
     private String configured(String key) throws Exception {
-        return Reply.of("stellurgytest config get", exec("stellurgytest config get " + key))
+        return Reply.of("stellurgytest config get", read("stellurgytest config get " + key).raw())
                 .requireOk("read " + key).text("value");
     }
 
@@ -544,13 +534,13 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      */
     @org.junit.Before
     public void authoredOnlySky() throws Exception {
-        Reply.of("stellurgytest space gen-empty", exec("stellurgytest space gen-empty"))
+        Reply.of("stellurgytest space gen-empty", arrange("stellurgytest space gen-empty").raw())
                 .requireOk("start from an authored-only sky");
     }
 
     @org.junit.After
     public void restoreTheSavesSky() throws Exception {
-        Reply.of("stellurgytest space gen-reset", exec("stellurgytest space gen-reset"))
+        Reply.of("stellurgytest space gen-reset", arrange("stellurgytest space gen-reset").raw())
                 .requireOk("put the server's own sky back");
     }
 
@@ -558,12 +548,12 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     private void proceduralSky() throws Exception {
         GalaxyGenConfig shipped = GalaxyGenConfig.defaults();
         Reply.of("stellurgytest space gen-install",
-                exec("stellurgytest space gen-install " + shipped.density + " " + shipped.minSpacing))
+                arrange("stellurgytest space gen-install " + shipped.density + " " + shipped.minSpacing).raw())
                 .requireOk("install the shipped procedural sky");
     }
 
     private void releaseProceduralSky() throws Exception {
-        Reply.of("stellurgytest space gen-reset", exec("stellurgytest space gen-reset"))
+        Reply.of("stellurgytest space gen-reset", arrange("stellurgytest space gen-reset").raw())
                 .requireOk("put the server's own sky back");
     }
 
@@ -577,25 +567,25 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * loaded" mid-scenario. The hold also keeps the tile ticking, which is what completes a survey.</p>
      */
     private TelescopeReading standObservatory(FixtureSite site) throws Exception {
-        Reply.of("stellurgytest chunk hold", exec("stellurgytest chunk hold " + at(site) + " 0"))
+        Reply.of("stellurgytest chunk hold", arrange("stellurgytest chunk hold " + at(site) + " 0").raw())
                 .requireOk("hold the observatory's chunk loaded");
-        Reply.of("stellurgytest telescope place", exec("stellurgytest telescope place " + at(site)))
+        Reply.of("stellurgytest telescope place", arrange("stellurgytest telescope place " + at(site)).raw())
                 .requireOk("stand an observatory at " + site);
         blankCrystal(site);
-        TelescopeReading idle = TelescopeReading.at(this::exec, at(site)).requireOk("read the observatory");
+        TelescopeReading idle = TelescopeReading.at(c -> read(c).raw(), at(site)).requireOk("read the observatory");
         requireArranged("the observatory must know where in the galaxy it stands: " + idle.raw(),
                 idle.hasOrigin());
         return idle;
     }
 
     private void releaseChunks() throws Exception {
-        Reply.of("stellurgytest chunk release", exec("stellurgytest chunk release"))
+        Reply.of("stellurgytest chunk release", arrange("stellurgytest chunk release").raw())
                 .requireOk("release the held chunks");
     }
 
     private void blankCrystal(FixtureSite site) throws Exception {
         int held = Reply.of("stellurgytest telescope crystal",
-                exec("stellurgytest telescope crystal " + at(site))).integer("addresses");
+                arrange("stellurgytest telescope crystal " + at(site)).raw()).integer("addresses");
         requireArranged("the crystal must start blank, or every count after it means nothing: " + held,
                 held == 0);
     }
@@ -609,23 +599,23 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
             requireArranged("the probe seats a system by integer sectors: " + cell(sectors),
                     Math.abs(sector) <= Integer.MAX_VALUE);
         }
-        return Reply.of("stellurgytest telescope system", exec("stellurgytest telescope system "
+        return Reply.of("stellurgytest telescope system", arrange("stellurgytest telescope system "
                         + cell(sectors) + " " + name + " " + RETINUE + " " + sizeSuns + " "
-                        + (int) StellarMagnitude.SOLAR_TEMPERATURE_UNITS))
+                        + (int) StellarMagnitude.SOLAR_TEMPERATURE_UNITS).raw())
                 .requireOk("seat the system " + name).text("cellKey");
     }
 
     /** Production's photometry of the system seated at {@code sectors}, from this observatory. */
     private Reply photometry(FixtureSite site, long[] sectors) throws Exception {
         return Reply.of("stellurgytest telescope sees",
-                exec("stellurgytest telescope sees " + at(site) + " " + cell(sectors)))
+                read("stellurgytest telescope sees " + at(site) + " " + cell(sectors)).raw())
                 .requireOk("read the photometry of " + cell(sectors));
     }
 
     /** What the crystal in the machine holds of the system owning {@code sectors}. */
     private Reply recorded(FixtureSite site, long[] sectors) throws Exception {
         return Reply.of("stellurgytest telescope entries",
-                exec("stellurgytest telescope entries " + at(site) + " " + cell(sectors)))
+                read("stellurgytest telescope entries " + at(site) + " " + cell(sectors)).raw())
                 .requireOk("read what the crystal holds of " + cell(sectors));
     }
 
@@ -651,10 +641,10 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * before the aim.
      */
     private void surveyAlong(FixtureSite site, long[] dir, int steps) throws Exception {
-        long before = Reply.of("stellurgytest clock", exec("stellurgytest clock")).longInteger("tick");
+        long before = Reply.of("stellurgytest clock", read("stellurgytest clock").raw()).longInteger("tick");
         long mark = events.mark();
-        TelescopeReading aimed = TelescopeReading.of(exec("stellurgytest telescope scan " + at(site) + " "
-                + cell(dir) + " " + steps)).requireOk("aim the instrument");
+        TelescopeReading aimed = TelescopeReading.of(act("stellurgytest telescope scan " + at(site) + " "
+                + cell(dir) + " " + steps).raw()).requireOk("aim the instrument");
         requireArranged("the pointing must reach as deep as it was aimed (" + steps + " territories)"
                         + " rather than be cut short by its look budget: " + aimed.raw(),
                 aimed.distanceCells() >= (long) steps * aimed.stride());
@@ -667,7 +657,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     /** Run the local radar over the observatory's own neighbourhood and wait for it to finish. */
     private void localRadar(FixtureSite site) throws Exception {
         long mark = events.mark();
-        TelescopeReading.of(exec("stellurgytest telescope passive " + at(site)))
+        TelescopeReading.of(act("stellurgytest telescope passive " + at(site)).raw())
                 .requireOk("start the local radar");
         events.awaitRecordWithFields(mark, SURVEY_ADVANCED, "the local radar must finish",
                 INSTANT_SURVEY_TICKS, "pos", machineKey(site), "complete", "true");
@@ -695,23 +685,22 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * <p>Sees the survey a running observatory performs once aimed; does NOT see the GUI's aim
      * buttons (the probe aims), the research-paced sweep (switched off here), or a sky other than the
      * shipped procedural one.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading
-     * {@code if (false)}, this fails with "a sun-like star 2.98… ly away must be NAMED by the shipped
-     * telescope"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
-     * {@code magnitude <= limitMagnitude}, with "one 32.79… ly away must be a point of light - its
-     * address alone"; with {@code limitMagnitude += 5d;} inserted after
-     * {@code double resolveLimit = limitMagnitude - resolveMarginMagnitudes();}, with "and one 283.19…
-     * ly away, past the shipped reach, must not be seen at all"; with
-     * {@code TelescopeScan#resolveMarginMagnitudes} at
-     * {@code return Math.max(0d, StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes);}
-     * answering the shipped default, with "with a resolve margin of zero the star that was only a light
-     * must be named"; with {@code TelescopeScan#limitMagnitude} at
-     * {@code return StellurgyConfiguration.getCurrentConfig().telescopeLimitingMagnitude;} answering the
-     * shipped default, with "an aperture one magnitude deeper must register the star the shipped one
-     * missed, as a light" — one inversion per run, 2026-10-02.</p>
      */
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading"
+            + " {@code if (false)}, this fails with \"a sun-like star 2.98… ly away must be NAMED by the shipped"
+            + " telescope\"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading"
+            + " {@code magnitude <= limitMagnitude}, with \"one 32.79… ly away must be a point of light - its"
+            + " address alone\"; with {@code limitMagnitude += 5d;} inserted after"
+            + " {@code double resolveLimit = limitMagnitude - resolveMarginMagnitudes();}, with \"and one 283.19…"
+            + " ly away, past the shipped reach, must not be seen at all\"; with"
+            + " {@code TelescopeScan#resolveMarginMagnitudes} at"
+            + " {@code return Math.max(0d, StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes);}"
+            + " answering the shipped default, with \"with a resolve margin of zero the star that was only a light"
+            + " must be named\"; with {@code TelescopeScan#limitMagnitude} at"
+            + " {@code return StellurgyConfiguration.getCurrentConfig().telescopeLimitingMagnitude;} answering the"
+            + " shipped default, with \"an aperture one magnitude deeper must register the star the shipped one"
+            + " missed, as a light\" — one inversion per run, 2026-10-02.")
     @Test
     public void theShippedApertureNamesANearSunSeesAFarOneAsALightAndMissesOneBeyondIt()
             throws Exception {
@@ -830,18 +819,17 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      *
      * <p>Does NOT see a look with no observer (no production caller makes one) or the obscured-look
      * count the operator is shown.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column
-     * ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with
-     * "behind dust thinner than the threshold the system must be named"; the same with
-     * {@code TelescopeScan#isObscuredAt} at {@code return threshold > 0d && extinctionMagnitudes >= threshold;}
-     * reading {@code extinctionMagnitudes > 0d}; with that line reading {@code return false;}, with
-     * "behind dust thicker than the threshold the system must still be written down - its address
-     * alone, never nothing" (it was named); with {@code TelescopeScan#characterise} at
-     * {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was
-     * written) — one inversion per run, 2026-10-02.</p>
      */
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column"
+            + " ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with"
+            + " \"behind dust thinner than the threshold the system must be named\"; the same with"
+            + " {@code TelescopeScan#isObscuredAt} at {@code return threshold > 0d && extinctionMagnitudes >= threshold;}"
+            + " reading {@code extinctionMagnitudes > 0d}; with that line reading {@code return false;}, with"
+            + " \"behind dust thicker than the threshold the system must still be written down - its address"
+            + " alone, never nothing\" (it was named); with {@code TelescopeScan#characterise} at"
+            + " {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was"
+            + " written) — one inversion per run, 2026-10-02.")
     @Test
     public void thickDustLeavesASystemItsAddressAndThinDustHidesNothing() throws Exception {
         FixtureSite site = site();
@@ -856,7 +844,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
             // The probe's own ceiling on how far it walks, so the search is as wide as it can be.
             Reply cloud = Reply.of("stellurgytest space nebula-find",
-                    exec("stellurgytest space nebula-find 4096 " + stride)).requireOk("look for a cloud");
+                    read("stellurgytest space nebula-find 4096 " + stride).raw()).requireOk("look for a cloud");
             requireArranged("the shipped sky must hold a cloud along the search: " + cloud,
                     cloud.bool("found") && cloud.has("centreX"));
             double[] toCloud = {cloud.longInteger("centreX") - home[0],
@@ -878,8 +866,8 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                     home[2] + Math.round(toCloud[2] / cloudCells * k * stride)};
             String seatKey = systemAt(seat, "veiled-star", BRIGHT_STAR_SIZE);
 
-            Reply line = Reply.of("stellurgytest space extinction", exec("stellurgytest space extinction "
-                    + cell(home) + " " + cell(seat))).requireOk("measure the dust on the sight line");
+            Reply line = Reply.of("stellurgytest space extinction", read("stellurgytest space extinction "
+                    + cell(home) + " " + cell(seat)).raw()).requireOk("measure the dust on the sight line");
             double dust = line.number("magnitudes");
             requireArranged("the sight line must cross dust: " + line, dust > 0d);
             double magnitude = photometry(site, seat).element("systems", "anchor", seatKey)
@@ -944,21 +932,20 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      *
      * <p>Sees the operator's toggle pressed through the machine's own button handler; does NOT see the
      * GUI that sends it, or the sync of what was taught to a client.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping
-     * {@code wholeSystem}, this fails with "recording positions only writes the home system's address
-     * alone"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},
-     * with "and teaches the world it stands on nothing"; with the same report made only when
-     * {@code wholeSystem}, with "and a point of light teaches the world it stands on nothing"; with
-     * {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
-     * {@code magnitude <= limitMagnitude}, with "a system registered but too faint to make out is an
-     * address alone"; at {@code if (memory.record(entryFor(body, observedTick, nameOf)))} skipping a
-     * body with a dimension, with "a look that made the home system out must name Earth on the
-     * crystal"; with {@code TileObservatory#teachThisBody} at {@code here.discoverPlanet(dimId);}
-     * removed, with "and must teach the world it stands on that Earth is there" — one inversion per
-     * run, 2026-10-02.</p>
      */
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping"
+            + " {@code wholeSystem}, this fails with \"recording positions only writes the home system's address"
+            + " alone\"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},"
+            + " with \"and teaches the world it stands on nothing\"; with the same report made only when"
+            + " {@code wholeSystem}, with \"and a point of light teaches the world it stands on nothing\"; with"
+            + " {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading"
+            + " {@code magnitude <= limitMagnitude}, with \"a system registered but too faint to make out is an"
+            + " address alone\"; at {@code if (memory.record(entryFor(body, observedTick, nameOf)))} skipping a"
+            + " body with a dimension, with \"a look that made the home system out must name Earth on the"
+            + " crystal\"; with {@code TileObservatory#teachThisBody} at {@code here.discoverPlanet(dimId);}"
+            + " removed, with \"and must teach the world it stands on that Earth is there\" — one inversion per"
+            + " run, 2026-10-02.")
     @Test
     public void onlyWhatALookMadeOutTeachesTheWorldItStandsOn() throws Exception {
         int moon = homeMoon();
@@ -984,7 +971,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
             // 1. Positions only, through an aperture that could make the system out.
             configure("telescopeLimitingMagnitude", magnitude + margin + 1d);
             Reply.of("stellurgytest telescope whole-system",
-                    exec("stellurgytest telescope whole-system " + at(site) + " false"))
+                    act("stellurgytest telescope whole-system " + at(site) + " false").raw())
                     .requireOk("set the instrument to record positions only");
             localRadar(site);
             Reply positions = recorded(site, home);
@@ -994,7 +981,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
             // 2. Whole systems, through an aperture that registers the system and cannot make it out.
             Reply.of("stellurgytest telescope whole-system",
-                    exec("stellurgytest telescope whole-system " + at(site) + " true"))
+                    act("stellurgytest telescope whole-system " + at(site) + " true").raw())
                     .requireOk("set the instrument to follow detections to their bodies");
             configure("telescopeLimitingMagnitude", magnitude + margin / 2d);
             blankCrystal(site);
@@ -1025,16 +1012,16 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     /** Whether the world {@code standing} has itself learned of Earth — its own knowledge, not the pack's. */
     private boolean earthKnownOn(int standing) throws Exception {
         return Reply.of("stellurgytest planet knowledge",
-                exec("stellurgytest planet knowledge " + standing + " " + EARTH)).bool("local");
+                read("stellurgytest planet knowledge " + standing + " " + EARTH).raw()).bool("local");
     }
 
     /** The registered world whose parent is Earth. */
     private int homeMoon() throws Exception {
-        for (int dim : DimList.from(this::exec).registered()) {
+        for (int dim : DimList.from(c -> read(c).raw()).registered()) {
             if (dim == EARTH) {
                 continue;
             }
-            Reply info = Reply.of("stellurgytest planet info", exec("stellurgytest planet info " + dim));
+            Reply info = Reply.of("stellurgytest planet info", read("stellurgytest planet info " + dim).raw());
             if (info.has("parent") && info.integer("parent") == EARTH) {
                 return dim;
             }
@@ -1098,14 +1085,17 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * client decision is involved), nor an authored system written by a pack file rather than seated by
      * the probe (the registry stores both through {@code UniverseRegistry#place}).</p>
      *
-     * <p>red-witnessed: with {@code UniverseRegistry#anchorsInTerritory} at
-     * {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with
-     * "expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;" (the same reading the tree
-     * gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at
-     * {@code if (!namedSomething)} reading {@code if (false)}, with "must have written both addresses"
-     * ("expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;") — one
-     * inversion per run, 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
+     * Pins ADDR-25 (one seat, one system, one answer across attribution, territory and survey).
      */
+    @Pins({"ADDR-23", "ADDR-25"})
+    @LegacyWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
+            + " {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with"
+            + " \"expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;\" (the same reading the tree"
+            + " gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at"
+            + " {@code if (!namedSomething)} reading {@code if (false)}, with \"must have written both addresses\""
+            + " (\"expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;\") — one"
+            + " inversion per run, 2026-10-03.")
     @Test
     public void aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName() throws Exception {
         FixtureSite site = site();
@@ -1210,7 +1200,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
             // 4. Positions only, and the radar.
             Reply.of("stellurgytest telescope whole-system",
-                    exec("stellurgytest telescope whole-system " + at(site) + " false"))
+                    act("stellurgytest telescope whole-system " + at(site) + " false").raw())
                     .requireOk("set the instrument to record positions only");
             localRadar(site);
 
@@ -1247,7 +1237,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     /** What the registry attributes the cell {@code sectors} to, and whether it holds a stored placement. */
     private Reply cellInfo(long[] sectors) throws Exception {
         return Reply.of("stellurgytest space cell-info",
-                exec("stellurgytest space cell-info " + key(sectors))).requireOk("read the cell " + key(sectors));
+                read("stellurgytest space cell-info " + key(sectors)).raw()).requireOk("read the cell " + key(sectors));
     }
 
     private static String key(long[] sectors) {

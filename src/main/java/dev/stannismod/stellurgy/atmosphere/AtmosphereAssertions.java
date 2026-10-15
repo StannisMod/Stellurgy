@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.atmosphere;
 
-import javax.annotation.Nullable;
-
-import net.minecraft.util.math.BlockPos;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
+import net.minecraft.util.math.BlockPos;
+
+import javax.annotation.Nullable;
 
 /**
  * Whether a statement about the air is true at a position.

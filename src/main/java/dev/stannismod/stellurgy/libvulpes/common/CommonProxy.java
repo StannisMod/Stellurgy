@@ -4,7 +4,6 @@ import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 public class CommonProxy {
 	public String getLocalizedString(String str) {
@@ -22,11 +21,6 @@ public class CommonProxy {
 	}
 
 	public void init() {
-		
-	}
-
-	public void addScheduledTask(BasePacket packet) {
-		// TODO Auto-generated method stub
 		
 	}
 

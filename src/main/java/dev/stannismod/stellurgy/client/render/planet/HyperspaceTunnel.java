@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.client.render.planet;
 
+import dev.stannismod.stellurgy.entity.EntityDummy;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -8,11 +9,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
 import org.lwjgl.opengl.GL11;
-
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.space.HyperspaceWorld;
 
 /**
  * The corridor a ship flies down while it is in hyperspace.

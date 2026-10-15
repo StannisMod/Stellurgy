@@ -2,11 +2,14 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * What the OUTSIDE does to a ship's heat: the incident flux, and the shield that thins it.
@@ -78,7 +81,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
     }
 
     private void requireClearInCell(Cell cell, int x0, String what) throws Exception {
-        FixtureSite.openAir(cell.dim, x0, z).requireClear(this::exec, HALO, 3, what);
+        FixtureSite.openAir(cell.dim, x0, z).requireClear(c -> arrange(c).raw(), HALO, 3, what);
     }
 
     /** `getStateFromMeta` maps this to a cell radiating UP, so nothing but sky is in front of it. */
@@ -106,11 +109,14 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * whole gap between the two nets must be the gap between the two reported fluxes. A star wired as
      * its own mechanism would move one of those and not the other.</p>
      *
-     * <p>red-witnessed: with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each
-     * cell: "a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a
-     * world and -1129 in space, a difference of 1179.0, against a reported flux difference of
-     * 589.965", 2026-09-30. The premises on both legs are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-14 (A warm world and a distant star reach a radiator through the SAME term).
+     * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
+    @Pins({"INV-HEAT-14", "HEAT-8"})
+    @LegacyWitness(prose = "with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each"
+            + " cell: \"a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a"
+            + " world and -1129 in space, a difference of 1179.0, against a reported flux difference of"
+            + " 589.965\", 2026-09-30. The premises on both legs are arrangements and are not witnessed.")
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
         int x0 = stand("one radiating loop on the overworld, and the same loop in a space cell");
@@ -176,15 +182,18 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * ship that built none is not warmed by one. Without that control this scenario would also pass on
      * a bug that simply added the environment to every loop in the world.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}
-     * exchanging only positive shares: "under a star this strong the net must run BACKWARDS … \"rejected\":0".
-     * IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: "and the energy must
-     * actually be in the loop, not merely reported: … \"rejected\":-76764,\"heatStored\":0". NO
-     * RADIATING SURFACE — {@code HeatNetwork#rejectHeat} at {@code return 0L;} giving a loop with no cells the incident flux:
-     * "a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;
-     * but was:&lt;76800&gt;". The three premises before the star is turned up are arrangements and are
-     * not witnessed.</p>
+     * Pins INV-HEAT-15 (Under a star strong enough, the net runs backwards and an empty loop GAINS heat).
+     * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
+    @Pins({"INV-HEAT-15", "HEAT-8"})
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}"
+            + " exchanging only positive shares: \"under a star this strong the net must run BACKWARDS … \\\"rejected\\\":0\"."
+            + " IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: \"and the energy must"
+            + " actually be in the loop, not merely reported: … \\\"rejected\\\":-76764,\\\"heatStored\\\":0\". NO"
+            + " RADIATING SURFACE — {@code HeatNetwork#rejectHeat} at {@code return 0L;} giving a loop with no cells the incident flux:"
+            + " \"a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;"
+            + " but was:&lt;76800&gt;\". The three premises before the star is turned up are arrangements and are"
+            + " not witnessed.")
     @Test
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
         Cell cell = occupyHomeCell();
@@ -237,13 +246,21 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * shielded loop must still gain something, with the configuration demanding a hundred percent. That
      * second assertion is the clause: the refusal lives in the code, so no setting can reach it.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}
-     * treating no cell as covered: "a raised shield must take most of the incident flux off the ship
-     * (shielded=76764 unshielded=76764)". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take
-     * everything: "and it must NOT take all of it, however much the configuration asks for … (shielded=0)".
-     * The emitter premise and the unshielded premise are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-16 (A raised shield takes most of the incident flux and never all of it, with the configuration set to demand a hundred percent).
+     * Pins HEAT-10 (a shield attenuates incident flux and never eliminates it).
      */
+    @Pins({"INV-HEAT-16", "HEAT-10"})
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}"
+            + " treating no cell as covered: \"a raised shield must take most of the incident flux off the ship"
+            + " (shielded=76764 unshielded=76764)\". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take"
+            + " everything: \"and it must NOT take all of it, however much the configuration asks for … (shielded=0)\"."
+            + " The emitter premise and the unshielded premise are arrangements and are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
+            why = "fifteen rounds of charge, generator tick and network solve are the DOSE that brings the emitter"
+                    + " up, and every round is driven by a probe rather than by world time, so the same dose"
+                    + " does the same work on any box. No record closes it because nothing here waits: the one"
+                    + " read after the dose is refused as an arrangement failure below.")
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {
         Cell cell = occupyHomeCell();
         try {
@@ -256,18 +273,14 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
             buildLoopWithRadiatorFirst(cell.dim, shieldedX);
             buildLoopWithRadiatorFirst(cell.dim, unshieldedX);
 
-            // STIMULUS: fifteen rounds of charge, generator tick and network solve are the DOSE that
-            // brings the emitter up, and every round is driven by a probe rather than by world time,
-            // so the same dose does the same work on any box. No record closes it because nothing
-            // here waits: the one read after the dose is refused as an arrangement failure below.
             for (int i = 0; i < 15; i++) {
                 arrange("stellurgytest energy inject " + cell.dim + " " + generatorX + " " + y + " " + z
                         + " 4000");
-                arrange("stellurgytest tile force-tick " + cell.dim + " " + generatorX + " " + y + " " + z
-                        + " 1");
-                arrange("stellurgytest shield tick " + cell.dim);
+                act("stellurgytest tile force-tick " + cell.dim + " " + generatorX + " " + y + " " + z
+                        + " 1").requireOk();
+                act("stellurgytest shield tick " + cell.dim).requireOk();
             }
-            Reply emitter = ask("stellurgytest shield read " + cell.dim + " " + emitterX + " " + y + " " + z);
+            Reply emitter = read("stellurgytest shield read " + cell.dim + " " + emitterX + " " + y + " " + z);
             requireArranged("premise: the emitter never came up, so nothing below is a test of a shield: "
                     + emitter, emitter.bool("powered"));
 
@@ -317,11 +330,11 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * a real star at its real distance rather than something this test invented.
      */
     private Cell occupyHomeCell() throws Exception {
-        String cellKey = ask("stellurgytest space cell-info 0 0 0 0").text("dimCell");
+        String cellKey = read("stellurgytest space cell-info 0 0 0 0").text("dimCell");
         String[] sectors = cellKey.split("_");
         assertEquals("a cell key is a sector triple: " + cellKey, 3, sectors.length);
         String args = sectors[0] + " " + sectors[1] + " " + sectors[2];
-        Reply occupied = arrange("stellurgytest space occupy " + args);
+        Reply occupied = arrange("stellurgytest space occupy " + args).requireOk();
         requireArranged("the cell must materialize, or there is no space environment to test in: "
                 + occupied, occupied.bool("worldLoaded"));
         return new Cell(args, occupied.integer("slotDim"));
@@ -329,7 +342,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
 
     /** Hand the slot back. A test that holds a pool slot is a test that breaks somebody else's. */
     private void release(Cell cell) throws Exception {
-        arrange("stellurgytest space release " + cell.args);
+        arrange("stellurgytest space release " + cell.args).requireOk();
     }
 
     /** A straight run of {@value #LOOP_LENGTH} blocks with {@code radiators} cells at the far end. */
@@ -355,7 +368,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
         // "the run is built" is `inNetwork` and not `ok`.
         Reply info = loopInfo(dim, x0);
         requireArranged("the run must be built before it is solved: " + info, info.bool("inNetwork"));
-        Reply solved = arrange("stellurgytest subnet solve heat " + dim + " 1");
+        Reply solved = act("stellurgytest subnet solve heat " + dim + " 1").requireOk();
         assertEquals("solve failed in dim " + dim + ": " + solved, 1, solved.integer("ticksSolved"));
     }
 
@@ -367,8 +380,8 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * ticks — and here that gap would quietly deliver a whole star's worth of flux into the answer.</p>
      */
     private Reply cycle(int dim, int x0, long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle " + dim + " " + x0 + " " + y + " " + z + " " + charge
-                + " 1");
+        Reply cycled = act("stellurgytest heat cycle " + dim + " " + x0 + " " + y + " " + z + " " + charge
+                + " 1").requireOk();
         requireArranged("heat cycle found no loop at " + x0 + " in dim " + dim + ": " + cycled,
                 cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
@@ -378,15 +391,15 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
 
     private void place(int dim, int x, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + " in dim " + dim + ": " + resp, resp.bool("placed"));
     }
 
     private void setConfig(String key, String value) throws Exception {
-        arrange("stellurgytest config set " + key + " " + value);
+        arrange("stellurgytest config set " + key + " " + value).requireOk();
     }
 
     private Reply loopInfo(int dim, int x) throws Exception {
-        return ask("stellurgytest subnet info heat " + dim + " " + x + " " + y + " " + z);
+        return read("stellurgytest subnet info heat " + dim + " " + x + " " + y + " " + z);
     }
 }

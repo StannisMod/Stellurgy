@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.client.ShipFrameCamera;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.entity.EntityLivingBase;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.client.ShipFrameCamera;
 
 /**
  * Stands an aboard entity's rendered model on the deck it is actually standing on.

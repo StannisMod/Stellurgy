@@ -5,6 +5,26 @@
 
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.IStorageChunk;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
+import dev.stannismod.stellurgy.damage.DamageLayer;
+import dev.stannismod.stellurgy.item.ItemPackedStructure;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
+import dev.stannismod.stellurgy.world.util.WorldDummy;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -32,28 +52,10 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.items.CapabilityItemHandler;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.stations.IStorageChunk;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.item.ItemPackedStructure;
-import dev.stannismod.stellurgy.api.capability.CapabilityWear;
-import dev.stannismod.stellurgy.api.capability.IPartWear;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
-import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import dev.stannismod.stellurgy.world.util.WorldDummy;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.block.*;
 
 public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBreakable {
 
@@ -92,8 +94,17 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     private ArrayList<TileEntity> inventoryTiles;
     private ArrayList<TileEntity> liquidTiles;
     private Entity entity;
-    private float weight;
+    /** Total mass of the packed structure, kilograms. */
+    private float mass;
     private boolean hasServiceMonitor;
+
+    /**
+     * The stages and destruction provenance of the captured blocks that cannot hold their own — the
+     * half of a structure's damage that does not ride along in tile NBT. Captured with the blocks,
+     * carried in this chunk's NBT and replayed at the paste site, so a relocated structure arrives
+     * as battered as it left. Empty for a pristine capture, which is the ordinary case.
+     */
+    private DamageLayer damage = new DamageLayer();
 
     public Block[][][] getblocks() {
         return blocks;
@@ -149,17 +160,20 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     }
 
 
-    public void setWeight(int weight) {
-        this.weight = weight;
+    /** @param mass total mass of the packed structure, kilograms */
+    public void setMass(int mass) {
+        this.mass = mass;
     }
 
+    /** Total mass of the packed structure, kilograms. */
     @Override
     public float getWeight() {
-        return this.weight;
+        return this.mass;
     }
 
-    public float recalculateWeight() {
-        this.weight = 0;
+    /** Re-walk the packed blocks and tile contents and return the total mass in kilograms. */
+    public float recalculateMass() {
+        this.mass = 0;
 
         // plain blocks
         for (int x = 0; x < this.sizeX; x++) {
@@ -167,7 +181,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int z = 0; z < this.sizeZ; z++) {
                     Block block = this.blocks[x][y][z];
                     if (block != null) {
-                        this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(null, block);
+                        this.mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(null, block);
                     }
                 }
             }
@@ -175,27 +189,29 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         // TEs
         for (TileEntity te : this.tileEntities) {
-            this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(te);
+            this.mass += dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(te);
 
             if (te instanceof TileSatelliteHatch) {
                 TileSatelliteHatch hatch = (TileSatelliteHatch) te;
                 if (hatch.getSatellite() != null) {
-                    weight += hatch.getSatellite().getProperties().getWeight();
+                    mass += hatch.getSatellite().getProperties().getWeight();
                 } else if (hatch.getStackInSlot(0).getItem() instanceof ItemPackedStructure) {
                     ItemPackedStructure struct = (ItemPackedStructure) hatch.getStackInSlot(0).getItem();
-                    weight += struct.getStructure(hatch.getStackInSlot(0)).getWeight();
+                    mass += struct.getStructure(hatch.getStackInSlot(0)).getWeight();
                 }
             }
         }
-        return this.weight;
+        return this.mass;
     }
 
     public void recalculateStats(StatsRocket stats) {
-        int thrustMonopropellant = 0;
-        int thrustBipropellant = 0;
-        int thrustNuclearNozzleLimit = 0;
-        int thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit = 0;
+        // Thrust is in newtons and accumulates per engine, so these sum in long: a stack of
+        // reactor cores alone runs into tens of millions.
+        long thrustMonopropellant = 0;
+        long thrustBipropellant = 0;
+        long thrustNuclearNozzleLimit = 0;
+        long thrustNuclearReactorLimit = 0;
+        long thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;
@@ -209,7 +225,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         stats.reset_no_fuel();// Oh Quarter... you can not keep adding engine and seat locations every launch
         final boolean isSD = (this.entity instanceof dev.stannismod.stellurgy.entity.EntityStationDeployedRocket);
 
-        float weight = 0;
+        float mass = 0;
 
         for (int yCurr = 0; yCurr <= this.sizeY; yCurr++) {
             for (int xCurr = 0; xCurr <= this.sizeX; xCurr++) {
@@ -223,9 +239,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                         Block block = state.getBlock();
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
+                            mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                         } else {
-                            weight += 1;
+                            // Weight system off: every block counts as one unit of mass.
+                            mass += 1;
                         }
 
                         //If rocketEngine increaseThrust
@@ -307,13 +324,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
             }
         }
 
-        int nuclearWorkingFluidUse = 0;
-        if (thrustNuclearNozzleLimit > 0) {
-            //Only run the number of engines our cores can support - we can't throttle these effectively because they're small, so they shut off if they don't get full power
-            thrustNuclearTotalLimit = Math.min(thrustNuclearNozzleLimit, thrustNuclearReactorLimit);
-            nuclearWorkingFluidUse = (int) (nuclearWorkingFluidUseMax * (thrustNuclearTotalLimit / (float) thrustNuclearNozzleLimit));
-            thrustNuclearTotalLimit = (nuclearWorkingFluidUse * thrustNuclearNozzleLimit) / nuclearWorkingFluidUseMax;
-        }
+        NuclearEngineLimit nuclear = NuclearEngineLimit.derive(
+                thrustNuclearNozzleLimit, thrustNuclearReactorLimit, nuclearWorkingFluidUseMax);
+        int nuclearWorkingFluidUse = nuclear.workingFluidUse;
+        thrustNuclearTotalLimit = nuclear.thrust;
 
         //Set fuel stats
         //Thrust depending on rocket type
@@ -358,7 +372,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
 
         //Non-fuel stats (keep these after the capacity/tag work)
-        stats.setWeight(weight);
+        stats.setMass(mass);
         stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
         stats.setDrillingPower(drillPower);
         stats.setStatTag("intakePower", intakePower);
@@ -406,7 +420,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         StorageChunk ret = new StorageChunk((actualMaxX - actualMinX + 1), (actualMaxY - actualMinY + 1), (actualMaxZ - actualMinZ + 1));
 
-        float weight = 0;
+        float mass = 0;
 
         //Iterate though the bounds given storing blocks/meta/tiles
         for (int x = actualMinX; x <= actualMaxX; x++) {
@@ -414,7 +428,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int y = actualMinY; y <= actualMaxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
 
-                    weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, pos);
+                    mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, pos);
 
                     IBlockState state = world.getBlockState(pos);
                     ret.blocks[x - actualMinX][y - actualMinY][z - actualMinZ] = state.getBlock();
@@ -457,7 +471,15 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
             }
         }
 
-        ret.weight = weight;
+        ret.mass = mass;
+        // SELECTED over the caller's whole box, because a cut empties all of it and a record left
+        // out here is a record destroyed. MEASURED from the tight bounds, because that is the origin
+        // the block array and the transformed tile coordinates above already use. The two differ
+        // exactly where it matters: tight bounds are drawn around blocks that still exist, and a
+        // shot-away outer column leaves its records outside them.
+        ret.damage = DamageLayer.harvest(world, (int) bb.minX, (int) bb.minY, (int) bb.minZ,
+                (int) bb.maxX, (int) bb.maxY, (int) bb.maxZ,
+                actualMinX, actualMinY, actualMinZ);
 
         return ret;
     }
@@ -488,6 +510,14 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         }
         } finally {
             relocation.depth--;
+        }
+
+        // The cut region is air now, and its damage went into the copy above. Leaving the entries
+        // behind would hand them to whatever is pasted here next - in a shipyard, that is the very
+        // next ship to be assembled at these coordinates.
+        if (!worldObj.isRemote) {
+            BlockDamageSavedData.get(worldObj).clearBox((int) bb.minX, (int) bb.minY, (int) bb.minZ,
+                    (int) bb.maxX, (int) bb.maxY, (int) bb.maxZ);
         }
 
         //Carpenter's block's dupe
@@ -674,7 +704,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         nbt.setInteger("xSize", sizeX);
         nbt.setInteger("ySize", sizeY);
         nbt.setInteger("zSize", sizeZ);
-        nbt.setFloat("weight", weight);
+        nbt.setFloat("mass", mass);
         nbt.setBoolean("hasServiceMonitor", hasServiceMonitor);
 
         Iterator<TileEntity> tileEntityIterator = tileEntities.iterator();
@@ -710,6 +740,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         nbt.setTag("idList", idList);
         nbt.setTag("metaList", metaList);
         nbt.setTag("tiles", tileList);
+        damage.writeToNBT(nbt);
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
@@ -719,8 +750,9 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         sizeX = nbt.getInteger("xSize");
         sizeY = nbt.getInteger("ySize");
         sizeZ = nbt.getInteger("zSize");
-        weight = nbt.getFloat("weight");
+        mass = nbt.getFloat("mass");
         hasServiceMonitor = nbt.getBoolean("hasServiceMonitor");
+        damage = DamageLayer.readFromNBT(nbt);
 
         blocks = new Block[sizeX][sizeY][sizeZ];
         metas = new short[sizeX][sizeY][sizeZ];
@@ -793,6 +825,13 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         // rocket cargo carrying any of them lost those blocks the moment it landed: the pilot seat
         // (cloth) was replaced by fire before its tile was restored, which left the arriving craft
         // with no seat at all and its crew with nowhere to sit.
+        // A position this paste WRITES gets a block that has never been shot, so whatever the
+        // destination recorded there belongs to something that used to stand here. Cleared per
+        // written block rather than over the whole footprint: the air gaps of an arriving structure
+        // are not its business, and a damaged wall standing inside them keeps its record.
+        BlockDamageSavedData destinationDamage =
+                world.isRemote ? null : BlockDamageSavedData.get(world);
+
         AtmosphereHandler.beginStructurePaste(world);
         try {
             //Set all the blocks
@@ -801,11 +840,20 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                     for (int y = 0; y < sizeY; y++) {
 
                         if (blocks[x][y][z] != Blocks.AIR) {
-                            world.setBlockState(new BlockPos(xCoord + x, yCoord + y, zCoord + z), blocks[x][y][z].getStateFromMeta(metas[x][y][z]), 2);
+                            BlockPos target = new BlockPos(xCoord + x, yCoord + y, zCoord + z);
+                            world.setBlockState(target, blocks[x][y][z].getStateFromMeta(metas[x][y][z]), 2);
+                            if (destinationDamage != null) {
+                                destinationDamage.clear(target);
+                            }
                         }
                     }
                 }
             }
+
+            // Now the structure's own damage, on top of the clean slate just laid down. After the
+            // blocks, because a destroyed position is air here and carries only its provenance -
+            // there is no block arriving to clear it.
+            damage.applyAt(world, xCoord, yCoord, zCoord);
 
             //Set tiles for each block
             for (TileEntity tile : tileEntities) {
@@ -838,9 +886,11 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     }
 
     public void damageParts() {
-        // Single gate for wear ACCRUAL. When the parts-wear system is disabled no
-        // part ever advances a wear stage, so a worn save loaded with the system
-        // off neither grows nor (combined with the gated consequences) bites.
+        // Single gate for wear ACCRUAL, and ONLY accrual. When the parts-wear system is
+        // disabled no part advances a stage from use, so a save stops getting worse — but
+        // the stages already on it keep every consequence they had. Wear and battle damage
+        // share one stage axis and nothing here can tell a long career from a shell, so
+        // gating the consequences would make a shot-up hull fly like a new one.
         if (!StellurgyConfiguration.getCurrentConfig().partsWearSystem) {
             return;
         }
@@ -926,14 +976,17 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     }
 
     /**
-     * Thrust multiplier for a motor at the given position based on its wear
-     * stage: 1.0 when pristine, (1 - wearThrustPenaltyMax) when fully worn.
-     * Returns 1.0 when the wear system is off or the block has no wear state.
+     * Thrust multiplier for a motor at the given position based on its condition: 1.0 when pristine,
+     * (1 - wearThrustPenaltyMax) when fully gone. Returns 1.0 when the block has no stage.
+     *
+     * <p>Deliberately NOT gated on {@code partsWearSystem}. There is one stage axis — a stage put
+     * there by a thousand hours of flying and one put there by a shell are the same number, and this
+     * method cannot tell them apart nor should it. The flag gates where wear ACCRUES
+     * ({@link #damageParts}); reading it here as well would mean a modpack that turned wear off got
+     * motors that shrug off battle damage, which is a different and much larger decision than the one
+     * the flag advertises.</p>
      */
     private float wearThrustFactor(BlockPos pos) {
-        if (!StellurgyConfiguration.getCurrentConfig().partsWearSystem) {
-            return 1f;
-        }
         double maxPenalty = StellurgyConfiguration.getCurrentConfig().wearThrustPenaltyMax;
         if (maxPenalty <= 0) {
             return 1f;

@@ -1,14 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * TileSatelliteTerminal chip recognition + power gate +
@@ -84,14 +81,18 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     private static final int CX_NO_POWER = 14500;
     private static final int CX_ERASE = 15000;
 
-    /** Happy path — chip in slot + energy injected &rarr; status 3. */
+    /**
+     * Happy path — chip in slot + energy injected &rarr; status 3.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
+    @Pins("INV-SAT-07")
     @Test
     public void chippedTerminalWithPowerReachesStatus3() throws Exception {
         int x = CX_STATUS3, y = CY, z = CZ;
         long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ true);
         assertNotEquals(-1L, satId);
 
-        String info = exec("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
         assertEquals("chip+power must reach status 3: " + info,
                 "3", extract(info, STATUS));
         // PowerPerTick reflects the satellite's generator wattage — the
@@ -104,7 +105,11 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
                 ppt > 0);
     }
 
-    /** Empty slot &rarr; status 0 even with power present. */
+    /**
+     * Empty slot &rarr; status 0 even with power present.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
+    @Pins("INV-SAT-07")
     @Test
     public void unchippedTerminalReportsNoLink() throws Exception {
         int x = CX_NO_CHIP, y = CY, z = CZ;
@@ -112,32 +117,39 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         // Inject power so we PIN that the no-link branch wins over no-power.
         injectPower(x, y, z, 1000);
 
-        String info = exec("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
         assertEquals("empty slot must report status 0: " + info,
                 "0", extract(info, STATUS));
     }
 
-    /** Chip loaded but zero energy &rarr; status 1. */
+    /**
+     * Chip loaded but zero energy &rarr; status 1.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
+    @Pins("INV-SAT-07")
     @Test
     public void chippedTerminalWithoutPowerReportsNoPower() throws Exception {
         int x = CX_NO_POWER, y = CY, z = CZ;
         long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ false);
         assertNotEquals(-1L, satId);
 
-        String info = exec("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
         assertEquals("chip without power must report status 1: " + info,
                 "1", extract(info, STATUS));
     }
 
     /** Erase button — destructive contract: removes linked satellite from
-     *  its dim's DimensionProperties AND blanks the chip NBT. */
+     *  its dim's DimensionProperties AND blanks the chip NBT.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
+    @Pins("INV-SAT-07")
     @Test
     public void pressEraseRemovesSatelliteFromDimAndBlanksChip() throws Exception {
         int x = CX_ERASE, y = CY, z = CZ;
         long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ false);
         assertNotEquals(-1L, satId);
 
-        String result = exec("stellurgytest satellite-terminal press-erase 0 " + x + " " + y + " " + z);
+        String result = act("stellurgytest satellite-terminal press-erase 0 " + x + " " + y + " " + z).raw();
         assertEquals("linked satellite must be registered on dim BEFORE erase: "
                         + result, "true", extract(result, PRE_REGISTERED));
         assertEquals("linked satellite must be GONE from dim AFTER erase: "
@@ -150,10 +162,10 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
 
     /** Place a satelliteControlCenter at the given position. */
     private void placeTerminal(int x, int y, int z) throws Exception {
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteControlCenter");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:satelliteControlCenter").raw();
         assertTrue("satelliteControlCenter place failed: " + place,
                 Reply.of(place).bool("placed"));
     }
@@ -162,7 +174,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
      *  inject 1000 RF for the powered-path tests. Returns the satellite id. */
     private long placeTerminalAndLoadChip(int x, int y, int z, boolean injectPower) throws Exception {
         placeTerminal(x, y, z);
-        String build = exec("stellurgytest satellite-builder build 0 optical");
+        String build = arrange("stellurgytest satellite-builder build 0 optical").raw();
         assertTrue("optical satellite build failed: " + build,
                 Reply.of(build).ok());
         Reply mReply = Reply.of(build);
@@ -170,8 +182,8 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
             return -1L;
         }
         long satId = Long.parseLong(mReply.text(SAT_ID));
-        String load = exec("stellurgytest satellite-terminal load-chip 0 " + x + " " + y + " " + z
-                + " " + satId);
+        String load = arrange("stellurgytest satellite-terminal load-chip 0 " + x + " " + y + " " + z
+                + " " + satId).raw();
         assertTrue("chip load failed: " + load, Reply.of(load).ok());
         if (injectPower) {
             injectPower(x, y, z, 1000);
@@ -180,8 +192,8 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     }
 
     private void injectPower(int x, int y, int z, int amount) throws Exception {
-        String result = exec("stellurgytest energy inject 0 " + x + " " + y + " " + z
-                + " " + amount);
+        String result = arrange("stellurgytest energy inject 0 " + x + " " + y + " " + z
+                + " " + amount).raw();
         assertTrue("energy inject must succeed: " + result, Reply.of(result).ok());
     }
 

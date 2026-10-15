@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.event;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.Stellurgy;
 
 public class WirelessDataTickHandler {
 

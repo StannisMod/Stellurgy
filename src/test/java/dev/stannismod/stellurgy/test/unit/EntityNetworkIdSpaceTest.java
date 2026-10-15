@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.network.EntityNetworkIds;
 import net.minecraft.util.ResourceLocation;
 import org.junit.Test;
-import dev.stannismod.stellurgy.network.EntityNetworkIds;
 
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * The entity spawn-network-id space is owned in one place and cannot hand the same number out twice.

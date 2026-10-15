@@ -8,6 +8,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockPos.MutableBlockPos;
 import net.minecraft.world.ChunkCache;
 import net.minecraft.world.World;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 
 /**
  * Used to efficiently detect a connected set of blocks TODO: Incorporate a scanline technique to
@@ -30,12 +31,21 @@ public abstract class SpatialDetector {
     public TIntHashSet nextQueue = new TIntHashSet();
     // public int totalCalls = 0;
     public boolean cleanHouse = false;
+    /**
+     * The region the detection may not leave, inclusive. A block outside it is never reached, so it
+     * neither joins the result nor counts toward {@link #maxSize} — which is the point: without it the
+     * flood ran 26-connected until the size cap, and whatever touched the craft diagonally (snow on a
+     * launch pad's rim, a tree's foliage) carried it into the pad and the terrain.
+     */
+    public final StructureBoundingBox footprint;
 
-    public SpatialDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners) {
+    public SpatialDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners,
+                           StructureBoundingBox footprint) {
         firstBlock = start;
         worldObj = worldIn;
         maxSize = maximum;
         corners = checkCorners;
+        this.footprint = footprint;
         BlockPos minPos = new BlockPos(start.getX() - 128, 0, start.getZ() - 128);
         BlockPos maxPos = new BlockPos(start.getX() + 128, 255, start.getZ() + 128);
         cache = new ChunkCache(worldIn, minPos, maxPos, 0);
@@ -181,6 +191,10 @@ public abstract class SpatialDetector {
     }
 
     protected void tryExpanding(int x, int y, int z, int hash) {
+        if (x < footprint.minX || x > footprint.maxX || y < footprint.minY || y > footprint.maxY
+            || z < footprint.minZ || z > footprint.maxZ) {
+            return;
+        }
         if (isValidExpansion(x, y, z)) {
             // totalCalls++;
             if (!foundSet.contains(hash) && (foundSet.size() + nextQueue.size() < maxSize)) {

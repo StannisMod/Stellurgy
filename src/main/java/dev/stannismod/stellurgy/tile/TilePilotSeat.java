@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.tile;
 
+import dev.stannismod.stellurgy.api.FreeFlightInput;
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import io.netty.buffer.ByteBuf;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -12,10 +14,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
-
-import dev.stannismod.stellurgy.api.FreeFlightInput;
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 /**
  * Pilot seat for a tier-2 (Valkyrien Skies) ship: the in-world control station that hands a
@@ -52,6 +50,8 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
     public static final byte PACKET_AUTO_TAKEOFF_TOGGLE = 2;
     /** Control-packet id: commit the ship to the jump armed at its navigation computer (no payload). */
     public static final byte PACKET_JUMP = 3;
+    /** Control-packet id: name the ship ahead of the pilot as this ship's batteries' target (no payload). */
+    public static final byte PACKET_DESIGNATE_SHIP = 4;
 
     private boolean linked = false;
     private int afcDx, afcDy, afcDz;
@@ -279,6 +279,12 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
             TileAdvancedFlightComputer afc = isPilotOf(player) ? getFlightComputer() : null;
             if (afc != null) {
                 afc.onJumpKey();
+            }
+        } else if (id == PACKET_DESIGNATE_SHIP) {
+            // Only the seated pilot names a target: the ship ahead is "ahead" of the helm, and the
+            // batteries it commands are those of the ship this seat belongs to.
+            if (world != null && !world.isRemote && isPilotOf(player)) {
+                dev.stannismod.stellurgy.weapon.ShipDesignation.designate(world, pos, player);
             }
         }
     }

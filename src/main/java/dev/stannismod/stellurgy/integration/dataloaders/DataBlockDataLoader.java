@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.integration.dataloaders;
 
-import net.minecraft.tileentity.TileEntity;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
 import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
 import dev.stannismod.stellurgy.tile.hatch.TileDataBus;
 import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
+import net.minecraft.tileentity.TileEntity;
 
 public abstract class DataBlockDataLoader {
     public abstract DataType getDataType();

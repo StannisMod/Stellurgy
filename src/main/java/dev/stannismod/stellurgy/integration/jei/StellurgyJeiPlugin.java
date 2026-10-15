@@ -1,13 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei;
 
-import mezz.jei.api.*;
-import mezz.jei.api.gui.IAdvancedGuiHandler;
-import mezz.jei.api.ingredients.IIngredientBlacklist;
-import mezz.jei.api.recipe.IRecipeCategoryRegistration;
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.block.BlockSmallPlatePress;
 import dev.stannismod.stellurgy.integration.jei.arcFurnace.ArcFurnaceCategory;
 import dev.stannismod.stellurgy.integration.jei.arcFurnace.ArcFurnaceRecipeHandler;
@@ -36,6 +31,7 @@ import dev.stannismod.stellurgy.integration.jei.fuelingStation.FuelingStationRec
 import dev.stannismod.stellurgy.integration.jei.gasgiants.GasGiantCategory;
 import dev.stannismod.stellurgy.integration.jei.gasgiants.GasGiantRecipeHandler;
 import dev.stannismod.stellurgy.integration.jei.gasgiants.GasGiantRecipeMaker;
+import dev.stannismod.stellurgy.integration.jei.gasgiants.GasGiantWrapper;
 import dev.stannismod.stellurgy.integration.jei.lathe.LatheCategory;
 import dev.stannismod.stellurgy.integration.jei.lathe.LatheRecipeHandler;
 import dev.stannismod.stellurgy.integration.jei.lathe.LatheRecipeMaker;
@@ -54,29 +50,30 @@ import dev.stannismod.stellurgy.integration.jei.precisionLaserEtcher.PrecisionLa
 import dev.stannismod.stellurgy.integration.jei.rollingMachine.RollingMachineCategory;
 import dev.stannismod.stellurgy.integration.jei.rollingMachine.RollingMachineRecipeHandler;
 import dev.stannismod.stellurgy.integration.jei.rollingMachine.RollingMachineRecipeMaker;
-import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillCategory;
-import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillRecipeHandler;
-import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillRecipeMaker;
 import dev.stannismod.stellurgy.integration.jei.satelliteBuilder.SatelliteBuilderCategory;
 import dev.stannismod.stellurgy.integration.jei.satelliteBuilder.SatelliteBuilderRecipeHandler;
 import dev.stannismod.stellurgy.integration.jei.satelliteBuilder.SatelliteBuilderRecipeMaker;
+import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillCategory;
+import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillRecipeHandler;
+import dev.stannismod.stellurgy.integration.jei.sawmill.SawMillRecipeMaker;
 import dev.stannismod.stellurgy.integration.jei.stationAssembler.StationAssemblerCategory;
 import dev.stannismod.stellurgy.integration.jei.stationAssembler.StationAssemblerRecipeHandler;
 import dev.stannismod.stellurgy.integration.jei.stationAssembler.StationAssemblerRecipeMaker;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
+import dev.stannismod.stellurgy.tile.TileStationAssembler;
 import dev.stannismod.stellurgy.tile.infrastructure.TileFuelingStation;
 import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 import dev.stannismod.stellurgy.tile.satellite.TileSatelliteBuilder;
-import dev.stannismod.stellurgy.tile.TileStationAssembler;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
-
-import mezz.jei.api.IRecipeRegistry;
+import mezz.jei.api.*;
+import mezz.jei.api.gui.IAdvancedGuiHandler;
+import mezz.jei.api.ingredients.IIngredientBlacklist;
+import mezz.jei.api.recipe.IRecipeCategoryRegistration;
 import net.minecraft.client.Minecraft;
-import dev.stannismod.stellurgy.integration.jei.gasgiants.GasGiantWrapper;
-
-import java.util.ArrayList;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 
 @JEIPlugin

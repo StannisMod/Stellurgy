@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The CARRY — the ship's own velocity at the body's point, which is the second term of every velocity
@@ -36,8 +34,9 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
 @Mixin(value = VSIntegration.class, remap = false)
 public abstract class MixinShipVelocityAtPoint {
 
-    /** Speed worth a record, in blocks per second as this seam reports it. A parked hull is ~0. */
-    private static final double SHIP_SPEED_REPORT = 4.0;
+    /** Speed worth a record, in blocks per tick as this seam reports it (4 blocks a second). A parked
+     *  hull is ~0. */
+    private static final double SHIP_SPEED_REPORT = 0.2;
 
     @Inject(method = "shipVelocityAtPointFor", at = @At("RETURN"))
     private static void stellurgyTest$afterShipVelocityAtPoint(World world, String shipId,

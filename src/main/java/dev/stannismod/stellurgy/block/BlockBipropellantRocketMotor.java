@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.IRocketEngine;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
+import dev.stannismod.stellurgy.util.IBrokenPartBlock;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.util.ITooltipFlag;
@@ -16,19 +22,24 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.IRocketEngine;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
-import dev.stannismod.stellurgy.util.IBrokenPartBlock;
-import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
-
-import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
-public class BlockBipropellantRocketMotor extends BlockFullyRotatable implements IRocketEngine, IBrokenPartBlock {
+public class BlockBipropellantRocketMotor extends BlockFullyRotatable
+        implements IRocketEngine, IBrokenPartBlock, dev.stannismod.stellurgy.api.IShipActuatorBlock {
+
+    @Override
+    public void addActuators(World world, BlockPos pos, IBlockState state,
+                             List<dev.stannismod.stellurgy.ship.control.Actuator> out) {
+        ChemicalMotorActuators.add(world, pos, state, getThrust(world, pos), out);
+    }
+
+    @Override
+    public boolean isWorking(World world, BlockPos pos, IBlockState state) {
+        return ChemicalMotorActuators.working(world, pos);
+    }
 
     public BlockBipropellantRocketMotor(Material mat) {
         super(mat);
@@ -40,9 +51,10 @@ public class BlockBipropellantRocketMotor extends BlockFullyRotatable implements
         return false;
     }
 
+    /** Rated thrust, newtons. */
     @Override
     public int getThrust(World world, BlockPos pos) {
-        return 10;
+        return 490_500;
     }
 
     @Override

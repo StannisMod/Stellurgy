@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.subsystem.ejection;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.subsystem.hull.HullClearance;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.subsystem.hull.HullClearance;
 
 /**
  * Throwing matter out of a hull, done once for everyone who needs to.
@@ -71,7 +71,8 @@ public final class EjectionPort {
         EntityItem item = new EntityItem(world, x, y, z, stack.copy());
         item.setPickupDelay(20);
 
-        double[] carry = VSIntegration.shipVelocityAtPoint(world, x, y, z);
+        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        double[] carry = shipId == null ? null : VSIntegration.shipVelocityAtPointFor(world, shipId, x, y, z);
         double carryX = carry == null ? 0.0D : carry[0];
         double carryY = carry == null ? 0.0D : carry[1];
         double carryZ = carry == null ? 0.0D : carry[2];

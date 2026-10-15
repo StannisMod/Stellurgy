@@ -1,14 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -43,7 +40,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
 
     private String probe(int x, int y, int z) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().read(
                 "stellurgytest seal-detector check " + DIM + " " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
         assertTrue("probe response must contain a branch field; got: " + resp,
@@ -55,7 +52,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // /stellurgytest place uses minecraft:<name> form; ensure chunk loaded by
         // first placing air at the position (no-op for an already-air cell
         // but force-loads the chunk).
-        client().execute("stellurgytest place " + DIM + " " + x + " " + y + " " + z
+        client().arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z
                 + " " + blockId);
     }
 
@@ -153,7 +150,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
             assertEquals("baseline: unbanned gold_block should seal",
                     "sealed", probe(x, y, z));
 
-            String ban = String.join("\n", client().execute(
+            String ban = String.join("\n", client().arrange(
                     "stellurgytest seal-detector add-block-ban minecraft:gold_block"));
             assertTrue("add-block-ban probe failed: " + ban,
                     Reply.of(ban).ok());
@@ -165,7 +162,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
             // Restore — shared harness leaks state across tests, and a
             // permanently-banned gold_block would make any sibling test
             // that happened to place gold_block diverge from production.
-            client().execute(
+            client().arrange(
                     "stellurgytest seal-detector remove-block-ban minecraft:gold_block");
         }
     }
@@ -175,7 +172,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // Belt-and-braces — even if a @Test threw before its finally ran,
         // this @After tries the un-ban anyway. Idempotent: produces
         // {"removed":false} when the block isn't present.
-        client().execute(
+        client().arrange(
                 "stellurgytest seal-detector remove-block-ban minecraft:gold_block");
     }
 

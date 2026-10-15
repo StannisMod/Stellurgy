@@ -1,18 +1,5 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.energy.IEnergyStorage;
-
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState;
@@ -24,6 +11,18 @@ import dev.stannismod.stellurgy.tile.hyperdrive.TileGravityDampener;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileHyperdriveGenerator;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpFieldEmitter;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraftforge.energy.CapabilityEnergy;
+import net.minecraftforge.energy.IEnergyStorage;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * One real ship's drive: which machines it actually has aboard, and what they are worth together.
@@ -42,10 +41,26 @@ public final class ShipDrive {
 
     private final World world;
     private final BlockPos flightComputerPos;
+    /** Whether resolving this drive links an unlinked machine standing in the ship's claim (see below). */
+    private final boolean adoptsUnlinked;
 
     public ShipDrive(World world, BlockPos flightComputerPos) {
+        this(world, flightComputerPos, true);
+    }
+
+    private ShipDrive(World world, BlockPos flightComputerPos, boolean adoptsUnlinked) {
         this.world = world;
         this.flightComputerPos = flightComputerPos;
+        this.adoptsUnlinked = adoptsUnlinked;
+    }
+
+    /**
+     * The drive as it stands, for an OBSERVER: resolved like {@link #ShipDrive(World, BlockPos)} except that
+     * an unlinked machine in the claim is not adopted — it is simply not this ship's yet. Every answer is
+     * then about the machines the ship already holds, and asking writes nothing.
+     */
+    public static ShipDrive observedFrom(World world, BlockPos flightComputerPos) {
+        return new ShipDrive(world, flightComputerPos, false);
     }
 
     // ─── The machines ──────────────────────────────────────────────────────────
@@ -296,7 +311,7 @@ public final class ShipDrive {
             // aboard" while the player is looking straight at one, and the only cure is rebuilding
             // the whole craft. The claim is the ownership test; a block outside it was already
             // skipped above, so nothing on a planet or on a neighbouring ship can be adopted.
-            if (!component.isLinked() && !world.isRemote) {
+            if (adoptsUnlinked && !component.isLinked() && !world.isRemote) {
                 component.linkToFlightComputer(flightComputerPos);
             }
             if (component.belongsTo(flightComputerPos)) {

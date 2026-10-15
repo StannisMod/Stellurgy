@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.entity.Entity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import java.util.UUID;
 
 /**
  * The one definition of a <b>ship-relative point</b>: a position on a ship expressed as an offset

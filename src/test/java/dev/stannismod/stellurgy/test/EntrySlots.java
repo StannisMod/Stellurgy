@@ -6,20 +6,14 @@ import java.util.List;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Keeping the ships of an entry arrangement's slot worlds load-queued.
+ * The slot worlds an entry arrangement's reply names — every one of them, refusing when it names none.
  *
- * <p>A headless server has no player standing next to a ship, and an unattended ship unloads. A
- * scenario that waits for one to settle therefore has to keep asking for the load while it waits —
- * work the wait does, not part of what is being waited for.</p>
+ * <p>Six server-tier classes once carried a private copy that read exactly TWO dimension ids out of
+ * the {@code entry-setup} reply, behind an {@code if (m.find())} with no else: a reply the pattern did
+ * not match read as no slots at all and said nothing.</p>
  *
- * <p><b>Why this is shared rather than copied.</b> Six server-tier classes carried a byte-identical
- * private copy that read exactly TWO dimension ids out of the {@code entry-setup} reply and pumped
- * those. It was correct only while that reply named exactly two, and it failed in the quietest way
- * possible when it did not: the body was {@code if (m.find()) { … }} with no else, so a reply the
- * pattern did not match turned the pump into a no-op that reported nothing. A wait then ran its
- * whole budget against a ship nobody was loading, and the red said "the ship never settled".</p>
- *
- * <p>So this reads EVERY dim the reply names, and refuses when it names none.</p>
+ * <p>It used to load every ship of those worlds as well. That is gone with every other world-wide
+ * ship operation (2026-10-14): a scenario loads its own ship by its id ({@code vs load-ship}).</p>
  */
 public final class EntrySlots {
 
@@ -33,19 +27,6 @@ public final class EntrySlots {
     }
 
     private static final String DIMS = "dims";
-
-    /**
-     * Queue a ship load in every slot world the {@code entry-setup} reply named.
-     *
-     * <p>Fails when the reply names no slots at all: that is an arrangement that cannot do what the
-     * caller is about to wait for, and it is worth one loud line here instead of a budget spent
-     * silently somewhere downstream.</p>
-     */
-    public static void loadAll(Probe probe, String entrySetupReply) throws Exception {
-        for (String dim : dimsOf(entrySetupReply)) {
-            probe.exec("stellurgytest vs load-ships " + dim);
-        }
-    }
 
     /** The slot dimension ids an {@code entry-setup} reply reported, in the order it reported them. */
     public static List<String> dimsOf(String entrySetupReply) {

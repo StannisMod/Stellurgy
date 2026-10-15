@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.Optional;
-
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.entity.IFlightBackend;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.joml.AxisAngle4d;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
@@ -13,8 +12,7 @@ import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import valkyrienwarfare.api.TransformType;
 
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.entity.IFlightBackend;
+import java.util.Optional;
 
 /**
  * Model-A flight backend for a Valkyrien Skies ship: it realizes Free Flight's

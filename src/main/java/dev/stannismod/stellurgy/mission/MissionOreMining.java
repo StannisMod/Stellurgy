@@ -1,5 +1,15 @@
 package dev.stannismod.stellurgy.mission;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.item.ItemAsteroidChip;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.util.Asteroid;
+import dev.stannismod.stellurgy.util.Asteroid.StackEntry;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -10,17 +20,6 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.api.DataStorage.DataType;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.item.ItemAsteroidChip;
-import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import dev.stannismod.stellurgy.util.Asteroid;
-import dev.stannismod.stellurgy.util.Asteroid.StackEntry;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.LinkedList;
 import java.util.List;

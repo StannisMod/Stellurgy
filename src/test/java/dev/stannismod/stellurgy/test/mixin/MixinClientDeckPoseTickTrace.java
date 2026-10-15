@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.DeckPoseTraceWindow;
+import dev.stannismod.stellurgy.test.trace.PoseArrival;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
-
-import dev.stannismod.stellurgy.test.trace.DeckPoseTraceWindow;
-import dev.stannismod.stellurgy.test.trace.PoseArrival;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * One record per client tick per craft: what the client's pose did, and what the capture guard made

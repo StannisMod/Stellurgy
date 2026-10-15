@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.api.stations;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
 
 public interface ISpaceObject {
 

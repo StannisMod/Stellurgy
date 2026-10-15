@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.command.sub.planet;
 
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import org.apache.commons.lang3.math.NumberUtils;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
 
 import javax.annotation.Nullable;
 import java.lang.invoke.MethodHandle;

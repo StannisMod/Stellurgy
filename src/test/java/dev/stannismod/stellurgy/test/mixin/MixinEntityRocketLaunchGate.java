@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
-
 import dev.stannismod.stellurgy.api.StatsRocket;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
  * The quantities a tier-1 rocket's weight-based launch gate is about to compare, recorded at the one
@@ -58,7 +57,9 @@ public abstract class MixinEntityRocketLaunchGate {
                 + ",\"gravity\":" + Double.toString((double) gravity)
                 + ",\"twr\":" + Double.toString((double) stats.getThrustToWeightRatio(gravity))
                 + ",\"thrust\":" + stats.getThrust()
-                + ",\"weight\":" + Double.toString((double) stats.getWeight())
+                // The wet craft's weight at ONE standard gravity, in newtons — the unit thrust is in,
+                // so thrust over it is the one-gee ratio a reader compares the local one against.
+                + ",\"weight\":" + Double.toString((double) stats.getWeightNewtons(1f))
                 + ",\"minLaunchTWR\":" + Double.toString(cfg.minLaunchTWR)
                 + ",\"weightSystem\":" + cfg.advancedWeightSystem);
         return gravity;

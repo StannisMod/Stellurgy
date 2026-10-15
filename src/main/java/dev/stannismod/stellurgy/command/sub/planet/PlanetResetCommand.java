@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.command.sub.planet;
 
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.network.PacketDimInfo;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.MinecraftServer;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.network.PacketDimInfo;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 public class PlanetResetCommand extends StellurgyCommand {
     @Override

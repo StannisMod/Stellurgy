@@ -35,10 +35,10 @@ public class ServerSmokeTest extends AbstractHeadlessServerTest {
 For E2E tests that need a real Minecraft client connected to the server:
 
 ```java
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import org.junit.Test;
 
-public class GuiSmokeTest extends AbstractClientE2ETest {
+public class GuiSmokeTest extends AbstractOwnBootClientTest {
     @Test
     public void guiOpens() throws Exception {
         bot().openInventory();
@@ -58,7 +58,7 @@ Opt-in via system properties (defaults are `false` → tests SKIP via
 | Property | Default | Purpose |
 |---|---|---|
 | `forge.test.harness.enabled` | `false` | enable `AbstractHeadlessServerTest` |
-| `forge.test.client.enabled` | `false` | enable `AbstractClientE2ETest` (needs OpenGL display) |
+| `forge.test.client.enabled` | `false` | enable `AbstractOwnBootClientTest` (needs OpenGL display) |
 
 ## Scope
 
@@ -70,7 +70,7 @@ The framework is a **library**, not a runner. It provides:
   server, drive it via a socket bridge.
 - `ForgeTestClientBootstrap` — the bridge endpoint that runs inside the
   client JVM.
-- `AbstractHeadlessServerTest` / `AbstractClientE2ETest` — JUnit 4 base
+- `AbstractHeadlessServerTest` / `AbstractOwnBootClientTest` — JUnit 4 base
   classes wrapping the harness lifecycle.
 
 There is **no** built-in test orchestrator, registry, or report writer.

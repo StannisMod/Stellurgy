@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.IGravityManager;
+import dev.stannismod.stellurgy.api.IPlanetaryProvider;
+import dev.stannismod.stellurgy.api.StellurgyAPI;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityFlying;
 import net.minecraft.entity.EntityLivingBase;
@@ -7,12 +14,6 @@ import net.minecraft.entity.item.*;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.projectile.EntityArrow;
 import net.minecraft.entity.projectile.EntityThrowable;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyAPI;
-import dev.stannismod.stellurgy.api.IGravityManager;
-import dev.stannismod.stellurgy.api.IPlanetaryProvider;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

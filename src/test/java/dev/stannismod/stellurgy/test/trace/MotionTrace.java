@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * A flight recorder for MOTION SMOOTHNESS: bounded rings of where a tier-2 ship, its pilot and the

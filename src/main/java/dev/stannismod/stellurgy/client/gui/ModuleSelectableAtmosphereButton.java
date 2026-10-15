@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.client.gui;
 
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
-import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 @SideOnly(Side.CLIENT)
 public class ModuleSelectableAtmosphereButton extends ModuleButton {

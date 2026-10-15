@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.Optional;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
+
+import java.util.Optional;
 
 /**
  * Where an AUTHORED system is declared to be: a {@link GalaxyKey} plus a cell offset from that

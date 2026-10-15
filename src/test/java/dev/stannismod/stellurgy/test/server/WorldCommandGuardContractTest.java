@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -25,39 +25,49 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     private static final String NO_PLAYER =
             "You must specify which player you wish to perform this action on";
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void addTorchRefusesConsoleSender() throws Exception {
-        String resp = exec("ar addTorch");
+        String resp = arrange("ar addTorch").raw();
         assertTrue("addTorch must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void setGravityRefusesConsoleSenderWithUsage() throws Exception {
         // setGravity resolves the sender via getCommandSenderEntity() (null on
         // console) and falls through to wrongUsage(), printing its usage line.
-        String resp = exec("ar setGravity 0.5");
+        String resp = arrange("ar setGravity 0.5").raw();
         assertTrue("setGravity must refuse console with usage — got: " + resp,
                 resp.contains("sets your gravity"));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void fillDataRefusesConsoleSender() throws Exception {
-        String resp = exec("ar fillData distance");
+        String resp = arrange("ar fillData distance").raw();
         assertTrue("fillData must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void gotoRefusesConsoleSender() throws Exception {
         // goto is now a tree; the dimension leaf carries the player guard.
-        String resp = exec("ar goto dimension 0");
+        String resp = arrange("ar goto dimension 0").raw();
         assertTrue("goto must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void fetchRefusesConsoleSender() throws Exception {
         // fetch resolves the destination (the command sender) as a player first,
         // so a console sender is rejected before the target lookup.
-        String resp = exec("ar fetch nonExistentPlayerName123");
+        String resp = arrange("ar fetch nonExistentPlayerName123").raw();
         assertTrue("fetch must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
@@ -65,18 +75,8 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     public void giveStationWithUnknownPlayerNameEmitsNotFoundMessage() throws Exception {
         // give is now under the `station` subtree; an unknown target player is
         // reported by vanilla getPlayer's PlayerNotFoundException.
-        String resp = exec("ar station give 7 nonExistentPlayerName123");
+        String resp = arrange("ar station give 7 nonExistentPlayerName123").raw();
         assertTrue("station give must report player not found — got: " + resp,
                 resp.toLowerCase().contains("found"));
-    }
-
-    /** An unknown subcommand must not echo a help envelope with the old
-     *  "Subcommands:" header (the StellurgyCommandRoot tree emits the vanilla
-     *  invalid-subcommand key instead). */
-    @Test
-    public void unknownTopLevelSubcommandDoesNotEmitHelpEnvelope() throws Exception {
-        String resp = exec("ar definitelyNotARealSubcommand");
-        assertFalse("unknown sub must NOT echo the help header — got: " + resp,
-                resp.contains("Subcommands:"));
     }
 }

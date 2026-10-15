@@ -1,6 +1,11 @@
 package dev.stannismod.stellurgy.item.tools;
 
 import com.google.common.base.Predicates;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.util.AudioRegistry;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -20,11 +25,6 @@ import net.minecraft.util.math.RayTraceResult.Type;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.world.WorldRuntime;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

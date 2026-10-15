@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.integration.jei.satelliteBuilder;
 
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.integration.jei.MachineRecipe;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 import mezz.jei.api.gui.IGuiItemStackGroup;
 import mezz.jei.api.gui.ITooltipCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.integration.jei.MachineRecipe;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 
 import java.util.HashSet;
 import java.util.List;

@@ -1,14 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * TileSatelliteBuilder real-construction path.
@@ -71,19 +68,22 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
     private static final int CX_WEATHER = 10500;
 
     /** Standard happy-path: place builder, press build with "optical"
-     *  primary, observe slot transitions match {@code assembleSatellite}. */
+     *  primary, observe slot transitions match {@code assembleSatellite}.
+     * Pins INV-SAT-05 (Builder stamps the same fresh satelliteId into both the chassis item (satId) and the id chip (satelliteId)).
+     */
+    @Pins("INV-SAT-05")
     @Test
     public void pressBuildAssemblesOpticalSatellite() throws Exception {
         int x = CX_OPTICAL, y = CY, z = CZ;
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteBuilder");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder press-build 0 "
-                + x + " " + y + " " + z + " optical");
+        String resp = act("stellurgytest satellite-builder press-build 0 "
+                + x + " " + y + " " + z + " optical").raw();
         assertTrue("press-build must succeed: " + resp, Reply.of(resp).ok());
 
         // Per-type resolution: optical must map to a primary-function meta.
@@ -129,19 +129,22 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      *  {@code canAssembleSatellite()} must return FALSE for
      *  weatherController. Pin protects the per-type-chip contract — a
      *  regression that loses an override would let the wrong chip
-     *  silently accept any type. */
+     *  silently accept any type.
+     * Pins INV-SAT-06 (a chip-overriding type rejects the default id chip).
+     */
+    @Pins("INV-SAT-06")
     @Test
     public void pressBuildRejectsDefaultChipForChipOverridingType() throws Exception {
         int x = CX_WEATHER, y = CY, z = CZ;
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteBuilder");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder press-build 0 "
-                + x + " " + y + " " + z + " weatherController");
+        String resp = act("stellurgytest satellite-builder press-build 0 "
+                + x + " " + y + " " + z + " weatherController").raw();
         // Probe must surface the canAssemble-false branch as an error
         // (not crash, not silently succeed).
         // Read OF THE FIELD: the producer writes a tail onto this one ("… after slot load"), so

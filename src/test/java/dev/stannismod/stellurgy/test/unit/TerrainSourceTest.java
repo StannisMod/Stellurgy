@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
+import org.junit.Test;
 
 import static org.junit.Assert.assertSame;
 

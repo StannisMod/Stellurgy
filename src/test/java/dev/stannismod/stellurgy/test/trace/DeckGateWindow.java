@@ -1,18 +1,17 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.math.AxisAlignedBB;
+
 import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.math.AxisAlignedBB;
-
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.integration.vs.DeckHeld;
-
 /**
  * What the client's deck frame decided about taking ONE named body, per tick, over a window a test
  * opens and closes.

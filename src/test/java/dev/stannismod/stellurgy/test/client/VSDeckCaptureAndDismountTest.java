@@ -2,12 +2,16 @@ package dev.stannismod.stellurgy.test.client;
 
 import java.util.Arrays;
 import java.util.List;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
 
 import dev.stannismod.stellurgy.test.PlayerShipData;
 import dev.stannismod.stellurgy.test.DeckCapture;
@@ -16,13 +20,11 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipFrameCheck;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.trace.ShipLoadDecisionHold;
-
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -264,6 +266,27 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      */
     private static final double LEVELLED_ROLL_JITTER_DEG = 5.0;
 
+    /**
+     * How far above the rolled deck, along the deck's own normal, the fly-in point is, in blocks. Not
+     * chosen: it is the clearance this scenario's green runs were taken at — 3 blocks of world height
+     * over the pose at a 45-degree roll, on a craft whose centre of mass sat 0.91 under the deck top
+     * (3 × cos45° − 0.91 = 1.21) — kept when the craft changed under it.
+     */
+    private static final double FLY_IN_DECK_CLEARANCE = 1.21;
+
+    /** The same green-run geometry across the deck: 3 × sin45° = 2.12 blocks along the deck's +X. */
+    private static final double FLY_IN_ACROSS = 2.12;
+
+    /**
+     * How far from the ship's pose, on X and on Z, the fly-in leg sends the player before the fly-in,
+     * in blocks. Two bounds and this sits between them: FAR enough that he is out of the ship's
+     * region — the hull's box is about seven blocks across and production's stay margin is four, so
+     * any capture is released — and NEAR enough, two chunks, that his client keeps the ship loaded.
+     * It was 200, and measured 2026-10-05 that is past the near bound: on the first tick back the
+     * client held no ship at all, and he fell onto the deck while it loaded.
+     */
+    private static final int FLY_IN_AWAY_BLOCKS = 32;
+
     // The bugs this class exists for are all CLIENT facts — a player falls through a deck on his OWN
     // client while the server holds him on it, which is exactly why an armour stand read through a
     // server probe could never reproduce them. So every wait below reads the base's
@@ -308,6 +331,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: a walking client player on a grounded deck falls through it -----------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(60);",
+            why = "overshoot only gives a sinking body longer to sink, so a slow box makes this stricter, never"
+                    + " more lenient.")
     public void aRealClientPlayerOnAGroundedDeckStaysOnItInsteadOfFallingThrough() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -334,7 +360,19 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // was then lost shows up in the release absence over the sink window below.
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        long serverLandingMark = serverEvents().mark();
+        // The SERVER is read below, and it only knows where he is from his client's movement packets:
+        // a client capture is taken while he is still falling (measured: 1.5 above the deck), so a
+        // server read after it can find him in the air over the deck — once, red, with the server's
+        // body 0.52 up and nothing under its feet. So the link is the client's LANDING on this ship
+        // after the teleport applied, and then a fence: the server has handled every packet his
+        // client sent up to it. The window's budget is one link's — the landing link may take at
+        // most DECK_LINK_BUDGET_TICKS, under the log's 256-deep ring.
+        String landed = landOnTheDeckUnderGateWatch(landingMark, serverLandingMark, scenarioShipId,
+                "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
+                        + " fall-through leaves the client with no landing on it at all, which is the"
+                        + " fault this scenario exists for", DECK_LINK_BUDGET_TICKS,
+                DECK_LINK_BUDGET_TICKS, ship[0], ship[1] + 4, ship[2]);
         // Carrying this scenario's ship: the record names the hull that took the body, and this class
         // shares its world — a type-only wait returns on a sibling scenario's capture and calls the
         // fall-through "resolved". And over the EPISODE rather than the edge alone: an episode that
@@ -342,14 +380,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // next line sees nobody holding him, so the predicate is the chain — the opening, with no
         // later release and no later entry onto another hull.
         String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
-                "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
-                        + " fall-through leaves the client with no capture at all, which is the fault"
-                        + " this scenario exists for", DECK_LINK_BUDGET_TICKS);
-        System.out.println("[deckcap] grounded client capture=" + landing);
+                "the player's OWN client must still hold him on the deck of THIS grounded ship after"
+                        + " he landed on it", DECK_LINK_BUDGET_TICKS);
+        closeDeckGateWindow();
+        System.out.println("[deckcap] grounded client landing=" + landed + " capture=" + landing);
 
         // Server oracle: does the server capture the standing player on the deck at all, and is the deck
         // solid under his feet in the ship frame? deck-capture prints the whole handles() decision.
-        PlayerShipData server = PlayerShipData.read(this::exec);
+        PlayerShipData server = PlayerShipData.read(c -> read(c).raw());
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the server must resolve him on THIS scenario's grounded ship");
         double serverY = server.playerY;
@@ -380,8 +418,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // an inference from two Y samples. An absence only means something once the instrument has
         // announced itself, which is what assertInstrumentRan is for.
         long sinkMark = clientEvents.mark();
-        // WINDOW: overshoot only gives a sinking body longer to sink, so a slow box makes this
-        // stricter, never more lenient.
         advanceServerAndClient(60);
         double clientYLater = bot().reportState().get("playerY").getAsDouble();
         String sinkReleases = clientEvents.since(sinkMark, "deck_released");
@@ -399,19 +435,26 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: dismounting mid-hover drops the ship and the pilot --------------------------------
 
-    /**
-     * <p>red-witnessed: with {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this fails reading the dismounted pilot's capture,
-     * "nothing holds entity …, so there is no anchor ship to name", 2026-10-06. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.)</p>
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#update} at
-     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,} replaced
-     * by a null command in the unmanned branch, this fails at "a hovering ship must not start falling
-     * when the pilot dismounts" with velY -7.04, 2026-10-06.</p>
-     */
+    @RedWitness(verdict = "the dismounted pilot must be resolved on the deck", member = "DeckFrameTick#admissible",
+            at = "(!entity.world.isRemote || isLocalPlayer(entity))", replacedBy = "(!entity.world.isRemote)",
+            fails = "nothing holds entity", on = "2026-10-06")
+    @RedWitness(verdict = "must not start falling", member = "TileAdvancedFlightComputer#update",
+            at = "FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference, true,"
+                    + " velocitySetpoint, SHIP_MAX_SPEED)",
+            replacedBy = "null",
+            fails = "a hovering ship must not start falling when the pilot dismounts", on = "2026-10-06")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, 10);",
+            why = "the sag window opens after the coast. The helper returns the instant it cuts, and the hull then"
+                    + " coasts UP past its hold (measured +3.07..+4.75 against a hold to +3.0) — a climb that,"
+                    + " left inside the window, would cancel the very sag it measures, which is the silent"
+                    + " direction. Its vertical velocity at the window's start is printed with the verdict, so"
+                    + " a coast still under way is visible.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, 10);",
+            why = "the coast is the server's physics; the read is the server's ship report at the window's start.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "its length is how long a hull whose hold is off needs to fall visibly; overshoot only lets it"
+                    + " fall further.")
     public void standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -422,11 +465,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // and why the climb is measured rather than awaited all live in the helper.
         hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
 
-        // EXPERIMENT: the sag window opens after the coast. The helper returns the instant it cuts,
-        // and the hull then coasts UP past its hold (measured +3.07..+4.75 against a hold to +3.0) —
-        // a climb that, left inside the window, would cancel the very sag it measures, which is the
-        // silent direction. Its vertical velocity at the window's start is printed with the verdict,
-        // so a coast still under way is visible.
         GameTicks.advanceWorld(serverClient(), 0, 10);
         // The start of the sag window below, read at the instant before the stimulus it measures.
         ShipInfo atWindowStart = shipInfo();
@@ -434,53 +472,34 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double velYAtWindowStart = atWindowStart.velY;
 
         // Dismount exactly as the maintainer did: the real sneak key. (While seated it also feeds the
-        // flight brake, but a held sneak still triggers vanilla's dismount.) Confirm on the CLIENT that
-        // the player left the seat; fall back to the server dismount only if the key path did not fire.
-        // The un-seating is recorded where production performs it — at
-        // {@code Entity.dismountRidingEntity}, with the CALLER that performed it — so the wait is on
-        // that record rather than on the client's replicated riding flag, and the record's own
-        // caller trail says which of the two routes below actually got him out. (The client flag is
-        // the replication of a server write; polling it measured the round trip as much as the
-        // dismount.)
+        // flight brake, but a held sneak still triggers vanilla's dismount.) The un-seating is recorded
+        // where production performs it — at {@code Entity.dismountRidingEntity}, with the CALLER that
+        // performed it — so the key is held for exactly as long as it takes that record to appear, and
+        // the record's `by` trail names the un-seater. There is no second route: a server dismount
+        // standing in for a dead key would let this scenario pass on a path no player has, so a key that
+        // un-seats nobody ends the arrangement, naming what the client and the capture then held.
         Events events = serverEvents();
         long dismountMark = events.markInstrumented();
         Events clientEvents = clientEvents();
         long clientDismountMark = clientEvents.mark();
-        boolean dismounted = false;
-        String dismountPath = "sneak-key";
-        bot().holdKey(Keyboard.KEY_LSHIFT);
-        for (int i = 0; i < 40 && !dismounted; i++) {
-            advanceServerAndClient(2);
-            dismounted = Events.countRecordsWithField(events.since(dismountMark, "dismount"), "mount") > 0;
-        }
-        bot().releaseKey(Keyboard.KEY_LSHIFT);
-        String serverDismount = "";
-        if (!dismounted) {
-            System.out.println("[deckcap] sneak key did not dismount; using server dismount");
-            dismountPath = "sneak-key-then-server-dismount";
-            serverDismount = exec("stellurgytest player dismount").replace('\n', ' ');
-        }
-        // Which PATH was taken is the diagnosis, and this message used to be a bare sentence. Both
-        // paths failing is a different fault from the key path alone failing: the first says the
-        // player cannot be un-seated at all, the second says only the real key route is dead, which
-        // is the one a player actually uses and the one this scenario is about. The record's `by`
-        // trail names the un-seater — vanilla's own updateRidden for the sneak key, the probe verb
-        // for the fallback — so the two are now told apart by the log instead of by which branch the
-        // test happened to take.
         String dismountRecord;
+        bot().holdKey(Keyboard.KEY_LSHIFT);
         try {
-            dismountRecord = events.await(dismountMark, "dismount",
-                    "the pilot must actually leave the seat, and NEITHER route got him out. tried="
-                            + dismountPath
-                            + (serverDismount.isEmpty() ? "" : " serverDismount=" + serverDismount),
-                    DECK_LINK_BUDGET_TICKS);
-        } catch (AssertionError neverDismounted) {
-            throw new AssertionError(neverDismounted.getMessage()
+            dismountRecord = ArrangementFailure.arranged(() -> events.awaitMatching(dismountMark, "dismount",
+                    reply -> Events.countRecordsWithField(reply, "mount") > 0, "an un-seating from a mount",
+                    "the pilot's held sneak key must take him out of the seat — the real key route is the one a"
+                            + " player has, and the scenario stands up by it",
+                    DECK_LINK_BUDGET_TICKS));
+        } catch (ArrangementFailure neverDismounted) {
+            ArrangementFailure named = new ArrangementFailure(neverDismounted.getMessage()
                     + " | riding=" + bot().reportRidingEntity()
-                    + " | capture=" + exec("stellurgytest vs deck-capture"), neverDismounted);
+                    + " | capture=" + read("stellurgytest vs deck-capture").raw());
+            named.initCause(neverDismounted);
+            throw named;
+        } finally {
+            bot().releaseKey(Keyboard.KEY_LSHIFT);
         }
-        System.out.println("[deckcap] dismount route tried=" + dismountPath
-                + " unSeatedBy=" + Events.lastField(dismountRecord, "by"));
+        System.out.println("[deckcap] dismount unSeatedBy=" + Events.lastField(dismountRecord, "by"));
 
         // Let the now-unmanned ship reveal whether it holds or falls — waited on the flight
         // computer's OWN decision rather than on 40 ticks. With no pilot input it either commands a
@@ -506,13 +525,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
                         + " mid-hover", DECK_LINK_BUDGET_TICKS);
 
-        // WINDOW: its length is how long a hull whose hold is off needs to fall visibly; overshoot
-        // only lets it fall further.
         advanceServerAndClient(40);
         ShipInfo info = shipInfo();
         double shipYPost = info.y;
         double velYPost = info.velY;
-        PlayerShipData server = PlayerShipData.read(this::exec);
+        PlayerShipData server = PlayerShipData.read(c -> read(c).raw());
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the dismounted pilot must be resolved on the deck of the ship he was flying");
         double serverY = server.playerY;
@@ -545,7 +562,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("the client must render the dismounted pilot on the deck where the server holds him: "
                 + "serverY=" + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_DISMOUNT_BLOCKS);
 
-        exec("stellurgytest player dismount"); // clean state for any following test
+        arrange("stellurgytest player dismount"); // clean state for any following test
     }
 
     // ---- Bug: a ship reloaded from a save drops a walking client player through its deck ---------
@@ -565,7 +582,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // ships stay loaded, so a class-level opt-out trades these two reds for a different set. The
         // restore is the dangerous half — a `false` left in force turns the default off for
         // everything after it in this JVM — so it is put back in a `finally` at the end.
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "this scenario's subject IS the unload-and-reload path of a saved ship");
         try {
 
@@ -581,8 +598,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // ticket, so idle chunks unload. Belt and braces: drop any tickets a prior step left.
         Events events = serverEvents();
         long unloadMark = events.markInstrumented();
-        exec("stellurgytest chunk release-all");
-        exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
+        arrange("stellurgytest chunk release-all");
+        arrange("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship: a whole-dimension "no ship is loaded" gate would wait on every
         // neighbour scenario's ship as well, and would answer about theirs rather than ours.
         // ASK for the unload rather than waiting to see whether one happens. Walking away is what a
@@ -619,7 +636,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long reloadMark = events.markInstrumented();
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "a saved ship must come back when the player returns to its deck");
         String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
@@ -628,7 +645,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 DECK_LINK_BUDGET_TICKS);
         System.out.println("[deckcap] reloaded ship=" + reloaded + " clientCapture=" + landing);
 
-        PlayerShipData server = PlayerShipData.read(this::exec);
+        PlayerShipData server = PlayerShipData.read(c -> read(c).raw());
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the returning player must be resolved on the ship this scenario built, which is the"
                         + " one that was saved and reloaded");
@@ -654,7 +671,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             // In a `finally` and not at the end of the happy path: a scenario that fails here would
             // otherwise leave the default OFF for every scenario that runs after it in this JVM,
             // which turns one red into a class of them and hides the original.
-            ShipReadiness.holdShipsLoaded(this::exec,
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(),
                     "the unload was this scenario's subject; the rest of the class needs the default");
         }
     }
@@ -687,62 +704,50 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * <p>Each break below was run alone against this method, which is green alone with all of them
      * restored, 2026-10-06.</p>
      *
-     * <p>red-witnessed: with {@code WorldClientShipManager#queueShipLoad} at
-     * {@code pendingLoadState.put(shipID, true)} changed to {@code putIfAbsent}, so the reload no
-     * longer supersedes the queued unload, this fails at the verdict "must keep THIS ship loaded" with
-     * {@code ship_load_decisions_resumed} {@code deferredPasses:16, loadedCount:0, loaded:""}.</p>
-     *
-     * <p>red-witnessed: with {@code WorldClientShipManager#loadShip} at
-     * {@code loadedShips.containsKey(toLoadID)} answering by unloading the loaded ship and building it
-     * again instead of returning, this fails at the deck link "must hold him on the deck of the ship it kept" — no
-     * {@code deck_entered} opened on the ship: rebuilt, it had lost the chunks re-sent while it was
-     * held.</p>
-     *
-     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
-     * {@code physObjectWorld.queueShipLoad(loadID)} removed, this fails at the first arrangement link,
-     * no client {@code ship_loaded} of the ship.</p>
-     *
-     * <p>red-witnessed: with {@code WorldShipLoadingController#determineLoadAndUnload} at
-     * {@code shipManager.queueShipUnload(data.getUuid())} removed, this fails at the server
-     * {@code ship_unloaded} link.</p>
-     *
-     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
-     * {@code physObjectWorld.queueShipUnload(unloadID)} removed, this fails at the link "the server's
-     * UNLOAD of the ship must reach the held client".</p>
-     *
-     * <p>red-witnessed: NOT YET for the server {@code ship_loaded} link after the return. Attempted:
-     * {@code WorldShipLoadingController#determineLoadAndUnload} at
-     * {@code shipManager.queueShipLoad(data.getUuid())} removed — it fails earlier, in
-     * {@link #buildShip}'s {@code ship_usable} link, because the same call loads the ship the first
-     * time.</p>
-     *
-     * <p>red-witnessed: NOT YET for the link "the server's RELOAD of the ship must reach the held
-     * client". Attempted: {@code ShipIndexDataMessageHandler#onMessage} at
-     * {@code physObjectWorld.queueShipLoad(loadID)} removed — it fails at the first arrangement link,
-     * because the same call carries the client's first load.</p>
-     *
-     * <p>The four checks below guard the test's own instruments, so their breaks are in test code.</p>
-     *
-     * <p>red-witnessed: with {@code ShipLoadDecisionHold#deferPass} at {@code return held;} changed to
-     * answer false, so the hold never holds, this fails at "the held client must not have decided on
-     * either instruction before the release" — the client unloaded the ship on its own pass.</p>
-     *
-     * <p>red-witnessed: with {@code ShipLoadDecisionHold#deferPass} at
-     * {@code w.deferredPasses++;} removed, this fails at "the hold must actually have skipped the
-     * manager's passes" with {@code deferredPasses=0}.</p>
-     *
-     * <p>red-witnessed: with {@code ShipLoadDecisionHold#passRan} at
-     * {@code if (w.released && !w.resumeReported)} never taken, this fails at the
-     * {@code ship_load_decisions_resumed} link.</p>
-     *
-     * <p>red-witnessed: with {@code MixinPhysicsObjectEvents#stellurgyTest$loaded} at
-     * {@code TestTrace.instrumentHere(INSTRUMENT);} removed there and in its unload twin, this fails at
-     * the check that the {@code physics_object_events} observation point executed.</p>
+     * <p>Four checks guard the test's own instruments, so their breaks are in test code and are not
+     * production witnesses; each was run alone on 2026-10-06. {@code ShipLoadDecisionHold.deferPass}
+     * answering false at {@code return held;}, so the hold never holds: it fails at "the held client
+     * must not have decided on either instruction before the release" - the client unloaded the ship on
+     * its own pass. {@code ShipLoadDecisionHold.deferPass} without {@code w.deferredPasses++;}: "the hold
+     * must actually have skipped the manager's passes", deferredPasses=0.
+     * {@code ShipLoadDecisionHold.passRan} never taking {@code if (w.released && !w.resumeReported)}: the
+     * {@code ship_load_decisions_resumed} link. {@code MixinPhysicsObjectEvents} without
+     * {@code TestTrace.instrumentHere(INSTRUMENT);} in its load and unload handlers: the check that the
+     * {@code physics_object_events} observation point executed.</p>
      */
+    @RedWitness(verdict = "must keep THIS ship", member = "WorldClientShipManager#queueShipLoad",
+            at = "pendingLoadState.put(shipID, true)", replacedBy = "pendingLoadState.putIfAbsent(shipID, true)",
+            fails = "a client that decided on the server's unload and the reload after it in ONE pass must keep"
+                    + " THIS ship", on = "2026-10-06")
+    @RedWitness(verdict = "must hold him on the deck of the ship it kept", member = "WorldClientShipManager#loadShip",
+            at = "if (loadedShips.containsKey(toLoadID)) { return; }",
+            replacedBy = "if (loadedShips.containsKey(toLoadID)) { unloadShip(toLoadID); }",
+            fails = "the returning player's own client must hold him on the deck of the ship it kept",
+            on = "2026-10-06")
+    @RedWitness(verdict = "the client must have loaded the ship", member = "ShipIndexDataMessageHandler#onMessage",
+            at = "physObjectWorld.queueShipLoad(loadID)", replacedBy = "",
+            fails = "arrangement: the client must have loaded the ship before it stops deciding", on = "2026-10-06")
+    @RedWitness(verdict = "the server must unload the ship", member = "WorldShipLoadingController#determineLoadAndUnload",
+            at = "shipManager.queueShipUnload(data.getUuid())", replacedBy = "",
+            fails = "arrangement: with the player out of range the server must unload the ship", on = "2026-10-06")
+    @RedWitness(verdict = "the server's UNLOAD of the ship must reach the held client",
+            member = "ShipIndexDataMessageHandler#onMessage",
+            at = "physObjectWorld.queueShipUnload(unloadID)", replacedBy = "",
+            fails = "arrangement: the server's UNLOAD of the ship must reach the held client", on = "2026-10-06")
+    @NotYetRed(prose = "NOT YET for the server {@code ship_loaded} link after the return. Attempted:"
+            + " {@code WorldShipLoadingController#determineLoadAndUnload} at"
+            + " {@code shipManager.queueShipLoad(data.getUuid())} removed — it fails earlier, in"
+            + " {@link #buildShip}'s {@code ship_usable} link, because the same call loads the ship the first"
+            + " time.")
+    @NotYetRed(prose = "NOT YET for the link \"the server's RELOAD of the ship must reach the held"
+            + " client\". Attempted: {@code ShipIndexDataMessageHandler#onMessage} at"
+            + " {@code physObjectWorld.queueShipLoad(loadID)} removed — it fails at the first arrangement link,"
+            + " because the same call carries the client's first load.")
+    @Pins("PORT-15")
     @Test
     public void aClientThatFellBehindAcrossAnUnloadAndAReloadKeepsTheShip() throws Exception {
         final FixtureSite site = site();
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "this scenario's subject is the client's answer to the server unloading a ship and"
                         + " loading it again");
         ClientWindow hold = null;
@@ -763,7 +768,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             hold = ClientWindow.open(bot(), ShipLoadDecisionHold.class.getName());
 
             long awayMark = server.markInstrumented();
-            exec("tp @a " + (ship[0] + WALK_AWAY_BLOCKS) + " 120 " + (ship[2] + WALK_AWAY_BLOCKS)
+            arrange("tp @a " + (ship[0] + WALK_AWAY_BLOCKS) + " 120 " + (ship[2] + WALK_AWAY_BLOCKS)
                     + " 0 0");
             awaitThisShip(server, awayMark, "ship_unloaded",
                     "arrangement: with the player out of range the server must unload the ship");
@@ -774,7 +779,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             // Above the hull's reported position, so he comes down onto its deck.
             long backMark = server.markInstrumented();
             long landingMark = client.mark();
-            exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+            arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
             awaitThisShip(server, backMark, "ship_loaded",
                     "arrangement: the player's return must load the ship on the server again");
             client.awaitRecordWithFields(landingMark, "client_ship_load_queued",
@@ -813,26 +818,46 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             if (hold != null) {
                 hold.close();
             }
-            ShipReadiness.holdShipsLoaded(this::exec,
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(),
                     "the unload was this scenario's subject; the rest of the class needs the default");
         }
     }
 
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
-    /**
-     * <p>red-witnessed: NOT YET. With {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this failed at the ARRANGEMENT ("the fly-in
-     * point must be … off any deck block", the refusal ledgered as a test defect), not at the
-     * positive leg, 2026-10-06. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.)
-     * 2026-10-07, the fly-in's "not held on a deck" verdict (rewritten that day from the hull-stand
-     * form) — with {@code DeckFrameTick#admissionFor} at {@code candidates.add(0, declared);} followed by
-     * returning the first containing craft: "setup: the fly-in point must be inside the ship's AABB,
-     * off any deck block, and the player must not be held on a deck".</p>
-     */
+    @NotYetRed(prose = "NOT YET. With {@code DeckFrameTick#admissible} at"
+            + " {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame"
+            + " takes no body — this failed at the ARRANGEMENT (\"the fly-in"
+            + " point must be … off any deck block\", the refusal ledgered as a test defect), not at the"
+            + " positive leg, 2026-10-06. (A record taken before the 2026-10-06 change needed two more breaks, while the"
+            + " travel resolver could also take him on a deck; that code is deleted.)"
+            + " 2026-10-07, the fly-in's \"not held on a deck\" verdict (rewritten that day from the hull-stand"
+            + " form) — with {@code DeckFrameTick#admissionFor} at {@code candidates.add(0, declared);} followed by"
+            + " returning the first containing craft: \"setup: the fly-in point must be inside the ship's AABB,"
+            + " off any deck block, and the player must not be held on a deck\".")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(1);",
+            why = "one client tick counted FROM the placement's own record. The record is taken while the client"
+                    + " drains its task queue, and a read queued behind it could run before the client ticks or"
+                    + " draws at the new point at all — describing the old one. One tick is one pass there; he"
+                    + " has fallen about a tenth of a block by then.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(DECK_LANDING_TICKS);",
+            why = "the reading is DEFINED forty client ticks after the put-down reached the client. He is dropped"
+                    + " five blocks, which vanilla gravity covers in about thirteen ticks, and it is the"
+                    + " client's own ticks that move him and resolve his capture — so forty of them are a"
+                    + " landing and then some, on any box. A camera that has not engaged by then fails below"
+                    + " with the capture verdict beside it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
+            + " info = shipInfo();",
+            why = "a deck that has not tilted is not \"the airspace you cross flying up to a ship\" this leg"
+                    + " describes.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo info = shipInfo();",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
+            + " lvl = shipInfo();",
+            why = "the levelling slew; an attitude converges and nothing declares it reached.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo lvl = shipInfo();",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -844,10 +869,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double h = Math.toRadians(45.0) / 2.0;
         double upBeforeRoll = shipInfo().upY();
         assertTrue("attitude hold must accept the roll",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        // WINDOW: a deck that has not tilted is not "the airspace you cross flying up to a ship" this
-        // leg describes.
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         scenario().requireArranged("the ship must be rolled before the fly-in: upY " + upBeforeRoll
@@ -859,28 +882,38 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // deck. He comes straight from far, so nothing has captured him (his ship-frame movement state is
         // empty). His view must stay his own - not snap to the tilted deck's horizon.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (sx + 200) + " 120 " + (sz + 200) + " 0 0");
+        arrange("tp @a " + (sx + FLY_IN_AWAY_BLOCKS) + " " + sy + " " + (sz + FLY_IN_AWAY_BLOCKS) + " 0 0");
         // He must be AWAY on the client, because the claim below is about a body the deck has never
         // touched: a client still standing on the deck is still being captured there.
-        awaitClientPlacedNear(awayMark, sx + 200, sz + 200,
+        awaitClientPlacedNear(awayMark, sx + FLY_IN_AWAY_BLOCKS, sz + FLY_IN_AWAY_BLOCKS,
                 "the negative leg needs a body that has never stood on this deck");
+        // THE FLY-IN POINT IS PLACED RELATIVE TO THE DECK, not to the pose. The pose is the centre of
+        // mass, and where that sits under the deck is a property of the hull: the with-pilot-deck
+        // craft hangs its motors under the deck and has it about 1.6 below the deck top, so 3 blocks
+        // of world height over the pose put him 0.4 over the deck, where the deck took him before the
+        // first read (measured 2026-10-15: supportedByShip one tick after the placement). So the point
+        // is a deck-frame offset - FLY_IN_ACROSS along the deck, FLY_IN_DECK_CLEARANCE over its top -
+        // carried into the world through the hull's own attitude. The deck top is the flight
+        // computer's floor (it stands on the deck); the centre of mass and the attitude are the ship
+        // report's own.
+        Reply pose = Reply.of(info.raw());
+        double deckTopAboveCom = Reply.of(read("stellurgytest vs flight-model-by-id 0 " + scenarioShipId).raw())
+                .integer("afcY") - pose.number("comY");
+        double[] flyIn = rotateByShip(pose, FLY_IN_ACROSS, deckTopAboveCom + FLY_IN_DECK_CLEARANCE, 0.0);
+        final double fx = sx + flyIn[0], fz = sz + flyIn[2];
         Events clientEvents = clientEvents();
         long flyInMark = clientEvents.mark();
-        exec("tp @a " + sx + " " + (sy + 3) + " " + sz + " 0 0");
+        arrange("tp @a " + fx + " " + (sy + flyIn[1]) + " " + fz + " 0 0");
         // The reads below must describe him AT the off-deck point, and he starts falling onto the
         // deck the tick his client applies it — so the placement is linked, read every tick rather
         // than every five. A read that followed the link ran after at least one client pass there.
         clientEvents.awaitMatchingEvery(flyInMark, "client_pos_look_applied",
-                reply -> ClientEvents.appliedNear(reply, sx, sz),
+                reply -> ClientEvents.appliedNear(reply, fx, fz),
                 "placing the client at the fly-in point",
                 "the fly-in teleport must reach the client before its view there can be read",
                 DECK_LINK_BUDGET_TICKS, 1);
-        // EXPERIMENT: one client tick counted FROM the placement's own record. The record is taken
-        // while the client drains its task queue, and a read queued behind it could run before the
-        // client ticks or draws at the new point at all — describing the old one. One tick is one
-        // pass there; he has fallen about a tenth of a block by then.
         bot().waitWorldTicks(1);
-        DeckCapture flyInCap = DeckCapture.read(this::exec);
+        DeckCapture flyInCap = DeckCapture.read(c -> read(c).raw());
         boolean inAABB = flyInCap.aboardByContainment;
         boolean onShipBlock = flyInCap.supportedByShip;
         // What must NOT be true is the thing this leg is about: he must not be held on a deck, since
@@ -912,9 +945,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
         double upBeforeLevel = shipInfo().upY();
         assertTrue("attitude hold must accept levelling",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0").raw()
                         ).bool("commanded"));
-        // WINDOW: the levelling slew; an attitude converges and nothing declares it reached.
         GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo lvl = shipInfo();
         scenario().requireArranged("the ship must be level again before the positive control lands"
@@ -937,21 +969,16 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // the camera had been released and came back, which is a different and interesting story
         // from one that never dropped.
         long onDeckMark = clientEvents.mark();
-        exec("tp @a " + lvl.x + " " + (lvl.y + 5) + " " + lvl.z + " 0 0");
+        arrange("tp @a " + lvl.x + " " + (lvl.y + 5) + " " + lvl.z + " 0 0");
         clientEvents.awaitMatching(onDeckMark, "client_pos_look_applied",
                 reply -> ClientEvents.appliedNear(reply, lvl.x, lvl.z),
                 "placing the client over the level deck",
                 "the put-down over the level deck must reach the client before its landing can be"
                         + " read", DECK_LINK_BUDGET_TICKS);
-        // EXPERIMENT: the reading is DEFINED forty client ticks after the put-down reached the client.
-        // He is dropped five blocks, which vanilla gravity covers in about thirteen ticks, and it is
-        // the client's own ticks that move him and resolve his capture — so forty of them are a
-        // landing and then some, on any box. A camera that has not engaged by then fails below with
-        // the capture verdict beside it.
         bot().waitWorldTicks(DECK_LANDING_TICKS);
         String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
         boolean onDeckCam = Boolean.parseBoolean(deckCameraText("active"));
-        DeckCapture camCapture = DeckCapture.read(this::exec);
+        DeckCapture camCapture = DeckCapture.read(c -> read(c).raw());
         System.out.println("[deckcap] cam on-deck active=" + onDeckCam
                 + " edgesSincePutDown=" + engaged + " cap=" + camCapture.raw());
         // The camera is DOWNSTREAM of the capture, so a bare "no deck camera" blames the renderer
@@ -970,18 +997,19 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: a hovering ship falls (and tumbles inverted) after a world reload -----------------
 
-    /**
-     * <p>red-witnessed: NOT YET, and the attempts say the method cannot see its subject. GREEN with
-     * {@code TileAdvancedFlightComputer#readFromNBT} at
-     * {@code stationKeeping = nbt.getBoolean(NBT_STATION_KEEPING);} forced to false, and GREEN again
-     * with {@code TileAdvancedFlightComputer#update} at
-     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,} replaced
-     * by a null command in the unmanned branch — which turns the sibling live-dismount scenario red at
-     * once. The pre-reload hover is read before a hull could have fallen, and after the reload a hull
-     * nothing holds stays where it was rather than falling, so "it did not fall" is true of the
-     * subject's absence, 2026-10-06.</p>
-     */
+    @NotYetRed(prose = "NOT YET, and the attempts say the method cannot see its subject. GREEN with"
+            + " {@code TileAdvancedFlightComputer#readFromNBT} at"
+            + " {@code stationKeeping = nbt.getBoolean(NBT_STATION_KEEPING);} forced to false, and GREEN again"
+            + " with {@code TileAdvancedFlightComputer#update} at"
+            + " {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,} replaced"
+            + " by a null command in the unmanned branch — which turns the sibling live-dismount scenario red at"
+            + " once. The pre-reload hover is read before a hull could have fallen, and after the reload a hull"
+            + " nothing holds stays where it was rather than falling, so \"it did not fall\" is true of the"
+            + " subject's absence, 2026-10-06.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
+            why = "its length is how long a hull whose hold did not come back needs to fall visibly after the"
+                    + " reload; overshoot only lets it fall further.")
     public void aHoveringShipKeepsHoveringAcrossAReloadInsteadOfFalling() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -990,7 +1018,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // is a hull going away and coming back, which the server's permanently-loaded default makes
         // impossible. Restored in a `finally` so a red here cannot disarm the default for whatever
         // runs next in this JVM.
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "this scenario's subject IS a hovering craft surviving an unload and reload");
         try {
 
@@ -1006,7 +1034,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // than on 40 ticks: the state this whole scenario saves and restores is the one it names.
         Events events = serverEvents();
         long standUpMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         String holdBefore = events.await(standUpMark, "unmanned_hold_decided",
                 "the flight computer must take an unmanned decision when the pilot stands up — the"
                         + " hover this scenario then saves and reloads is that decision's result",
@@ -1021,8 +1049,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // hold back so the ship does NOT fall - the live playtest's "hovering ship survived a restart,
         // then fell and flipped".
         long unloadMark = events.markInstrumented();
-        exec("stellurgytest chunk release-all");
-        exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
+        arrange("stellurgytest chunk release-all");
+        arrange("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship, like the saved-ship scenario above: on a shared world a whole-dimension
         // count answers about whichever neighbour's ship is loaded — and the substrate's own
         // unload/load commits are what is awaited, keyed on this ship's physics uuid.
@@ -1036,14 +1064,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("the by-id state must agree with the unload record " + unloaded, !shipIsLoaded());
 
         long reloadMark = events.markInstrumented();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         // The reload is a COMMIT — a fresh physics object for this ship — and the poll it replaces
         // discarded its own `satisfied` flag, so a reload that never happened surfaced further down
         // as a regex failure reading like the contract breaking.
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "arrangement: the saved ship must come back before its hold can be judged");
-        // WINDOW: its length is how long a hull whose hold did not come back needs to fall visibly
-        // after the reload; overshoot only lets it fall further.
         advanceServerAndClient(80);
 
         // What the flight computer restored from NBT, and what it then decided unmanned. Read, not
@@ -1065,7 +1091,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + " | what it then decided unmanned: " + heldAfter, hoverY - afterY < RELOAD_SAG_BLOCKS);
 
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec,
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(),
                     "the unload was this scenario's subject; the rest of the class needs the default");
         }
     }
@@ -1073,6 +1099,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: entering / leaving the seat on a truly INVERTED ship (the maintainer's live scenario) --
 
     private static final String KEY_BINDINGS = "dev.stannismod.stellurgy.client.KeyBindings";
+
+    /** The steep tilt commands up.y = 0.5; at or under this the hull is there, in reach of the target. */
+    private static final double STEEP_TILT_REACHED_UP_Y = 0.55;
+
+    /** The deadline on the hull reaching that tilt: the 40 passes of 4 ticks the arrangement always allowed. */
+    private static final int STEEP_TILT_TURN_BUDGET_TICKS = 160;
 
     private double shipUpYFromInfo(ShipInfo info) {
         return info.upY(); // world-Y of the ship's local +Y
@@ -1082,16 +1114,22 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         return new double[]{info.x, info.y, info.z};
     }
 
-    /**
-     * <p>red-witnessed: NOT YET. With {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this stayed GREEN, 2026-10-06: the travel
-     * resolver's hull-stand first contact took him on the tilted deck instead, and the capture link
-     * waits for a {@code deck_entered} that does not name the mode. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.) The hull-stand that kept it
-     * green was deleted 2026-10-07, so the same inversion is owed again.</p>
-     */
+    @NotYetRed(prose = "NOT YET. With {@code DeckFrameTick#admissible} at"
+            + " {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame"
+            + " takes no body — this stayed GREEN, 2026-10-06: the travel"
+            + " resolver's hull-stand first contact took him on the tilted deck instead, and the capture link"
+            + " waits for a {@code deck_entered} that does not name the mode. (A record taken before the 2026-10-06 change needed two more breaks, while the"
+            + " travel resolver could also take him on a deck; that code is deleted.) The hull-stand that kept it"
+            + " green was deleted 2026-10-07, so the same inversion is owed again.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "releasedUpY (the instant the command is cut) to `tilted`, and the assertion below holds BOTH"
+                    + " ends in the envelope and prints both — the craft has to KEEP the tilt it was brought"
+                    + " to, not merely pass through it. Overshoot only gives it longer to drift out.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 22; i++) {",
+            why = "the MINIMUM height over the settled tail — a body that dipped and recovered is exactly the"
+                    + " failure being looked for, so a last-sample read would miss it, and no record carries a"
+                    + " minimum over a stretch of ticks. What this cannot see: a dip inside one 2-tick sample.")
     public void standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1108,15 +1146,26 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // keeps turning after the cursor centres — its own comment says so — so it landed anywhere
         // between no tilt and a vertical wall and SKIPPED whenever it missed. The mouse is not the
         // subject here; standing up on a tilted deck is, and it is still the real client that stands.
-        for (int i = 0; i < 40 && shipUpYFromInfo(shipInfo()) > 0.55; i++) {
-            exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0");
-            advanceServerAndClient(4);
-        }
-        exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
+        //
+        // The hold is commanded ONCE: it stands until it is cleared, and it never decides that it has
+        // arrived. So what is awaited is the hull's own attitude, published by its computer on every tick
+        // the hold is turning it, closing on the first tick it is in reach of the commanded up.y = 0.5.
+        Events tiltLog = serverEvents();
+        long tiltMark = tiltLog.markInstrumented();
+        String held = arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0").raw();
+        scenario().requireArranged("the steep tilt must be commanded on THIS ship's flight computer: " + held,
+                Reply.of(held).bool("commanded"));
+        ArrangementFailure.arranged(() -> tiltLog.awaitMatching(tiltMark, "afc_attitude",
+                reply -> Events.recordsWhereAll(reply, "vsShip", scenarioShipId, "via", "probe").stream()
+                        .anyMatch(record -> Events.number(record, "upY") <= STEEP_TILT_REACHED_UP_Y),
+                "a probe-held attitude of THIS ship at up.y <= " + STEEP_TILT_REACHED_UP_Y,
+                "the commanded 60-degree roll must bring the craft to the steep tilt before he stands up on it",
+                STEEP_TILT_TURN_BUDGET_TICKS));
+        // The pilot is at the controls, so the tilt is his to keep once the probe lets go — which his
+        // computer does only once he has put his hands on the stick (see takeTheStickWhileHeld).
+        takeTheStickWhileHeld("at the steep tilt, before the probe hold is cut");
+        arrange("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
         double releasedUpY = shipUpYFromInfo(shipInfo());
-        centreFlightCursor();
-        // WINDOW: the craft has to KEEP the tilt it was brought to, not merely pass through it;
-        // overshoot only gives it longer to drift out.
         advanceServerAndClient(30);
         double tilted = shipUpYFromInfo(shipInfo());
         // An ASSERT, not an Assume: the tilt is commanded to a value inside the envelope, so failing
@@ -1140,17 +1189,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // rather than one that may never have been.
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         String seeded = clientEvents.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "standing up on THIS tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
                         + " seed is what puts him there, and without it the heights below are"
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE;
-        // WINDOW: the MINIMUM height over the settled tail — a body that dipped and recovered is
-        // exactly the failure being looked for, so a last-sample read would miss it, and no record
-        // carries a minimum over a stretch of ticks. What this cannot see: a dip inside one 2-tick
-        // sample.
         for (int i = 0; i < 22; i++) {
             advanceServerAndClient(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1162,9 +1207,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // Every release in the window, each with the gate that performed it — production's own words
         // for what the cumulative counters this replaced could only report as a number.
         String releases = clientEvents.since(dismountMark, "deck_released");
-        DeckCapture capture = DeckCapture.read(this::exec);
+        DeckCapture capture = DeckCapture.read(c -> read(c).raw());
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = PlayerShipData.read(this::exec).playerY;
+        double serverY = PlayerShipData.read(c -> read(c).raw()).playerY;
         System.out.println("[deckcap] tilted-dismount upY=" + tilted + " shipPosY=" + seat[1]
                 + " settledMinY=" + settledMin + " Ytraj=" + traj);
         System.out.println("[deckcap] tilted-dismount seed=" + seeded + " releases=" + releases);
@@ -1199,15 +1244,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 Math.cos(h), Math.sin(h), -0.35, 0.35, "90deg");
     }
 
-    /**
-     * <p>red-witnessed: NOT YET. With {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this stayed GREEN, 2026-10-06, for the reason
-     * the steeply tilted stand-up records: a hull-stand capture satisfied a capture link that does not
-     * name the mode. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.) The hull-stand was deleted
-     * 2026-10-07, so the same inversion is owed again.</p>
-     */
+    @NotYetRed(prose = "NOT YET. With {@code DeckFrameTick#admissible} at"
+            + " {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame"
+            + " takes no body — this stayed GREEN, 2026-10-06, for the reason"
+            + " the steeply tilted stand-up records: a hull-stand capture satisfied a capture link that does not"
+            + " name the mode. (A record taken before the 2026-10-06 change needed two more breaks, while the"
+            + " travel resolver could also take him on a deck; that code is deleted.) The hull-stand was deleted"
+            + " 2026-10-07, so the same inversion is owed again.")
     @Test
     public void aFreshlyDismountedPilotStaysCapturedWhenTheShipThenRollsPastVertical() throws Exception {
         // Command 160deg; the attitude hold settles well PAST vertical on this fixture (measured deck-up
@@ -1231,6 +1274,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * steep/inverted deck in the headless harness. Thresholds are deck-relative (derived from the measured
      * ship Y), never a magic absolute.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew to the roll; an attitude converges and nothing declares it reached.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 22; i++) {",
+            why = "under a roll the claim is that the body stays within a band, a property of the stretch and not"
+                    + " of any instant. What this cannot see: an excursion inside one 2-tick sample.")
     private void assertDismountThenRollHolds(FixtureSite site, double qw, double qz,
             double upYLo, double upYHi, String label) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged. It arrives as
@@ -1250,7 +1300,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // before the stimulus is what turns the same question into one that can come back "no".
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         String seeded = clientEvents.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "the fresh dismount must engage the ship-frame capture on THIS ship's level deck",
                 DECK_LINK_BUDGET_TICKS);
@@ -1258,9 +1308,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
         double upBeforeTilt = shipUpYFromInfo(shipInfo());
         assertTrue("attitude hold must accept the " + label + " roll command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz).raw()
                         ).bool("commanded"));
-        // WINDOW: the slew to the roll; an attitude converges and nothing declares it reached.
         GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
         double tilted = shipUpYFromInfo(shipInfo());
         // Reliable command -> a HARD assert that the regime was reached (fail loudly, not a silent skip).
@@ -1273,9 +1322,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long rollMark = clientEvents.mark();
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE, settledMax = -Double.MAX_VALUE;
-        // WINDOW: under a roll the claim is that the body stays within a band, a property of the
-        // stretch and not of any instant. What this cannot see: an excursion inside one 2-tick
-        // sample.
         for (int i = 0; i < 22; i++) {
             advanceServerAndClient(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1298,7 +1344,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the ex-pilot must stay resolved on the ship he was rolled with");
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = PlayerShipData.read(this::exec).playerY;
+        double serverY = PlayerShipData.read(c -> read(c).raw()).playerY;
         System.out.println("[deckcap] dismount-then-roll " + label + " upY=" + tilted + " shipPosY="
                 + shipPosY + " settledMin=" + settledMin + " osc=" + osc + " seed=" + seeded
                 + " capturesOnRoll=" + Events.countRecordsWithField(rollCaptures, "ship")
@@ -1327,14 +1373,27 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + " clientY=" + clientY + ")", Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS);
     }
 
-    /**
-     * <p>red-witnessed: with {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this fails at "leaving the seat on THIS INVERTED ship
-     * must leave the ex-pilot captured BY IT on his own client", 2026-10-06. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.)</p>
-     */
+    @RedWitness(verdict = "must leave the ex-pilot captured BY IT on his own client", member = "DeckFrameTick#admissible",
+            at = "(!entity.world.isRemote || isLocalPlayer(entity))", replacedBy = "(!entity.world.isRemote)",
+            fails = "leaving the seat on THIS INVERTED ship must leave the ex-pilot captured BY IT on his own client",
+            on = "2026-10-06")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "a slew that did not get there fails in the gate below, loudly.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "overshoot only gives the craft longer to right itself.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "the hold is the server computer's, the pilot's idle input already linked in"
+                    + " takeTheStickWhileHeld; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
+            why = "fifteen raw mouse deltas two ticks apart are the turn command itself; the loop applies the"
+                    + " input and reads nothing. What it produced is judged after it — the cursor through its"
+                    + " `flight_cursor` link, the hull's answer through the rate window below.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
+            why = "the hull's rate over 20 readings two ticks of its world apart — the stretch the poll it"
+                    + " replaced could spend — and the verdict below is on the LARGEST of them.")
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1342,10 +1401,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double[] ship = buildShip(site);
 
         // Put the FRESH (never-piloted) craft into a held inversion by writing the attitude: 180
-        // degrees about X is q = (0, 1, 0, 0), so the deck's own +Y points at world −Y. It STAYS
-        // there once written, because an attitude error this far past the reference reseed is
-        // ADOPTED and then held rather than corrected — which is also the maintainer's ship, stuck
-        // inverted after a tumble.
+        // degrees about X is q = (0, 1, 0, 0), so the deck's own +Y points at world −Y — which is
+        // also the maintainer's ship, stuck inverted after a tumble. It does NOT stay there on its
+        // own once the hold is cut: an unmanned computer holds the reference it was assembled with,
+        // and a hull whose actuators can turn it (every fixture since 2026-09-30) slews back to
+        // level. So the hold stands until the pilot is seated and has put his hands on the stick,
+        // which makes the inverted attitude his computer's own (see takeTheStickWhileHeld).
         //
         // Three arrangements were measured side by side (2026-08-22, server tier, same craft type),
         // and only this one works. Re-applying a raw 5 rad/s spin — what this scenario did until
@@ -1365,16 +1426,25 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // "reached" for a record to carry. So the slew is a WINDOW, and the hold is a command that
         // STANDS: set once, it is in force until the force-clear below.
         double upBeforeSlew = shipUpYFromInfo(shipInfo());
-        String held = exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+        String held = arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0").raw();
         scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
                 + held, Reply.of(held).bool("commanded"));
-        // WINDOW: a slew that did not get there fails in the gate below, loudly.
         GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
         double reachedUpY = shipUpYFromInfo(shipInfo());
+
+        // ENTER the seat on the inverted ship, with the hold still standing — located inside THIS
+        // ship, not "the first seat in the world" (see mountPilotSeatOfShipAt). The mark is taken
+        // here rather than inside the helper because the helper's other callers take their own.
+        long seatClientMark = clientEvents().mark();
+        mountPilotSeatOfShipAt(bx, by, bz);
+        awaitClientMount(seatClientMark, "the turn commands below are sent BY THE CLIENT from the"
+                + " seat it believes he is in, so the server's own mount receipt is not enough",
+                DECK_LINK_BUDGET_TICKS, "");
+        takeTheStickWhileHeld("seated on the inverted ship, before the probe hold is cut");
+
         // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
         // and everything below needs the second one.
-        exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
-        // WINDOW: overshoot only gives the craft longer to right itself.
+        arrange("stellurgytest vs force-clear-by-id 0 " + scenarioShipId).raw();
         GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);
         ShipInfo info0 = shipInfo();
         double invertedUpY = shipUpYFromInfo(info0);
@@ -1392,23 +1462,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + ", when cut=" + reachedUpY + ", after the window=" + invertedUpY + "): " + info0,
                 reachedUpY < INVERTED_UP_Y && invertedUpY < INVERTED_UP_Y);
 
-        // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
-        // the world" (see mountPilotSeatOfShipAt). The mark is taken here rather than inside the
-        // helper because the helper's other callers take their own.
-        long seatClientMark = clientEvents().mark();
-        mountPilotSeatOfShipAt(bx, by, bz);
-        awaitClientMount(seatClientMark, "the turn commands below are sent BY THE CLIENT from the"
-                + " seat it believes he is in, so the server's own mount receipt is not enough",
-                DECK_LINK_BUDGET_TICKS, "");
-
         // SYMPTOM "after entering, the ship does not react": a turn command must actually move it.
         // Judged ABOVE what the slew left behind, read here before the command: the hull is not
         // still after an inversion (0.27 rad/s measured in the sibling scenario below), and a bare
         // bar would be cleared by that residue with the controls dead.
         double omegaSettled = shipInfo().omega;
-        // STIMULUS: fifteen raw mouse deltas two ticks apart are the turn command itself; the loop
-        // applies the input and reads nothing. What it produced is judged after it — the cursor
-        // through its `flight_cursor` link, the hull's answer through the rate window below.
         for (int i = 0; i < 15; i++) {
             mouseDelta(60, 0);
             bot().waitWorldTicks(2);
@@ -1420,10 +1478,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // the result is an angular RATE. A rate is measured, and the window's EXTREMUM is the
         // measurement, because a hull commanded round passes through every attitude and a last
         // sample of a completed turn reads as "unmoved".
-        // WINDOW: the hull's rate over 20 readings two ticks of its world apart — the stretch the poll
-        // it replaced could spend — and the verdict below is on the LARGEST of them.
         java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
-        GameTicks.observe(serverClient(), GameTicks.world(0), 20, TURN_WINDOW_GAP_TICKS,
+        // Both clocks: the client keeps the deflected cursor's turn command going while the hull answers.
+        GameTicks.observe(worldAndClient(0), 20, TURN_WINDOW_GAP_TICKS,
                 () -> turnRates.add(shipInfo().omega));
         double omegaAfter = java.util.Collections.max(turnRates);
         System.out.println("[deckcap] force-invert control cursor="
@@ -1433,7 +1490,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // The client's own capture of THIS dismount is the link; a body that fell through has none.
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         String seeded = ShipIdentity.awaitCaptureHeldBy(clientEvents, dismountMark, scenarioShipId,
                 "leaving the seat on THIS INVERTED ship must leave the ex-pilot captured BY IT on his"
                         + " own client, which is where the reported fall-through happens",
@@ -1442,7 +1499,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 "after leaving the seat on an INVERTED ship the ex-pilot must stay resolved on THAT"
                         + " ship, not on whatever else is in the airspace");
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = PlayerShipData.read(this::exec).playerY;
+        double serverY = PlayerShipData.read(c -> read(c).raw()).playerY;
         System.out.println("[deckcap] force-invert dismount seed=" + seeded + " capture=" + capture.raw()
                 + " clientY=" + clientY + " serverY=" + serverY);
 
@@ -1453,13 +1510,23 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + "through: " + capture.raw(), capture.verdict);
     }
 
-    /**
-     * <p>red-witnessed: with {@code KeyBindings#acceptShipPilotMouseDelta} at
-     * {@code pilot.pendingCursorYawDeg += dx * degPerUnit;} removed, this fails at "a hard
-     * flight-cursor deflection must register on the client even when inverted" (cursor=0.0),
-     * 2026-10-06.</p>
-     */
+    @RedWitness(verdict = "a hard flight-cursor deflection must register", member = "KeyBindings#acceptShipPilotMouseDelta",
+            at = "pilot.pendingCursorYawDeg += dx * degPerUnit;", replacedBy = "",
+            fails = "a hard flight-cursor deflection must register on the client even when inverted (cursor=0.0)",
+            on = "2026-10-06")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "the reading is the client's deck camera, so the client's ticks count too.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds BOTH ends"
+                    + " inverted and prints both. The same ticks let the slew's residual spin decay before the"
+                    + " turn below; that spin is printed as omegaSettled and asserted nowhere.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20; i++) {",
+            why = "twenty raw mouse deltas two ticks apart are the command; the loop applies the input and reads"
+                    + " nothing, and what it produced is judged after it, as in the leg above.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
+            why = "30 readings two ticks of the hull's world apart, the stretch the poll it replaced could spend;"
+                    + " the verdict below is on the LARGEST.")
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1475,16 +1542,15 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // The same standing hold as the force-invert leg above, and the same argument: one command,
         // in force until the force-clear.
         double upBeforeSlew = deckCamera("shipUpY");
-        String held = exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+        String held = arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0").raw();
         scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
                 + held, Reply.of(held).bool("commanded"));
-        // WINDOW: the reading is the client's deck camera, so the client's ticks count too.
         advanceWorldAndClient(0, INVERT_SLEW_WINDOW_TICKS);
         double releasedUpY = deckCamera("shipUpY");
-        exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
-        centreFlightCursor();
-        // WINDOW: the same ticks let the slew's residual spin decay before the turn below; that spin
-        // is printed as omegaSettled and asserted nowhere.
+        // His hands on the stick while the hold stands, so the inversion is what his computer keeps
+        // once it is cut (see takeTheStickWhileHeld); it leaves the cursor centred.
+        takeTheStickWhileHeld("at the inversion, before the probe hold is cut");
+        arrange("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
         advanceWorldAndClient(0, INVERTED_HOLD_WINDOW_TICKS);
         double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
@@ -1504,8 +1570,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
         // Now, WHILE inverted, command a fresh turn. The ship must respond - its angular velocity must
         // rise - just as it does upright. If it stays at rest, the controls are dead at inversion.
-        // STIMULUS: twenty raw mouse deltas two ticks apart are the command; the loop applies the
-        // input and reads nothing, and what it produced is judged after it, as in the leg above.
         for (int i = 0; i < 20; i++) {
             mouseDelta(60, 0);
             bot().waitWorldTicks(2);
@@ -1515,10 +1579,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // the link for the command going in — asserted three lines below, not merely printed — and
         // the hull's answer is an angular rate that nothing decides and no record carries. Read the
         // refusal there; it is not repeated here.
-        // WINDOW: 30 readings two ticks of the hull's world apart, the stretch the poll it replaced
-        // could spend; the verdict below is on the LARGEST.
         java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
-        GameTicks.observe(serverClient(), GameTicks.world(0), 30, TURN_WINDOW_GAP_TICKS,
+        // Both clocks: the client keeps the deflected cursor's turn command going while the hull answers.
+        GameTicks.observe(worldAndClient(0), 30, TURN_WINDOW_GAP_TICKS,
                 () -> turnRates.add(shipInfo().omega));
         double omegaTurning = java.util.Collections.max(turnRates);
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);
@@ -1530,6 +1593,46 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("a seated pilot must still be able to TURN the ship when it is inverted - commanding a "
                 + "turn must spin it up, not leave it dead (omega " + omegaSettled + " before the command,"
                 + " " + omegaTurning + " after)", omegaTurning > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S);
+    }
+
+    /**
+     * The seated pilot takes the stick and lets it centre again, while a probe hold keeps the hull at
+     * the attitude it was brought to — so the attitude his computer holds once the probe lets go is
+     * the one he is sitting at, not the one it held before.
+     *
+     * <p>Derived from the flight computer's own rule: while a pilot is at the controls and asks for no
+     * rotation, the reference it holds is pinned to where the ship IS
+     * ({@code TileAdvancedFlightComputer.update}, the {@code !turning} re-seed), and an unmanned or
+     * idle-seated craft keeps holding the last reference it had. A pilot who has never touched the
+     * stick has sent no input at all — the client sends on a change ({@code PilotInputCadence}) — so
+     * without this his craft still holds the attitude it was assembled at and slews back to it the
+     * moment the probe is cleared, which is production doing its job and not the arrangement the
+     * scenario needs.</p>
+     *
+     * <p>The link is the computer's own record of the input arriving ({@code pilot_input_set}, for
+     * THIS ship). The centring's last send is the idle input; the scenario's following read of the
+     * attitude over a window is what says the hold took.</p>
+     */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20 && Math.abs(stick) <= CURSOR_DEFLECTED; i++) {",
+            why = "each iteration IS a push of the cursor off centre, sized by how far the cursor read short of"
+                    + " the dead-zone's edge, and the loop ends on its goal state — a deflection past the"
+                    + " dead-zone, which is a CHANGE the client sends.")
+    private void takeTheStickWhileHeld(String what) throws Exception {
+        double stick = flightCursorX(what + ", before deflecting");
+        for (int i = 0; i < 20 && Math.abs(stick) <= CURSOR_DEFLECTED; i++) {
+            // Past the dead-zone's edge by as much again: a deflection the client sends, not a graze of it.
+            mouseDelta(cursorPush(2 * CURSOR_DEFLECTED, CURSOR_DEFLECTED, stick), 0);
+            bot().waitWorldTicks(1);
+            stick = flightCursorX(what + ", deflecting, pass " + i);
+        }
+        long inputMark = serverEvents().mark();
+        centreFlightCursor();
+        // An ARRANGEMENT, not a verdict: the scenario's subject comes after the hold is cut, and this
+        // only establishes that the attitude his computer holds then is the one he is sitting at.
+        ArrangementFailure.arranged(() -> serverEvents().awaitRecordWithFields(inputMark, "pilot_input_set",
+                what + " — the pilot's hands on the stick must reach THIS ship's flight computer, or"
+                        + " the hold it keeps afterwards is still the one it was assembled with",
+                DECK_LINK_BUDGET_TICKS, "vsShip", scenarioShipId, "input", "set"));
     }
 
     /** Feed a raw mouse delta to the client's own ship-pilot handler, as the window's mouse would. */
@@ -1547,10 +1650,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * {@link #flightCursorX} is what makes that failure legible — against a dead path it names the
      * empty window instead of handing back the value the last live tick left behind.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {",
+            why = "each iteration IS a nudge of the cursor, and the loop ends on its goal state; delete it and the"
+                    + " centring stops happening, not merely stops being watched.")
     private void centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
-        // STIMULUS: each iteration IS a nudge of the cursor, and the loop ends on its goal state;
-        // delete it and the centring stops happening, not merely stops being watched.
         for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {
             int step = Math.abs(cursor) > 0.2 ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
@@ -1580,14 +1684,21 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: camera/capture instability on a steeply tilted, HELD deck ------------------------
 
-    /**
-     * <p>red-witnessed: with {@code DeckFrameTick#admissible} at
-     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct — the client's deck frame
-     * takes no body — this fails at "capture must stay STABLE on a held tilted
-     * deck, not flicker (captured 0/5)", 2026-10-06. (A record taken before the 2026-10-06 change needed two more breaks, while the
-     * travel resolver could also take him on a deck; that code is deleted.)</p>
-     */
+    @RedWitness(verdict = "capture must stay STABLE on a held tilted deck, not flicker (captured",
+            member = "DeckFrameTick#admissible",
+            at = "(!entity.world.isRemote || isLocalPlayer(entity))", replacedBy = "(!entity.world.isRemote)",
+            fails = "capture must stay STABLE on a held tilted deck, not flicker (captured 0/5)", on = "2026-10-06")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);",
+            why = "\"on its side\" is the band this class already holds the same 90-degree command to"
+                    + " (aFreshlyDismountedPilotStaysCaptured...Ninety).")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < n; i++) {",
+            why = "how many samples had the deck camera on, and how far roll and height moved across them, are"
+                    + " properties of the observation rather than of a moment, so no record could answer. What"
+                    + " this cannot see: a capture or a camera that flipped and returned inside one 4-tick"
+                    + " sample.")
     public void aClientPlayerRidingASteeplyTiltedDeckHasStableCaptureAndCamera() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1600,7 +1711,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // capture (which alternates gravity and drags the body "back and forth through the deck").
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // The message says CLIENT, so the read is the client's: his own resolver's capture record,
         // awaited rather than given 80 ticks. (The server probe beside it re-evaluates handles() for
         // the SERVER player and reads the SERVER state map — a second opinion, not this one.)
@@ -1619,10 +1730,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
         double upBeforeSide = shipInfo().upY();
         assertTrue("attitude hold must accept the tilt",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        // WINDOW: "on its side" is the band this class already holds the same 90-degree command to
-        // (aFreshlyDismountedPilotStaysCaptured...Ninety).
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);
         double upOnSide = shipInfo().upY();
         scenario().requireArranged("the deck must be on its side before its stability is sampled:"
@@ -1640,10 +1749,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
         int captured = 0, camOn = 0;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: how many samples had the deck camera on, and how far roll and height moved across
-        // them, are properties of the observation rather than of a moment, so no record could
-        // answer. What this cannot see: a capture or a camera that flipped and returned inside one
-        // 4-tick sample.
         for (int i = 0; i < n; i++) {
             advanceServerAndClient(4);
             boolean active = Boolean.parseBoolean(deckCameraText("active"));
@@ -1651,7 +1756,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             // Counted as "captured" only while the capture is anchored on THIS scenario's ship: the
             // claim below is that one capture held for the whole window, and a body handed from this
             // hull to a neighbour's and back keeps `verdict:true` at every sample.
-            DeckCapture sample = DeckCapture.read(this::exec);
+            DeckCapture sample = DeckCapture.read(c -> read(c).raw());
             boolean verdict = sample.verdict
                     && sample.anchoredOn(scenarioShipId);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1691,12 +1796,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: coordinate transforms break at extreme (inverted) attitudes ----------------------
 
-    /**
-     * <p>red-witnessed: with {@code Quat#rotate} at
-     * {@code vy * 2 * (xy - wz)} changed to {@code (xy + wz)}, this fails at "movement rotate and
-     * camera quaternion must agree on ship-up" (disagreement 0.711), 2026-10-06.</p>
-     */
+    @RedWitness(verdict = "must agree on ship-up", member = "Quat#rotate",
+            at = "vy * 2 * (xy - wz)", replacedBy = "vy * 2 * (xy + wz)",
+            fails = "movement rotate and camera quaternion must agree on ship-up", on = "2026-10-06")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the flip; an attitude publishes no record, so the frame check below reads it.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
     public void anInvertedShipsMovementAndCameraFramesStayConsistent() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1714,18 +1821,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // test server holds every ship loaded from the moment the probes register.
         double upBeforeFlip = shipInfo().upY();
         assertTrue("attitude hold must accept the flip",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481").raw()
                         ).bool("commanded"));
-        // WINDOW: the flip; an attitude publishes no record, so the frame check below reads it.
         GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
 
         ShipInfo info = shipInfo();
         double sx = info.x, sy = info.y, sz = info.z;
         // Inside the AABB so the probe resolves. No wait: the check is the SERVER's, it resolves the
         // hull from the server player's position, and `tp` has written that before it replies.
-        exec("tp @a " + sx + " " + (sy + 1) + " " + sz + " 0 0");
+        arrange("tp @a " + sx + " " + (sy + 1) + " " + sz + " 0 0").raw();
 
-        ShipFrameCheck tc = ShipFrameCheck.ofFirstPlayer(this::exec)
+        ShipFrameCheck tc = ShipFrameCheck.ofFirstPlayer(c -> read(c).raw())
                 .requireMeasured("the frame check must run on the player standing on this deck");
         System.out.println("[deckcap] inverted transform-check=" + tc.raw());
         // The attitude controller converges shy of a full 180 (axis-angle is singular there), settling
@@ -1790,23 +1896,29 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * to stand him on the seat's deck point, and his client keeps each request for
      * {@link #PENDING_SEED_TICKS}. A teleport made inside that window is a different presence of the
      * body, and both must end with it.</p>
-     *
-     * <p>red-witnessed: 2026-10-07, with {@code EntityDummy#keepDismountedPilotOnDeck} at
-     * {@code != dismountTeleports} made {@code != dismountTeleports && false} and {@code
-     * PendingSeed#voidedBy} at {@code != teleports} made {@code != teleports && false}:
-     * "a pilot teleported away right after standing up must not be put back on the deck he left:
-     * captures since the teleport …" — his client applied the window's deck point three more times
-     * after the teleport ({@code ship_frame_seed} outcome {@code applied}).</p>
      */
+    @NotYetRed(prose = "no single-fragment witness. On 2026-10-07 the verdict went red with two breaks at"
+            + " once, and neither is recorded alone: {@code EntityDummy#keepDismountedPilotOnDeck} at"
+            + " {@code != dismountTeleports} made {@code != dismountTeleports && false}, and"
+            + " {@code PendingSeed#voidedBy} at {@code != teleports} made {@code != teleports && false}:"
+            + " \"a pilot teleported away right after standing up must not be put back on the deck he left:"
+            + " captures since the teleport\" - his client applied the window's deck point three more times"
+            + " after the teleport ({@code ship_frame_seed} outcome {@code applied}).")
+    @Pins("HOLD-2")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "arrange(\"stellurgytest player dismount\");",
+            why = "stand up — the server's own dismount, the call a Shift press ends in.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(DISMOUNT_WINDOW_TICKS + PENDING_SEED_TICKS);",
+            why = "the longest an intent made before the teleport could still act — the rest of the server's"
+                    + " window plus a request's life on the client; overshoot only gives a surviving intent"
+                    + " longer to put him back, so it can only turn a green red.")
     public void aPilotTeleportedAwayRightAfterStandingUpIsNotPutBackOnHisDeck() throws Exception {
         double[] ship = buildAndBoardShip(site());
         String who = botName();
         Events server = serverEvents();
         long dismountMark = server.markInstrumented();
         long clientDismountMark = clientEvents().mark();
-        // STIMULUS: stand up — the server's own dismount, the call a Shift press ends in.
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // The deck must have TAKEN him on his client: that is the state a teleport has to end, and
         // the request that put him there is what keeps coming for the rest of the window.
         clientEvents().awaitRecordWithFields(clientDismountMark, "deck_entered",
@@ -1816,7 +1928,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double awayX = ship[0] + TELEPORTED_AWAY_BLOCKS, awayZ = ship[2] + TELEPORTED_AWAY_BLOCKS;
         long teleportMark = server.mark();
         long clientTeleportMark = clientEvents().mark();
-        exec("tp @a " + awayX + " " + (ship[1] + TELEPORTED_UP_BLOCKS) + " " + awayZ + " 0 0");
+        arrange("tp @a " + awayX + " " + (ship[1] + TELEPORTED_UP_BLOCKS) + " " + awayZ + " 0 0");
         awaitClientPlacedNear(clientTeleportMark, awayX, awayZ,
                 "the teleport must reach his client before what happens to him after it can be read");
 
@@ -1831,9 +1943,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                         + DISMOUNT_WINDOW_TICKS + ")",
                 teleportTick - dismountTick < DISMOUNT_WINDOW_TICKS);
 
-        // WINDOW: the longest an intent made before the teleport could still act — the rest of the
-        // server's window plus a request's life on the client; overshoot only gives a surviving
-        // intent longer to put him back, so it can only turn a green red.
         advanceServerAndClient(DISMOUNT_WINDOW_TICKS + PENDING_SEED_TICKS);
         String retaken = clientEvents().since(clientTeleportMark, "deck_entered");
         Events.assertInstrumentRan(retaken, "deck_capture_events",
@@ -1858,7 +1967,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -1867,14 +1976,15 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // that merely went up is answered by any neighbour that assembled one in the same window.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -1882,7 +1992,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // The IDENTITY is already known: this scenario ASSEMBLED the ship, and the registry's own
         // `ship_spawned` record above names it. What still has to be waited for is a different fact
         // — the physics object being USABLE, which a registry add does not prove. That fact is
-        // production's own `ShipEvent.ShipLoadedEvent`, recorded off the bus as `ship_usable`: the
+        // production's own `ShipLifecycleEvent.ShipUsable`, recorded off the bus as `ship_usable`: the
         // conjunction the physics loop selects a ship by, where the old `managed:true` poll read a
         // literal `true` in the probe's reply builder and so waited on nothing. The wait is still
         // keyed BY ID: these scenarios hover, tumble and invert their ship on purpose, and a bounded
@@ -1927,17 +2037,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * where the scenario thought its ship was.</p>
      */
     private void mountPilotSeatOfShipAt(int bx, int by, int bz) throws Exception {
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, scenarioShipId)
                 .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
                         + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("stellurgytest player mount-entity " + dummyId)).bool("mounted"));
+                Reply.of(arrange("stellurgytest player mount-entity " + dummyId).raw()).bool("mounted"));
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. The site stands
@@ -1948,14 +2058,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // HEIGHT 24 is the ENVELOPE, not the hull: ~10 blocks of hull, a deck on top of it, a body
         // standing (~2) and jumping (~1.25) there, and the room the scenarios below dismount, drop
         // and roll in. A check sized to what is BUILT is green in exactly the case that failed.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
                 "the hull, the deck a pilot dismounts onto, and the air he jumps into above it");
     }
 
     /** This scenario's ship, asked by identity, as the probe answered it. */
     private String shipInfoReply() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
-        return exec("stellurgytest vs ship-info 0 id " + scenarioShipId);
+        return read("stellurgytest vs ship-info 0 id " + scenarioShipId).raw();
     }
 
     /** The same reading, parsed — it refuses a craft this world does not hold. */
@@ -1975,7 +2085,106 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         return ShipInfo.isLoaded(shipInfoReply());
     }
 
+    // ---- A falling deck keeps the body it has taken -----------------------------------------------
+    //
+    // The two scenarios above hold a hovering deck. This one lets the deck FALL, because that is where
+    // a body and its deck part company if anything does: an entity and a VS ship do not fall at the
+    // same rate (an entity accumulates -0.08 per game tick against a 0.98 drag; a ship integrates its
+    // field at its own step and drag), so a body resolved in the WORLD frame over a falling deck sinks
+    // toward it and through it. A body resolved in the SHIP frame cannot — its ship-frame position is
+    // authoritative and the deck is static in that frame — and the support probe that keeps it there
+    // reaches further the faster the body falls in the ship frame. So the contract is stated on the
+    // resolver's own record: taken onto this deck, and still held by it after the deck has fallen.
+
+    /** How long the released deck is let fall, in ticks of the hull's world clock. */
+    private static final int DECK_FALL_TICKS = 30;
+
+    /**
+     * How far the deck must have fallen for this scenario to be about a FALLING deck, in blocks. A
+     * released craft covers 88.7 to 128.3 blocks in 61 ticks on the server tier (four runs,
+     * 2026-09-29), so a
+     * deck that clears this in thirty has been released; one that does not is still being held.
+     */
+    private static final double DECK_FELL_MIN = 4.0;
+
+    /**
+     * How far above its pad the deck is lifted before it is let fall, in blocks: more than a released
+     * craft covers in {@link #DECK_FALL_TICKS} (at most about 31 from rest, scaling the server tier's
+     * largest measured fall, 128.3 in 61 ticks, by the square of the time), so
+     * the fall ends in the air and not on the pad.
+     */
+    private static final int DECK_FALL_CLEARANCE_BLOCKS = 60;
+
+    /**
+     * A pilot who stands up and is taken onto his deck stays on it while the deck falls.
+     */
+    @NotYetRed(prose = "NOT YET — three attempts, all GREEN. (1) {@code ShipFrameTravel.FLOOR_PROBE_DEPTH}"
+            + " at 0, 2026-09-29: with no floor in reach a body still touching the hull goes to HULL-STAND"
+            + " ({@code ShipFrameTravel#handles} at {@code state.hullStand = true;}), which keeps the episode open, so no release is recorded."
+            + " (2) {@code ShipFrameTravel#travel} at {@code String shipId = anchored.shipId;} handing every aboard body to vanilla's world-frame travel,"
+            + " 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable#tickAddedVelocityForWorld} at {@code if (!e.isDead)}),"
+            + " 2026-09-30. So the body is kept by more than one mechanism — the ship-frame resolver and the"
+            + " substrate's world-frame collision — and none of the three drove the resolver to a release, which"
+            + " is the only thing this verdict reads. What would turn it red is a release on a falling deck; the"
+            + " production line that decides one there is not yet identified.")
+    @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(4);",
+            why = "the sneak key held across client ticks, as a player holds it to stand up.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceWorldAndClient(0, DECK_FALL_TICKS);",
+            why = "the dose is DECK_FALL_TICKS of fall. The gate below is a LOWER bound on the deck's drop, which"
+                    + " extra ticks only make easier to meet — for a deck that is falling at all.")
+    public void yABodyTakenOntoADeckIsKeptWhileTheDeckFalls() throws Exception {
+        buildAndBoardShip(site());
+        // Off the pad first: the launchpad is WORLD blocks under the hull, so a deck released where it
+        // was built falls one block onto it and stops — measured 2026-09-29, 1.6 blocks in 30 ticks.
+        // The rigid lift carries the seated pilot with it.
+        liftClearOfThePad(scenarioShipId, DECK_FALL_CLEARANCE_BLOCKS);
+
+        // Stand up the way a player does — the real sneak key — and wait for his OWN client to take
+        // him onto THIS ship's deck. A riding body is excluded from capture, so standing up has to
+        // produce an entry, and an entry is an edge the mark cannot miss.
+        Events clientEvents = clientEvents();
+        long clientMark = clientEvents.mark();
+        long dismountMark = serverEvents().markInstrumented();
+        bot().holdKey(Keyboard.KEY_LSHIFT);
+        bot().waitWorldTicks(4);
+        bot().releaseKey(Keyboard.KEY_LSHIFT);
+        ArrangementFailure.arranged(() -> serverEvents().await(dismountMark, "dismount", "the real sneak key"
+                + " must take the pilot out of his seat before anything about the deck can be asked",
+                DECK_LINK_BUDGET_TICKS));
+        ArrangementFailure.arranged(() -> clientEvents.awaitField(clientMark, "deck_entered", "ship",
+                scenarioShipId, "the ex-pilot's OWN client must take him onto THIS ship's deck when he"
+                        + " stands up", DECK_LINK_BUDGET_TICKS));
+
+        // Release the craft. Flight Assist is the unmanned mode switch: on, an unpiloted craft holds;
+        // off, it is handed to the field.
+        scenario().requireArranged("the flight computer of THIS craft must take the release",
+                Reply.of(arrange("stellurgytest vs fa-by-id 0 " + scenarioShipId + " false").raw())
+                        .bool("afcResolved"));
+        double deckFrom = shipInfo().y;
+        advanceWorldAndClient(0, DECK_FALL_TICKS);
+        double deckTo = shipInfo().y;
+        scenario().requireArranged("the released deck must actually FALL, or nothing here is about a"
+                + " falling deck: it went from " + deckFrom + " to " + deckTo + " in "
+                + DECK_FALL_TICKS + " ticks", deckFrom - deckTo >= DECK_FELL_MIN);
+
+        scenario().asserting("the body taken onto the deck is still held by it after the fall");
+        assertTrue("a body taken onto a deck must still be held by it after the deck has fallen "
+                        + (deckFrom - deckTo) + " blocks. The releases in the window, with production's"
+                        + " own reason for each: " + clientEvents.since(clientMark, "deck_released")
+                        + " ||| the episode edges: " + clientEvents.since(clientMark, "deck_entered"),
+                ShipIdentity.endsCapturedBy(clientEvents, clientMark, scenarioShipId));
+    }
+
     private int readInt(String json, String field) {
         return Reply.of(json).integer(field);
+    }
+
+    /** {@code (x, y, z)} rotated by the attitude quaternion {@code qw/qx/qy/qz} of a ship report. */
+    private static double[] rotateByShip(Reply pose, double x, double y, double z) {
+        double w = pose.number("qw"), ux = pose.number("qx"), uy = pose.number("qy"), uz = pose.number("qz");
+        double cx = uy * z - uz * y, cy = uz * x - ux * z, cz = ux * y - uy * x;
+        double ccx = uy * cz - uz * cy, ccy = uz * cx - ux * cz, ccz = ux * cy - uy * cx;
+        return new double[]{x + 2 * (w * cx + ccx), y + 2 * (w * cy + ccy), z + 2 * (w * cz + ccz)};
     }
 }

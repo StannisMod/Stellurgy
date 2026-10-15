@@ -1,5 +1,6 @@
 package com.github.stannismod.forge.testing.client;
 
+import com.github.stannismod.forge.testing.junit.HarnessBoot;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.sun.jna.*;
 import com.sun.jna.ptr.IntByReference;
@@ -11,11 +12,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public final class RealClientHarness implements AutoCloseable {
@@ -63,14 +60,20 @@ public final class RealClientHarness implements AutoCloseable {
         this.clientLogFile = clientLogFile;
     }
 
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness) throws Exception {
-        return start(serverHarness, CLIENT_USERNAME);
+    /**
+     * The default client. Every start takes a {@link HarnessBoot}: the right to a client of one's own,
+     * which the mechanics bases make and an e2e cannot (see that class).
+     */
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness)
+            throws Exception {
+        return start(boot, serverHarness, CLIENT_USERNAME);
     }
 
     /** The default client, with the framebuffer object on from the first frame — see the overload below. */
-    public static RealClientHarness startWithFramebuffer(RealDedicatedServerHarness serverHarness)
+    public static RealClientHarness startWithFramebuffer(HarnessBoot boot,
+                                                         RealDedicatedServerHarness serverHarness)
             throws Exception {
-        return start(serverHarness, CLIENT_USERNAME, true);
+        return start(boot, serverHarness, CLIENT_USERNAME, true);
     }
 
     /**
@@ -88,9 +91,9 @@ public final class RealClientHarness implements AutoCloseable {
      * and also seeds the deterministic offline-mode UUID
      * ({@code OfflinePlayer:<username>} → {@code UUID.nameUUIDFromBytes}).</p>
      */
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness,
                                           String clientUsername) throws Exception {
-        return start(serverHarness, clientUsername,
+        return start(boot, serverHarness, clientUsername,
                 "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")));
     }
 
@@ -108,9 +111,30 @@ public final class RealClientHarness implements AutoCloseable {
      * minimal for driver safety, and the render path the rest of the tier runs is not one test's to
      * change. {@code -Dforge.test.client.fbo=true} still turns it on for every client.</p>
      */
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness,
                                           String clientUsername,
                                           boolean framebufferAtLaunch) throws Exception {
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
+        return startInternal(serverHarness, clientUsername, framebufferAtLaunch, /*e2e=*/false);
+    }
+
+    /**
+     * The default client in E2E MODE ({@link com.github.stannismod.forge.testing.E2EMode}): its bridge
+     * refuses, at the call, every command whose kind an e2e does not admit, and a static call on anything
+     * but an instrument the consuming project names. The framebuffer follows {@code -Dforge.test.client.fbo},
+     * as for every other client.
+     */
+    public static RealClientHarness startE2E(HarnessBoot boot, RealDedicatedServerHarness serverHarness)
+            throws Exception {
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.E2E);
+        return startInternal(serverHarness, CLIENT_USERNAME,
+                "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")), /*e2e=*/true);
+    }
+
+    private static RealClientHarness startInternal(RealDedicatedServerHarness serverHarness,
+                                                   String clientUsername,
+                                                   boolean framebufferAtLaunch,
+                                                   boolean e2e) throws Exception {
         Path root = Files.createTempDirectory("forge-client-");
         Files.createDirectories(root.resolve("resourcepacks"));
         bootstrapClientFiles(root, framebufferAtLaunch);
@@ -124,9 +148,10 @@ public final class RealClientHarness implements AutoCloseable {
         try (java.net.ServerSocket controlSocket = openControlSocket()) {
             int controlPort = controlSocket.getLocalPort();
             process = launchClient(root, serverHarness.port(), controlPort, clientLogFile,
-                    clientUsername);
+                    clientUsername, e2e);
 
-            ClientBot bot = awaitClientBot(controlSocket);
+            // An e2e's player input tells ITS server when his walk begins: from then on no build is admitted.
+            ClientBot bot = awaitClientBot(controlSocket, e2e ? serverHarness.client() : null);
             bot.waitForWorld();
             return new RealClientHarness(root, process, bot, clientLogFile);
         } catch (Exception exception) {
@@ -151,10 +176,6 @@ public final class RealClientHarness implements AutoCloseable {
                     + (preservedLog != null ? " Full log: " + preservedLog : "")
                     + "\nRecent client log:\n" + logTail, exception);
         }
-    }
-
-    public Path root() {
-        return root;
     }
 
     public ClientBot bot() {
@@ -222,7 +243,7 @@ public final class RealClientHarness implements AutoCloseable {
      * applied as the environment variable {@code <NAME>} on the client
      * process, overriding whatever the test JVM inherited.</p>
      *
-     * <p>This exists because {@code AbstractClientE2ETest} runs a dedicated
+     * <p>This exists because {@code AbstractOwnBootClientTest} runs a dedicated
      * server harness AND a client in the same test JVM. The server harness
      * inherits the test JVM's environment (which a FG6 build script populates
      * from the {@code runServer} run-config — {@code mainClass}, {@code tweakClass},
@@ -241,15 +262,19 @@ public final class RealClientHarness implements AutoCloseable {
     public static final String PROP_CLIENT_ENV_PREFIX = "forge.test.client.env.";
 
     private static Process launchClient(Path root, int serverPort, int controlPort, Path clientLogFile,
-                                        String clientUsername) throws IOException {
+                                        String clientUsername, boolean e2e) throws IOException {
         Path javaBinary = resolveJavaBinary();
         String assetsDirProp = System.getProperty(PROP_ASSETS_DIR);
         Path assetsDir = assetsDirProp != null
                 ? Paths.get(assetsDirProp)
                 : gradleUserHome().resolve("caches").resolve("retro_futura_gradle").resolve("assets");
-        Path nativesDir = resolveNativesDir();
-        String launcherClass = System.getProperty(PROP_LAUNCHER_CLASS, "GradleStart");
-        boolean legacyArgs = Boolean.parseBoolean(System.getProperty(PROP_LEGACY_ARGS, "true"));
+        Path nativesDir = soundlessNativesDir(resolveNativesDir());
+        String launcherClass = e2e ? E2E_LAUNCHER : System.getProperty(PROP_LAUNCHER_CLASS, E2E_LAUNCHER);
+        boolean legacyArgs = e2e || Boolean.parseBoolean(System.getProperty(PROP_LEGACY_ARGS, "true"));
+        if (e2e) {
+            refuseAnotherSetting(PROP_LAUNCHER_CLASS, E2E_LAUNCHER);
+            refuseAnotherSetting(PROP_LEGACY_ARGS, "true");
+        }
 
         String currentClassPath = Objects.requireNonNull(System.getProperty("java.class.path"), "java.class.path");
         Path libDir = Files.createTempDirectory(root, "client-libs-");
@@ -291,6 +316,9 @@ public final class RealClientHarness implements AutoCloseable {
         // while recording nothing. A normal game never sets this property, never discovers the
         // class (it is compiled into the test source set only) and pays nothing for any of it.
         javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
+        // Every child carries its mode; one launched without would refuse to start.
+        javaArgs.addAll((e2e ? com.github.stannismod.forge.testing.ChildMode.E2E
+                : com.github.stannismod.forge.testing.ChildMode.MECHANICS).childArguments());
         // Every `mixin.*` property set on the test JVM is forwarded to the child. Queuing a
         // configuration is not the same as WEAVING a class, and nothing reports the difference: a
         // mixin whose target was already loaded is silently skipped, and its silence then reads as
@@ -378,7 +406,7 @@ public final class RealClientHarness implements AutoCloseable {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(root.toFile());
         builder.redirectErrorStream(true);
-        applyClientEnvOverrides(builder);
+        applyClientEnvOverrides(builder, e2e);
         Process process = builder.start();
         startWindowSuppressor(process, windowsProcessId(process));
         return new LoggedProcess(process, clientLogFile);
@@ -396,11 +424,17 @@ public final class RealClientHarness implements AutoCloseable {
      * them into {@code forge.test.client.env.JAVA_TOOL_OPTIONS}, which then
      * cleanly replaces the inherited (server) {@code JAVA_TOOL_OPTIONS}.</p>
      */
-    private static void applyClientEnvOverrides(ProcessBuilder builder) {
+    private static void applyClientEnvOverrides(ProcessBuilder builder, boolean e2e) {
         Map<String, String> childEnv = builder.environment();
         for (String name : System.getProperties().stringPropertyNames()) {
             if (name.startsWith(PROP_CLIENT_ENV_PREFIX)) {
                 String envName = name.substring(PROP_CLIENT_ENV_PREFIX.length());
+                if (e2e && !displayVariable(envName)) {
+                    throw new IllegalStateException("REFUSED: an e2e client takes only the display's variables"
+                            + " (DISPLAY, XAUTHORITY, LIBGL_ALWAYS_SOFTWARE) from " + PROP_CLIENT_ENV_PREFIX
+                            + "*, and this JVM sets " + name + " -- an environment variable such as"
+                            + " JAVA_TOOL_OPTIONS reaches the child's JVM before its gate exists");
+                }
                 if (!envName.isEmpty()) {
                     childEnv.put(envName, System.getProperty(name));
                 }
@@ -408,10 +442,32 @@ public final class RealClientHarness implements AutoCloseable {
         }
     }
 
-    private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket) throws IOException {
+    /** The variables a client needs to find its display, the only ones an e2e client is handed. */
+    private static boolean displayVariable(String name) {
+        return "DISPLAY".equals(name) || "XAUTHORITY".equals(name) || "LIBGL_ALWAYS_SOFTWARE".equals(name);
+    }
+
+    /**
+     * The launcher an e2e's client child runs, FIXED: RFG's {@code GradleStart}. See the server harness's
+     * own: a launcher named by a property is one the test JVM could have pointed at a class of its own.
+     */
+    private static final String E2E_LAUNCHER = "GradleStart";
+
+    /** Refuses an e2e launch while {@code property} names something other than the fixed {@code value}. */
+    private static void refuseAnotherSetting(String property, String value) {
+        String set = System.getProperty(property);
+        if (set != null && !set.equals(value)) {
+            throw new IllegalStateException("REFUSED: an e2e child launches with " + property + "=" + value
+                    + ", fixed, and this JVM asks for " + set + " -- a launcher an e2e child runs is not a setting");
+        }
+    }
+
+    private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket,
+                                            com.github.stannismod.forge.testing.server.TestClient walkServer)
+            throws IOException {
         serverSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
         java.net.Socket socket = serverSocket.accept();
-        return new ClientBot(socket);
+        return new ClientBot(socket, walkServer);
     }
 
     private static Path resolveJavaBinary() throws IOException {
@@ -587,16 +643,12 @@ public final class RealClientHarness implements AutoCloseable {
     }
 
     /**
-     * The stable post-mortem location of the last client log, one file PER TEST-JVM (the PID
-     * suffix): a single fixed name let concurrent forks clobber each other's diagnostics, which
-     * makes every post-mortem unreliable exactly when parallel runs make failures interesting.
+     * The stable post-mortem location of the last client log — inside THIS checkout and one file
+     * per test JVM. See {@link com.github.stannismod.forge.testing.PostMortemLogs} for why both
+     * halves of that are load-bearing.
      */
     private static Path preservedLogPath() {
-        String jvm = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
-        int at = jvm.indexOf('@');
-        String pid = at > 0 ? jvm.substring(0, at) : jvm;
-        return Paths.get(System.getProperty("java.io.tmpdir"),
-                "forge-test-client-last-pid" + pid + ".log");
+        return com.github.stannismod.forge.testing.PostMortemLogs.client();
     }
 
     /** Bind an ephemeral control port and KEEP the socket - the bound port is read off it, so
@@ -614,6 +666,134 @@ public final class RealClientHarness implements AutoCloseable {
             return Paths.get(env.trim());
         }
         return Paths.get(System.getProperty("user.home"), ".gradle");
+    }
+
+    /**
+     * The OpenAL shared libraries LWJGL 2 looks for, by the exact names hardcoded in
+     * {@code org.lwjgl.openal.AL}. There is no property that turns its audio backend off, so the
+     * only way to keep a harness client away from the sound device is to hand it a library path
+     * that does not contain these.
+     *
+     * <p>A constant: an unmodifiable set.</p>
+     */
+    private static final java.util.Set<String> OPENAL_LIBRARY_NAMES =
+            java.util.Collections.unmodifiableSet(new java.util.HashSet<>(Arrays.asList(
+                    "openal64.dll", "openal32.dll",
+                    "libopenal64.so", "libopenal.so", "libopenal.so.0",
+                    "openal.dylib")));
+
+    /**
+     * A private copy of the LWJGL natives directory with the OpenAL libraries left out, so this
+     * client never opens the machine's audio device.
+     *
+     * <p><b>Why a harness client must be silent.</b> A test client has nothing to hear — nobody is
+     * listening to an off-screen child, and what a test CAN observe about sound is the play request
+     * reaching the sound manager, which survives this (see below). What holding the device DOES buy
+     * is making the machine's audio a shared resource between however many forks are running and
+     * whatever the developer is doing at the same time. That is not merely
+     * untidy — LWJGL 2.9.4 ships an OpenAL from 2015 whose own {@code AL} class carries the line
+     * "Only one OpenAL context may be instantiated at any one time", and a second client opening
+     * the same default device can take an {@code EXCEPTION_ACCESS_VIOLATION} inside
+     * {@code OpenAL64.dll} rather than a catchable error. A JVM that dies in native code takes the
+     * whole run with it, and the crash names a DLL rather than anything in this tree, so the cost
+     * lands on whoever has to work out why an unrelated client aborted.</p>
+     *
+     * <p><b>Why the directory is copied rather than filtered in place.</b> The natives are the
+     * build's shared, pre-extracted set — the interactive {@code runClient} loads the same files
+     * and is entitled to its sound. Only this child's library path is narrowed.</p>
+     *
+     * <p><b>Why it lives beside the natives it mirrors and not under the client's temp root.</b>
+     * Windows locks a mapped DLL for as long as the loader holds it, and the client's root is
+     * DELETED at {@code close()} — a natives copy in there makes every client teardown race the
+     * child's unmapping and throw {@code AccessDeniedException} out of {@code @After}, which reads
+     * as a failed test whose assertions all passed. The copy is therefore content-addressed and
+     * shared: one directory per distinct natives set, built once and reused by every fork and every
+     * later run, never deleted while a client might still hold it.</p>
+     *
+     * <p><b>What the client does instead, measured.</b> LWJGL locates its libraries through
+     * {@code org.lwjgl.librarypath}, {@code java.library.path}, {@code user.dir} and the
+     * classloader; with none of them holding an OpenAL binary it tries each candidate, fails every
+     * one with "Could not load OpenAL library (126)", and {@code AL.create} throws a plain
+     * {@code LWJGLException}. The sound layer then falls through to a no-output backend and the
+     * sound engine still comes up — so {@code SoundManager.loaded} is TRUE and
+     * {@code PlaySoundEvent} still fires for every play request. That is what keeps the sound
+     * coverage honest rather than silently retiring it: the one e2e that observes a server-played
+     * sound reaching the client passes unchanged, because what it asserts is the hand-off, not
+     * audibility. The only thing lost is output nobody was listening to.</p>
+     */
+    private static Path soundlessNativesDir(Path source) throws IOException {
+        Path target = Paths.get(System.getProperty("java.io.tmpdir"),
+                "forge-test-natives-nosound-" + nativesFingerprint(source));
+        if (Files.isDirectory(target)) {
+            return target;
+        }
+        // Build somewhere private and PUBLISH by rename, so a fork that finds the target present
+        // finds it complete. Two forks racing here is the normal case, not an edge one.
+        Path staging = Files.createTempDirectory("forge-test-natives-staging-");
+        copyWithoutOpenAl(source, staging);
+        try {
+            Files.move(staging, target);
+        } catch (IOException lostTheRace) {
+            deleteRecursively(staging);
+        }
+        if (!Files.isDirectory(target)) {
+            throw new IOException("Could not publish a sound-free natives directory at " + target
+                    + " (mirroring " + source + ")");
+        }
+        return target;
+    }
+
+    private static void copyWithoutOpenAl(Path source, Path target) throws IOException {
+        try (java.util.stream.Stream<Path> stream = Files.walk(source)) {
+            for (Path entry : (Iterable<Path>) stream::iterator) {
+                if (!Files.isRegularFile(entry)) {
+                    continue;
+                }
+                String name = entry.getFileName().toString();
+                if (OPENAL_LIBRARY_NAMES.contains(name.toLowerCase(java.util.Locale.ROOT))) {
+                    continue;
+                }
+                Path destination = target.resolve(source.relativize(entry).toString());
+                Path parent = destination.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.copy(entry, destination, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    /**
+     * Identifies the natives SET, not the directory holding it: the source path plus every file's
+     * name and size. A Minecraft or LWJGL bump re-extracts different natives into the same path, and
+     * a mirror keyed on the path alone would keep serving the previous set forever.
+     */
+    private static String nativesFingerprint(Path source) throws IOException {
+        StringBuilder material = new StringBuilder(source.toAbsolutePath().toString());
+        try (java.util.stream.Stream<Path> stream = Files.walk(source)) {
+            List<Path> files = new ArrayList<>();
+            for (Path entry : (Iterable<Path>) stream::iterator) {
+                if (Files.isRegularFile(entry)) {
+                    files.add(entry);
+                }
+            }
+            files.sort(java.util.Comparator.comparing(Path::toString));
+            for (Path file : files) {
+                material.append('|').append(source.relativize(file))
+                        .append(':').append(Files.size(file));
+            }
+        }
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-1")
+                    .digest(material.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format("%02x", digest[i]));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IOException("SHA-1 unavailable", impossible);
+        }
     }
 
     private static Path resolveNativesDir() throws IOException {

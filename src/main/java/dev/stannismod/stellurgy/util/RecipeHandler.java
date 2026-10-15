@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.block.BlockSmallPlatePress;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidRegistry;
@@ -9,16 +16,9 @@ import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
 import net.minecraftforge.registries.GameData;
-import dev.stannismod.stellurgy.block.BlockSmallPlatePress;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
-import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.*;
 import java.util.Map.Entry;
-import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 
 public class RecipeHandler {
 

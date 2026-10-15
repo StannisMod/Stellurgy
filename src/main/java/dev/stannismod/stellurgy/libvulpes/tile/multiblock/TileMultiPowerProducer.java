@@ -1,10 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
@@ -13,6 +8,11 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine.NetworkPackets;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.MultiBattery;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraftforge.fml.relauncher.Side;
 
 import java.util.LinkedList;
 import java.util.List;

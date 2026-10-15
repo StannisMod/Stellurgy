@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FluidStored;
-import org.junit.Test;
-
-
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.FluidStored;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -45,6 +44,8 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
     private static final int PZ = 6300;
 
 
+    /** Pins INV-INFRA-22 (A pump above an adjacent water source fills its tank ( 0 mB) within ~60 ticks). */
+    @Pins("INV-INFRA-22")
     @Test
     public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
         // Place pump.
@@ -65,11 +66,12 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
 
         // Force-tick the pump. Each qualifying tick drains the source into
         // the tank.
-        ok("stellurgytest tile force-tick 0 " + PX + " " + PY + " " + PZ + " 60");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + PX + " " + PY + " " + PZ + " 60");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // Read pump's tank state via the standard fluid stored probe.
-        String stored = exec("stellurgytest fluid stored 0 "
-                + PX + " " + PY + " " + PZ);
+        String stored = read("stellurgytest fluid stored 0 "
+                + PX + " " + PY + " " + PZ).raw();
         // The first tank holding any fluid at all: the band pinned below is "> 0", not a particular
         // fluid, so the reader asks each tank rather than matching one expression across two fields.
         FluidStored tanks = FluidStored.of(stored);
@@ -89,7 +91,7 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }

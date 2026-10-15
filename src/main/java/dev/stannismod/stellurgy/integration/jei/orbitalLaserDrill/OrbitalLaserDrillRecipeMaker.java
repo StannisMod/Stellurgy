@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.integration.jei.orbitalLaserDrill;
 
-import mezz.jei.api.IJeiHelpers;
-import net.minecraft.client.Minecraft;
-import net.minecraft.world.World;
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import mezz.jei.api.IJeiHelpers;
+import net.minecraft.client.Minecraft;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collections;

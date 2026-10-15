@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.Vec3d;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 public class PacketLaserGun extends BasePacket {
 

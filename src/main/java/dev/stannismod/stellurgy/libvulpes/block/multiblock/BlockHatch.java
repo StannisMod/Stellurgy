@@ -1,5 +1,14 @@
 package dev.stannismod.stellurgy.libvulpes.block.multiblock;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInputHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileOutputHatch;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.BlockStateContainer;
 import net.minecraft.block.state.IBlockState;
@@ -20,17 +29,8 @@ import net.minecraftforge.fluids.FluidActionResult;
 import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
-import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInputHatch;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileOutputHatch;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
 
 import java.util.Random;
-import dev.stannismod.stellurgy.api.Constants;
 
 public class BlockHatch extends BlockMultiblockStructure {
 

@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.affs.network;
 
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.client.ClientForceFieldRenderCache;
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import dev.stannismod.stellurgy.affs.world.FieldSource;
@@ -27,8 +26,8 @@ public class PacketSyncActiveGenerators implements IMessage {
     public static PacketSyncActiveGenerators fromWorld(World world) {
         PacketSyncActiveGenerators packet = new PacketSyncActiveGenerators();
         packet.dimension = world.provider.getDimension();
-        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators(world)) {
-            if (generator == null || generator.isInvalid() || !generator.isFieldPowered()) {
+        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.loadedIn(world)) {
+            if (generator.isInvalid() || !generator.isFieldPowered()) {
                 continue;
             }
             packet.entries.add(new Entry(generator.getPos(), generator.getRadius()));

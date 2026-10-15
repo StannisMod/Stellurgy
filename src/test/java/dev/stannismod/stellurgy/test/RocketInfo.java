@@ -128,7 +128,8 @@ public final class RocketInfo {
     public final boolean guidanceComputerSlotOccupied;
     /** Aggregates {@code StatsRocket} computed during the assembly scan. */
     public final int thrust;
-    public final double weightNoFuel;
+    /** The craft's dry mass — everything but its fuel — in kilograms. */
+    public final double dryMassKg;
     public final double breakingProb;
     public final int seatCount;
     public final int engineCount;
@@ -173,7 +174,7 @@ public final class RocketInfo {
         this.guidanceComputerPresent = reply.bool("guidanceComputerPresent");
         this.guidanceComputerSlotOccupied = reply.bool("guidanceComputerSlotOccupied");
         this.thrust = reply.integer("thrust");
-        this.weightNoFuel = reply.number("weight_no_fuel");
+        this.dryMassKg = reply.number("dry_mass_kg");
         this.breakingProb = reply.number("breakingProb");
         this.seatCount = reply.integer("seatCount");
         this.engineCount = reply.integer("engineCount");

@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
 
 import javax.annotation.Nullable;
 
@@ -16,9 +16,10 @@ public class BlockAdvancedBipropellantRocketMotor extends BlockBipropellantRocke
         super(mat);
     }
 
+    /** Rated thrust, newtons. */
     @Override
     public int getThrust(World world, BlockPos pos) {
-        return 50;
+        return 2_452_500;
     }
 
     @Override

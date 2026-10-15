@@ -8,6 +8,10 @@ import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 
 /**
  * <b>A living body on a deck stands on it as it would stand on the ground</b>, whatever the craft's
@@ -58,25 +62,25 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
 
     // -- a living body with no will of its own rests on the deck, at any attitude ---------------
 
-    /**
-     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
-     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the
-     * travel resolver held the stand) - along 0.136; taken on the pre-player-admission form, which
-     * also excluded players on that line. The ACROSS verdict has not been seen red: it runs after
-     * along and read 6e-12 in that same run.
-     */
+    @NotYetRed(prose = "neither verdict has been seen red against the current code. The old ALONG witness,"
+            + " 2026-09-29, was taken on the form before players were admitted, and while a travel resolver (since"
+            + " deleted) could hold the stand: {@code DeckFrameTick#admissible} at"
+            + " {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the"
+            + " travel resolver held the stand) - along 0.136. The ACROSS verdict runs after along and read 6e-12"
+            + " in that same run.")
+    @Pins("ENT-3")
     @Test
     public void anArmorStandOnADeckRolled30DegreesStaysWhereItLanded() throws Exception {
         standRestsOnADeckRolledBy(30.0);
     }
 
-    /**
-     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
-     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the
-     * travel resolver held the stand) - along 0.136; taken on the pre-player-admission form, which
-     * also excluded players on that line. The ACROSS verdict has not been seen red: it runs after
-     * along and read 1e-12 in that same run.
-     */
+    @NotYetRed(prose = "neither verdict has been seen red against the current code. The old ALONG witness,"
+            + " 2026-09-29, was taken on the form before players were admitted, and while a travel resolver (since"
+            + " deleted) could hold the stand: {@code DeckFrameTick#admissible} at"
+            + " {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the"
+            + " travel resolver held the stand) - along 0.136. The ACROSS verdict runs after along and read 1e-12"
+            + " in that same run.")
+    @Pins("ENT-3")
     @Test
     public void anArmorStandOnADeckRolled60DegreesStaysWhereItLanded() throws Exception {
         standRestsOnADeckRolledBy(60.0);
@@ -85,15 +89,19 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
     /**
      * The deck rolls over while the stand is on it: past a right angle world-down points away from
      * the deck, so "falls toward the deck" and "falls toward the world" give different answers.
-     *
-     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#runInDeckFrame} at
-     * {@code entity.motionX - episode.writtenX} (taken when it stood in `DeckFrameTick.update`, moved
-     * verbatim since) (and its Y, Z) taking the whole world motion into the
-     * deck frame each update instead of adding only what the world wrote - along 0.41; and with
-     * {@code DeckFrameTick#admissible} at {@code return entity instanceof EntityLivingBase} answering
-     * false (no living body admitted) - along 0.226, taken on the pre-player-admission form. The
-     * ACROSS verdict, asserted first, passed in both (2e-11, 7e-12) and has not been seen red.</p>
      */
+    @RedWitness(verdict = "must not slide along it while the craft rolls over", member = "DeckFrameTick#runInDeckFrame",
+            at = "entity.motionX - episode.writtenX, entity.motionY - episode.writtenY,"
+                    + " entity.motionZ - episode.writtenZ",
+            replacedBy = "entity.motionX, entity.motionY, entity.motionZ",
+            fails = "an armor stand on a deck must not slide along it while the craft rolls over: it moved",
+            on = "2026-09-29")
+    @NotYetRed(prose = "THE ACROSS verdict, asserted first, has not been seen red: it passed (2e-11) under the"
+            + " break of {@code DeckFrameTick#runInDeckFrame} above, and (7e-12) on 2026-09-29 under a break taken"
+            + " on the form before players were admitted, which is not a witness of the current code either:"
+            + " {@code DeckFrameTick#admissible} at {@code return entity instanceof EntityLivingBase} answering"
+            + " false (no living body admitted) - along 0.226.")
+    @Pins({"ENT-3", "ENT-8"})
     @Test
     public void anArmorStandOnADeckStaysOnItWhileTheCraftRollsOver() throws Exception {
         Craft craft = buildCraft();
@@ -119,26 +127,28 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
 
     /**
      * The craft keeps rolling at a steady rate under the stand; read while it is still turning.
-     *
-     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
-     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted; taken
-     * on the pre-player-admission form) - along 0.0054. That run was read against the earlier 0.05 bound and PASSED there;
-     * it is red against {@code AT_REST} as now measured. The ACROSS verdict has not been seen red.</p>
      */
+    @NotYetRed(prose = "neither verdict has been seen red against the current code. The old ALONG reading,"
+            + " 2026-09-29, was taken on the form before players were admitted: {@code DeckFrameTick#admissible}"
+            + " at {@code return entity instanceof EntityLivingBase} answering false (no living body admitted) -"
+            + " along 0.0054. That run was read against the earlier 0.05 bound and PASSED there; it would be red"
+            + " against {@code AT_REST} as now measured. The ACROSS verdict has not been seen red.")
+    @Pins({"ENT-3", "ENT-8"})
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",
+            why = "a stretch of steady rolling; the read is taken with the craft still turning.")
     public void anArmorStandOnADeckStaysOnItWhileTheCraftKeepsRolling() throws Exception {
         Craft craft = buildCraft();
         int standId = putOnDeck(craft, "minecraft:armor_stand", 1.5, 0.5);
         double[] landed = onTheDeckTop(craft, standId, "the level deck");
 
         double upBefore = deckUpY(craft);
-        Reply spun = Reply.of(exec("stellurgytest vs force-rot-by-id 0 " + craft.shipId + " "
-                + ROLL_RATE + " 0 0"));
+        Reply spun = Reply.of(arrange("stellurgytest vs force-rot-by-id 0 " + craft.shipId + " "
+                + ROLL_RATE + " 0 0").raw());
         requireArranged("the craft must accept the roll command: " + spun, spun.bool("afcResolved"));
-        // EXPERIMENT: a stretch of steady rolling; the read is taken with the craft still turning.
         GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
         double[] later = deckPoint(craft, standId);
-        ShipInfo turning = ShipInfo.byId(this::exec, 0, craft.shipId);
+        ShipInfo turning = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId);
         simulatedBetween(landed, later, REST_WINDOW_TICKS);
         requireArranged("the craft must still be turning when the stand is read (omega "
                 + turning.omega + ")", turning.omega > ROLL_RATE / 4.0);
@@ -148,7 +158,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
         String evidence = evidence(landed, later, craft, standId) + " omega=" + turning.omega;
         System.out.println("[deck-living] standRolling along=" + along(landed, later) + " across="
                 + across(landed, later) + evidence);
-        exec("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
+        arrange("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
         assertTrue("an armor stand on a rolling deck must stay on its top face: " + across(landed, later)
                 + " blocks off;" + evidence, across(landed, later) <= AT_REST);
         assertTrue("an armor stand on a rolling deck must not slide along it: " + along(landed, later)
@@ -159,17 +169,20 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * The deck is level and the world around it has no gravity. A craft carries its own for what
      * stands on its deck, so a stand let go a tenth of a block above it falls onto it. The landing
      * is the subject, so it is asserted, not gated.
-     *
-     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body, {@code GravityHandler#apply}
-     * at {@code DeckFrameTick.holds(entity)} - 0.865 blocks off the top face after 100 ticks.</p>
      */
+    @RedWitness(member = "GravityHandler#apply",
+            at = "if (dev.stannismod.stellurgy.integration.vs.DeckFrameTick.holds(entity))", replacedBy = "if (false)",
+            fails = "an armor stand let go a tenth of a block above a deck, in a world without gravity, must fall"
+                    + " onto the deck: it is", on = "2026-09-29")
+    @Pins("ENT-3")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",
+            why = "the fall takes a couple of ticks; overshoot only gives a hanging stand longer.")
     public void anArmorStandLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {
         withOverworldGravity(0.0, () -> {
             Craft craft = buildCraft();
             int standId = putOnDeck(craft, "minecraft:armor_stand", 1.5, 0.5);
             double[] first = deckPoint(craft, standId);
-            // WINDOW: the fall takes a couple of ticks; overshoot only gives a hanging stand longer.
             GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
             double[] later = deckPoint(craft, standId);
             simulatedBetween(first, later, REST_WINDOW_TICKS);
@@ -193,14 +206,16 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * and an arrangement failure is not this verdict failing. The inversion owed is one that lets a
      * running cow leave the deck.</p>
      */
+    @Pins("ENT-3")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), COW_WINDOW_TICKS);",
+            why = "the cow's own AI, running from the fire, for the whole window.")
     public void aCowRunningAboutADeckRolled60DegreesIsStillOnTheDeck() throws Exception {
         Craft craft = buildCraft();
         rollTo(craft, 60.0);
         int cowId = putOnDeck(craft, "minecraft:cow", 1.5, 1.5);
         double[] landed = onTheDeckTop(craft, cowId, "the tilted deck");
         panic(cowId);
-        // EXPERIMENT: the cow's own AI, running from the fire, for the whole window.
         GameTicks.advance(client(), GameTicks.server(), COW_WINDOW_TICKS);
         requireStillOnTheDeck(craft, cowId, landed, COW_WINDOW_TICKS, "tilted60");
     }
@@ -211,6 +226,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * <p>Not witnessed red: the travel resolver passed it too (ran 3.08, on the deck). The inversion
      * owed is one that lets a running cow leave the deck.</p>
      */
+    @Pins({"ENT-3", "ENT-8"})
     @Test
     public void aCowRunningAboutADeckIsStillOnItAfterTheCraftRollsOver() throws Exception {
         Craft craft = buildCraft();
@@ -225,14 +241,15 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
 
     // -- arrangement and the reading shared by the cow scenarios ------------------------------------
 
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",
+            why = "two reads in the ship's frame with a stretch of standing between them; overshoot gives a"
+                    + " sliding stand longer to slide, so it can only turn a green red.")
     private void standRestsOnADeckRolledBy(double rollDeg) throws Exception {
         Craft craft = buildCraft();
         rollTo(craft, rollDeg);
         int standId = putOnDeck(craft, "minecraft:armor_stand", 1.5, 0.5);
         double[] landed = onTheDeckTop(craft, standId, "the tilted deck");
 
-        // WINDOW: two reads in the ship's frame with a stretch of standing between them; overshoot
-        // gives a sliding stand longer to slide, so it can only turn a green red.
         GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
         double[] later = deckPoint(craft, standId);
         simulatedBetween(landed, later, REST_WINDOW_TICKS);
@@ -253,7 +270,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
             throws Exception {
         double[] later = deckPoint(craft, cowId);
         simulatedBetween(landed, later, window);
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + cowId + " " + craft.shipId));
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + cowId + " " + craft.shipId).raw());
         double height = later[1] - craft.seat.seatY;
         double offX = Math.abs(later[0] - (craft.seat.seatX + 0.5));
         double offZ = Math.abs(later[2] - (craft.seat.seatZ + 0.5));
@@ -277,7 +294,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
 
     /** Set the cow on fire, so that its own AI runs it about the deck. */
     private void panic(int cowId) throws Exception {
-        Reply lit = Reply.of(exec("stellurgytest entity ignite 0 " + cowId + " " + PANIC_SECONDS));
+        Reply lit = Reply.of(arrange("stellurgytest entity ignite 0 " + cowId + " " + PANIC_SECONDS).raw());
         requireArranged("the cow must be burning: " + lit, lit.bool("burning"));
     }
 
@@ -318,14 +335,17 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * <p>Whatever holds it there is not asserted: on the outer hull a living body keeps world
      * semantics (it is not the deck's), and which mechanism collides it with the hull is the
      * question the readings printed beside the verdict answer.</p>
-     *
-     * <p>red-witnessed: 2026-10-07, THE LANDING — with {@code EntityCollisionInjector#alterEntityMovement}
-     * at {@code final double origDx = dx;} preceded by a {@code return null}: "a stand put on the hull's
-     * outer face must come to rest on it (ship-frame Y 128.0, face 127.0)". THE ALONG verdict: NOT YET as
-     * a break of the current code — it went red on the pre-change tree, where the since-deleted
-     * hull-stand crept the stand along the hull: "a living body on the outer hull must not slide along
-     * it: 0.009586752811068293 blocks" (the pre-change baseline, HEAD fdc813556).</p>
      */
+    @RedWitness(verdict = "must come to rest on it", member = "EntityCollisionInjector#alterEntityMovement",
+            at = "final double origDx = dx;", replacedBy = "if (true) return null; final double origDx = dx;",
+            fails = "a stand put on the hull's outer face must come to rest on it (ship-frame Y 128.0, face 127.0)",
+            on = "2026-10-07")
+    @NotYetRed(prose = "THE ALONG verdict has not been seen red against the current code, where the outer hull"
+            + " is held by {@code EntityCollisionInjector#alterEntityMovement}. The old witness, 2026-10-07, was"
+            + " the tree before that change (HEAD fdc813556), where a hull-stand, since deleted, crept the stand"
+            + " along the hull: \"a living body on the outer hull must not slide along it: 0.009586752811068293"
+            + " blocks\".")
+    @Pins("ENT-7")
     @Test
     public void anArmorStandOnTheOuterHullOfAnInvertedCraftStaysWhereItLanded() throws Exception {
         // R11-OK: the outer hull's hold of a living body - the substrate's
@@ -335,37 +355,45 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
 
     /**
      * As above, while the craft flies sideways under the stand.
-     *
-     * <p>red-witnessed: 2026-10-07, THE LANDING — the same break as the hovering scenario
-     * ({@code EntityCollisionInjector#alterEntityMovement} at {@code final double origDx = dx;}
-     * preceded by a {@code return null}): "a stand put on the hull's outer face must come to rest on it
-     * (ship-frame Y 127.9999999999998, face 127.0)". THE ALONG verdict: NOT YET as a break of the
-     * current code — on the pre-change tree: "a living body on the outer hull must not slide along it:
-     * 0.006340703694149852 blocks" (the pre-change baseline, HEAD fdc813556).</p>
      */
+    @RedWitness(verdict = "must come to rest on it", member = "EntityCollisionInjector#alterEntityMovement",
+            at = "final double origDx = dx;", replacedBy = "if (true) return null; final double origDx = dx;",
+            fails = "a stand put on the hull's outer face must come to rest on it (ship-frame Y 127.9999999999998,"
+                    + " face 127.0)", on = "2026-10-07")
+    @NotYetRed(prose = "THE ALONG verdict has not been seen red against the current code, where the outer hull"
+            + " is held by {@code EntityCollisionInjector#alterEntityMovement}. The old witness, 2026-10-07, was"
+            + " the tree before that change (HEAD fdc813556): \"a living body on the outer hull must not slide"
+            + " along it: 0.006340703694149852 blocks\".")
+    @Pins("ENT-7")
     @Test
     public void anArmorStandOnTheOuterHullOfAFlyingInvertedCraftRidesWithIt() throws Exception {
         // R11-OK: as above, with the craft's carry of the body in flight; asserted in standOnTheOuterHull.
         standOnTheOuterHull(HULL_FLIGHT_VELOCITY);
     }
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
+            why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",
+            why = "between `landed` above and `later` below, whose difference is asserted; flying, it is also the"
+                    + " EXPERIMENT, the flight being the dose.")
     private void standOnTheOuterHull(String velocity) throws Exception {
         Craft craft = buildCraft();
         rollTo(craft, 180.0);
-        // The deck's corner cell: in the with-pilot-deck fixture only the seat's row carries blocks
-        // below the deck, so on the inverted craft the outer face over this cell is the deck block's
-        // underside, at ship-frame Y seatY - 1.
+        // The middle of the deck's -Z edge: its column holds nothing below the deck, and neither do
+        // its neighbours' (the with-pilot-deck fixture hangs its motors under the four corners, its
+        // engines and tanks on the seat's row and its reaction wheel beside the seat at +Z), so on the
+        // inverted craft the outer face over this cell is the deck block's underside, at ship-frame
+        // Y seatY - 1.
         double face = craft.seat.seatY - 1.0;
-        double[] at = toWorld(craft, DECK_HALF_WIDTH, -1.0, DECK_HALF_WIDTH);
-        Reply spawned = Reply.of(exec("stellurgytest vs drop-living 0 minecraft:armor_stand " + at[0] + " "
-                + (at[1] + 0.1) + " " + at[2]));
+        double[] at = toWorld(craft, 0.5, -1.0, -1.5);
+        Reply spawned = Reply.of(arrange("stellurgytest vs drop-living 0 minecraft:armor_stand " + at[0] + " "
+                + (at[1] + 0.1) + " " + at[2]).raw());
         requireArranged("the armor stand must have been spawned: " + spawned, spawned.boolOr("found", false));
         int standId = spawned.integer("entityId");
-        // STIMULUS: a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.
         GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
         requireTicked(craft, standId);
         double[] landed = deckPoint(craft, standId);
-        Reply rest = Reply.of(exec("stellurgytest vs player-ship-data 0 " + standId + " " + craft.shipId));
+        Reply rest = Reply.of(read("stellurgytest vs player-ship-data 0 " + standId + " " + craft.shipId).raw());
         double gap = face - landed[1];
         // On THIS face and no other: the next surface in any direction is a block away. A VERDICT, not
         // an arrangement: it was spawned a tenth of a block over the face, so the hull taking it and
@@ -374,17 +402,15 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
                 + landed[1] + ", face " + face + "): " + rest,
                 rest.bool("playerOnGround") && Math.abs(gap) < ON_THE_OUTER_FACE_BLOCKS);
 
-        double shipXBefore = ShipInfo.byId(this::exec, 0, craft.shipId).x;
+        double shipXBefore = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId).x;
         if (velocity != null) {
-            Reply flown = Reply.of(exec("stellurgytest vs force-vel-by-id 0 " + craft.shipId + " " + velocity));
+            Reply flown = Reply.of(arrange("stellurgytest vs force-vel-by-id 0 " + craft.shipId + " " + velocity).raw());
             requireArranged("the craft must accept the flight command: " + flown, flown.bool("afcResolved"));
         }
-        // WINDOW: between `landed` above and `later` below, whose difference is asserted; flying, it is
-        // also the EXPERIMENT, the flight being the dose.
         GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
         double[] later = deckPoint(craft, standId);
         simulatedBetween(landed, later, REST_WINDOW_TICKS);
-        double flownX = ShipInfo.byId(this::exec, 0, craft.shipId).x - shipXBefore;
+        double flownX = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId).x - shipXBefore;
         String evidence = evidence(landed, later, craft, standId) + " gap=" + gap + " craftMovedX=" + flownX;
         System.out.println("[deck-living] hull" + (velocity == null ? "Static" : "Flying") + " along="
                 + along(landed, later) + " across=" + across(landed, later) + evidence);
@@ -394,7 +420,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
             requireArranged("the craft must have flown further than its deck is wide while the stand lay"
                     + " on it;" + evidence, Math.abs(flownX) > HULL_FLIGHT_MIN_TRAVEL);
         }
-        exec("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
+        arrange("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
         assertTrue("a living body on the outer hull must stay on it: " + across(landed, later)
                 + " blocks off where it lay;" + evidence, across(landed, later) <= OUTER_HULL_STILL);
         assertTrue("a living body on the outer hull must not slide along it: " + along(landed, later)
@@ -407,23 +433,24 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * drop: what a landing leaves behind depends on which mechanism holds the body, so a link on it
      * would decide the verdict by mechanism. Every caller follows it with a reading of where it is.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
+            why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.")
     private int putOnDeck(Craft craft, String type, double dx, double dz) throws Exception {
         double[] at = toWorld(craft, dx, 0.1, dz);
         // A mob through drop-living, with its AI left ON: the plain spawn verb leaves an animal to
         // the harness's spawn-animals=false, which vanilla enforces by killing it on its first
         // update, and drop-living's default switches the AI off, which stops all its movement.
         Reply spawned = Reply.of(type.equals("minecraft:armor_stand")
-                ? exec("stellurgytest entity spawn 0 " + at[0] + " " + at[1] + " " + at[2] + " " + type)
-                : exec("stellurgytest vs drop-living 0 " + type + " " + at[0] + " " + at[1] + " " + at[2]
-                        + " ai"));
+                ? arrange("stellurgytest entity spawn 0 " + at[0] + " " + at[1] + " " + at[2] + " " + type).raw()
+                : arrange("stellurgytest vs drop-living 0 " + type + " " + at[0] + " " + at[1] + " " + at[2]
+                        + " ai").raw());
         requireArranged("the " + type + " must have been spawned: " + spawned,
                 spawned.boolOr("spawned", false) || spawned.boolOr("found", false));
         int id = spawned.integer("entityId");
-        // STIMULUS: a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.
         GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
         requireTicked(craft, id);
         if (!type.equals("minecraft:armor_stand")) {
-            Reply mob = Reply.of(exec("stellurgytest vs player-ship-data 0 " + id + " " + craft.shipId));
+            Reply mob = Reply.of(read("stellurgytest vs player-ship-data 0 " + id + " " + craft.shipId).raw());
             requireArranged("the " + type + "'s AI must be running, or it does not move itself at all and"
                     + " reads still on anything: " + mob, !mob.bool("aiDisabled"));
             System.out.println("[deck-living] mobLanded yaw=" + mob.textOr("rotationYaw", "?"));

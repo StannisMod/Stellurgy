@@ -1,12 +1,97 @@
 package dev.stannismod.stellurgy;
 
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.satellite.SatelliteOptical;
-import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
+import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
+import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.api.atmosphere.IAtmosphereSealHandler;
-import dev.stannismod.stellurgy.api.ISpaceObjectManager;
+import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
 import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
-import dev.stannismod.stellurgy.api.IGravityManager;
+import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
+import dev.stannismod.stellurgy.armor.ItemSpaceChest;
+import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.block.inventory.BlockInvHatch;
+import dev.stannismod.stellurgy.block.multiblock.BlockDataBusBig;
+import dev.stannismod.stellurgy.block.multiblock.BlockStellurgyHatch;
+import dev.stannismod.stellurgy.block.plant.BlockLightwoodLeaves;
+import dev.stannismod.stellurgy.block.plant.BlockLightwoodPlanks;
+import dev.stannismod.stellurgy.block.plant.BlockLightwoodSapling;
+import dev.stannismod.stellurgy.block.plant.BlockLightwoodWood;
+import dev.stannismod.stellurgy.capability.CapabilityProtectiveArmor;
+import dev.stannismod.stellurgy.command.StellurgyCommandRoot;
+import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
+import dev.stannismod.stellurgy.common.CommonProxy;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
+import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
+import dev.stannismod.stellurgy.enchant.EnchantmentSpaceBreathing;
+import dev.stannismod.stellurgy.entity.*;
+import dev.stannismod.stellurgy.event.*;
+import dev.stannismod.stellurgy.integration.CompatibilityMgr;
+import dev.stannismod.stellurgy.integration.GalacticCraftHandler;
+import dev.stannismod.stellurgy.integration.theoneprobe.TopIntegration;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.item.*;
+import dev.stannismod.stellurgy.item.components.ItemJetpack;
+import dev.stannismod.stellurgy.item.components.ItemPressureTank;
+import dev.stannismod.stellurgy.item.components.ItemUpgrade;
+import dev.stannismod.stellurgy.item.tools.ItemBasicLaserGun;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.libvulpes.api.material.MixedMaterial;
+import dev.stannismod.stellurgy.libvulpes.block.*;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisible;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisibleAlphaTexture;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.items.ItemBlockMeta;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
+import dev.stannismod.stellurgy.libvulpes.items.ItemProjector;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.TileMaterial;
+import dev.stannismod.stellurgy.libvulpes.tile.energy.TilePlugBase;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
+import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
+import dev.stannismod.stellurgy.mission.MissionGasCollection;
+import dev.stannismod.stellurgy.mission.MissionOreMining;
+import dev.stannismod.stellurgy.network.EntityNetworkIds;
+import dev.stannismod.stellurgy.network.PacketRegistry;
+import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
+import dev.stannismod.stellurgy.satellite.*;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.stellurgy.Tags;
+import dev.stannismod.stellurgy.tile.*;
+import dev.stannismod.stellurgy.tile.atmosphere.*;
+import dev.stannismod.stellurgy.tile.hatch.TileDataBus;
+import dev.stannismod.stellurgy.tile.hatch.TileDataBusBig;
+import dev.stannismod.stellurgy.tile.hatch.TileInvHatch;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
+import dev.stannismod.stellurgy.tile.infrastructure.*;
+import dev.stannismod.stellurgy.tile.multiblock.*;
+import dev.stannismod.stellurgy.tile.multiblock.energy.TileBlackHoleGenerator;
+import dev.stannismod.stellurgy.tile.multiblock.energy.TileMicrowaveReciever;
+import dev.stannismod.stellurgy.tile.multiblock.energy.TileSolarArray;
+import dev.stannismod.stellurgy.tile.multiblock.machine.*;
+import dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill;
+import dev.stannismod.stellurgy.tile.satellite.TileSatelliteBuilder;
+import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
+import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
+import dev.stannismod.stellurgy.tile.station.*;
+import dev.stannismod.stellurgy.util.*;
+import dev.stannismod.stellurgy.world.biome.*;
+import dev.stannismod.stellurgy.world.decoration.MapGenLander;
+import dev.stannismod.stellurgy.world.ore.OreGenerator;
+import dev.stannismod.stellurgy.world.type.WorldTypePlanetGen;
+import dev.stannismod.stellurgy.world.type.WorldTypeSpace;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.MapColor;
 import net.minecraft.block.material.Material;
@@ -54,83 +139,6 @@ import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.OreDictionary.OreRegisterEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.stellurgy.Tags;
-import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
-import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
-import dev.stannismod.stellurgy.armor.ItemSpaceChest;
-import dev.stannismod.stellurgy.block.inventory.BlockInvHatch;
-import dev.stannismod.stellurgy.block.multiblock.BlockStellurgyHatch;
-import dev.stannismod.stellurgy.block.multiblock.BlockDataBusBig;
-import dev.stannismod.stellurgy.block.plant.BlockLightwoodLeaves;
-import dev.stannismod.stellurgy.block.plant.BlockLightwoodPlanks;
-import dev.stannismod.stellurgy.block.plant.BlockLightwoodSapling;
-import dev.stannismod.stellurgy.block.plant.BlockLightwoodWood;
-import dev.stannismod.stellurgy.capability.CapabilityProtectiveArmor;
-import dev.stannismod.stellurgy.command.StellurgyCommandRoot;
-import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
-import dev.stannismod.stellurgy.common.CommonProxy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
-import dev.stannismod.stellurgy.enchant.EnchantmentSpaceBreathing;
-import dev.stannismod.stellurgy.integration.CompatibilityMgr;
-import dev.stannismod.stellurgy.integration.GalacticCraftHandler;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
-import dev.stannismod.stellurgy.integration.theoneprobe.TopIntegration;
-import dev.stannismod.stellurgy.item.components.ItemJetpack;
-import dev.stannismod.stellurgy.item.components.ItemPressureTank;
-import dev.stannismod.stellurgy.item.components.ItemUpgrade;
-import dev.stannismod.stellurgy.item.tools.ItemBasicLaserGun;
-import dev.stannismod.stellurgy.mission.MissionGasCollection;
-import dev.stannismod.stellurgy.mission.MissionOreMining;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
-import dev.stannismod.stellurgy.tile.hatch.TileDataBus;
-import dev.stannismod.stellurgy.tile.hatch.TileDataBusBig;
-import dev.stannismod.stellurgy.tile.hatch.TileInvHatch;
-import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import dev.stannismod.stellurgy.tile.multiblock.energy.TileBlackHoleGenerator;
-import dev.stannismod.stellurgy.tile.multiblock.energy.TileMicrowaveReciever;
-import dev.stannismod.stellurgy.tile.multiblock.energy.TileSolarArray;
-import dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill;
-import dev.stannismod.stellurgy.tile.satellite.TileSatelliteBuilder;
-import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
-import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
-import dev.stannismod.stellurgy.world.decoration.MapGenLander;
-import dev.stannismod.stellurgy.world.ore.OreGenerator;
-import dev.stannismod.stellurgy.world.type.WorldTypePlanetGen;
-import dev.stannismod.stellurgy.world.type.WorldTypeSpace;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
-import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
-import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
-import dev.stannismod.stellurgy.libvulpes.api.material.MixedMaterial;
-import dev.stannismod.stellurgy.libvulpes.block.*;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisible;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisibleAlphaTexture;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
-import dev.stannismod.stellurgy.libvulpes.items.ItemBlockMeta;
-import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
-import dev.stannismod.stellurgy.libvulpes.items.ItemProjector;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.TileMaterial;
-import dev.stannismod.stellurgy.libvulpes.tile.energy.TilePlugBase;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
-import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
 
 import javax.annotation.Nonnull;
 import java.io.BufferedWriter;
@@ -140,25 +148,23 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.Map.Entry;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.block.*;
-import dev.stannismod.stellurgy.entity.*;
-import dev.stannismod.stellurgy.event.*;
-import dev.stannismod.stellurgy.item.*;
-import dev.stannismod.stellurgy.network.*;
-import dev.stannismod.stellurgy.satellite.*;
-import dev.stannismod.stellurgy.tile.*;
-import dev.stannismod.stellurgy.tile.atmosphere.*;
-import dev.stannismod.stellurgy.tile.infrastructure.*;
-import dev.stannismod.stellurgy.tile.multiblock.*;
-import dev.stannismod.stellurgy.tile.multiblock.machine.*;
-import dev.stannismod.stellurgy.tile.station.*;
-import dev.stannismod.stellurgy.util.*;
-import dev.stannismod.stellurgy.world.biome.*;
 
 
 @Mod(modid = Tags.MOD_ID, name = Tags.MOD_NAME, version = Tags.VERSION, dependencies = Constants.DEPENDENCIES)
 public class Stellurgy {
+
+    /**
+     * How much absorbed energy a mirror's metal film sheds before it melts. Shared by every tier: a
+     * film is a film, and what separates aluminium from gold is how much of a hit it lets into that
+     * film rather than how much the film can take.
+     */
+    private static final int MIRROR_FILM_DISSIPATION = 4000;
+    /**
+     * How much of an impact one PLATE of reactive armour swallows; a full block takes twice. Set so
+     * that ordinary fire is eaten whole and a railgun-class round is not — which is the ordering the
+     * mechanic exists to produce, not a number anybody should read as sacred.
+     */
+    private static final int REACTIVE_PLATE_CAPACITY = 10000;
 
     private static final String PLANET = "Planet";
     /** Effectively final, process lifetime: built once at class initialisation. */
@@ -392,8 +398,12 @@ public class Stellurgy {
         return serverState().spaceObjects;
     }
 
-    /** The running server's subsystem networks, or {@code null} when there is none. */
-    public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks() {
+    /**
+     * The running server's subsystem networks, or {@code null} when no server is running in this JVM —
+     * null rather than a throw, because a client JVM attached to a remote server asks too and must
+     * read "none". @see dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager#of
+     */
+    public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager subsystemNetworks() {
         ServerState state = instance == null ? null : instance.server;
         return state == null ? null : state.subsystemNetworks;
     }
@@ -677,6 +687,7 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileAstrobodyDataProcessor.class, "ARplanetAnalyser");
         GameRegistry.registerTileEntity(TileGuidanceComputer.class, "ARguidanceComputer");
         GameRegistry.registerTileEntity(TileAdvancedFlightComputer.class, "ARadvancedFlightComputer");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileReactionWheel.class, "ARreactionWheel");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileNavigationComputer.class, "ARnavigationComputer");
         GameRegistry.registerTileEntity(TilePilotSeat.class, "ARpilotSeat");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.hyperdrive.TileHyperdriveGenerator.class, "ARhyperdriveGenerator");
@@ -702,6 +713,7 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileGasSeparator.class, "StellurgyGasSeparator");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, "StellurgyLifeSupportPlant");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationDuct.class, "StellurgyVentilationDuct");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort.class, "StellurgyVentilationPort");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, "StellurgyJettisonPort");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatPipe.class, "StellurgyHeatPipe");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatAccumulator.class, "StellurgyHeatAccumulator");
@@ -745,6 +757,12 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TilePrecisionLaserEtcher.class, new ResourceLocation(Constants.modId, "StellurgyPrecisionLaserEtcher"));
         GameRegistry.registerTileEntity(TileSolarArray.class, new ResourceLocation(Constants.modId, "StellurgySolarArray"));
         GameRegistry.registerTileEntity(TileOrbitalRegistry.class, new ResourceLocation(Constants.modId, "orbitalRegistry"));
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.weapon.TileTurret.class,
+                new ResourceLocation(Constants.modId, "ARturret"));
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole.class,
+                new ResourceLocation(Constants.modId, "ARweaponConsole"));
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor.class,
+                new ResourceLocation(Constants.modId, "ARfireControlSensor"));
 
         if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().enableGravityController)
             GameRegistry.registerTileEntity(TileAreaGravityController.class, "StellurgyGravityMachine");
@@ -829,6 +847,7 @@ public class Stellurgy {
         //TODO: move registration in the case we have more than one chip type
         StellurgyItems.itemDataUnit = new ItemData().setUnlocalizedName("stellurgy:dataUnit").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemMemoryCrystal = new dev.stannismod.stellurgy.item.ItemMemoryCrystal().setUnlocalizedName("stellurgy:memoryCrystal").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemRepairWelder = new dev.stannismod.stellurgy.item.ItemRepairWelder().setUnlocalizedName("stellurgy:repairWelder").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemOreScanner = new ItemOreScanner().setUnlocalizedName("OreScanner").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemQuartzCrucible = new ItemBlock(StellurgyBlocks.blockQuartzCrucible).setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellite = new ItemSatellite().setUnlocalizedName("satellite").setCreativeTab(tabAdvRocketry).setMaxStackSize(1);
@@ -886,6 +905,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceStationChip.setRegistryName("spaceStationChip"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemDataUnit.setRegistryName("dataUnit"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemMemoryCrystal.setRegistryName("memoryCrystal"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemRepairWelder.setRegistryName("repairWelder"));
         //Satellite bits
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatellite.setRegistryName("satellite"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatellitePowerSource.setRegistryName("satellitePowerSource"));
@@ -951,6 +971,20 @@ public class Stellurgy {
         StellurgyBlocks.blockBlastBrick = new BlockMultiBlockComponentVisible(Material.ROCK).setCreativeTab(tabAdvRocketry).setUnlocalizedName("blastBrick").setHardness(3F).setResistance(15F);
         StellurgyBlocks.blockStructureTower = new BlockAlphaTexture(Material.IRON).setUnlocalizedName("structuretower").setCreativeTab(tabAdvRocketry).setHardness(2f);
         StellurgyBlocks.blockLens = new BlockLens().setUnlocalizedName("lens").setCreativeTab(tabAdvRocketry).setHardness(0.3f);
+        // The tiers differ ONLY in reflectance, deliberately: the film they share is the same
+        // thickness, so what a better mirror buys is that less of each hit stays in it.
+        StellurgyBlocks.blockMirrorPlatingAluminium = new BlockMirrorPlating(0.90D, MIRROR_FILM_DISSIPATION)
+                .setUnlocalizedName("mirrorPlatingAluminium").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockMirrorPlatingSilver = new BlockMirrorPlating(0.96D, MIRROR_FILM_DISSIPATION)
+                .setUnlocalizedName("mirrorPlatingSilver").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockMirrorPlatingGold = new BlockMirrorPlating(0.97D, MIRROR_FILM_DISSIPATION)
+                .setUnlocalizedName("mirrorPlatingGold").setCreativeTab(tabAdvRocketry);
+        // Heavy plating swallows twice what light does; nothing else separates the two, because what a
+        // body meets is the voxel and not the shape inside it.
+        StellurgyBlocks.blockReactivePlate = new BlockReactivePlating(REACTIVE_PLATE_CAPACITY)
+                .setUnlocalizedName("reactivePlate").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockReactiveBlock = new BlockReactivePlating(REACTIVE_PLATE_CAPACITY * 2)
+                .setUnlocalizedName("reactiveBlock").setCreativeTab(tabAdvRocketry);
         StellurgyBlocks.blockSolarPanel = new Block(Material.IRON).setUnlocalizedName("solarPanel").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockSolarArrayPanel = new BlockMultiBlockComponentVisibleAlphaTexture(Material.IRON).setUnlocalizedName("solararraypanel").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
         StellurgyBlocks.blockQuartzCrucible = new BlockQuartzCrucible().setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
@@ -1020,6 +1054,43 @@ public class Stellurgy {
         StellurgyBlocks.blockOxidizerFuelTank = new BlockOxidizerFuelTank(Material.IRON).setUnlocalizedName("oxidizerfueltank").setCreativeTab(tabAdvRocketry).setHardness(2f);
         StellurgyBlocks.blockNuclearFuelTank = new BlockNuclearFuelTank(Material.IRON).setUnlocalizedName("nuclearfueltank").setCreativeTab(tabAdvRocketry).setHardness(2f);
         StellurgyBlocks.blockNuclearCore = new BlockNuclearCore(Material.IRON).setUnlocalizedName("nuclearcore").setCreativeTab(tabAdvRocketry).setHardness(2f);
+        // The gun family. Each part states what it is worth and nothing else; the numbers a built
+        // gun ends up with are the sum, which is why a longer barrel is a real decision rather than
+        // a tier. A part contributes only when it is placed against a gun, so these are ordinary
+        // blocks with no wiring of their own.
+        StellurgyBlocks.blockTurret = new dev.stannismod.stellurgy.block.weapon.BlockTurret()
+                .setUnlocalizedName("turret").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockGunBarrel = new dev.stannismod.stellurgy.block.weapon.BlockGunPart(
+                builder -> builder.addMuzzleSpeed(0.9D).addImpactEnergy(8).addSpreadDegrees(-0.8D)
+                        .addLifetimeTicks(20).addEnergyPerShot(50).addHeatPerShot(1))
+                .setUnlocalizedName("gunBarrel").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockGunAmmoFeed = new dev.stannismod.stellurgy.block.weapon.BlockGunPart(
+                builder -> builder.speedUpFireIntervalBy(3).addImpactEnergy(6).addEnergyPerShot(75)
+                        .addHeatPerShot(2)
+                        .declareInput(dev.stannismod.stellurgy.api.weapon.GunInput.FORGE_ENERGY))
+                .setUnlocalizedName("gunAmmoFeed").setCreativeTab(tabAdvRocketry);
+        // The one part that makes a gun a BEAM rather than a thrower. Power per TICK, so a bigger
+        // laser is a laser with more emitters rather than a bigger number written beside one; the
+        // declared kind is what makes it priced against the ablation column and absorbed whole by a
+        // shell instead of being thrown back off it.
+        StellurgyBlocks.blockGunBeamEmitter = new dev.stannismod.stellurgy.block.weapon.BlockGunPart(
+                builder -> builder.addBeamPowerPerTick(4_000).setKind(
+                        dev.stannismod.stellurgy.api.damage.ImpactKind.BEAM)
+                        .addHeatPerShot(1).addHeatCapacity(20)
+                        .declareInput(dev.stannismod.stellurgy.api.weapon.GunInput.FORGE_ENERGY))
+                .setUnlocalizedName("gunBeamEmitter").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockGunCooling = new dev.stannismod.stellurgy.block.weapon.BlockGunPart(
+                builder -> builder.addHeatCapacity(40).addCoolingPerTick(2).addTraverseDegreesPerTick(0.5D))
+                .setUnlocalizedName("gunCooling").setCreativeTab(tabAdvRocketry);
+        StellurgyBlocks.blockWeaponConsole = new BlockTile(dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole.class,
+                GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("weaponConsole")
+                .setCreativeTab(tabAdvRocketry).setHardness(3f);
+        // The battery's eyes. A node of the same network the guns are on, so a sensor placed against
+        // a gun feeds it with no wiring, and one placed alone feeds nothing - which is honest: there
+        // is nothing for it to hand a contact to.
+        StellurgyBlocks.blockFireControlSensor = new BlockTile(dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor.class,
+                GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("fireControlSensor")
+                .setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockGuidanceComputer = new BlockTile(TileGuidanceComputer.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("guidanceComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockAdvancedFlightComputer = new dev.stannismod.stellurgy.block.BlockAdvancedFlightComputer(GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("advancedFlightComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
         // MODULARNOINV, not MODULAR: the console needs the whole panel for its own controls, and a
@@ -1036,6 +1107,7 @@ public class Stellurgy {
         StellurgyBlocks.blockJumpCapacitor = new dev.stannismod.stellurgy.block.BlockShipMachine(dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor.class).setUnlocalizedName("jumpCapacitor").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockJumpCapacitorCell = new Block(Material.IRON).setUnlocalizedName("jumpCapacitorCell").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockJumpHeatSink = new Block(Material.IRON).setUnlocalizedName("jumpHeatSink").setCreativeTab(tabAdvRocketry).setHardness(3f);
+        StellurgyBlocks.blockReactionWheel = new dev.stannismod.stellurgy.block.BlockReactionWheel(Material.IRON).setUnlocalizedName("reactionWheel").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockGravityDampener = new dev.stannismod.stellurgy.block.BlockShipMachine(dev.stannismod.stellurgy.tile.hyperdrive.TileGravityDampener.class).setUnlocalizedName("gravityDampener").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockIntake = new BlockIntake(Material.IRON).setUnlocalizedName("gasIntake").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockDrill = new BlockMiningDrill().setUnlocalizedName("drill").setCreativeTab(tabAdvRocketry).setHardness(3f);
@@ -1070,6 +1142,7 @@ public class Stellurgy {
         StellurgyBlocks.blockGasSeparator = new dev.stannismod.stellurgy.block.BlockGasSeparator(TileGasSeparator.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("gasSeparator").setHardness(3f);
         StellurgyBlocks.blockLifeSupportPlant = new BlockTile(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("lifeSupportPlant").setHardness(3f);
         StellurgyBlocks.blockVentilationDuct = new dev.stannismod.stellurgy.block.BlockVentilationDuct().setCreativeTab(tabAdvRocketry).setUnlocalizedName("ventilationDuct").setHardness(1f);
+        StellurgyBlocks.blockVentilationPort = new BlockTile(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("ventilationPort").setHardness(3f);
         StellurgyBlocks.blockJettisonPort = new BlockTile(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("jettisonPort").setHardness(3f);
         StellurgyBlocks.blockHeatPipe = new dev.stannismod.stellurgy.block.BlockHeatPipe().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatPipe").setHardness(1f);
         StellurgyBlocks.blockHeatAccumulator = new dev.stannismod.stellurgy.block.BlockHeatAccumulator().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatAccumulator").setHardness(3f);
@@ -1158,6 +1231,11 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockBlastBrick.setRegistryName("blastbrick"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockStructureTower.setRegistryName("structureTower"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockLens.setRegistryName("blockLens"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockMirrorPlatingAluminium.setRegistryName("mirrorPlatingAluminium"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockMirrorPlatingSilver.setRegistryName("mirrorPlatingSilver"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockMirrorPlatingGold.setRegistryName("mirrorPlatingGold"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockReactivePlate.setRegistryName("reactivePlate"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockReactiveBlock.setRegistryName("reactiveBlock"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockSolarPanel.setRegistryName("solarPanel"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockSolarArrayPanel.setRegistryName("solararraypanel"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockQuartzCrucible.setRegistryName("quartzcrucible"), null, false);
@@ -1229,6 +1307,13 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockOxidizerFuelTank.setRegistryName("oxidizerfueltank"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNuclearFuelTank.setRegistryName("nuclearfueltank"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNuclearCore.setRegistryName("nuclearcore"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockTurret.setRegistryName("turret"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockWeaponConsole.setRegistryName("weaponConsole"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockFireControlSensor.setRegistryName("fireControlSensor"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunBarrel.setRegistryName("gunBarrel"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunAmmoFeed.setRegistryName("gunAmmoFeed"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunBeamEmitter.setRegistryName("gunBeamEmitter"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunCooling.setRegistryName("gunCooling"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGuidanceComputer.setRegistryName("guidanceComputer"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockAdvancedFlightComputer.setRegistryName("advancedFlightComputer"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNavigationComputer.setRegistryName("navigationComputer"));
@@ -1238,6 +1323,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpCapacitor.setRegistryName("jumpCapacitor"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpCapacitorCell.setRegistryName("jumpCapacitorCell"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpHeatSink.setRegistryName("jumpHeatSink"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockReactionWheel.setRegistryName("reactionWheel"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGravityDampener.setRegistryName("gravityDampener"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockIntake.setRegistryName("intake"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockDrill.setRegistryName("drill"));
@@ -1272,6 +1358,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGasSeparator.setRegistryName("gasSeparator"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockLifeSupportPlant.setRegistryName("lifeSupportPlant"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockVentilationDuct.setRegistryName("ventilationDuct"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockVentilationPort.setRegistryName("ventilationPort"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJettisonPort.setRegistryName("jettisonPort"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatPipe.setRegistryName("heatPipe"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatAccumulator.setRegistryName("heatAccumulator"));
@@ -1463,6 +1550,9 @@ public class Stellurgy {
             throw new IllegalStateException("the weight table is written once per process");
         }
         weights = new WeightEngine("config/advRocketry/weights.json");
+        // Read now rather than on first use: a table file the pack broke stops the start with the
+        // file's name, instead of crashing the game the first time a hull melts or a slug is thrown.
+        dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.all();
 
         CapabilitySpaceArmor.register();
         // The player's own bindings: one home for what this mod holds on him, attached to the
@@ -1470,6 +1560,7 @@ public class Stellurgy {
         // real work, because a player is not a host that persists its own NBT.
         dev.stannismod.stellurgy.player.CapabilityPlayerBindings.register();
         dev.stannismod.stellurgy.api.capability.CapabilityWear.register();
+        dev.stannismod.stellurgy.api.capability.CapabilityDamageAware.register();
         dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter.register();
         dev.stannismod.stellurgy.api.capability.CapabilityHeatPump.register();
         dev.stannismod.stellurgy.api.capability.CapabilityHeatSink.register();
@@ -1530,6 +1621,8 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.world.weather.PlanetWeatherEventHandler());
         // Acid rain damage on planets flagged acidicRain
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.event.AcidRainHandler());
+        // Forget a block's damage record when a player breaks or replaces that block
+        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.damage.DamageInvalidationHandler());
 
         WirelessDataTickHandler wirelessTickHandler = new WirelessDataTickHandler();
         MinecraftForge.EVENT_BUS.register(wirelessTickHandler);
@@ -1579,6 +1672,11 @@ public class Stellurgy {
         playerRelease = new dev.stannismod.stellurgy.player.PlayerRelease(
                 spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(ServerStateEvents.class);
+        // The authoritative mass recompute, armed on the naming edge rather than on a timer: before
+        // a ship is named its blocks sit at shipyard addresses and a frame computed there is about
+        // nowhere. Writes the record and logs any disagreement with the incremental total.
+        MinecraftForge.EVENT_BUS.register(
+                new dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.Hooks());
 
         GameRegistry.registerWorldGenerator(new OreGenerator(), 100);
 
@@ -1630,6 +1728,8 @@ public class Stellurgy {
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+        // Before worlds load: the first tile to load registers into this server's networks, which
+        // the server state builds.
         beginServerLifetime();
         // Populate dimension properties before worlds get loaded
         serverDimensions().createAndLoadDimensions(resetFromXml);

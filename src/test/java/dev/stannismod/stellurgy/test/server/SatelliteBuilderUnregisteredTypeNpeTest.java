@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -36,11 +35,11 @@ public class SatelliteBuilderUnregisteredTypeNpeTest extends AbstractSharedServe
     public void buildWithUnregisteredCoreTypeIsRejected() throws Exception {
         int x = 10900, y = FixtureSite.OPEN_AIR_Y, z = 9700; // isolated column, distinct from other builder tests
 
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:satelliteBuilder");
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)).raw();
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder must place: " + place, Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder press-build-unregistered 0 " + x + " " + y + " " + z);
+        String resp = act("stellurgytest satellite-builder press-build-unregistered 0 " + x + " " + y + " " + z).raw();
         assertTrue("probe setup must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("the bogus type must be absent from the class registry (else not a valid L3 repro): " + resp,
                 Reply.of(resp).bool("getNewSatelliteNull"));

@@ -1,23 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.hyperdrive.*;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.HashSet;
 import java.util.Set;
 
-import org.junit.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.hyperdrive.ComponentScan;
-import dev.stannismod.stellurgy.hyperdrive.DampenerField;
-import dev.stannismod.stellurgy.hyperdrive.DriveTier;
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.hyperdrive.ShipDriveStats;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The shape of the hyperdrive's numbers — never the numbers themselves.

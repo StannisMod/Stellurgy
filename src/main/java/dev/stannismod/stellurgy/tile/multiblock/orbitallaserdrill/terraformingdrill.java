@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.entity.EntityLaserNode;
+import dev.stannismod.stellurgy.util.BiomeHandler;
+import dev.stannismod.stellurgy.util.TerraformingHelper;
+import dev.stannismod.stellurgy.world.ChunkManagerPlanet;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
@@ -7,13 +13,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeProvider;
 import net.minecraftforge.common.ForgeChunkManager;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.entity.EntityLaserNode;
-import dev.stannismod.stellurgy.util.BiomeHandler;
-import dev.stannismod.stellurgy.util.TerraformingHelper;
-import dev.stannismod.stellurgy.world.ChunkManagerPlanet;
 
 /**
  * This drill is used if the laserDrillPlanet config option is disabled. It simply conjures ores from nowhere

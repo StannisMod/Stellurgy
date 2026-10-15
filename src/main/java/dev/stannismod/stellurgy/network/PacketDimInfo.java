@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -116,7 +115,13 @@ public class PacketDimInfo extends BasePacket {
     @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
     public void executeClient(EntityPlayer thePlayer) {
         if (deleteDim) {
-            DimensionManager.getInstance().forgetDimension(dimNumber);
+            // Against a remote server this client made the Forge registration itself, so it withdraws
+            // it; in single player the integrated server owns it and has already withdrawn it.
+            if (dev.stannismod.stellurgy.client.ServerView.current().remote()) {
+                DimensionManager.getInstance().withdrawDimension(dimNumber);
+            } else {
+                DimensionManager.getInstance().forgetDimension(dimNumber);
+            }
         } else {
             dimProperties = new DimensionProperties(dimNumber);
             dimProperties.readFromNBT(dimNBT);

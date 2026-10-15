@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import org.junit.Assume;
 
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Assume;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -41,7 +41,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
     private static final String AR_DIMS_ARRAY_PATTERN = "stellurgyDimensions";
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest dim list"));
+        String joined = String.join("\n", client().read("stellurgytest dim list"));
         Assume.assumeFalse(
                 "No Stellurgy dimensions registered — skipping (empty galaxy?)",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
@@ -63,7 +63,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // wrapper via WorldEvent.Load. No `/stellurgytest weather set` between the
         // load and the probe — we're testing the event chain, not the
         // setRain path that follows it.
-        String loaded = String.join("\n", client().execute("stellurgytest dim load " + dim));
+        String loaded = String.join("\n", client().arrange("stellurgytest dim load " + dim));
         assertTrue("dim load probe did not report loaded=true: " + loaded,
                 Reply.of(loaded).bool("loaded"));
 
@@ -78,7 +78,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // Counter-test: WorldEvent.Load on a non-Stellurgy dim must NOT wrap.
         // (The wrapping decision lives in PlanetWeatherManager.shouldWrap,
         // and this fixes the polarity of that gate.)
-        client().execute("stellurgytest dim load 0");
+        client().arrange("stellurgytest dim load 0");
         DimWeather weather = weather(0);
         // Vanilla overworld WorldInfo class — neither StellurgyDimensionWorldInfo
         // nor anything that contains "StellurgyWeather".
@@ -88,7 +88,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
 
     /** One world's sky, refusing a world the probe could not bring up. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 }

@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.navigation;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * One address a memory crystal holds: <b>which body</b> it is, <b>where</b> that body was seen,

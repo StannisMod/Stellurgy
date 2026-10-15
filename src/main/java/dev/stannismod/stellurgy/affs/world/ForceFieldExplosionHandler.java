@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.affs.world;
 
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.ExplosionEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.Constants;
 
 import java.util.Collections;
 import java.util.Iterator;

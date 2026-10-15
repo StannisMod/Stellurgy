@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.cap;
 
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import net.darkhax.tesla.api.ITeslaConsumer;
 import net.darkhax.tesla.api.ITeslaHolder;
 import net.darkhax.tesla.api.ITeslaProducer;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityInject;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 
 public class TeslaHandler {
 

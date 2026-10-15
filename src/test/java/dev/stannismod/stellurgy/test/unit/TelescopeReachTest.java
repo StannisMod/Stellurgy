@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.RegionScan;
 import dev.stannismod.stellurgy.universe.UniverseLawsV0;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -37,15 +37,14 @@ public class TelescopeReachTest {
      * against the stock star table, a five-degree opening, and a ceiling of 5 000 looks. The first
      * assertion MEASURES what they buy — that the full-depth pointing really would not fit — so the
      * shortening below is one the tuning forced and not one it merely permitted.</p>
-     *
-     * <p>red-witnessed: with {@code Tuning#fit} at {@code depth = Math.max(1, depth / 2);}
-     * reading {@code break;}, this fails with "an aperture too good for the budget must be shortened,
-     * not refused: a pointing of half-angle 5,000 degrees holds more than 5000 looks …"; at
-     * {@code if (aimed.totalLooks() <= maxCells)} reading {@code if (true)}, with "the survey must fit
-     * under its ceiling: 1572443916 looks"; at {@code int depth = Math.max(1, steps);} reading
-     * {@code int depth = 1;}, with "and it must still be a survey past the instrument's own territory:
-     * 3525313 cells at a stride of 3525313" — one inversion per run, 2026-10-02.</p>
      */
+    @LegacyWitness(prose = "with {@code Tuning#fit} at {@code depth = Math.max(1, depth / 2);}"
+            + " reading {@code break;}, this fails with \"an aperture too good for the budget must be shortened,"
+            + " not refused: a pointing of half-angle 5,000 degrees holds more than 5000 looks …\"; at"
+            + " {@code if (aimed.totalLooks() <= maxCells)} reading {@code if (true)}, with \"the survey must fit"
+            + " under its ceiling: 1572443916 looks\"; at {@code int depth = Math.max(1, steps);} reading"
+            + " {@code int depth = 1;}, with \"and it must still be a survey past the instrument's own territory:"
+            + " 3525313 cells at a stride of 3525313\" — one inversion per run, 2026-10-02.")
     @Test
     public void anApertureTooGoodForTheLookBudgetIsShortenedRatherThanRefused() {
         long stride = GalaxyGenConfig.DEFAULT_MIN_SPACING;

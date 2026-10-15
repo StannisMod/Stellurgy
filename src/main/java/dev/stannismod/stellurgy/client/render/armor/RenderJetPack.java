@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.client.render.armor;
 
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.ModelBiped;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 
 public class RenderJetPack extends ModelBiped {
     /**

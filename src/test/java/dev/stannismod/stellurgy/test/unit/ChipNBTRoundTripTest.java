@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.init.Items;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.item.ItemAsteroidChip;
 import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * chip-item NBT round-trip pins.
@@ -50,6 +47,8 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemPlanetIdentificationChip ─────────────────
 
+    /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
+    @Pins("INV-ITM-01")
     @Test
     public void planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt() {
         // Production contract (getDimensionId, lines 99-103): a stack with
@@ -62,6 +61,8 @@ public class ChipNBTRoundTripTest {
                 Constants.INVALID_PLANET, chip.getDimensionId(s));
     }
 
+    /** Pins INV-ITM-02 (set then get round-trips through NBT). */
+    @Pins("INV-ITM-02")
     @Test
     public void planetChipDimIdRoundTripsForRegisteredDim() {
         // setDimensionId only persists if the dim is registered (its
@@ -84,7 +85,10 @@ public class ChipNBTRoundTripTest {
      *  {@code setDimensionId} previously built a fresh NBT but never
      *  called {@code stack.setTagCompound(nbt)} before returning — so
      *  the sentinel was silently dropped. Now it attaches the NBT so
-     *  callers can observe the "explicitly invalid" state. */
+     *  callers can observe the "explicitly invalid" state.
+     * Pins INV-ITM-04 (setting the invalid planet still attaches a tag carrying the sentinel).
+     */
+    @Pins("INV-ITM-04")
     @Test
     public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -111,6 +115,8 @@ public class ChipNBTRoundTripTest {
         assertEquals(0xCAFEBABE_DEADBEEFL, chip.getUUID(s).longValue());
     }
 
+    /** Pins INV-ITM-03 (erase drops the entire compound). */
+    @Pins("INV-ITM-03")
     @Test
     public void planetChipEraseClearsAllNbt() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -123,6 +129,8 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemStationChip ──────────────────────────────
 
+    /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
+    @Pins("INV-ITM-01")
     @Test
     public void stationChipUuidDefaultsToZero() {
         // Static methods, no instance needed. Production contract: no NBT
@@ -146,6 +154,11 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemAsteroidChip ─────────────────────────────
 
+    /**
+     * Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default).
+     * Pins INV-ITM-02 (set then get round-trips through NBT).
+     */
+    @Pins({"INV-ITM-01", "INV-ITM-02"})
     @Test
     public void asteroidChipUuidAndTypeRoundTrip() {
         ItemAsteroidChip chip = new ItemAsteroidChip();

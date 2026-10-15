@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.HyperspaceTiles;
+import dev.stannismod.stellurgy.space.ShipCrossingService;
+import dev.stannismod.stellurgy.space.VSShipCrosser;
+import dev.stannismod.stellurgy.test.trace.CrossingMemory;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.test.trace.CrossingMemory;
-import dev.stannismod.stellurgy.space.CrewTransfer;
-import dev.stannismod.stellurgy.space.HyperspaceTiles;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.space.VSShipCrosser;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * What a hyperspace jump does to the HULL and to the PEOPLE, as events, at the seams where the

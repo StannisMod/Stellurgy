@@ -1,13 +1,5 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
@@ -18,6 +10,13 @@ import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ZoneScale;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Derives the addressable {@link SystemBody} content of an AUTHORED system (a catalogued {@link StellarBody})

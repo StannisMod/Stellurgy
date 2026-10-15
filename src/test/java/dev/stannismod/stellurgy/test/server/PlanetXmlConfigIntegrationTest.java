@@ -1,17 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -31,7 +26,6 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetXmlConfigIntegrationTest.Galaxy.class)
 public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
 
     /** Dim id we declare in the fixture. Must be outside vanilla 0/-1/1 + Stellurgy's
@@ -43,6 +37,11 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
     private static final int FIXTURE_ATM_DENSITY = 50;
     private static final int FIXTURE_ROTATIONAL_PERIOD = 16000;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {
@@ -81,26 +80,25 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
     /**
      * The fixture's fields as the running server holds them, and — its last verdicts — that a file
      * stating no {@code <galaxyGen>} runs the shipped procedural galaxy.
-     *
-     * <p>red-witnessed, the last two verdicts (the field reads above predate the record form): with
-     * {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced
-     * by {@code GalaxyGenConfig.nonProcedural()}, it fails
-     * with "a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:
-     * {"generator":"EmptyGalaxyGenerator","config":null}"; with {@code UniverseSchemaV0#generator}'s
-     * {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with
-     * "built from the shipped configuration: … "density":0.175", 2026-10-05.</p>
      */
+    @LegacyWitness(prose = "the last two verdicts (the field reads above predate the record form): with"
+            + " {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced"
+            + " by {@code GalaxyGenConfig.nonProcedural()}, it fails"
+            + " with \"a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:"
+            + " {\"generator\":\"EmptyGalaxyGenerator\",\"config\":null}\"; with {@code UniverseSchemaV0#generator}'s"
+            + " {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with"
+            + " \"built from the shipped configuration: … \"density\":0.175\", 2026-10-05.")
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
 
         // `holds` refuses a reply carrying no `stellurgyDimensions` of its own, so the malformed-reply
         // claim that used to stand here as a separate line is the same claim, made where it bites.
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         assertTrue("fixture dim " + FIXTURE_DIM + " not in stellurgyDimensions: " + dimList,
                 dimList.holds(FIXTURE_DIM));
 
         String planetInfo = String.join("\n",
-                client().execute("stellurgytest planet info " + FIXTURE_DIM));
+                client().read("stellurgytest planet info " + FIXTURE_DIM));
         assertTrue("planet info errored: " + planetInfo,
                 !Reply.of(planetInfo).has("error"));
 
@@ -122,7 +120,7 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
         // This fixture states no <galaxyGen>: the shipped procedural galaxy, read off the generator the
         // running universe has in force. (The file WITH a <galaxyGen> is PlanetDefsAuthoringTest's.)
         Reply inForce = Reply.of("stellurgytest space gen-config",
-                String.join("\n", client().execute("stellurgytest space gen-config")));
+                String.join("\n", client().read("stellurgytest space gen-config")));
         assertEquals("a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy: "
                 + inForce, "ClusteredGalaxyGenerator", inForce.text("generator"));
         assertEquals("built from the shipped configuration: " + inForce,

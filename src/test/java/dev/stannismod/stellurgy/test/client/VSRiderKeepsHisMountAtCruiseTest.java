@@ -1,22 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * A player riding a mount aboard a CRUISING ship never loses that mount.
@@ -129,34 +120,38 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         return Reply.of(json).integerOr(key, fallback);
     }
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(this::exec, dim,
-                "this scenario's craft must be loaded before the rider is put on it");
-    }
-
     /**
      * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
      * tracking headroom.
-     *
-     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle#ar$aRiderNeverLosesItsVehicle} at
-     * {@code cir.setReturnValue(true);} removed — no longer forcing the mount visible to its own rider —
-     * this fails with "the client threw the rider off his mount 24 of 40
-     * samples", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as
-     * it stands after the settle became a dose and a two-speed window.</p>
      */
+    @LegacyWitness(prose = "with {@code MixinEntityTrackerRiderSeesVehicle#ar$aRiderNeverLosesItsVehicle} at"
+            + " {@code cir.setReturnValue(true);} removed — no longer forcing the mount visible to its own rider —"
+            + " this fails with \"the client threw the rider off his mount 24 of 40"
+            + " samples\", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as"
+            + " it stands after the settle became a dose and a two-speed window.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_RAMP_TICKS);",
+            why = "CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured, see the"
+                    + " constant); then the cruise is judged ONCE, by the window below.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s0 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
+            why = "three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names both. The"
+                    + " physics velocity controller never decides it has arrived, so no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s1 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
+            why = "a cruise speed is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s2 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
+            why = "the second speed of the pair.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {",
+            why = "it COUNTS how many samples of a cruise found the rider unseated, his mount missing or the"
+                    + " anchor lagging, plus the WORST lag seen. Every one of those is a statistic over the"
+                    + " cruise, and the contract is about the cruise rather than about any tick of it. What it"
+                    + " cannot see: a seat lost and regained inside one sampling gap.")
     public void aSeatedRiderNeverLosesTheMountHeIsRidingWhileTheShipCruises() throws Exception {
 
         // Headless: nobody is near the ship between probe calls, so pin it loaded. This is
         // arrangement only - what is under test is what the client is TOLD about an entity it
         // already has, not whether the ship loads.
 
-        int dim = TransitSetup.empty(this::exec).originDim;
+        int dim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
 
         // The cell is a void world, so this is not about escaping terrain — it is about ONE
         // definition of where a fixture stands instead of a 64 nobody chose. The first link still
@@ -170,19 +165,20 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(dim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 2, 16,
-                "the craft whose rider must stay aboard through the cruise");
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
-                waitForLoadedShip(dim) >= 1);
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16, "the craft whose rider must stay aboard through the cruise");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The seat inside the craft this scenario BUILT, named by the assembler that minted it. The
         // anchored form resolved the yard nearest a point over the whole registry, so it could reach
-        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
+        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it. The
+        // craft is loaded before the rider is put on it: the link is its own `ship_usable`.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
-        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, durableShipId, 200);
-        PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
+        disposeOfShipAtEnd(durableShipId);
+        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), dim, durableShipId, 200);
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), dim, scenarioShipId)
                 .requireFound("the pilot seat must be found, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
         // A WORLD-frame pose, carried through a name lookup into the `space enter` below. Sound
@@ -194,14 +190,14 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         int sy = (int) Math.round(seat.shipWorldY);
         int sz = (int) Math.round(seat.shipWorldZ);
 
-        String health = exec("stellurgytest player health");
+        String health = read("stellurgytest player health").raw();
         Reply nameMReply = Reply.of(health);
         String botName = nameMReply.text(PLAYER_NAME);
 
         long enterMark = clientEvents().mark();
         scenario().requireArranged("the bot must enter the cell",
-                readBool(exec("stellurgytest space enter " + botName + " " + dim
-                        + " " + sx + " " + sy + " " + sz), "ok"));
+                readBool(arrange("stellurgytest space enter " + botName + " " + dim
+                        + " " + sx + " " + sy + " " + sz).raw(), "ok"));
         awaitClientDim(enterMark, dim, "the client must follow the bot into the ship's cell");
 
         // The subject is a mount on a MOVING SHIP whose data-watcher is quiet - a passenger seat,
@@ -209,19 +205,26 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         // flight-telemetry floats, and each write re-pins its own tracking anchor, which is vanilla's
         // third refresh disjunct. Measured on that subject: at 4.075 blocks/tick the anchor never fell
         // more than 3.34 blocks behind a 16-block range - the mechanism cannot be put under load at
-        // any speed VS will allow. A mount one block off the pilot seat resolves no flight computer,
-        // publishes nothing, and is carried by the same ship - which is exactly a passenger's chair.
+        // any speed VS will allow. A plain seat one block off the pilot seat resolves no flight
+        // computer, publishes nothing, and is carried by the same ship - which is exactly a passenger's
+        // chair. It is a real seat BLOCK, set into the craft's shipyard beside the pilot seat: a dummy
+        // with no rider stands only on a seat (EntityDummy#seatStands), so one bound to an empty cell
+        // removes itself on its first tick, before anybody can be put on it.
         int mountX = seatX + 1, mountY = seatY, mountZ = seatZ;
+        String chair = arrange("stellurgytest fill " + dim + " " + mountX + " " + mountY + " " + mountZ
+                + " " + mountX + " " + mountY + " " + mountZ + " stellurgy:seat").raw();
+        scenario().requireArranged("the passenger seat must be set into the craft beside the pilot seat: "
+                + chair, Reply.of(chair).integerOr("placed", 0) == 1);
         // ONE mount. It used to be retried five times ten ticks apart, which would hide WHY a first
         // mount is refused — and a refused mount is the arrangement's own failure, reported with the
         // server's answer. The client's mark goes before it: the link below is this mount's.
         long seatClientMark = clientEvents().mark();
-        String mountAt = exec("stellurgytest vs seat-mount-at " + dim
-                + " " + mountX + " " + mountY + " " + mountZ);
+        String mountAt = arrange("stellurgytest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ).raw();
         scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                 readBool(mountAt, "ok"));
         int dummyId = readInt(mountAt, "dummyId");
-        String mount = exec("stellurgytest player mount-entity " + dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + dummyId).raw();
         // `mounted` is missing only from the probe's "entity not found" reply, which names
         // `playerDim`, `foundInDim` and `gone` — so absence is the answer: a refused mount, reported
         // with that reply.
@@ -244,14 +247,14 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
                     + " — the mount reported success and he is off ten ticks later. Whether the seat"
                     + " dummy (entity " + dummyId + ") still EXISTS separates a removal under him"
                     + " from a dismount: mountReply=" + mount
-                    + " dummyNow=" + exec("stellurgytest vs deck-capture " + dim + " " + dummyId)
-                    + " serverSaysRiding=" + exec("stellurgytest player riding-of " + botName));
+                    + " dummyNow=" + read("stellurgytest vs deck-capture " + dim + " " + dummyId).raw()
+                    + " serverSaysRiding=" + read("stellurgytest player riding-of " + botName).raw());
         }
 
         // The instrument's own proof: it must be able to say FALSE. Without this leg, the cruise
         // assertion below is green on a reporter that is simply stuck on true.
         long offClientMark = clientEvents().mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // The control's own far side is a record too: the client LETTING GO is what makes the
         // reporter's FALSE mean something, and ten ticks were the same bet as above in reverse.
         awaitClientDismount(offClientMark, "CONTROL: the client must be able to report NOT riding —"
@@ -263,11 +266,11 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         // The CLIENT's mark, before the re-seat is ordered: the control below reads the
         // client, and the link is what says the mount reached it. ONE re-seat, for the reason above.
         long reseatClientMark = clientEvents().mark();
-        String remountAt = exec("stellurgytest vs seat-mount-at " + dim
-                + " " + mountX + " " + mountY + " " + mountZ);
+        String remountAt = arrange("stellurgytest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ).raw();
         scenario().requireArranged("seat-mount-at must spawn the seat dummy again: " + remountAt,
                 readBool(remountAt, "ok"));
-        mount = exec("stellurgytest player mount-entity " + readInt(remountAt, "dummyId"));
+        mount = arrange("stellurgytest player mount-entity " + readInt(remountAt, "dummyId")).raw();
         // Same reading as the first mount: absence is the answer, a refused mount.
         scenario().requireArranged("the bot must be re-seated after the control: " + mount,
                 Reply.of(mount).boolOr("mounted", false));
@@ -308,25 +311,19 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         // question already answered, and one a neighbour's craft can give.
         String shipId = scenarioShipId;
         scenario().requireArranged("this scenario's ship must be managed before it is commanded;"
-                + " id=" + shipId, ShipInfo.loadedIn(this::exec, dim, shipId));
+                + " id=" + shipId, ShipInfo.loadedIn(c -> read(c).raw(), dim, shipId));
 
-        String commanded = exec("stellurgytest vs force-vel-by-id " + dim + " " + shipId
-                + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0");
+        String commanded = arrange("stellurgytest vs force-vel-by-id " + dim + " " + shipId
+                + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0").raw();
         scenario().requireArranged("the cruise command must reach THIS ship's flight computer: "
                 + commanded, readBool(commanded, "commanded"));
 
-        // EXPERIMENT: CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured,
-        // see the constant); then the cruise is judged ONCE, by the window below.
         advanceServerAndClient(CRUISE_RAMP_TICKS);
-        // WINDOW: three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names
-        // both. The physics velocity controller never decides it has arrived, so no record answers.
-        ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: a cruise speed is a value, not an event; no record answers.
+        ShipInfo s0 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
         advanceServerAndClient(SETTLE_SAMPLE_TICKS);
-        ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: the second speed of the pair.
+        ShipInfo s1 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
         advanceServerAndClient(SETTLE_SAMPLE_TICKS);
-        ShipInfo s2 = ShipInfo.byId(this::exec, dim, shipId);
+        ShipInfo s2 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
         double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
         double second = Math.hypot(s2.x - s1.x, s2.z - s1.z) / SETTLE_SAMPLE_TICKS;
         scenario().requireArranged("the ship must be in a STEADY cruise above "
@@ -338,7 +335,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
                 first > EVICTION_THRESHOLD_BLOCKS_PER_TICK && second > EVICTION_THRESHOLD_BLOCKS_PER_TICK
                         && Math.abs(first - second) < STEADY_TOLERANCE);
 
-        ShipInfo before = ShipInfo.byId(this::exec, dim, shipId);
+        ShipInfo before = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
         double x0 = before.x, z0 = before.z;
         double px0 = bot().reportState().get("playerX").getAsDouble();
         double pz0 = bot().reportState().get("playerZ").getAsDouble();
@@ -351,10 +348,6 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         int notRiding = 0, samples = 0, mountMissing = 0, riderUntracked = 0;
         double maxAnchorLag = 0.0;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: it COUNTS how many samples of a cruise found the rider unseated, his mount
-        // missing or the anchor lagging, plus the WORST lag seen. Every one of those is a statistic
-        // over the cruise, and the contract is about the cruise rather than about any tick of it.
-        // What it cannot see: a seat lost and regained inside one sampling gap.
         for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {
             advanceServerAndClient(POLL_EVERY_TICKS);
             samples++;
@@ -365,7 +358,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
             // client is about to lose the mount. Without this the run can only say THAT the seat
             // held, never why - and a green would not distinguish "the guard worked" from "the
             // arrangement never put the mechanism under load".
-            String track = exec("stellurgytest vs mount-tracking " + dim);
+            String track = read("stellurgytest vs mount-tracking " + dim).raw();
             // absence is the answer for `seatedRider`: the verb writes `{"error":"world not
             // loaded"}` with no fields at all when the dimension is between worlds, which across a
             // jump is exactly the moment this counter exists to describe — and a refusing read
@@ -396,7 +389,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         System.out.println("[#163] seated/mount trace ('.' seated+mount present, 'x' unseated,"
                 + " 'M' mount gone, 'X' both): " + trace);
 
-        ShipInfo after = ShipInfo.byId(this::exec, dim, shipId);
+        ShipInfo after = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
         double shipDX = after.x - x0, shipDZ = after.z - z0;
         double shipTravel = Math.hypot(shipDX, shipDZ);
         double perTickX = Math.abs(shipDX) / OBSERVE_TICKS;

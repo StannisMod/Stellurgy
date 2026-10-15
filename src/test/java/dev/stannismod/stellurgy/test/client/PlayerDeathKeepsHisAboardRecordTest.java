@@ -1,11 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertTrue;
 
@@ -24,7 +25,7 @@ import static org.junit.Assert.assertTrue;
  * this one is about what survives the death.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2ETest {
+public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTest {
 
     /** A deadline for a discrete record — the death screen opening, the respawn arriving. */
     private static final int DEATH_LINK_BUDGET_TICKS = 200;
@@ -52,32 +53,32 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2E
 
     /**
      * The record survives a death and a respawn through the death screen.
-     *
-     * <p>red-witnessed: with {@code CapabilityPlayerBindings#carryAcrossDeath} at
-     * {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: "a player who dies must still know which ship he belongs to …
-     * {\"bound\":[]}", 2026-09-28.</p>
      */
+    @LegacyWitness(prose = "with {@code CapabilityPlayerBindings#carryAcrossDeath} at"
+            + " {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: \"a player who dies must still know which ship he belongs to …"
+            + " {\\\"bound\\\":[]}\", 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);",
+            why = "the death screen's own enabling timer, counted on the clock that runs it.")
     public void aPlayerWhoDiesStillKnowsWhichShipHeBelongsTo() throws Exception {
         scenario().arranging("stamp the aboard record on the real player");
-        String bind = exec("stellurgytest player bind-aboard " + SHIP);
+        String bind = arrange("stellurgytest player bind-aboard " + SHIP).raw();
         scenario().requireArranged("the arrangement must actually stamp the record: " + bind,
                 Reply.of(bind).bool("tagged"));
         // THE CONTROL: the record is REPORTED before the death, by the same witness asked after it.
         // Without this, "still reported afterwards" could be a witness that always says so.
-        String before = exec("stellurgytest player bindings");
+        String before = read("stellurgytest player bindings").raw();
         assertTrue("before the death the player must be reported bound to his ship: " + before,
                 Reply.of(before).holdsText("bound", ABOARD_RECORD));
 
         scenario().asserting("the player dies, respawns through the death screen, and keeps the record");
         Events client = clientEvents();
         long deathMark = client.mark();
-        exec("kill @a");
+        arrange("kill @a");
         client.awaitMatching(deathMark, "client_gui_opened",
                 seen -> !Events.recordsWhere(seen, "gui", "GuiGameOver").isEmpty(),
                 "opening the death screen",
                 "the kill must bring the player's client to the death screen", DEATH_LINK_BUDGET_TICKS);
-        // WINDOW: the death screen's own enabling timer, counted on the clock that runs it.
         bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);
         long respawnMark = client.mark();
         bot().clickButton(RESPAWN_BUTTON_INDEX);
@@ -88,7 +89,7 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2E
                 "carrying via = respawn",
                 "pressing respawn must make the server rebuild the player", DEATH_LINK_BUDGET_TICKS);
 
-        String after = exec("stellurgytest player bindings");
+        String after = read("stellurgytest player bindings").raw();
         assertTrue("a player who dies must still know which ship he belongs to — the respawned player"
                 + " must be reported bound to it: " + after,
                 Reply.of(after).holdsText("bound", ABOARD_RECORD));

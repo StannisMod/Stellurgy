@@ -1,21 +1,15 @@
 package dev.stannismod.stellurgy.dimension;
 
-import net.minecraft.nbt.CompressedStreamTools;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.DimensionType;
-import net.minecraft.world.World;
-import net.minecraft.world.WorldProvider;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.Loader;
-import org.apache.commons.io.FileUtils;
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.StellurgyBiomes;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellitesUpdate;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
@@ -27,7 +21,14 @@ import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
 import dev.stannismod.stellurgy.world.provider.WorldProviderAsteroid;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import net.minecraft.nbt.CompressedStreamTools;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.DimensionType;
+import net.minecraft.world.World;
+import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.Loader;
+import org.apache.commons.io.FileUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -39,10 +40,9 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.zip.GZIPOutputStream;
 
+import static dev.stannismod.stellurgy.Stellurgy.logger;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static dev.stannismod.stellurgy.Stellurgy.logger;
-import dev.stannismod.stellurgy.api.*;
 
 
 /**
@@ -478,14 +478,59 @@ public class DimensionManager implements IGalaxy {
      * the server's, and in single player the integrated server has already removed them.
      */
     public void forgetDimension(int dimId) {
+        forget(dimId, false);
+    }
+
+    /**
+     * A REMOTE client's half of a deletion: {@link #forgetDimension}, and also the Forge registration
+     * this connection made for the body and its moons. Against a remote server those registrations
+     * are this client's own — nobody else will withdraw them, and a body later created on the same id
+     * would otherwise keep the deleted one's dimension type. Never for the client of an integrated
+     * server, whose registrations are the server's.
+     */
+    public void withdrawDimension(int dimId) {
+        forget(dimId, true);
+    }
+
+    private void forget(int dimId, boolean withdrawRegistration) {
         DimensionProperties properties = dimensionList.remove(dimId);
         if (properties == null) {
             return;
         }
         unlinkFromSystem(properties);
-        for (Integer child : new ArrayList<>(properties.getChildPlanets())) {
-            forgetDimension(child);
+        if (withdrawRegistration && properties.isNativeDimension && properties.hasSurface()
+                && net.minecraftforge.common.DimensionManager.isDimensionRegistered(dimId)) {
+            net.minecraftforge.common.DimensionManager.unregisterDimension(dimId);
         }
+        for (Integer child : new ArrayList<>(properties.getChildPlanets())) {
+            forget(child, withdrawRegistration);
+        }
+    }
+
+    /**
+     * Undo what parsing a refused nested body did to its parent: {@code XMLPlanetLoader} put the
+     * body's id into its parent's moon set before anyone knew the id was taken, so the parent would
+     * list the HOLDER of that id as its moon.
+     *
+     * <p>The set is keyed by id, so the id is removed only when it does not also belong to a genuine
+     * moon of that parent — two moons of one planet given the same DIMID leave one accepted, and that
+     * one stays. The rule is the set's own invariant: an id in a parent's moon set names a body whose
+     * parent is that parent.</p>
+     */
+    private void detachFromParseParent(DimensionProperties refused) {
+        int parentId = refused.getParentPlanet();
+        if (parentId == Constants.INVALID_PLANET) {
+            return;
+        }
+        DimensionProperties parent = dimensionList.get(parentId);
+        if (parent == null) {
+            return;
+        }
+        DimensionProperties holder = dimensionList.get(refused.getId());
+        if (holder != null && holder.getParentPlanet() == parentId) {
+            return;
+        }
+        parent.removeChild(refused.getId());
     }
 
     private static void unlinkFromSystem(DimensionProperties properties) {
@@ -969,6 +1014,9 @@ public class DimensionManager implements IGalaxy {
                         continue;
                     }
                     properties.setStar(properties.getStarId(), this);
+                }
+                for (DimensionProperties refused : refusedBodies) {
+                    detachFromParseParent(refused);
                 }
 
                 for (StellarBody star : dimCouplingList.stars) {

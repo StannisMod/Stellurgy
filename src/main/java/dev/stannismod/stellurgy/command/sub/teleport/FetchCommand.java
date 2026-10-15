@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.command.sub.teleport;
 
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
+import dev.stannismod.stellurgy.world.util.BasicTeleporter;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.world.util.BasicTeleporter;
 
 import javax.annotation.Nullable;
 import java.util.Collections;

@@ -1,9 +1,7 @@
 package dev.stannismod.stellurgy.block;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemStack;
@@ -11,8 +9,9 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 /**
  * Yes, this class may seem useless, but isBlockNormalCube and isOpaqueCube can't be set in the registry, only by overriding the methods.

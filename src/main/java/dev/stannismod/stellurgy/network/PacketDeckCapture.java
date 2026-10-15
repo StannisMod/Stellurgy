@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
-
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-
 /**
  * Server -> client: put the recipient (a just-dismounted pilot, or a player a relog returns) on his
  * ship's deck, at a DECK point expressed in the ship's own SUBSPACE.

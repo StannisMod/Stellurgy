@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.api.util;
 
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.AreaBlob;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import net.minecraft.world.World;
 
 public interface IBlobHandler {
 	/* *

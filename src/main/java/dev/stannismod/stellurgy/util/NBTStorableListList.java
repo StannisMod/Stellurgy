@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraftforge.common.util.Constants.NBT;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.LinkedList;
 import java.util.List;
