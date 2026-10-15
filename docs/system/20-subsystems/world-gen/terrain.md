@@ -170,18 +170,18 @@ what consumes the result.
   block and biome (deterministic gen): chunk generation re-seeds its `Random` from the chunk
   coordinates before filling (`ChunkProviderPlanet.java:293`). Distinct chunks are independently addressable: still `[T]`,
   `WorldgenDeterminismAndSamplingTest#differentChunksReturnIndependentlyAddressableData:64-65`.
-- **INV-WGEN-22 [A][BEH]** A planet's published world type is its own, never the save's: a `NATIVE`
+- **INV-WGEN-22 [T][BEH]** A planet's published world type is its own, never the save's: a `NATIVE`
   planet answers `PlanetGen` and a `MOD_WORLDTYPE` planet answers the foreign type it runs, and the
   authored options string is what its generator was built from —
   `server/PlanetTerrainSourceTest#planetPublishesItsOwnWorldTypeThroughWorldInfo`,
   `#modWorldtypePlanetConfiguresItsForeignGeneratorFromItsOwnOptions`.
-- **INV-WGEN-06 [A]** `ChunkProviderPlanet.settings` is non-null by the time
+- **INV-WGEN-06 [V]** `ChunkProviderPlanet.settings` is non-null by the time
   `getChunkPrimer` dereferences it (`this.settings.useCaves`,
   `ChunkProviderPlanet.java:311`). It is only assigned when the generator-options
   string is non-null (`:118-119`); an actually-null options string would NPE. In
   practice the options string is never null: it now comes from
   `DimensionProperties.terrainGeneratorOptions`, whose setter maps null to `""`
-  (MECH-WGEN-28). Unconfirmed for all callers.
+  (MECH-WGEN-28). Unconfirmed for all callers. Every constructor call passes a non-null string: `TerraformingHelper.java:91` (vanilla `WorldInfo.getGeneratorOptions` maps null to `""`), `WorldProviderPlanet.java:81,96-98` over `DimensionProperties.java:2756`, and `WorldTypePlanetGen.java:23` with Forge's own argument; assigned at `ChunkProviderPlanet.java:118-119`.
 
 ## Failure modes & edge cases
 

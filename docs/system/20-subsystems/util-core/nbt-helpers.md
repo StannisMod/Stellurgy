@@ -64,8 +64,8 @@ restructure them freely for the 0.1.0 clean break (pre-0.1.0 saves are abandoned
   long form (not a 3-int array). `NBTHelper.java:163-177`. FOR: save format: BlockPos as one long.
 - **INV-NBT-04 [V]** `NBTStorableListList.readFromNBT` clears its list before repopulating,
   so a re-read is idempotent (no accumulation). `NBTStorableListList.java:38`.
-- **INV-NBT-05 [A][SYS]** The AABB double shape round-trips. No test asserts it directly: the fluid-tank
-  restart scenario reaches it only through tank contents. FOR: save format: tile and state NBT helpers.
+- **INV-NBT-05 [V][SYS]** The AABB double shape round-trips. No test asserts it directly: the fluid-tank
+  restart scenario reaches it only through tank contents. FOR: save format: tile and state NBT helpers. `NBTHelper.java:205-227`.
 
 ## Failure modes & edge cases
 

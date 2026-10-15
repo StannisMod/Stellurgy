@@ -98,6 +98,11 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#roleRefusalOf",
             at = "if (role.admits(kind)) {", replacedBy = "if (true) {",
             fails = "these were not: [`stellurgytest chunk forceload 0 0 0` RAN", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#roleRefusalOf",
+            at = "ProbeVerbKind kind = probe ? ProbeVerbKind.formOf(args) : rootKind(command, args);",
+            replacedBy = "ProbeVerbKind kind = probe ? ProbeVerbKind.of(args) : rootKind(command, args);",
+            fails = "these were not: [`stellurgytest vs shiplocal status` RAN, `stellurgytest rocket launch 1 true instant` RAN]",
+            on = "2026-10-15")
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#timeKind",
             at = "case \"add\": return ProbeVerbKind.ARRANGE;", replacedBy = "case \"add\": return ProbeVerbKind.READ;",
             fails = "these were not: [`time set 6000` RAN, `time add 0` RAN]", on = "2026-10-14")
@@ -155,6 +160,11 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet set 0 atmosphereDensity 100", "ROLE");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet list", "ROLE");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar definitelyNotARealSubcommand", "UNCLASSIFIED");
+        // ---- a probe verb whose later word chooses its form: the same, judged on the form this call takes ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest vs shiplocal observe 1", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest vs shiplocal status", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest rocket launch 1 true instant", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ACT, "stellurgytest rocket launch 1 true force", "ROLE");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
                 + " getInstance", "STATIC_CALL");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
@@ -192,6 +202,7 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "gamerule doMobSpawning true");
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet list");
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet set 0 atmosphereDensity 100");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest vs shiplocal status");
         try {
             JsonObject opened = bot.invokeStaticInt(CLIENT_WINDOW, "open");
             bot.invokeStaticInt(CLIENT_WINDOW, "close", Integer.parseInt(opened.get("returned").getAsString()));

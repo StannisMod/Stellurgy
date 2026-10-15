@@ -234,8 +234,12 @@ again, the answer is `permaload false` plus a poll.
   e2e-only WALK / START_ITEM — matched on
   its leading one to three words; a verb with no row is UNCLASSIFIED and refused in BOTH modes. Every command
   the harness bridge carries is sent in a ROLE (`CommandRole`: `read` admits READ and a named instrument,
-  `arrange` admits ARRANGE / BUILD / DECIDE and the e2e's walk and start item, `act` admits TRIGGER; a SPLIT row
-  whose later word picks between two forms admits either), carried in the bridge sender's name after a slash;
+  `arrange` admits ARRANGE / BUILD / DECIDE and the e2e's walk and start item, `act` admits TRIGGER), carried in
+  the bridge sender's name after a slash. A probe call has ONE kind too: a SPLIT row, whose later word or
+  argument picks between two forms, is judged on the form THIS call takes, read as its handler reads it
+  (`ProbeVerbKind#formOf`; the SPLIT rows and the word that picks each form are the cases of
+  `ProbeVerbKind#splitForm`), so the read form of such a verb is refused in `arrange` and its writing form in
+  `read`;
   in either mode a bridge command with no role, or of a kind its role does not admit, is refused at the call
   (`E2EModeGate#roleRefusalOf`, kinds `NO_ROLE`, `ROLE`) before the mode's own judgement, and on a mechanics
   server so is a bridge command whose form has no kind (`E2EModeGate#rootKind`, kind `UNCLASSIFIED`). A command

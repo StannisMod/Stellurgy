@@ -11,7 +11,7 @@ see-also: [C24 (the environment a harvester reads), C25 (the hyperfield may not 
 Ratified 2026-09-02: two products from one site means two machines, and the altitude control surface
 is a UI over one array, not physics.
 
-**The rule the whole contract exists to hold**: *"а static magnetic field is not a free reservoir. It is a
+**The rule the whole contract exists to hold**: *"a static magnetic field is not a free reservoir. It is a
 channel."* Every joule names its source.
 
 ## Conservation — the clauses that make a harvester honest

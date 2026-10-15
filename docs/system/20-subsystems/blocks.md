@@ -227,8 +227,8 @@ Config: see `C4-config-surface`.
   `BlockLandingPad.java:55` `BlockStationModuleDockingPort.java:48`
 - **INV-BLK-05 [V]** Rocket-fire `AGE` property is registry-named `"level"`; the string is contractual for
   CCL lava-material render. `BlockRocketFire.java:34`
-- **INV-BLK-06 [A][BEH]** Data-bus items with no stored data are NBT-free and therefore stack — assumed the intended
-  behaviour of the `data>0` guard; not test-pinned. `BlockDataBusBig.java:54`
+- **INV-BLK-06 [V][BEH]** Data-bus items with no stored data are NBT-free and therefore stack — assumed the intended
+  behaviour of the `data>0` guard; not test-pinned. `BlockDataBusBig.java:53-56`
 - **INV-BLK-07 [V][BEH]** Landing pad registers on add and unregisters on break with its station (symmetric); the
   docking port's break path is **not** symmetric. `BlockLandingPad.java:46,71`
 

@@ -318,8 +318,8 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
   never deregistered by hand first (`VSIntegration.java:509-537`).
 - **INV-VSI-05 [V]** The departure is declared before the cut and taken back if nothing was cut; the
   announcer therefore never reports a crossing as a destruction (`VSIntegration.java:553-566`).
-- **INV-VSI-06 [A]** A velocity read at a point is in blocks per tick, on both sides, with the same
-  expression (`TurretOnAShipTest.java:178`).
+- **INV-VSI-06 [V]** A velocity read at a point is in blocks per tick, on both sides, with the same
+  expression (`TurretOnAShipTest.java:178`). One function converts for both sides: `VSBridge.java:1628,1684-1686`.
 - **INV-VSI-07 [V]** A captured body resolves every transform through its anchor ship id for the whole
   episode; first-match containment is used only to mint the first contact (`ShipFrameTravel.java:170-176`,
   `:448-468`).
@@ -327,20 +327,20 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
   written at its last commit (`ShipFrameTravel.java:1597-1603`, `:2183-2197`).
 - **INV-VSI-09 [V]** A held body is re-imaged on its deck point after the substrate has advanced the
   ships (`DeckFollowsItsShip.java:27` priority; `VSCrewRidesRollingDeckTest.java:95`).
-- **INV-VSI-10 [A]** The pending-seed state machine: a taken seed no-ops every re-send; a capture that
+- **INV-VSI-10 [V]** The pending-seed state machine: a taken seed no-ops every re-send; a capture that
   predates the slot wins for a dismount and loses for a restore; an excluded body is waited for; an expired
-  slot never snaps (`DismountPendingSeedTest.java:38-114`).
+  slot never snaps (`DismountPendingSeedTest.java:38-114`). `ShipFrameTravel.java:714-731`.
 - **INV-VSI-11 [V]** The server's deck bound refuses a step no input plus the deck's carry could produce and
   has no opinion about an uncaptured body (`VSCrewCaptureContractTest.java:1246`; `DeckMovementBound.java:93-96`).
 - **INV-VSI-12 [V]** A deck hold ends only by capture on its own ship, an excluded state, the destruction
   of its craft, or an announced give-up; it survives a departure (`DeckHold.java:349-363`, `:559-565`).
-- **INV-VSI-13 [A]** A machine on a shipyard block no ship claims does nothing
-  (`TurretStandaloneTest.java:334`).
-- **INV-VSI-14 [A]** Hull sweep: an obstacle a pass starts inside never clips it; a shallow embed is lifted
+- **INV-VSI-13 [V]** A machine on a shipyard block no ship claims does nothing
+  (`TurretStandaloneTest.java:334`). `TileTurret.java:114`, `TileWeaponConsole.java:103`, `TileFireControlSensor.java:125`, `TileEntityFieldGenerator.java:108`, all on `VSIntegration.java:1168`.
+- **INV-VSI-14 [V]** Hull sweep: an obstacle a pass starts inside never clips it; a shallow embed is lifted
   and then stands; a face within 45° of up holds, a steeper one sheds (`HullSweepTest.java:184`, `:171`,
-  `:136`, `:146`).
-- **INV-VSI-15 [A]** A seat bound to blocks a crossing cuts is retired with them, matched on the seat and
-  never on where the dummy rides (`CutLeavesNothingBoundTest.java:38`, `:75`).
+  `:136`, `:146`). `HullSweep.java:34,59-70,104`, `:289-291`.
+- **INV-VSI-15 [V]** A seat bound to blocks a crossing cuts is retired with them, matched on the seat and
+  never on where the dummy rides (`CutLeavesNothingBoundTest.java:38`, `:75`). `VSIntegration.java:662-666,1695-1702`.
 - **INV-VSI-16 [V]** The one mutable static in the aboard code is the client look port: written once by
   `installClientLookSource`, and a second install throws (`ShipFrameTravel.java:1772`, `:1789-1798`; caller
   `ClientProxy.java:265`). A null port therefore means "dedicated server" and nothing else.

@@ -55,8 +55,8 @@ import java.util.Set;
  * {@code drive charge status} is a charge whatever its last word says. Where a later word or an argument
  * changes what a verb does ({@code rocket launch}'s mode, {@code energy inject}'s simulate flag,
  * {@code shield priority} with or without a value), the row carries the kind of its most writing form, which is
- * what an e2e is judged by, and {@link #kindsOf} adds the other, so the {@link CommandRole} a test sends it in
- * may be either.
+ * what an e2e is judged by, and {@link #formOf} reads the call's own words for the form it takes, so the
+ * {@link CommandRole} a test sends it in is checked against that form alone.
  * {@code player exec-as-player} and {@code exec-as-named} run a command through the command manager, which
  * posts that command's own event, so the inner command is judged on its own row.</p>
  */
@@ -112,20 +112,17 @@ enum ProbeVerbKind {
     }
 
     /**
-     * Every kind the verb {@code args} names: its row's, and for a SPLIT row the second kind it declares — a
-     * verb whose later word or argument chooses between two forms is admitted in the role of either.
+     * The kind of THIS call: its row's, except that for a SPLIT row the words and arguments after the verb
+     * choose the form, read as the verb's handler reads them. One concrete call has one kind, so the role
+     * it is sent in is checked against the form it takes.
      */
-    static Set<ProbeVerbKind> kindsOf(String[] args) {
+    static ProbeVerbKind formOf(String[] args) {
         String verb = matched(args);
         if (verb == null) {
-            return EnumSet.of(UNCLASSIFIED);
+            return UNCLASSIFIED;
         }
-        Set<ProbeVerbKind> kinds = EnumSet.of(row(verb));
-        ProbeVerbKind second = splitSecondKind(verb);
-        if (second != null) {
-            kinds.add(second);
-        }
-        return kinds;
+        ProbeVerbKind form = splitForm(verb, args);
+        return form == null ? row(verb) : form;
     }
 
     /** The leading words of {@code args} that have a row, the longest first; {@code null} when none has. */
@@ -146,32 +143,61 @@ enum ProbeVerbKind {
     }
 
     /**
-     * The second kind of a SPLIT row — a verb a later word or an argument turns into one of two forms — or
-     * {@code null}. The row itself carries the more writing form; this is the other. Matching stays on the
-     * leading words: which form a call takes is the role its sender declared, checked to be one of the two.
+     * The kind of the form a call of a SPLIT row takes — a verb a later word or an argument turns into one of
+     * two forms — or {@code null} when the call takes the row's own, more writing form (and for every verb
+     * that is no SPLIT row). {@code a} is the whole call, the verb's words included, so each index here is one
+     * more than the handler's own, which reads the call without its first word.
      */
-    private static ProbeVerbKind splitSecondKind(String verb) {
+    private static ProbeVerbKind splitForm(String verb, String[] a) {
         switch (verb) {
-            // A query without its value or its flag: a priority read, a dump's contents, a pad's choice
-            // without committing it, a simulated inject, a toggle's or a mode's status.
+            // energy inject <dim> <x> <y> <z> <amount> [simulate]: a simulated inject only asks what would fit.
             case "energy inject":
+                return a.length >= 8 && Boolean.parseBoolean(a[7]) ? READ : null;
+            // heat dump <dim> <x> <y> <z> [load <item>]: without `load` it reports the dump's state.
             case "heat dump":
+                return a.length >= 8 && "load".equalsIgnoreCase(a[6]) ? null : READ;
+            // shield priority / vent priority <dim> <x> <y> <z> [value]: without a value it reads the priority.
             case "shield priority":
-            case "space auto-takeoff":
-            case "station dock":
             case "vent priority":
+                return a.length >= 7 ? null : READ;
+            // space auto-takeoff <dim> [id <ship>] [status]: `status` reads; any other call toggles.
+            case "space auto-takeoff": {
+                int modeAt = a.length >= 5 && "id".equalsIgnoreCase(a[3]) ? 5 : 3;
+                return a.length > modeAt && "status".equalsIgnoreCase(a[modeAt]) ? READ : null;
+            }
+            // station dock <id> [commit]: the commit defaults to true; `false` only names the pad it would take.
+            case "station dock":
+                return a.length >= 4 && !Boolean.parseBoolean(a[3]) ? READ : null;
+            // vs shiplocal <mode> [entity]: `status` reports the mode.
             case "vs shiplocal":
-                return READ;
-            // Its `instant` and `prepare` modes call production's own launch; `force` puts the rocket in flight.
+                return a.length >= 3 && "status".equalsIgnoreCase(a[2]) ? READ : null;
+            // rocket launch <id> [fill] [mode]: `force` puts the rocket in flight; every other mode, the
+            // default `prepare` included, calls production's own launch.
             case "rocket launch":
-                return TRIGGER;
-            // `ticksExisted`, `posY` and `motionY` are plain writes; `orbit` and `flight` are outcomes.
+                return a.length >= 5 && "force".equalsIgnoreCase(a[4]) ? null : TRIGGER;
+            // rocket set-state <id> key=value…: `orbit` and `flight` write outcomes; the other keys are plain writes.
             case "rocket set-state":
-            // Without its tick count a spawn; with it, the entity's own update runs.
-            case "entity spawn":
+                for (int i = 3; i < a.length; i++) {
+                    if (a[i].startsWith("orbit=") || a[i].startsWith("flight=")) {
+                        return null;
+                    }
+                }
                 return ARRANGE;
+            // entity spawn <dim> <x> <y> <z> <name> [state] [ticks]: with a positive tick count the entity's own
+            // update runs; without one it is a spawn.
+            case "entity spawn":
+                return a.length >= 9 && positive(a[8]) ? null : ARRANGE;
             default:
                 return null;
+        }
+    }
+
+    /** Whether {@code word} is an integer above zero, as the handler's own parse reads a tick count. */
+    private static boolean positive(String word) {
+        try {
+            return Integer.parseInt(word) > 0;
+        } catch (NumberFormatException notANumber) {
+            return false;
         }
     }
 

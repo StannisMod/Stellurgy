@@ -109,9 +109,9 @@ Waila tag, so there is no persistence-key conflict.
 - **INV-IPW-05 [V][BEH]** The data-storage "locked" line is suppressed whenever the same tile is a
   `TileWirelessTransceiver` (`showLockedLine=false`). `DataBlockProbeProvider.java:39-44`,
   `DataBlockProvider.java:108-114`.
-- **INV-IPW-06 [A]** `getWailaHead` assumes `currenttip` has an element 0 to `remove` when
+- **INV-IPW-06 [V]** `getWailaHead` assumes `currenttip` has an element 0 to `remove` when
   `fuelType` is present; relies on Waila always supplying the default name line first.
-  `RocketEntityProvider.java:116-118`.
+  `RocketEntityProvider.java:115-116`.
 
 ## Failure modes & edge cases
 

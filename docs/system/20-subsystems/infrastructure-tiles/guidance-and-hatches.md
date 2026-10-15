@@ -62,9 +62,9 @@ is the same mask over the network (wire only, `readDataFromNetwork`); `TileDataB
   [V TileDataBus.java:55-64]
 - **INV-INFRA-20 [V][BEH]** Big-bus capacity is re-enforced after every load, clamping
   overfull stored data. [V TileDataBusBig.java:44-46, 55-57]
-- **INV-INFRA-21 [A]** Persisted mask key `statuses` and wire key `status` intentionally
+- **INV-INFRA-21 [V]** Persisted mask key `statuses` and wire key `status` intentionally
   differ; both encode the same 4 toggles. (Naming split, not a data mismatch.)
-  [A TileGuidanceComputerAccessHatch.java:391, 425]
+  [V TileGuidanceComputerAccessHatch.java:391,405 wire; 425,435 persisted]
 
 ## Failure modes & edge cases
 

@@ -327,9 +327,9 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   `network/PacketMachine.java:88-100,106-116`.
 - **INV-LVP-06 [V]** A structure is validated in full before the first world mutation of that attempt; the cell list and the port caches
   are cleared before validation, so a failed attempt leaves the machine with no ports. `tile/multiblock/TileMultiBlock.java:317-439`.
-- **INV-LVP-07 [A]** A controller placed alone is not complete; a fixture-built correct structure validates, and replacing any one
+- **INV-LVP-07 [V]** A controller placed alone is not complete; a fixture-built correct structure validates, and replacing any one
   required cell (lens, motor, the air-required centre) makes validation refuse. `MultiblockControllerPreAssemblyTest.java:101,134`,
-  `ObservatoryMultiblockTest.java:61,84,108,133`.
+  `ObservatoryMultiblockTest.java:61,84,108,133`. The refusal is the cell check at `tile/multiblock/TileMultiBlock.java:373-389`.
 - **INV-LVP-08 [V]** A block replaced at formation is held by a placeholder (state + a copy of its tile) and put back on
   deconstruction. `TileMultiBlock.java:241-258,494-502`.
 - **INV-LVP-09 [V]** A placeholder and a ghost block persist the replaced block by its **numeric registry id**, so those saves are tied
@@ -352,16 +352,16 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   `inventory/GuiHandler.java:13-41`. The host forwards exactly these ids ([inventory-containers](./inventory-containers.md) `MECH-IVC-01`).
 - **INV-LVP-17 [V]** Slot acceptance is the `Slot` subclass's, never the inventory's `isItemValidForSlot`, for slots built by
   `ModuleSlotArray` (quick-move included). `inventory/modules/ModuleSlotArray.java:61`.
-- **INV-LVP-18 [A]** Shift-click from the player inventory moves a stack into a machine's module slot and the move is server state.
-  `MachineGuiClientGroupTest.java:648,651,653`; the screen class under a machine GUI is `GuiModular` (`:264,411`).
+- **INV-LVP-18 [V]** Shift-click from the player inventory moves a stack into a machine's module slot and the move is server state.
+  `MachineGuiClientGroupTest.java:648,651,653`; the screen class under a machine GUI is `GuiModular` (`:264,411`). `inventory/ContainerModular.java:111-131`.
 - **INV-LVP-19 [V]** A material's identity is its registration index (product damage, ore meta, block group `index/16`); registration
   order is therefore a save contract. `api/material/MaterialRegistry.java:68-72,170-186,299`.
 - **INV-LVP-20 [V]** A pointer persists only its master's coordinates; the master tile is resolved lazily and re-fetched when the cached
   one is invalid. `tile/TilePointer.java:116-121,147-165`.
 - **INV-LVP-21 [V]** A hatch is mastered by the last controller that integrated it; the earlier master is not notified.
   `TileMultiBlock.java:357-372,508-510`.
-- **INV-LVP-22 [A]** A linker bound to an `ILinkAimedTile` hands it the block or creature the player's line of sight lands on.
-  `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233`.
+- **INV-LVP-22 [V]** A linker bound to an `ILinkAimedTile` hands it the block or creature the player's line of sight lands on.
+  `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233`. `items/ItemLinker.java:235-243,256-281`.
 - **INV-LVP-23 [V]** An output-only fluid hatch refuses external fills and accepts internal ones; at integration it is classed by
   `isOutputOnly`. `TileFluidHatch.java:98-103,135-143`, `TileMultiBlock.java:516-521`.
 - **INV-LVP-24 [V]** Plug capacity is `10^tier × 10000 × energy_multiplier` at construction; a saved `maxEnergy` overrides it on load.

@@ -130,15 +130,15 @@ persists `destDimId`, `landingx/y/z`, `stationMapping` (list of `pos` int[3] + `
 - **INV-RKT-03 [V][BEH]** An unreachable destination aborts the launch with
   `setError("error.rocket.cannotGetThere")` before flight begins
   `EntityRocket.java:2723`.
-- **INV-RKT-04 [A][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
+- **INV-RKT-04 [T][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
   save with no `flightMode` key loads onto this path `RocketFlightMode.java:20`;
   pinned by `RocketFlightModeNbtTest` (missing-key → DEFAULT)
   `RocketFlightModeNbtTest.java:30`. Pinned by `RocketFlightModeNbtTest#defaultIsClassicLaunch`, `RocketFlightModeNbtTest#missingNbtKeyReadsDefault`. FOR: save format: flightMode key.
 - **INV-RKT-05 [V][BEH]** `toggleRCS` never mutates `RCS_MODE` or launch state — it only
   messages `EntityRocket.java:441`; a deprecation notice cannot abort a launch.
-- **INV-RKT-06 [A][BEH]** `deltaTime`-scaled acceleration assumes `getAcceleration`
+- **INV-RKT-06 [V][BEH]** `deltaTime`-scaled acceleration assumes `getAcceleration`
   is a per-tick value; after a multi-tick stall the single catch-up step can
-  overshoot altitude. Inferred from `:1745`/`:2126`; not test-pinned.
+  overshoot altitude. Read at `EntityRocket.java:1755,2142,2155` and `StatsRocket.java:279-289`; not test-pinned.
 
 ## Failure modes & edge cases
 

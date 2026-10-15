@@ -84,9 +84,9 @@ seam-*.tsv greps for these files returned empty).
 - **INV-MODC-04** [V] `CompatibilityMgr.gregtechLoaded`/`thermalExpansionLoaded` are never
   read anywhere in `src/`; they are set false in the ctor and only updated by
   `getLoadedMods()`, which has no caller. `CompatibilityMgr.java:8-20` (grep: 0 readers).
-- **INV-MODC-05** [A][BEH] MO android immunity is intended to be an early short-circuit before
+- **INV-MODC-05** [V][BEH] MO android immunity is intended to be an early short-circuit before
   the armour checks; inferred from ordering, no test pins the MO branch (no `matteroverdrive`
-  on the test classpath). `AtmosphereHazards.java:216-219`.
+  on the test classpath). `AtmosphereHazards.java:215-217` (the armour checks follow at `:232-238`).
 
 ## Failure modes & edge cases
 

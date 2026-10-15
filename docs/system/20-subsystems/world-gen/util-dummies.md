@@ -65,8 +65,8 @@ one compound per lane. `WorldDummy`/`MapStorageDummy`/`DummySaveHandler` persist
   no 2-high air gap exists below world height (`TeleporterSeekBlock.java:17-23`).
 - **INV-WGEN-20 [V][SYS]** `MultiData` lanes survive an NBT round-trip with their type
   preserved even at amount 0 (`MultiData.java:112-121`). FOR: save format: MultiData.
-- **INV-WGEN-21 [A]** `MultiData.SUPPORTED_TYPES` (`:22-27`) is declared but never
-  referenced; assumed dead / documentation-only. Low impact.
+- **INV-WGEN-21 [V]** `MultiData.SUPPORTED_TYPES` (`:23-28`) is declared but never
+  referenced; assumed dead / documentation-only. Low impact. Searched `src/main/java`, `src/test/java`, `valkyrienskies/` and `testframework/`: the only other `SUPPORTED_TYPES` is `ItemMultiData`'s own.
 
 ## Failure modes & edge cases
 

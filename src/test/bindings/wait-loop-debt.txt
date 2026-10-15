@@ -5,8 +5,5 @@
 # it sends input that varies with what it read. The list only shrinks: a method breaking the rule more often
 # than its line says fails, and one breaking it less often fails until its line is lowered.
 #
-# The loops listed when the rule was first set were all paid down. Re-listed when the exit rule learned what an
-# exit TESTS (2026-10-13), a method the first list already carried:
-#   the deck aim retries stands and pitches until the crosshair picks the ship -- a wait for the client's copy of
-#   the ship to become pickable, which no record yet publishes.
-dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#standOnTheDeckAndAimAtIt 1
+# Every loop listed has been paid down: the last, the deck aim that retried until the client's copy of the ship
+# was pickable, now links on client_ship_pickable and reads its fixed pitches once.

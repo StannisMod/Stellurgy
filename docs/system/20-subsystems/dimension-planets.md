@@ -290,7 +290,7 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   geode (not volcano) field is `[V]` — `DimensionProperties.java:2781-2783`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-05 [V][SYS]** Ring angle/color and sky/fog/sunrise colors survive the round-trip
   (`DimensionProperties.java:1891-1916,2111` read, `:2275-2298` write). FOR: save format: a dimension survives a world reload.
-- **INV-DIM-06 [A][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-06 [T][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-07 [V][BEH]** Parent↔child links are bidirectional (`DimensionProperties.java:1313-1320`,
   `addChildPlanet` sets both ends); a moon inherits its parent's solar distance (`:1034-1040`).
 - **INV-DIM-08 [V][SYS]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state):
@@ -324,8 +324,8 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
 - **INV-DIM-20 [V]** A per-planet ore table is never the shared climate object: `getOreGenProperties`
   returns either the planet's own `oreProperties`, the shared table unchanged (metallicity 1), or a
   **copy** with metals scaled. Nothing mutates a table another world is reading.
-- **INV-DIM-17 [A][BEH]** `orbitTheta` is deterministic for a fixed world time (celestial angle stable) —
-  asserted at world level by `celestialAngleProgressesAcrossDifferentWorldTimes` (`PlanetDimensionLoadTest.java:58-75`, a soft assertion that three world times do not collapse to one angle — not a determinism check; no test pins stability across the same world time).
+- **INV-DIM-17 [V][BEH]** `orbitTheta` is deterministic for a fixed world time (celestial angle stable) —
+  asserted at world level by `celestialAngleProgressesAcrossDifferentWorldTimes` (`PlanetDimensionLoadTest.java:58-75`, a soft assertion that three world times do not collapse to one angle — not a determinism check; no test pins stability across the same world time). `DimensionProperties.java:2622-2634`, `AstronomicalBodyHelper.java:388-395,416-425`: a pure function of the tick and the body's own fields.
 
 ## Failure modes & edge cases
 

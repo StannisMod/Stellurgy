@@ -65,7 +65,7 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
      * reading about a dump that is not there.</p>
      */
     private Reply dumpInfo(int cx) throws Exception {
-        Reply info = arrange("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z);
+        Reply info = read("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z);
         requireArranged("there must be a dump at the end of the loop: " + info, info.bool("isDump"));
         return info;
     }
