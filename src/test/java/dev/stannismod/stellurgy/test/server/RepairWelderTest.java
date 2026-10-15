@@ -98,11 +98,12 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * Pins REPAIR-7 (a bay that cannot work says why: every refusal is its own answer).
      */
     @Pins({"REPAIR-3", "REPAIR-7"})
-    @LegacyWitness(prose = "with a charge withdrawal inserted before {@code ItemRepairWelder#weld} at {@code return RepairOutcome.NO_MATERIALS;}'s"
-            + " NO_MATERIALS return, this fails with \"a refused repair spent charge: {...outcome:NO_MATERIALS,"
-            + " energyBefore:100000,energyAfter:98000...}\". The later refusals' verdicts were not separately"
-            + " witnessed. 2026-09-30, taken on the pre-change form {@code return Outcome.NO_MATERIALS;}, which is"
-            + " now the shared-vocabulary return named above.")
+    @RedWitness(verdict = "a refused repair spends no charge",
+            member = "ItemRepairWelder#weld",
+            at = "return RepairOutcome.NO_MATERIALS;",
+            replacedBy = "setStoredEnergy(tool, storedEnergy(tool) - energyCost); return RepairOutcome.NO_MATERIALS;",
+            fails = "a refused repair spent charge",
+            on = "2026-10-15")
     @Test
     public void everyRefusalIsItsOwnAnswerAndCostsNothing() throws Exception {
         // Each case gets its own block: a refusal that quietly consumed something would otherwise be
@@ -220,22 +221,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * one before, and no buildable size reaches the ceiling. Asserted as ORDERINGS of the rate
      * production computes for the bay as built — its own walk of the frames, its own law — never as
      * amounts.
-     *
-     * <p>red-witnessed: with {@code RepairBaySize#powerPerTick} at
-     * {@code return ceiling() * size / (double) (size + config.repairBayHalfRateSize);} given
-     * {@code config.repairBayHalfRateSize} as its numerator in place of {@code size} (a law that
-     * falls with size), this fails at "a bigger bay was not faster: sizes 1, 2, 3 worked at
-     * 355.55555555555554, 320.0, 290.90909090909093" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code RepairBaySize#powerPerTick} at
-     * {@code return ceiling() * size / (double) (size + config.repairBayHalfRateSize);} made linear,
-     * {@code ceiling() * size / (double) config.repairBayHalfRateSize}, this fails at "the gain from
-     * size 2 to 3 (50.0) did not shrink below the gain from 1 to 2 (50.0)" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code RepairBaySize#powerPerTick} at
-     * {@code return ceiling() * size / (double) (size + config.repairBayHalfRateSize);} doubled, this
-     * fails at "the largest buildable bay reached its ceiling:
-     * {...size:257,rate:775.8490566037735,ceiling:400.0...}" (2026-10-06).</p>
      */
     @RedWitness(verdict = "a bigger bay was not faster",
             member = "RepairBaySize#powerPerTick",
@@ -285,22 +270,26 @@ public class RepairWelderTest extends AbstractSharedServerTest {
     /**
      * F3 / C20 Scope: the bay serves only the ship it stands on. One standing in the world, powered,
      * stocked, beside a damaged world block, answers NO_STRUCTURE and leaves the block as it is.
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(RepairOutcome.NO_STRUCTURE);}
-     * and its return replaced by serving the box eight blocks round the bay, this fails at "a bay
-     * standing in the world never said it has no structure to serve — no `repair_bay_outcome` carrying
-     * bay = 4212,151,4020 and to = NO_STRUCTURE was recorded within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(RepairOutcome.NO_STRUCTURE);}
-     * kept but its return replaced by serving the same box, this
-     * fails at "a bay that is on no ship repaired a world block: before {...stage:1...}, after
-     * {...stage:0...} expected:&lt;1&gt; but was:&lt;0&gt;" (2026-10-06).</p>
      */
+    @RedWitness(verdict = "NO_STRUCTURE",
+            member = "TileRepairBay#look",
+            at = "settle(RepairOutcome.NO_STRUCTURE);",
+            replacedBy = "settle(RepairOutcome.UNDAMAGED);",
+            fails = "a bay standing in the world never said it has no structure to serve",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the world block left alone",
+            member = "TileRepairBay#look",
+            at = "settle(RepairOutcome.NO_STRUCTURE); return;",
+            replacedBy = "settle(RepairOutcome.NO_STRUCTURE); yard = new AxisAlignedBB(pos).grow(8);",
+            fails = "a bay that is on no ship repaired a world block",
+            on = "2026-10-15")
     @Pins("REPAIR-7")
     @Wait(shape = Wait.Shape.WINDOW,
-            at = "GameTicks.advance(client(), GameTicks.server(), 2 * able.integer(\"lookIntervalTicks\"));",
-            why = "two of the bay's looks, each one a chance to serve the wall, between the two reads; the"
-                    + " verdict names both.")
+            at = "GameTicks.advance(client(), GameTicks.server(), workBudget(able, able.integer(\"energyPerStage\")));",
+            why = "as long as a bay serving the wall would need to take one stage off it — its look plus one"
+                    + " stage of work at its own rate, doubled (workBudget) — between the two reads; the verdict"
+                    + " names both. Two looks alone were shorter than one stage of work, so a bay that served"
+                    + " the wall still left it as it was.")
     @Test
     public void aBayThatIsNotOnAShipAnswersNoStructureAndLeavesTheWorldAlone() throws Exception {
         FixtureSite site = clearedSite(2, 6, "a bay in the open world beside a damaged world block");
@@ -327,7 +316,7 @@ public class RepairWelderTest extends AbstractSharedServerTest {
         Reply able = readBay(bay);
         requireArranged("the bay must hold energy and blocks, or leaving the wall alone proves nothing: "
                 + able, able.integer("energy") > 0 && able.integer("reserve") == STOCK);
-        GameTicks.advance(client(), GameTicks.server(), 2 * able.integer("lookIntervalTicks"));
+        GameTicks.advance(client(), GameTicks.server(), workBudget(able, able.integer("energyPerStage")));
         Reply after = stage(wall);
         assertEquals("a bay that is on no ship repaired a world block: before " + damaged + ", after "
                 + after, damaged.integer("stage"), after.integer("stage"));
@@ -336,26 +325,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
     /**
      * REPAIR-13: two bays on one hull and one damaged block — one of them works it, and the other
      * neither puts energy into it nor pays for it.
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code : RepairOutcome.UNDAMAGED);} answering
-     * NO_RECIPE instead, this fails at "both bays must be looking at their hull and finding it whole
-     * before it is damaged — no `repair_bay_outcome` carrying to = UNDAMAGED for both bays was recorded
-     * within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#restage} at
-     * {@code DamageState.setStage(world, work.pos, work.stage - 1);} removed, this fails at "neither bay
-     * repaired the damaged block — no `block_stage_set` carrying pos = 19200001,129,102396 and to = 0
-     * was recorded within 130 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code BlockDamageSavedData#claim} at {@code return false;} removed (every
-     * claim granted), this fails at "both bays put energy into the one damaged stage: left
-     * {...energy:4000...} -> {...energy:2000,reserve:3...}, right {...energy:4000...} ->
-     * {...energy:3645,reserve:4...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with a reserve draw inserted into {@code TileRepairBay#look}'s branch at
-     * {@code if (!data.claim(candidate, this, now))}, this fails at "the bay that did not work the stage
-     * paid for it anyway: {...reserve:4...} -> {...reserve:2...} expected:&lt;4&gt; but was:&lt;2&gt;"
-     * (2026-10-06).</p>
      */
     @RedWitness(verdict = "both bays see a whole hull first",
             member = "TileRepairBay#look",
@@ -375,6 +344,12 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = "",
             fails = "both bays put energy into the one damaged stage",
             on = "2026-10-06")
+    @RedWitness(verdict = "the idle bay pays nothing",
+            member = "TileRepairBay#look",
+            at = "if (!data.claim(candidate, this, now)) {",
+            replacedBy = "if (!data.claim(candidate, this, now)) { decrStackSize(0, 1);",
+            fails = "the bay that did not work the stage paid for it anyway",
+            on = "2026-10-15")
     @Pins("REPAIR-13")
     @Test
     public void twoBaysOnOneHullRepairItsOneDamagedBlockOnce() throws Exception {
@@ -426,37 +401,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * REPAIR-4 and REPAIR-5: a hole is filled with the block its record names, paid for with one
      * block from the reserve, and the record is spent in the same step — so the bay's next look
      * finds nothing there and spends nothing.
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} answering false before
-     * {@code if (slot < 0 || !world.setBlockState(work.pos, work.place, 3))} whenever the reserve holds
-     * the block, this fails at "the bay never rebuilt the hole in its own hull — no `repair_bay_rebuilt`
-     * carrying pos = 19200001,129,51196 and placed = true was recorded within 400 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} at
-     * {@code world.setBlockState(work.pos, work.place, 3)} given {@code Blocks.STONE} in place of
-     * {@code work.place},
-     * this fails at "the hole was filled with something other than the block its record names:
-     * {...block:minecraft:stone...} expected:&lt;minecraft:[iron_block]&gt; but was:&lt;minecraft:[stone]&gt;"
-     * (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} at
-     * {@code BlockDamageSavedData.get(world).clear(work.pos);} removed, this fails at "the hole's record
-     * survived its own rebuild — a second free block on the next pass: {...stage:4,...
-     * block:minecraft:iron_block,wasDestroyed:true...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} at {@code decrStackSize(slot, 1);} removed,
-     * this fails at "the hole was rebuilt and nothing left the reserve: {...placed:true,...reserve:4}"
-     * (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code : RepairOutcome.UNDAMAGED);} answering
-     * NO_RECIPE instead, this fails at "after the rebuild the bay never looked again and found its hull
-     * whole — no `repair_bay_outcome` carrying to = UNDAMAGED after the rebuild was recorded within 40
-     * ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with a reserve draw inserted before {@code TileRepairBay#look}'s
-     * {@code settle(lacked ? RepairOutcome.NO_MATERIALS} when it is about to answer UNDAMAGED, this fails
-     * at "the bay's look after the rebuild spent from the reserve: {...reserve:2} then {...reserve:1...}
-     * expected:&lt;2&gt; but was:&lt;1&gt;" (2026-10-06).</p>
      */
     @RedWitness(verdict = "the hole was filled with the block its record names",
             member = "TileRepairBay#rebuild",
@@ -482,6 +426,19 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = ": RepairOutcome.NO_RECIPE);",
             fails = "after the rebuild the bay never looked again and found its hull whole",
             on = "2026-10-06")
+    @RedWitness(verdict = "the hole is rebuilt",
+            member = "TileRepairBay#rebuild",
+            at = "int slot = BayEngine.slotOf(work.step.price(), reserveHandler);",
+            replacedBy = "if (work != null) { return false; } int slot = BayEngine.slotOf(work.step.price(), reserveHandler);",
+            fails = "the bay never rebuilt the hole in its own hull",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the next look spends nothing",
+            member = "TileRepairBay#look",
+            at = "settle(lacked ? RepairOutcome.NO_MATERIALS",
+            replacedBy = "if (!lacked && !unfillable && !unpriced) { decrStackSize(0, 1); }"
+                + " settle(lacked ? RepairOutcome.NO_MATERIALS",
+            fails = "the bay's look after the rebuild spent from the reserve",
+            on = "2026-10-15")
     @Pins({"REPAIR-4", "REPAIR-5"})
     @Test
     public void aHoleIsRebuiltWithTheBlockItsRecordNamesAndTheRecordIsSpent() throws Exception {
@@ -526,25 +483,21 @@ public class RepairWelderTest extends AbstractSharedServerTest {
     /**
      * REPAIR-6: a hole whose record names a block that no longer exists is refused, said to be, and
      * its record kept — by a bay that has the energy and the blocks to fill any other hole.
-     *
-     * <p>red-witnessed: with {@code BlockDamageSavedData#blockFromName} at
-     * {@code return Block.REGISTRY.containsKey(key) ? Block.REGISTRY.getObject(key) : null;} reduced
-     * to the plain lookup (the defaulted registry then answers AIR, and the bay prices the hole as an
-     * item-less block and answers NO_RECIPE), this fails at "the bay never said the hole is one it may
-     * not fill — no `repair_bay_outcome` carrying bay = 19199999,129,51198 and to = UNFILLABLE was
-     * recorded within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code data.clear(pos);} inserted in {@code Work#at}'s branch at
-     * {@code if (block == null)}, this fails at "the refused hole was filled or its record dropped:
-     * {...block:minecraft:air,wasDestroyed:false,destroyedBlock:...}" (2026-10-06, taken on the
-     * pre-change form of that branch, which also tested for AIR).</p>
-     *
-     * <p>red-witnessed: with a reserve draw inserted into {@code TileRepairBay#look}'s branch at
-     * {@code unfillable = true;}, this fails at "refusing the hole took from the reserve:
-     * {...outcome:UNFILLABLE,energy:100000,reserve:1...} expected:&lt;4&gt; but was:&lt;1&gt;"
-     * (2026-10-06).</p>
      */
-    @RedWitness(member = "BlockDamageSavedData#blockFromName",
+    @RedWitness(verdict = "the record kept",
+            member = "Work#at",
+            at = "if (block == null) {",
+            replacedBy = "if (block == null) { data.clear(pos);",
+            fails = "the refused hole was filled or its record dropped",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the reserve untouched",
+            member = "TileRepairBay#look",
+            at = "unfillable = true;",
+            replacedBy = "unfillable = true; decrStackSize(0, 1);",
+            fails = "refusing the hole took from the reserve",
+            on = "2026-10-15")
+    @RedWitness(verdict = "UNFILLABLE",
+            member = "BlockDamageSavedData#blockFromName",
             at = "return Block.REGISTRY.containsKey(key) ? Block.REGISTRY.getObject(key) : null;",
             replacedBy = "return Block.REGISTRY.getObject(key);",
             fails = "the bay never said the hole is one it may not fill",
@@ -591,31 +544,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * REPAIR-7: nothing to do, nothing to pay with and no energy are three answers the bay gives
      * one after another as its hull changes — each its own, none of them costing anything — and the
      * same bay, given what it lacked, does the repair.
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code : RepairOutcome.UNDAMAGED);} answering
-     * NO_RECIPE instead, this fails at "a bay on a whole hull never said there is nothing to repair — no
-     * `repair_bay_outcome` carrying bay = 19199999,129,204798 and to = UNDAMAGED was recorded within 40
-     * ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(lacked ? RepairOutcome.NO_MATERIALS}
-     * answering UNDAMAGED instead, this fails at "a bay with an empty reserve never said it has nothing
-     * to pay with — no `repair_bay_outcome` carrying bay = 19199999,129,204798 and to = NO_MATERIALS was
-     * recorded within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(RepairOutcome.NO_CHARGE);}
-     * answering UNDAMAGED instead, this fails at "a stocked bay with no energy never said it has no
-     * energy — no `repair_bay_outcome` carrying bay = 19199999,129,204798 and to = NO_CHARGE was recorded
-     * within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with a reserve draw inserted before {@code TileRepairBay#look} at
-     * {@code settle(RepairOutcome.NO_CHARGE);}, this fails at "a
-     * refusal took from the reserve or mended the block anyway: {...outcome:NO_CHARGE,energy:0,
-     * reserve:3...}, {...stage:1...}" (2026-10-06). Its stage half was not separately witnessed.</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#restage} at
-     * {@code DamageState.setStage(world, work.pos, work.stage - 1);} removed, this fails at "the same
-     * bay, given energy, never took the stage off — no `block_stage_set` carrying pos =
-     * 19200001,129,204796 and to = 0 was recorded within 130 ticks" (2026-10-06).</p>
      */
     @RedWitness(verdict = "UNDAMAGED",
             member = "TileRepairBay#look",
@@ -641,6 +569,12 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = "",
             fails = "the same bay, given energy, never took the stage off",
             on = "2026-10-06")
+    @RedWitness(verdict = "a refusal costs nothing",
+            member = "TileRepairBay#look",
+            at = "settle(RepairOutcome.NO_CHARGE);",
+            replacedBy = "decrStackSize(0, 1); settle(RepairOutcome.NO_CHARGE);",
+            fails = "a refusal took from the reserve or mended the block anyway",
+            on = "2026-10-15")
     @Pins("REPAIR-7")
     @Test
     public void everyRefusalOfTheBayIsItsOwnAnswerAndCostsNothing() throws Exception {
@@ -707,55 +641,41 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * <p>The subject is a hole, the longest single step a bay takes. The middle of it is reached by
      * ENERGY, not by time: the bay is given half the job, puts it all in and says {@code NO_CHARGE}
      * with the hole still open and the half banked. The unload is the bay's chunk saved, dropped and
-     * read back from disk in one call — once its hull has been let go, because a loaded ship holds its
-     * chunks (C11 PORT-15). The bay that resumes is a NEW object built from what the old one wrote,
-     * which is the whole of what an unload asks of it; then the rest of the energy is handed in.</p>
+     * read back from disk — once its hull has been let go, because a loaded ship holds its chunks
+     * (C11 PORT-15). The bay that resumes is a NEW object built from what the old one wrote, which is
+     * the whole of what an unload asks of it; then the rest of the energy is handed in.</p>
      *
-     * <p>What it does NOT see: time spent away — the drop and the reload are one call (nothing of the
-     * bay's runs while unloaded and it keeps no clock, so there is no decision of ours in that interval
-     * to observe); and the bay's chunk going with its hull on its own, which a hull's unload does not
-     * yet guarantee — measured on this merge: the hull unloaded, 273 of its chunks dropped, and the
-     * bay's stayed loaded and finished the hole.</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#writeTo} at
-     * {@code nbt.setInteger(NBT_BANKED, banked);} removed, this fails at "the bay came back with
-     * different progress than it left with — its unload said {...job:19200001,129,153596,
-     * banked:266}, its return said {...banked:0} expected:&lt;266&gt; but was:&lt;0&gt;" (2026-10-06,
-     * re-taken when the banked energy moved out of {@code TileRepairBay#writeToNBT} into the engine).</p>
-     *
-     * <p>red-witnessed: with a draw of the buffer, {@code charge.spend(1000);}, inserted into
-     * {@code TileRepairBay#onLoad} after {@code lookCountdown = world.rand.nextInt(LOOK_INTERVAL_TICKS);}
-     * (a bay that bills for having been away), this fails at "the job cost other than one job's
-     * energy across the unload: {...energy:16000,reserve:4...} -> {...energy:7000,reserve:3...}"
-     * (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(RepairOutcome.REPAIRING);}
-     * answering UNDAMAGED instead, this fails at "the bay never started on the hole — no
-     * `repair_bay_outcome` carrying bay = 19199999,129,51198 and to = REPAIRING was recorded within 40
-     * ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} answering false before
-     * {@code int slot = reserveSlotOf(work.price);}, this fails at "the bay never finished the hole it
-     * resumed — no `repair_bay_rebuilt` carrying pos = 19200001,129,102396 and placed = true was
-     * recorded within 400 ticks" (2026-10-06).</p>
-     *
-     * <p>NOT YET: the two waits on {@code repair_bay_unloaded} and {@code repair_bay_loaded}. No
-     * decision of ours sits under them — the world tells a tile it unloaded and that it loaded,
-     * whatever the tile is — so the only break that reddens them is breaking the instrument; none
-     * was attempted.</p>
+     * <p>What it does NOT see: time spent away (nothing of the bay's runs while unloaded and it keeps
+     * no clock, so there is no decision of ours in that interval to observe). Which of the two takes
+     * the bay's chunk away — its hull's unload, or the cycle call that follows it — is not the subject
+     * either: measured 2026-10-15 on this tree the hull's unload already took it (the cycle found it
+     * {@code wasLoaded:false} and read it back), where on the earlier merge it stayed loaded until the
+     * call.</p>
      */
     @RedWitness(verdict = "the bay came back with the progress it left with",
             member = "BayEngine#writeTo",
             at = "nbt.setInteger(NBT_BANKED, banked);",
             replacedBy = "",
             fails = "the bay came back with different progress than it left with",
-            on = "2026-10-06")
+            on = "2026-10-15")
     @RedWitness(verdict = "the bay started on the hole",
             member = "TileRepairBay#look",
             at = "settle(RepairOutcome.REPAIRING);",
             replacedBy = "settle(RepairOutcome.UNDAMAGED);",
             fails = "the bay never started on the hole",
             on = "2026-10-06")
+    @RedWitness(verdict = "the resumed hole is finished",
+            member = "TileRepairBay#rebuild",
+            at = "int slot = BayEngine.slotOf(work.step.price(), reserveHandler);",
+            replacedBy = "if (work != null) { return false; } int slot = BayEngine.slotOf(work.step.price(), reserveHandler);",
+            fails = "the bay never finished the hole it resumed",
+            on = "2026-10-15")
+    @RedWitness(verdict = "one job's energy",
+            member = "TileRepairBay#readFromNBT",
+            at = "charge.stored = nbt.getInteger(NBT_ENERGY);",
+            replacedBy = "charge.stored = nbt.getInteger(NBT_ENERGY) - 1000;",
+            fails = "the job cost other than one job's energy across the unload",
+            on = "2026-10-15")
     @Pins("REPAIR-8")
     @Test
     public void aBayUnloadedMidJobResumesItAndIsBilledForOneJob() throws Exception {
@@ -783,8 +703,10 @@ public class RepairWelderTest extends AbstractSharedServerTest {
                 "minecraft:air".equals(hole.text("block")) && HULL_BLOCK.equals(hole.text("destroyedBlock")));
         events.awaitRecordWithFields(mark, "repair_bay_outcome", "the bay never started on the hole",
                 2 * spec.integer("lookIntervalTicks"), "bay", xyz(bay), "to", "REPAIRING");
-        events.awaitRecordWithFields(mark, "repair_bay_outcome", "the bay never ran out of the half it was given",
-                workBudget(spec, job), "bay", xyz(bay), "to", "NO_CHARGE");
+        // The middle of the job is arrangement: the subject is what the bay does after it.
+        dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() -> events.awaitRecordWithFields(mark,
+                "repair_bay_outcome", "the bay never ran out of the half it was given",
+                workBudget(spec, job), "bay", xyz(bay), "to", "NO_CHARGE"));
 
         // The unload: a loaded ship holds its chunks (C11 PORT-15), so the hull is let go first, and
         // its bay's chunk is then saved, dropped and read back from disk in one call.
@@ -793,23 +715,30 @@ public class RepairWelderTest extends AbstractSharedServerTest {
         ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "the subject is a bay whose chunk unloads in the middle of a job; its hull must not hold it");
         try {
-            events.awaitRecordWithField(cycled, "ship_unloaded", "vsShip", hull.ship.vsShip,
-                    "the hull nobody holds never unloaded", SHIP_UNLOAD_LINK_TICKS);
+            dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() -> events.awaitRecordWithField(cycled,
+                    "ship_unloaded", "vsShip", hull.ship.vsShip,
+                    "the hull nobody holds never unloaded", SHIP_UNLOAD_LINK_TICKS));
             cycle = arrange("stellurgytest chunk cycle 0 " + (bay[0] >> 4) + " " + (bay[2] >> 4));
         } finally {
             ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "the hull must load again for the bay to resume");
         }
-        requireArranged("the bay's chunk must be saved, dropped and read back as a new chunk: " + cycle,
-                cycle.bool("dropped") && cycle.bool("reloaded") && !cycle.bool("sameInstance"));
-        String unloaded = events.awaitRecordWithFields(cycled, "repair_bay_unloaded",
-                "the bay whose chunk was dropped was never told it unloaded", NEXT_TILE_PASS_BUDGET_TICKS,
-                "bay", xyz(bay));
+        requireArranged("the bay's chunk must be gone — with its hull or by the cycle — and read back as a"
+                        + " new chunk: " + cycle,
+                (cycle.bool("dropped") || !cycle.bool("wasLoaded")) && cycle.bool("reloaded")
+                        && !cycle.bool("sameInstance"));
+        // The world tells a tile it unloaded and that it loaded, whatever the tile is: both are links,
+        // and the banked energy they carry is the verdict.
+        String unloaded = dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() ->
+                events.awaitRecordWithFields(cycled, "repair_bay_unloaded",
+                        "the bay whose chunk was dropped was never told it unloaded", NEXT_TILE_PASS_BUDGET_TICKS,
+                        "bay", xyz(bay)));
         requireArranged("the bay must unload with energy put into the hole, or nothing here is resumed: "
                 + unloaded, Events.number(unloaded, "banked") > 0);
         // The reload is inside the cycle call, so its record is already written.
-        String loaded = events.awaitRecordWithFields(cycled, "repair_bay_loaded",
-                "the bay read back from its chunk never entered the world", NEXT_TILE_PASS_BUDGET_TICKS,
-                "bay", xyz(bay));
+        String loaded = dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() ->
+                events.awaitRecordWithFields(cycled, "repair_bay_loaded",
+                        "the bay read back from its chunk never entered the world", NEXT_TILE_PASS_BUDGET_TICKS,
+                        "bay", xyz(bay)));
         assertEquals("the bay came back with different progress than it left with — its unload said "
                 + unloaded + ", its return said " + loaded,
                 (long) Events.number(unloaded, "banked"), (long) Events.number(loaded, "banked"));
@@ -835,18 +764,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * <p>Asserted as an ORDER of production's own records, never as a duration: each bay's
      * {@code REPAIRING} came before the OTHER bay's rebuild. Holes, the longest single step, so two
      * bays starting a look apart still overlap by most of a job.</p>
-     *
-     * <p>red-witnessed: with {@code BlockDamageSavedData#claim} at
-     * {@code if (held != null && held.holder != holder && now - held.renewedAt <= 1)} widened to
-     * refuse any holder while ANY other holder's claim is live (one bay per world at a time), this
-     * fails at "the two holes were not worked at once by two bays: rebuilt {...tick:1336,...
-     * bay:19200003,129,153598,pos:19200001,129,153596...} and {...tick:1517,...bay:19200003,129,153598,
-     * pos:19200003,129,153596...}" — one bay did both, one after the other (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#rebuild} answering false before
-     * {@code int slot = reserveSlotOf(work.price);}, this fails at "the bays never rebuilt both holes —
-     * no `repair_bay_rebuilt` carrying placed = true for both holes was recorded within 800 ticks"
-     * (2026-10-06).</p>
      */
     @RedWitness(verdict = "both holes are rebuilt",
             member = "TileRepairBay#rebuild",
@@ -854,6 +771,12 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = "if (work != null) { return false; } int slot = BayEngine.slotOf(work.step.price(), reserveHandler);",
             fails = "the bays never rebuilt both holes",
             on = "2026-10-06")
+    @RedWitness(verdict = "both holes worked at once",
+            member = "BlockDamageSavedData#claim",
+            at = "if (held != null && held.holder != holder && now - held.renewedAt <= 1) {",
+            replacedBy = "if (claims.values().stream().anyMatch(c -> c.holder != holder && now - c.renewedAt <= 1)) {",
+            fails = "the two holes were not worked at once by two bays",
+            on = "2026-10-15")
     @Pins({"REPAIR-12", "REPAIR-14"})
     @Test
     public void twoBaysOnOneHullWorkTwoHolesAtOnce() throws Exception {
@@ -903,18 +826,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * is restaged in place, and one spare engine buys as many stages as an engine has — more than a
      * plain block's four, so a credit counted in the wrong home's stages shows as a second engine
      * drawn.
-     *
-     * <p>red-witnessed: with {@code TileRepairBay#damagedIn} at {@code found.add(at);} removed (the
-     * pool drawn from the damage map alone), this fails at "the bay never restaged the worn engine —
-     * no `block_stage_set` carrying pos = 19200001,129,102396 and to = 0 was recorded within 580
-     * ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
-     * {@code credits.put(step.creditKey(), step.creditPerSpare);} given
-     * {@code DamageState.DEFAULT_MAX_STAGE}, this fails at "one spare engine did not pay for every
-     * stage an engine has: {...outcome:UNDAMAGED,energy:100000,reserve:2...} expected:&lt;3&gt; but
-     * was:&lt;2&gt;" (2026-10-06, re-taken when the credit moved out of {@code TileRepairBay#restage}
-     * into the engine the service station shares).</p>
      */
     @RedWitness(verdict = "one spare pays an engine's stages",
             member = "BayEngine#holdCredit",
@@ -922,6 +833,12 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = "credits.put(step.creditKey(), DamageState.DEFAULT_MAX_STAGE);",
             fails = "one spare engine did not pay for every stage an engine has",
             on = "2026-10-06")
+    @RedWitness(verdict = "the engine is restaged",
+            member = "TileRepairBay#damagedIn",
+            at = "found.add(at);",
+            replacedBy = "",
+            fails = "the bay never restaged the worn engine",
+            on = "2026-10-15")
     @Pins("REPAIR-1")
     @Test
     public void aWornEngineAboardIsRestagedByTheBayOutOfOneSpare() throws Exception {
@@ -961,13 +878,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * not a block — is refused as having no price at all, which is not the same answer as a price
      * that is merely not on hand. Asked of a bay that is powered and stocked, so neither of the other
      * two refusals can be the answer.
-     *
-     * <p>red-witnessed: with {@code Step#restage} at
-     * {@code return isFinishedBlock(price) ? Optional.of(new Step(price, maxStage)) : Optional.empty();}
-     * reduced to {@code !price.isEmpty()} (the form the staged branch shipped with), this fails at "a
-     * bay meeting a block no finished block stands for never said it has no price — no
-     * `repair_bay_outcome` carrying bay = 19199999,129,102398 and to = NO_RECIPE was recorded within
-     * 40 ticks" (2026-10-06, re-taken when the price moved out of {@code Work#at} into the engine).</p>
      */
     @RedWitness(member = "BayEngine#restage",
             at = "return isFinishedBlock(price) ? Optional.of(new Step(price, maxStage)) : Optional.empty();",
@@ -1202,38 +1112,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * <p>NOT seen: the station's screen (its answer is read where production keeps it), and a frame
      * built against the station (it stands alone, size 1). The rocket never leaves its pad, so
      * nothing here moves into another scenario's world.</p>
-     *
-     * <p>red-witnessed: with {@code return false;} inserted at the head of
-     * {@code TileRocketServiceStation#restage}, before {@code wear.setStage(wear.getStage() - 1);}, this
-     * fails at "the station never brought the worn motor back to pristine — no
-     * `service_station_restaged` carrying station = 4017,151,4020 and part = 0,0,0 and stage = 0 was
-     * recorded within 310 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketServiceStation#restage} at
-     * {@code wear.setStage(wear.getStage() - 1);} given {@code wear.setStage(0);}, this fails at "the
-     * station must take the motor down one stage per step, never to pristine in one go:
-     * [{...stage:0,reserve:1,energy:8000}] expected:&lt;[2, 1, 0]&gt; but was:&lt;[0]&gt;" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
-     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);} removed, this fails at "the
-     * first stage must draw exactly one spare into credit: [{...stage:2,reserve:2,energy:8000}, ...]
-     * expected:&lt;1&gt; but was:&lt;2&gt;" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#holdCredit}'s guard {@code if (heldCredit(step) > 0)}
-     * removed, so every stage draws a spare, this fails at "one spare must pay for every stage of this
-     * motor's wear — credit, not a spare a stage: [{...stage:2,reserve:1...}, {...stage:1,reserve:0...},
-     * ...] expected:&lt;1&gt; but was:&lt;0&gt;" (2026-10-06; taken on the pre-change form, in which the
-     * draw read {@code if (slot >= 0 && !reserve.extractItem(slot, 1, false).isEmpty())}; it now reads
-     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);}).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#work} at {@code int got = draw.applyAsInt(want);} given
-     * {@code int got = want;}, this fails at "a stage was taken off without taking energy:
-     * {...energy:10000...} then [{...stage:2,reserve:1,energy:10000}, ...]" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at {@code : RepairOutcome.UNDAMAGED);}
-     * answering NO_RECIPE instead, this fails at "after the last stage the station never looked again
-     * and found the rocket whole — no `service_station_outcome` carrying to = UNDAMAGED after the last
-     * stage was recorded within 40 ticks" (2026-10-06).</p>
      */
     @RedWitness(verdict = "one stage per step",
             member = "TileRocketServiceStation#restage",
@@ -1259,6 +1137,18 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = ": RepairOutcome.NO_RECIPE);",
             fails = "after the last stage the station never looked again and found the rocket whole",
             on = "2026-10-06")
+    @RedWitness(verdict = "the motor reaches pristine",
+            member = "TileRocketServiceStation#restage",
+            at = "wear.setStage(wear.getStage() - 1);",
+            replacedBy = "if (wear != null) { return false; } wear.setStage(wear.getStage() - 1);",
+            fails = "the station never brought the worn motor back to pristine",
+            on = "2026-10-15")
+    @RedWitness(verdict = "one spare pays every stage",
+            member = "BayEngine#holdCredit",
+            at = "if (heldCredit(step) > 0) {",
+            replacedBy = "if (heldCredit(step) > 0 && slotOf(step.price, reserve) < 0) {",
+            fails = "one spare must pay for every stage of this motor's wear",
+            on = "2026-10-15")
     @Pins("REPAIR-11")
     @Test
     public void aServiceStationRestagesAWornMotorAStageAtATimeOutOfOneSpare() throws Exception {
@@ -1314,51 +1204,6 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * <p>The spare that does not pay is a WORN motor of the motor's own kind: a spare equals the
      * price only at the same item damage, so the rule that refuses it is the rule under test, not an
      * empty slot.</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at
-     * {@code settle(RepairOutcome.NO_CHARGE);} answering NO_MATERIALS instead, this fails at "a station
-     * with a spare that pays and no energy never said it had no energy — no `service_station_outcome`
-     * carrying station = 4081,151,4020 and to = NO_CHARGE was recorded within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with a reserve draw, {@code repairInventory.extractItem(0, 1, false);},
-     * inserted before {@code TileRocketServiceStation#look}'s {@code settle(RepairOutcome.NO_CHARGE);},
-     * this fails at "a station refusing for want of energy took from its reserve or touched the motor:
-     * {...outcome:NO_CHARGE,reserve:0,energy:0...} / {...stage:3,maxStage:10...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#slotOf} at {@code ItemStack.areItemsEqual(held, wanted)}
-     * given {@code ItemStack.areItemsEqualIgnoreDurability}, this fails at "a station holding only a worn
-     * spare never said it had nothing to pay with — no `service_station_outcome` carrying station =
-     * 4081,151,4020 and to = NO_MATERIALS was recorded within 40 ticks" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketServiceStation#getPowerPerOperation} at
-     * {@code return hasValidAssembler() ? 10 : 0;} given {@code return 10;} (the fee as it stood before),
-     * this fails at "a station refusing for want of a spare that pays spent something, or touched the
-     * motor: {...outcome:NO_MATERIALS,reserve:1,energy:9990...} then {...energy:9970...}"
-     * (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code return false;} inserted at the head of
-     * {@code TileRocketServiceStation#restage}, before {@code wear.setStage(wear.getStage() - 1);}, this
-     * fails at "given a spare that pays, the station never brought the motor back to pristine — no
-     * `service_station_restaged` carrying station = 4081,151,4020 and part = 0,0,0 and stage = 0 was
-     * recorded within 310 ticks" (2026-10-06; taken when the third phase stocked one pristine spare
-     * rather than {@code SPARES}, under its message of then).</p>
-     *
-     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
-     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);} drawing 2, this fails at "one
-     * pristine spare must pay for the whole repair, beside the worn one that paid nothing:
-     * {...stage:0,reserve:1,energy:4000} expected:&lt;2&gt; but was:&lt;1&gt;" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at {@code : RepairOutcome.UNDAMAGED);}
-     * answering NO_RECIPE instead, this fails at "after restaging the motor the station never said the
-     * rocket was whole — no `service_station_outcome` carrying to = UNDAMAGED after the motor was
-     * restaged was recorded within 40 ticks" (2026-10-06; taken when the third phase stocked one
-     * pristine spare rather than {@code SPARES}).</p>
-     *
-     * <p>red-witnessed: with an energy draw, {@code draw(1);}, inserted before
-     * {@code TileRocketServiceStation#look}'s {@code settle(lacked ? RepairOutcome.NO_MATERIALS} whenever
-     * it is about to answer UNDAMAGED, this fails at "a station with nothing to repair spent something:
-     * {...outcome:UNDAMAGED,reserve:1,energy:3999...} then {...energy:3997...}" (2026-10-06; taken when
-     * the third phase stocked one pristine spare rather than {@code SPARES}).</p>
      */
     @RedWitness(verdict = "NO_CHARGE",
             member = "TileRocketServiceStation#look",
@@ -1384,6 +1229,30 @@ public class RepairWelderTest extends AbstractSharedServerTest {
             replacedBy = "reserve.extractItem(slotOf(step.price, reserve), 2, false);",
             fails = "one pristine spare must pay for the whole repair",
             on = "2026-10-06")
+    @RedWitness(verdict = "refusing for want of energy costs nothing",
+            member = "TileRocketServiceStation#look",
+            at = "settle(RepairOutcome.NO_CHARGE);",
+            replacedBy = "repairInventory.extractItem(0, 1, false); settle(RepairOutcome.NO_CHARGE);",
+            fails = "a station refusing for want of energy took from its reserve or touched the motor",
+            on = "2026-10-15")
+    @RedWitness(verdict = "spares that pay restage the motor",
+            member = "TileRocketServiceStation#restage",
+            at = "wear.setStage(wear.getStage() - 1);",
+            replacedBy = "if (wear != null) { return false; } wear.setStage(wear.getStage() - 1);",
+            fails = "given spares that pay, the station never brought the motor back to pristine",
+            on = "2026-10-15")
+    @RedWitness(verdict = "whole after restaging",
+            member = "TileRocketServiceStation#look",
+            at = ": RepairOutcome.UNDAMAGED);",
+            replacedBy = ": RepairOutcome.NO_RECIPE);",
+            fails = "after restaging the motor the station never said the rocket was whole",
+            on = "2026-10-15")
+    @RedWitness(verdict = "nothing to repair costs nothing",
+            member = "TileRocketServiceStation#look",
+            at = "settle(lacked ? RepairOutcome.NO_MATERIALS",
+            replacedBy = "if (!lacked && !unpriced) { draw(1); } settle(lacked ? RepairOutcome.NO_MATERIALS",
+            fails = "a station with nothing to repair spent something",
+            on = "2026-10-15")
     @Pins({"REPAIR-11", "INV-INFRA-09"})
     @Wait(shape = Wait.Shape.WINDOW, at = "2 * look); Reply lackingAfter = readStation(station);",
             why = "two looks of a station that keeps refusing — no record is written while its answer stays the"

@@ -462,14 +462,18 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * that id among its children, since the body under it is not its moon. Unless it IS — two moons of
      * one planet stating one id leave the first holding it, and that one stays the planet's child.
      */
-    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing"
-            + " {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06;"
-            + " re-taken 2026-10-07 with the same reading).")
-    @LegacyWitness(prose = "with {@code DimensionManager#detachFromParseParent} at"
-            + " {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails"
-            + " showing {@code Tertius.children=[]} — the first moon, which holds the id, dropped with the"
-            + " refused second (2026-10-06).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "a refused moon is detached",
+            member = "DimensionManager#createAndLoadDimensions",
+            at = "detachFromParseParent(refused);",
+            replacedBy = "",
+            fails = "a parent must list exactly the moons that are its own",
+            on = "2026-10-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the holder keeps its place",
+            member = "DimensionManager#detachFromParseParent",
+            at = "if (holder != null && holder.getParentPlanet() == parentId)",
+            replacedBy = "if (false)",
+            fails = "a parent must list exactly the moons that are its own",
+            on = "2026-10-15")
     @Test
     public void aRefusedMoonIsNoLongerItsParentsChild() throws Exception {
         DimList dims = dims();

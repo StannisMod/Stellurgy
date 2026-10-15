@@ -650,21 +650,28 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
+     *
+     * <p>The roll is arrangement: the probe's {@code commanded} is its own answer, and the hull's
+     * measured {@code upY} is what the scenario rests on.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck"
-            + " gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any"
-            + " body that has flown aboard: \"turning"
-            + " flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …"
-            + " no `deck_contact` carrying ship = … was recorded within 240 ticks\". THE ROLL IS ACCEPTED —"
-            + " {@code VSIntegration#flightComputerOf} answering null:"
-            + " \"attitude hold must accept the roll\". THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf}"
-            + " at {@code if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying())} treating a"
-            + " creative flyer as excluded even when aboard: \"starting"
-            + " flight on the deck must NOT release the capture\". THE DESCENT — the aboard fly impulse"
-            + " ({@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}) dropped for"
-            + " descend: \"holding descend must sink along the DECK"
-            + " NORMAL (subspace -Y): 131.0 -&gt; 132.0\". The ABOARD commit after the dismount is the"
-            + " arrangement's link (server-committed).")
+    @RedWitness(verdict = "the capture is kept",
+            member = "ShipFrameTravel#excludedStateOf",
+            at = "if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()) {",
+            replacedBy = "if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()"
+                + " || entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {",
+            fails = "starting flight on the deck must keep the capture",
+            on = "2026-10-15")
+    @RedWitness(verdict = "holding descend must sink",
+            member = "ShipFrameTravel#flyingAboardTravel", at = "motion[1] += flyImpulse * fly;",
+            replacedBy = "motion[1] += flyImpulse * Math.max(fly, 0);",
+            fails = "holding descend must sink along the DECK NORMAL",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the landing",
+            member = "ShipFrameTravel#travel", at = "motion[1] -= LIVING_GRAVITY;",
+            replacedBy = "if (wasOnDeck || !(entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities"
+                + ".allowFlying)) { motion[1] -= LIVING_GRAVITY; }",
+            fails = "turning flight off must hand the body to deck gravity",
+            on = "2026-10-15")
     @RedWitness(verdict = "holding ascend must climb along the DECK NORMAL",
             member = "ShipFrameTravel#flyingAboardTravel", at = "motion[1] += flyImpulse * fly;",
             replacedBy = "motion[1] += flyImpulse * fly; motion[0] += flyImpulse * fly;",
@@ -740,7 +747,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         buildAndBoardShip(site);
         double h = Math.toRadians(60.0) / 2.0;
         double upBefore = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
-        assertTrue("attitude hold must accept the roll",
+        scenario().requireArranged("attitude hold must accept the roll",
                 Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
@@ -822,9 +829,11 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 "the held ascend moved the body along the deck normal");
         java.util.List<String> flying = Events.recordsWhereAll(flightTicks,
                 "who", botName(), "path", "f");
-        scenario().requireArranged("the held ascend must be resolved by the flying-aboard path"
-                + " at least twice, or there is no climb to take a direction of: " + flightTicks,
-                flying.size() >= 2);
+        // The capture kept through the start of flight is what puts the held ascend on the
+        // flying-aboard path; a capture released at the toggle leaves no such commit to read.
+        assertTrue("starting flight on the deck must keep the capture: the held ascend must be resolved"
+                + " by the flying-aboard path at least twice, or there is no climb to take a direction of: "
+                + flightTicks, flying.size() >= 2);
         String climbFrom = flying.get(0);
         String climbTo = flying.get(flying.size() - 1);
         double dySub = Events.number(climbTo, "heldY") - Events.number(climbFrom, "heldY");

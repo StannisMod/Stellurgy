@@ -65,20 +65,12 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * An undamaged block is told about with no damage line at all; once struck it is told its stage
-     * out of its maximum, with no "cannot be welded" because something crafts it; and the line is
-     * still there after the block has been taken out and put back by something that is not a
-     * player's hand — the record is the POSITION's.
+     * out of its maximum, with no "cannot be welded" because something crafts it.
      *
-     * <p>red-witnessed: 2026-10-07. NO LINE WHEN UNTOUCHED — {@code DamageProbeProvider#addProbeInfo}
-     * at {@code if (recorded == null && stage <= 0)} never taken: "an undamaged block must be told
-     * about with NO damage line: [..., {*msg.top.stellurgy.damage.stage*} 0/4]". THE STAGE — the
-     * stage line given the maximum where {@code stage + "/" + DamageState.getMaxStage(world, pos)}
-     * stands: "expected [... 1/4] but was [... 4/4]". NOTHING ELSE — {@code if (RepairCost.perStage(world,
-     * pos) == null)} inverted: "expected [... 1/4] but was [... 1/4, {*msg.top.stellurgy.damage.noRecipe*}]".
-     * THE LINE ON THE BLOCK PUT BACK: NOT YET — no break in the provider reddens it alone; the
-     * provider knows only a position, and every inversion of how it reads one (above) fails the struck
-     * verdict first. What keeps the record through a non-player replacement is the damage map's
-     * (structural-damage MECH-DMG-03/15), not this line's.</p>
+     * <p>Not asserted: the line on a block taken out and put back by something that is not a player's
+     * hand. The provider knows only a position, so that line is this same decision read again, and no
+     * break of the provider can redden it without reddening the struck verdict first; what keeps the
+     * record through such a replacement is the damage map's, not this line's.</p>
      */
     @RedWitness(verdict = "no line when untouched",
             member = "DamageProbeProvider#addProbeInfo",
@@ -115,31 +107,11 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
                         + " else about its damage — a block something crafts can be welded: " + struck,
                 lines(KEY_OPEN + "msg.top.stellurgy.damage.stage" + KEY_CLOSE + " " + staged[0] + "/" + staged[1]),
                 damageLines(struck));
-
-        scenario().arranging("take the block out and put the same kind back, by no player's hand");
-        place(block, "minecraft:air");
-        place(block, "minecraft:iron_block");
-        Reply after = stageAt(block);
-        scenario().requireArranged("the block must stand again with its record intact (a player's own"
-                        + " placement would have cleared it; this one did not go through a player): " + after,
-                "minecraft:iron_block".equals(after.text("block")) && after.integer("stage") == staged[0]);
-
-        scenario().asserting("the replaced block is still told the position's stage");
-        List<String> replaced = probeLinesNowFor(block, "the iron block, put back");
-        assertEquals("the stage belongs to the POSITION, so the block put back there is told it: "
-                        + replaced,
-                lines(KEY_OPEN + "msg.top.stellurgy.damage.stage" + KEY_CLOSE + " " + staged[0] + "/" + staged[1]),
-                damageLines(replaced));
     }
 
     /**
      * A struck block that nothing crafts is told so — the welder refuses it outright, and the player
      * should not learn that by failing.
-     *
-     * <p>red-witnessed: 2026-10-07, {@code DamageProbeProvider#addProbeInfo} at
-     * {@code if (RepairCost.perStage(world, pos) == null)} inverted: "expected [... 1/4,
-     * {*msg.top.stellurgy.damage.noRecipe*}] but was [... 1/4]"; and with the stage line given the
-     * maximum ({@code stage + "/" + DamageState.getMaxStage(world, pos)}): "but was [... 4/4, ...]".</p>
      */
     @RedWitness(member = "DamageProbeProvider#addProbeInfo",
             at = "if (RepairCost.perStage(world, pos) == null)",
@@ -172,12 +144,6 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
      * A block standing where the record says a block was DESTROYED is told that, and what the
      * record names — not a stage, because a destroyed position is rebuilt from the record rather
      * than welded.
-     *
-     * <p>red-witnessed: 2026-10-07, {@code DamageProbeProvider#addProbeInfo} at
-     * {@code if (recorded != null)} never taken: "expected [{*msg.top.stellurgy.damage.destroyed*}
-     * {*tile.blockIron.name*}] but was [{*msg.top.stellurgy.damage.stage*} 4/4]"; and with
-     * {@code if (RepairCost.perStage(world, pos) == null)} inverted: "but was [... destroyed ...,
-     * {*msg.top.stellurgy.damage.noRecipe*}]".</p>
      */
     @RedWitness(member = "DamageProbeProvider#addProbeInfo",
             at = "if (recorded != null)",
@@ -275,10 +241,11 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
         fenceWhatTheClientSent("every change to " + what + " must be behind the server before its"
                 + " probe reply is read");
         long mark = clientEvents().mark();
-        String record = clientEvents().awaitRecordWithFields(mark, "top_block_info",
-                "the client looking at " + what + " must be sent the probe's reply for it",
+        // A link: the probe mod asks and answers; what the reply SAYS is the verdict.
+        String record = dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() -> clientEvents().awaitRecordWithFields(mark,
+                "top_block_info", "the client looking at " + what + " must be sent the probe's reply for it",
                 PROBE_REPLY_DEADLINE_TICKS,
-                "x", String.valueOf(block[0]), "y", String.valueOf(block[1]), "z", String.valueOf(block[2]));
+                "x", String.valueOf(block[0]), "y", String.valueOf(block[1]), "z", String.valueOf(block[2])));
         Reply reply = Reply.of(record);
         scenario().requireArranged("the probe must have answered with info for " + what + ": " + record,
                 reply.bool("info"));

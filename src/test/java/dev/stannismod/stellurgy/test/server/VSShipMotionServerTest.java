@@ -94,12 +94,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     /** Ticks in one second of game time — Minecraft's fixed 50 ms server tick. */
     private static final double TICKS_PER_SECOND = 20.0;
 
-    /**
-     * How hard a port pushes a stack out of its own mouth, in blocks per tick —
-     * {@code EjectionPort#EJECT_SPEED} (0.35). The release's motion is the hull's motion at the port
-     * PLUS this push, so it is the margin the two predictions below are separated by.
-     */
-    private static final double PORT_PUSH_PER_TICK = 0.35;
 
     /**
      * The speed commanded along +X, in blocks per second. Chosen so that what arrives clears the
@@ -174,8 +168,8 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
         requireArranged("with VS, the pilot-seat build must route to a ship (no rocket): " + assemble,
                 RocketFixture.rocketsBornAt(events, loadMark, builder).isEmpty());
-        String shipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, 0,
-                ShipIdentity.nameFromAssembly(assemble), LOAD_TICKS);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
+                events, 0, ShipIdentity.nameFromAssembly(assemble), LOAD_TICKS));
         builtShip = shipId;
 
         Reply seat = read("stellurgytest vs find-seat 0 id " + shipId);
@@ -196,8 +190,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
         long releaseMark = events.markInstrumented();
         arrange("stellurgytest jettison load 0 " + subX + " " + subY + " " + subZ + " minecraft:cobblestone 1");
-        String released = events.awaitRecordWithField(releaseMark, "ejection_released", "ship", shipId,
-                "the loaded port aboard the moving hull must throw its stack out", RELEASE_DEADLINE_TICKS);
+        // A link: the release is the port's own duty cycle; what the stack left WITH is the verdict.
+        String released = ArrangementFailure.arranged(() -> events.awaitRecordWithField(releaseMark,
+                "ejection_released", "ship", shipId,
+                "the loaded port aboard the moving hull must throw its stack out", RELEASE_DEADLINE_TICKS));
 
         // The release point's velocity per tick, from the substrate's own state at that instant:
         // v + omega x r, per second, over the ticks in a second.
@@ -211,10 +207,14 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         double hullY = (Events.number(released, "hullVelY") + (wz * rx - wx * rz)) / TICKS_PER_SECOND;
         double hullZ = (Events.number(released, "hullVelZ") + (wx * ry - wy * rx)) / TICKS_PER_SECOND;
         double hullSpeed = Math.sqrt(hullX * hullX + hullY * hullY + hullZ * hullZ);
+        // How hard the port pushes a stack out of its own mouth, blocks per tick: production's own
+        // constant, published on the release record. The release's motion is the hull's motion at the
+        // port PLUS this push, so it is the margin the two predictions below are separated by.
+        double push = Events.number(released, "push");
         requireArranged("the hull must be moving at more than twice the port's push when it releases"
-                + " (" + hullSpeed + " blocks/tick against " + (2 * PORT_PUSH_PER_TICK) + "), or the"
+                + " (" + hullSpeed + " blocks/tick against " + (2 * push) + "), or the"
                 + " push alone could carry the release across either bound: " + released,
-                hullSpeed > 2 * PORT_PUSH_PER_TICK);
+                hullSpeed > 2 * push);
 
         double along = (Events.number(released, "motionX") * hullX
                 + Events.number(released, "motionY") * hullY

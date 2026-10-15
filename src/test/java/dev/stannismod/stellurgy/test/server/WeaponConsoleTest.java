@@ -305,20 +305,8 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * order on a real save, and a console in another chunk — the gun's decision reads only its
      * network, which is the same either way.</p>
      *
-     * <p>red-witnessed: with {@code TileTurret#isHoldingFire} at
-     * {@code return answersToConsole || (state != null && state.isHoldFire());} losing its
-     * {@code answersToConsole ||}, this fails at "a gun that answered to a console, reloaded with none
-     * in its network, never decided to hold its fire — no `turret_hold_decided` carrying pos =
-     * 10200,80,9800 and held = true" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileTurret#writeToNBT} at
-     * {@code nbt.setBoolean("answersToConsole", answersToConsole);} removed, the same wait fails the
-     * same way after the reload (2026-10-06).</p>
-     *
-     * <p>red-witnessed: NOT YET for the closing "fired once a console joined again" wait. The break
-     * tried, {@code TileTurret#isHoldingFire} at {@code if (state != null && state.hasConsole())} never
-     * taken, silences a gun that has a console — so it fails earlier, at the arrangement "the gun never
-     * fired on its console's order"; any break that keeps a commanded gun silent does the same.</p>
+     * <p>Everything before the reload is arrangement: the gun built, commanded by its console and
+     * firing on its order, then the network rebuilt without the console.</p>
      */
     @RedWitness(verdict = "the memory survives the reload",
             member = "TileTurret#writeToNBT",
@@ -327,6 +315,19 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
             fails = "a gun that answered to a console, reloaded with none in its network, never decided to "
                 + "hold its fire",
             on = "2026-10-06")
+    @RedWitness(verdict = "the hold is decided",
+            member = "TileTurret#isHoldingFire",
+            at = "return answersToConsole || (state != null && state.isHoldFire());",
+            replacedBy = "return (state != null && state.isHoldFire());",
+            fails = "a gun that answered to a console, reloaded with none in its network, never decided to "
+                + "hold its fire",
+            on = "2026-10-15")
+    @RedWitness(verdict = "fires once a console joins again",
+            member = "TileTurret#readFromNBT",
+            at = "answersToConsole = nbt.getBoolean(\"answersToConsole\");",
+            replacedBy = "answersToConsole = nbt.getBoolean(\"answersToConsole\"); registered = true;",
+            fails = "the gun never fired once a console joined its network again",
+            on = "2026-10-15")
     @Pins("INV-GUN-06")
     @Test
     public void aGunThatAnsweredToAConsoleHoldsFireUntilAConsoleJoinsAgain() throws Exception {
@@ -336,22 +337,28 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
         buildSite(base);
         long built = events.markInstrumented();
         buildGun(base);
-        Weapons.awaitAssembled(events, built, base, Y, Z, PARTS, "the gun never assembled");
+        ArrangementFailure.arranged(() -> {
+            Weapons.awaitAssembled(events, built, base, Y, Z, PARTS, "the gun never assembled");
+            return null;
+        });
         charge(base);
-        assertEquals("the console is not commanding the gun: ", 1,
-                placeConsoleAndAwaitNetwork(base + 1).integer("guns"));
+        int commanded = placeConsoleAndAwaitNetwork(base + 1).integer("guns");
+        requireArranged("the console is not commanding the gun: " + commanded, commanded == 1);
         long ordered = events.mark();
         arrange("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
                 + (base + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
-        Weapons.awaitFired(events, ordered, base, Y, Z,
-                "the gun never fired on its console's order, so it never answered to a console");
+        ArrangementFailure.arranged(() -> {
+            Weapons.awaitFired(events, ordered, base, Y, Z,
+                    "the gun never fired on its console's order, so it never answered to a console");
+            return null;
+        });
 
         long removed = events.mark();
         arrange("stellurgytest fill 0 " + (base + 1) + " " + Y + " " + Z + " " + (base + 1) + " " + Y + " "
                 + Z + " minecraft:air").requireOk("remove the console");
-        events.awaitRecordWithFields(removed, "subsystem_network_rebuilt",
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(removed, "subsystem_network_rebuilt",
                 "the weapons network never rebuilt without its console",
-                Weapons.ARRANGEMENT_TICKS, "domain", "Weapon", "dim", "0");
+                Weapons.ARRANGEMENT_TICKS, "domain", "Weapon", "dim", "0"));
         arrange("stellurgytest chunk release 0 " + cx + " " + cz).requireOk("let the gun's chunk go");
         Reply cycled = arrange("stellurgytest chunk cycle 0 " + cx + " " + cz).requireOk("reload the gun's chunk");
         requireArranged("the gun's chunk must really be dropped and read back from disk: " + cycled,

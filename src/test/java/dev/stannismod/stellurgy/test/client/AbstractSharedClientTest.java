@@ -992,11 +992,15 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      * every movement rejection, so a bare type wait can close on a rubber-band. The tolerance is a
      * block because a placement above the surface may settle onto it.</p>
      *
+     * <p>A failure here is the ARRANGEMENT's, typed as one: the placement is vanilla's position packet
+     * applied by the client, and no decision of ours sits under it.</p>
+     *
      * @param mark the CLIENT's own mark, taken BEFORE the teleport command
      */
     protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
             throws Exception {
-        ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS);
+        ArrangementFailure.arranged(() ->
+                ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS));
     }
 
     /**

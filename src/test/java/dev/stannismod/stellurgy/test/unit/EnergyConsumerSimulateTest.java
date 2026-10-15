@@ -33,10 +33,29 @@ public class EnergyConsumerSimulateTest {
         MinecraftBootstrap.ensure();
     }
 
-    @RedWitness(member = "TileEntityRFConsumer#extractEnergy",
+    @RedWitness(verdict = "a simulated extraction answers what it could take",
+            member = "TileEntityRFConsumer#extractEnergy",
+            at = "return energy.extractEnergy(amt, simulate);",
+            replacedBy = "return simulate ? 0 : energy.extractEnergy(amt, simulate);",
+            fails = "a simulated extraction must still answer what it could take",
+            on = "2026-10-15")
+    @RedWitness(verdict = "a simulated extraction takes nothing",
+            member = "TileEntityRFConsumer#extractEnergy",
             at = "return energy.extractEnergy(amt, simulate);",
             replacedBy = "return energy.extractEnergy(amt, false);",
             fails = "a simulated extraction took the energy anyway",
+            on = "2026-10-15")
+    @RedWitness(verdict = "a real extraction answers what it takes",
+            member = "TileEntityRFConsumer#extractEnergy",
+            at = "return energy.extractEnergy(amt, simulate);",
+            replacedBy = "return simulate ? energy.extractEnergy(amt, true) : 0;",
+            fails = "a real extraction must take what it answers",
+            on = "2026-10-15")
+    @RedWitness(verdict = "a real extraction leaves the rest",
+            member = "TileEntityRFConsumer#extractEnergy",
+            at = "return energy.extractEnergy(amt, simulate);",
+            replacedBy = "return energy.extractEnergy(amt, true);",
+            fails = "a real extraction must leave the rest",
             on = "2026-10-15")
     @Pins("INV-LVP-25")
     @Test

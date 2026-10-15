@@ -73,37 +73,10 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
      * is the positive half of both verdicts — the instruments can say "this hull" and "ready", and
      * what changes across the unload is only that the hull lost its physics object.</p>
      *
-     * <p>red-witnessed, one inversion per verdict, 2026-10-07:</p>
-     * <ul>
-     *   <li>FRAME: with {@code FieldFrames#forBlock} at {@code String shipId =
-     *       VSIntegration.registeredShipIdManagingBlock(world, pos);} followed by dropping the id while
-     *       {@code VSIntegration.toWorldFrameFor} answers null (the physics-object lookup this replaced),
-     *       this fails at "an emitter aboard a hull nobody is near was not framed on its own hull";</li>
-     *   <li>READY: with {@code ShipFieldFrame#isReady} at {@code return
-     *       VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) != null;} answering true, at
-     *       "an emitter aboard a hull with no physics object reports its frame ready";</li>
-     *   <li>DOMAIN after the unload: with {@code ShieldDomains#forBlock} at {@code String shipId =
-     *       VSIntegration.registeredShipIdManagingBlock(world, pos);} followed by the same physics-object
-     *       drop, at "an emitter aboard a hull nobody is near left the hull's shield domain …
-     *       expected:&lt;[ship:…]&gt; but was:&lt;[world:0]&gt;" (taken before the two frame assertions
-     *       were merged into one; that inversion leaves the frame verdict green either way);</li>
-     *   <li>DOMAIN while simulated: with that same line answering null outright, at "while the hull is
-     *       simulated, its emitter must be in the hull's shield domain";</li>
-     *   <li>the aboard-and-ready link: with {@code FieldFrames#forBlock}'s same line answering null
-     *       outright, at "the emitter never resolved its frame onto hull … while it was simulated";</li>
-     *   <li>the spawn link: with {@code VSBridge#assembleTier2Ship} at {@code
-     *       manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS);} skipped,
-     *       at "the assembly never registered a hull named …";</li>
-     *   <li>the unload link: with {@code WorldServerShipManager#loadAndUnloadShips} at {@code if
-     *       (!loadedShips.containsKey(toUnloadID))} always continuing, at "the substrate never dropped
-     *       the physics object of hull …";</li>
-     *   <li>NOT YET — the link on the emitter's frame record AFTER the unload. Attempted by reasoning,
-     *       not by a run: the frame is re-resolved both on load and on every tick
-     *       ({@code TileEntityFieldGenerator#onLoad}, {@code #update}), and the chunk is reloaded by
-     *       the read that precedes the wait (the post-unload record of the READY inversion came from a
-     *       new tile instance), so no single break silences the post-unload resolution without first
-     *       silencing the pre-unload link.</li>
-     * </ul>
+     * <p>Three waits are links of the arrangement: the hull's spawn, the substrate's unload of it, and
+     * the emitter's frame record after the unload. That last record is written by any tile instance
+     * on its first resolution, and the read before it reloads the chunk, so it appears whatever the
+     * frame is; its fields are the verdicts.</p>
      */
     @RedWitness(verdict = "READY",
             member = "ShipFieldFrame#isReady",
@@ -123,6 +96,20 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
             replacedBy = "String shipId = null;",
             fails = "the emitter never resolved its frame onto hull",
             on = "2026-10-07")
+    @RedWitness(verdict = "FRAME",
+            member = "FieldFrames#forBlock",
+            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            replacedBy = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos); if (shipId != null"
+                + " && VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) == null) { shipId = null; }",
+            fails = "an emitter aboard a hull nobody is near was not framed on its own hull",
+            on = "2026-10-15")
+    @RedWitness(verdict = "DOMAIN after the unload",
+            member = "ShieldDomains#forBlock",
+            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            replacedBy = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos); if (shipId != null"
+                + " && VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) == null) { shipId = null; }",
+            fails = "an emitter aboard a hull nobody is near left the hull's shield domain",
+            on = "2026-10-15")
     @Pins("PORT-16")
     @Test
     public void anEmitterAboardAHullNobodyIsNearIsStillThatHullsShield() throws Exception {
@@ -141,8 +128,9 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
                         + ", flight computers " + assembled.integer("afcCount") + "): " + assembled,
                 rockets.isEmpty() && assembled.integer("afcCount") == 1);
         String durable = assembled.text("shipId");
-        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durable,
-                "the assembly never registered a hull named " + durable, ASSEMBLY_LINK_TICKS);
+        String spawned = dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() ->
+                events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durable,
+                        "the assembly never registered a hull named " + durable, ASSEMBLY_LINK_TICKS));
         String hull = Events.text(spawned, "vsShip");
         try {
             observeTheEmitterAcrossTheUnload(mark, hull);
@@ -182,15 +170,17 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
     /** The verdicts on the emitter once its hull has no physics object; {@code unloadMark} precedes it. */
     private void observeTheUnsimulatedEmitter(long unloadMark, String hull, int ex, int ey, int ez)
             throws Exception {
-        events.awaitRecordWithField(unloadMark, "ship_unloaded", "vsShip", hull,
+        dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() -> events.awaitRecordWithField(unloadMark,
+                "ship_unloaded", "vsShip", hull,
                 "the substrate never dropped the physics object of hull " + hull + " with nobody near it",
-                UNLOAD_LINK_TICKS);
+                UNLOAD_LINK_TICKS));
         // A read of the emitter: if the substrate's unload let its chunk go, this loads it again (and
         // the tile resolves its frame on load); if not, the tile resolves on its next tick.
         ShieldTile.at(c -> read(c).raw(), DIM, ex, ey, ez).require(ShieldTile.EMITTER, "the emitter after the unload");
-        String unsimulated = events.awaitRecordWithField(unloadMark, "field_frame_resolved", "pos",
-                ex + "," + ey + "," + ez, "the emitter never resolved its frame after hull " + hull
-                        + " lost its physics object", UNLOAD_LINK_TICKS);
+        String unsimulated = dev.stannismod.stellurgy.test.ArrangementFailure.arranged(() ->
+                events.awaitRecordWithField(unloadMark, "field_frame_resolved", "pos",
+                        ex + "," + ey + "," + ez, "the emitter never resolved its frame after hull " + hull
+                                + " lost its physics object", UNLOAD_LINK_TICKS));
 
         // THE STATE, measured before any verdict: the record still claims the emitter's block, and
         // the substrate has no physics object for the hull.

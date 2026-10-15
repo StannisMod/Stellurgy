@@ -338,6 +338,21 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
             at = "if (isRemnant(mountPos, shipId))", replacedBy = "if (false)",
             fails = "a gun in the shipyard that no ship owns put a round into the world",
             on = "2026-10-15")
+    @RedWitness(verdict = "the shipyard gun runs", member = "TileTurret#update",
+            at = "if (!registered) {",
+            replacedBy = "if (dev.stannismod.stellurgy.integration.vs.VSIntegration.isShipyardRemnant(pos,"
+                + " dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipIdManagingBlock(world, pos)))"
+                + " { return; } if (!registered) {",
+            fails = "the shipyard gun never counted its build",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the control is commanded", member = "TurretFireControl#aimDirection",
+            at = "worldTarget == null || isRemnant(mountPos, shipId)", replacedBy = "true",
+            fails = "the control gun was never commanded onto its target",
+            on = "2026-10-15")
+    @RedWitness(verdict = "the fire check permits the shot", member = "TileTurret#canFireNow",
+            at = "return !targetIsFriendly()", replacedBy = "return !manualControl && !targetIsFriendly()",
+            fails = "the shipyard gun's own fire check did not permit the shot",
+            on = "2026-10-15")
     @Pins("INV-GUN-07")
     @Test
     public void aGunInTheShipyardThatNoShipOwnsNeitherTurnsNorFires() throws Exception {

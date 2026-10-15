@@ -25,7 +25,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * ship's centre {@code hullX/Y/Z}. The hull's motion is read here from the physics state rather
  * than from the carry reader the port itself calls, so a reader that converts wrongly cannot also be
  * the instrument that judges it. {@code ship} is {@code null} for a port on no ship, and the hull
- * fields are then absent. Read by
+ * fields are then absent. {@code push} is the port's own push out of its mouth, blocks per tick,
+ * read off production's constant, so a reader never carries a copy of it. Read by
  * {@code VSShipMotionServerTest#anItemEjectedFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
  *
  * <p>A redirect rather than an inject because the item IS the fact and the redirect is handed it as
@@ -65,7 +66,8 @@ public abstract class MixinEjectionPortEvents {
                 .append(",\"z\":").append(item.posZ)
                 .append(",\"motionX\":").append(item.motionX)
                 .append(",\"motionY\":").append(item.motionY)
-                .append(",\"motionZ\":").append(item.motionZ);
+                .append(",\"motionZ\":").append(item.motionZ)
+                .append(",\"push\":").append(EjectionPortAccessor.stellurgyTest$ejectSpeed());
         if (shipId == null) {
             payload.append(",\"ship\":null");
         } else {

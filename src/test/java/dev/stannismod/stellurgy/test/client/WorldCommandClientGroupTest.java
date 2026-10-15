@@ -258,17 +258,24 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * harness client is always remote (a separate server JVM), so this does not see the single-player
      * branch, where the registration is the integrated server's and must be left alone.</p>
      */
-    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
-            + " {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every"
-            + " client only forgetting, the shape it shipped with — this fails with \"the client forgot the"
-            + " deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,"
-            + " withdraw:false,forgeRegistered:true}\" (2026-10-06; re-taken 2026-10-07 with the same message,"
-            + " dim 14).")
-    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
-            + " {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails"
-            + " at \"the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14\";"
-            + " with its {@code if (deleteDim)} branch never taken, at \"the client was never told the planet was"
-            + " deleted — no `client_dim_forgotten` carrying dim = 14\" (2026-10-06).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the Forge registry lets the id go",
+            member = "PacketDimInfo#executeClient",
+            at = "if (dev.stannismod.stellurgy.client.ServerView.current().remote())",
+            replacedBy = "if (false)",
+            fails = "the client forgot the deleted planet but its Forge registry still holds dimension",
+            on = "2026-10-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the client learns of the planet",
+            member = "PacketDimInfo#executeClient",
+            at = "DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);",
+            replacedBy = "",
+            fails = "the client never learned of the generated planet",
+            on = "2026-10-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the client is told of the deletion",
+            member = "PacketDimInfo#executeClient",
+            at = "if (deleteDim)",
+            replacedBy = "if (false)",
+            fails = "the client was never told the planet was deleted",
+            on = "2026-10-15")
     @Test
     public void aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient() throws Exception {
         scenario().arranging("op the bot and generate a planet the client learns of");

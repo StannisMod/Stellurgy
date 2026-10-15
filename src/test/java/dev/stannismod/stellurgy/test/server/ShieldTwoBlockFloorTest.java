@@ -173,18 +173,18 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
     @Pins("INV-SHD-25")
-    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
-            + " VSIntegration.isShipyardRemnant(pos, null) ? new RemnantFieldFrame() : WorldFieldFrame.INSTANCE;}"
-            + " answering the world frame whatever the position, this fails at \"an emitter in the shipyard that no"
-            + " ship claims projected a shell over its shipyard address\". Taken on the pre-rename form"
-            + " {@code VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : ...}, the same"
-            + " decision.")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
-            + " (VSIntegration.isShipyardRemnant(pos, VSIntegration.registeredShipIdManagingBlock(world, pos)))}"
-            + " never waiting, this fails at \"an emitter in the"
-            + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
-            + " was:&lt;10453&gt;\". Taken on the pre-rename form {@code if (VSIntegration.isOnUnnamedShip(world,"
-            + " pos))}, the same decision.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "no shell over the shipyard address",
+            member = "FieldFrames#forBlock",
+            at = "return VSIntegration.isShipyardRemnant(pos, null) ? new RemnantFieldFrame() : WorldFieldFrame.INSTANCE;",
+            replacedBy = "return WorldFieldFrame.INSTANCE;",
+            fails = "an emitter in the shipyard that no ship claims projected a shell over its shipyard address",
+            on = "2026-10-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "no coil spent on nothing",
+            member = "TileEntityFieldGenerator#update",
+            at = "if (VSIntegration.isShipyardRemnant(pos, VSIntegration.registeredShipIdManagingBlock(world, pos)))",
+            replacedBy = "if (false)",
+            fails = "an emitter in the shipyard that no ship claims spent its coil on a shell over nothing",
+            on = "2026-10-15")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(),"
             + " MAINTENANCE_WINDOW_TICKS);",
