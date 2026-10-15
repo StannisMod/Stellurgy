@@ -739,6 +739,18 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
                         + "observed=(" + px + "," + py + "," + pz + ")"
                         + " distSq=" + distSq + " limit=" + MAX_INTERACT_DIST_SQ,
                 distSq < MAX_INTERACT_DIST_SQ);
+        // ...and standing on a floor his client HOLDS. Twice on 2026-10-07 the click was dropped with
+        // his client found afterwards on the world's floor 87 blocks under the pad: within reach at
+        // the read above, falling after it. A client without the pad's block, or one already falling,
+        // is named here as what it is, before a click that cannot land.
+        JsonObject floor = bot().blockState((int) Math.floor(px), (int) Math.floor(py - 0.01),
+                (int) Math.floor(pz));
+        String floorBlock = floor.has("block") ? floor.get("block").getAsString() : "";
+        scenario().requireArranged("the client must be STANDING on a floor it holds before he clicks: "
+                        + "floor=" + floor + " state=" + state,
+                state.get("onGround").getAsBoolean() && !floorBlock.isEmpty()
+                        && !floorBlock.endsWith(":air")
+                        && !(floor.has("chunkEmpty") && floor.get("chunkEmpty").getAsBoolean()));
 
         // A held stack can consume the right-click before the block ever sees it - and a freshly
         // joined player does NOT start empty-handed (mods hand out items on first join), so the

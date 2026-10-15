@@ -1324,13 +1324,14 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         long dropMark = events.markInstrumented();
         int crewId = readInt(exec("stellurgytest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
                 + " " + ship[2]), ENTITY_ID);
-        awaitTheDeckTakes(events, dropMark, crewId);
+        // A stand is moved by the server, so its landing is on the server's log.
+        awaitTheDeckTakes(events, dropMark, crewId, events, dropMark);
         return crewId;
     }
 
     /**
      * Put the BOT - the player - three blocks over the deck, where the stand is dropped, and wait
-     * for the deck to take him. A player is still held by the travel resolver; a stand no longer is.
+     * for the deck to take him.
      *
      * @return the player's entity id
      */
@@ -1342,14 +1343,19 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
         awaitClientPlacedNear(placedMark, ship[0], ship[2],
                 "the player must arrive over the deck before the deck can take him");
-        awaitTheDeckTakes(events, dropMark, botId);
+        // A player is moved by his own client, and the deck frame writes his landing there: on the
+        // server his held update (DeckFrameTick#updatePlayer) records no landing at all. The local
+        // player carries the server's entity id.
+        awaitTheDeckTakes(events, dropMark, botId, clientEvents(), placedMark);
         return botId;
     }
 
     /**
-     * The deck takes {@code bodyId}, as a link, and it comes to rest there.
+     * The deck takes {@code bodyId}, as a link, and it comes to rest there — its landing read off
+     * {@code landingLog}, the log of the side that moves the body.
      */
-    private void awaitTheDeckTakes(Events events, long dropMark, int crewId) throws Exception {
+    private void awaitTheDeckTakes(Events events, long dropMark, int crewId, Events landingLog,
+                                   long landingMark) throws Exception {
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
         events.awaitRecordWithFields(dropMark, "deck_entered",
@@ -1357,14 +1363,14 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                         + " resolver never captured it for this craft, so nothing below is about how"
                         + " a captured body rides THIS deck", 200,
                 "e", String.valueOf(crewId), "ship", scenarioShipId);
-        // The LANDING is a link too: `deck_contact` is the resolver putting this body on a surface it
-        // was not on at its previous move. It is an EDGE, and a body that touched down before the
-        // deck took it moved on an unresolved tick and never writes one — so the state is read
-        // first, and the landing is awaited only when one is still owed. Once captured, a body's
-        // moves are the resolver's, so an airborne captured body cannot land unrecorded.
+        // The LANDING is a link too: `deck_contact` is the deck frame putting this body on a surface it
+        // was not on at the previous tick it saw it. It is an EDGE, and a body that touched down
+        // before the deck took it never writes one — so the state is read first, and the landing is
+        // awaited only when one is still owed. Once held, a body's moves are the deck frame's, so an
+        // airborne held body cannot land unrecorded — on the side that moves it.
         PlayerShipData resting = PlayerShipData.byId(this::exec, 0, crewId);
         if (!resting.onGround) {
-            events.awaitField(dropMark, "deck_contact", "e", String.valueOf(crewId),
+            landingLog.awaitField(landingMark, "deck_contact", "e", String.valueOf(crewId),
                     "the dropped body (entity " + crewId + ") must LAND on the deck that took it",
                     200);
             resting = PlayerShipData.byId(this::exec, 0, crewId);
