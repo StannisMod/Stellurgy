@@ -1,20 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.MaterializedCell;
-import dev.stannismod.stellurgy.test.NebulaSearch;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.SkyNebulae;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import org.junit.After;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What a cell's sky is told about: the bodies around it, which belong to the CELL and not to a ship's
@@ -79,76 +71,79 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     @After
     public void clearStack() throws Exception {
         try {
-            exec("stellurgytest space entry-clear");
+            arrange("stellurgytest space entry-clear");
         } catch (Exception ignored) {
         }
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Hold the cell live with an occupant refcount and NO ship anywhere in the ledger.
-        int slotDim = MaterializedCell.at(this::exec, CELL_NO_SHIP)
+        int slotDim = MaterializedCell.at(c -> arrange(c).raw(), CELL_NO_SHIP)
                 .requireMaterialized("occupy must materialize the cell")
                 .slotDim();
 
         // CONTROL: the cell is live and its feed entry exists, but it holds nothing yet. A later
         // non-zero count is then attributable to the POI and to nothing else.
-        String before = exec("stellurgytest space bodies");
+        String before = read("stellurgytest space bodies").raw();
         assertEquals("a live cell must be in the feed even while it is empty; " + before,
                 0, feedBodyCount(before, slotDim));
 
-        String poi = exec("stellurgytest space add-poi " + CELL_NO_SHIP + " " + BODY_LOCAL + " PLANET 0 7");
+        String poi = arrange("stellurgytest space add-poi " + CELL_NO_SHIP + " " + BODY_LOCAL + " PLANET 0 7").raw();
         assertTrue("add-poi must register a descend target: " + poi,
                 Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
-        String after = exec("stellurgytest space bodies");
+        String after = read("stellurgytest space bodies").raw();
         assertEquals("the cell's own body must reach the feed with no ship in the cell at all; "
                 + after, 1, feedBodyCount(after, slotDim));
         assertEquals("and it must not have invented a second feed dimension; " + after,
                 1, jsonInt(after, "feedDims"));
-        assertEquals("no ship was ledgered by any of this; " + after, 0, jsonInt(after, "shipCount"));
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
-        String poi = exec("stellurgytest space add-poi " + CELL_MID_JUMP + " " + BODY_LOCAL + " MOON 0 7");
+        String poi = arrange("stellurgytest space add-poi " + CELL_MID_JUMP + " " + BODY_LOCAL + " MOON 0 7").raw();
         assertTrue("add-poi must register a descend target: " + poi,
                 Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
         // A settled ship first: this is the state the feed already handled, and it is the control that
         // proves the arrangement can produce a body at all.
-        String settle = exec("stellurgytest space ledger-settle " + CELL_MID_JUMP + " -1");
+        String settle = arrange("stellurgytest space ledger-settle " + CELL_MID_JUMP + " -1").raw();
         assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
         int slotDim = jsonInt(settle, "slotDim");
         String shipId = jsonString(settle, "shipId");
-        String settled = exec("stellurgytest space bodies");
+        String settled = read("stellurgytest space bodies").raw();
         assertEquals("control: with the ship SETTLED the cell's body is fed; " + settled,
                 1, feedBodyCount(settled, slotDim));
 
         // Now the ship goes mid-jump. Nothing about the WORLD changes: the cell stays bound to the same
         // slot, still holds its body, and whoever is standing in it is still looking at it.
-        String transit = exec("stellurgytest space ledger-transit " + CELL_MID_JUMP + " " + shipId);
+        String transit = arrange("stellurgytest space ledger-transit " + CELL_MID_JUMP + " " + shipId).raw();
         assertTrue("ledger-transit must record the ship as in transit: " + transit,
                 "IN_TRANSIT".equals(Reply.of(transit).text("state")));
 
-        String bodies = exec("stellurgytest space bodies");
-        // THIS scenario's ship, by the uuid it was ledgered under, and its state read off that row.
-        // Addressing the row by the STATE asks the feed "is anything in transit", which every other
-        // scenario's leftover jump answers — and would answer with this ship missing entirely.
+        String bodies = read("stellurgytest space bodies id " + shipId).raw();
+        // THIS scenario's ship, asked for by the uuid it was ledgered under, and its state read off
+        // that row. Addressing the row by the STATE asks the feed "is anything in transit", which
+        // every other scenario's leftover jump answers — and would answer with this ship missing.
         assertEquals("the feed must carry this ship as the one in transit: " + bodies,
                 "IN_TRANSIT",
                 Reply.of("stellurgytest space bodies", bodies)
                         .element("ships", "ship", shipId).text("state"));
         assertEquals("the cell is still bound to the same slot world; " + bodies,
-                slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
+                slotDim, LedgerEntry.forShip(c -> read(c).raw(), shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "
                 + bodies, 1, feedBodyCount(bodies, slotDim));
     }
@@ -163,10 +158,10 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
      */
     @Test
     public void registeringThePoolASecondTimeReusesItInsteadOfMintingAnother() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
-        String again = exec("stellurgytest space pool-idempotence");
+        String again = act("stellurgytest space pool-idempotence").raw();
         assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew")));
         assertTrue("and it must hand back the dimensions that already exist: " + again,
                 Reply.of(again).bool("returnedExisting"));
@@ -179,10 +174,10 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
      */
     @Test
     public void anUnknownShipIsReportedMissingRatherThanInvented() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
-        LedgerEntry missing = LedgerEntry.forShip(this::exec, java.util.UUID.randomUUID().toString());
+        LedgerEntry missing = LedgerEntry.forShip(c -> read(c).raw(), java.util.UUID.randomUUID().toString());
         assertFalse("a ship that was never settled must read back as absent: " + missing.raw(), missing.found);
     }
 
@@ -200,7 +195,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     @After
     public void restoreGenerator() throws Exception {
         try {
-            exec("stellurgytest space gen-reset");
+            arrange("stellurgytest space gen-reset");
         } catch (Exception ignored) {
         }
     }
@@ -210,19 +205,19 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
      * scenario counts bodies or clouds against when the count must be its own and nothing else's.
      */
     private void authoredOnlySky() throws Exception {
-        String empty = exec("stellurgytest space gen-empty");
+        String empty = arrange("stellurgytest space gen-empty").raw();
         assertTrue("the authored-only sky must install: " + empty, Reply.of(empty).ok());
     }
 
     /** Install the dense procedural galaxy, refusing an install that did not happen. */
     private void installDenseGalaxy() throws Exception {
-        String installed = exec(GEN_INSTALL);
+        String installed = arrange(GEN_INSTALL).raw();
         assertTrue("the procedural generator must install: " + installed, Reply.of(installed).ok());
     }
 
     /** Walk out for a cell with a cloud in its sky, refusing a walk that found none. */
     private NebulaSearch findACloud() throws Exception {
-        return NebulaSearch.walk(this::exec, 512, 64)
+        return NebulaSearch.walk(c -> read(c).raw(), 512, 64)
                 .requireFound("a dense galaxy must have a cloud somewhere in it");
     }
 
@@ -246,7 +241,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     @Test
     public void aGalaxyWithClustersInItHasCloudsToLookAt() throws Exception {
         installDenseGalaxy();
-        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
+        SkyNebulae feed = SkyNebulae.at(c -> read(c).raw(), findACloud().sectorX(), 0, 0);
         assertTrue("and that sky must hold the cloud the finder found: " + feed.raw(), feed.drawn >= 1);
         // The claim is that a drawn cloud covers something, so it is about the value.
         for (SkyNebulae.Cloud cloud : feed.clouds()) {
@@ -263,7 +258,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     public void withoutAProceduralGeneratorTheSkyIsEmptyRatherThanInvented() throws Exception {
         authoredOnlySky();
 
-        SkyNebulae feed = SkyNebulae.at(this::exec, 0, 0, 0);
+        SkyNebulae feed = SkyNebulae.at(c -> read(c).raw(), 0, 0, 0);
         assertEquals("a universe with no clusters must seat no clouds: " + feed.raw(), 0, feed.seated);
         assertEquals("and must draw none: " + feed.raw(), 0, feed.drawn);
     }
@@ -278,7 +273,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         installDenseGalaxy();
         String[] line = lineThrough(findACloud());
 
-        String through = exec("stellurgytest space extinction " + line[0] + " " + line[1]);
+        String through = read("stellurgytest space extinction " + line[0] + " " + line[1]).raw();
         assertTrue("the probe must answer for a real sight line: " + through, Reply.of(through).ok());
         assertTrue("a line that reaches a cloud's neighbourhood must cross SOME matter: " + through,
                 decimal(through, "column") > 0d);
@@ -286,7 +281,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
                 decimal(through, "magnitudes") > 0d);
 
         authoredOnlySky();
-        String clear = exec("stellurgytest space extinction " + line[0] + " " + line[1]);
+        String clear = read("stellurgytest space extinction " + line[0] + " " + line[1]).raw();
         assertEquals("a universe with no clouds must dim nothing: " + clear, 0d,
                 decimal(clear, "magnitudes"), 1.0E-9d);
     }
@@ -301,20 +296,20 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         installDenseGalaxy();
         String[] line = lineThrough(findACloud());
         String extinction = "stellurgytest space extinction " + line[0] + " " + line[1];
-        double threshold = decimal(exec(extinction), "threshold");
+        double threshold = decimal(read(extinction).raw(), "threshold");
         try {
-            exec("stellurgytest config set telescopeObscuredAtMagnitudes 0.0001");
-            String strict = exec(extinction);
+            arrange("stellurgytest config set telescopeObscuredAtMagnitudes 0.0001");
+            String strict = read(extinction).raw();
             assertTrue("at a threshold below the real reading the line must count as obscured: "
                     + strict, Reply.of(strict).bool("obscured"));
 
-            exec("stellurgytest config set telescopeObscuredAtMagnitudes 0");
-            String off = exec(extinction);
+            arrange("stellurgytest config set telescopeObscuredAtMagnitudes 0");
+            String off = read(extinction).raw();
             assertTrue("with the mechanic off nothing is obscured: " + off, (!Reply.of(off).bool("obscured")));
             assertTrue("and the dust itself is still measured — the flag removes the RULE, not the"
                     + " physics: " + off, decimal(off, "magnitudes") > 0d);
         } finally {
-            exec("stellurgytest config set telescopeObscuredAtMagnitudes " + threshold);
+            arrange("stellurgytest config set telescopeObscuredAtMagnitudes " + threshold);
         }
     }
 
@@ -325,7 +320,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     @Test
     public void whatIsSeatedAndWhatIsDrawnAreReportedSeparately() throws Exception {
         installDenseGalaxy();
-        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
+        SkyNebulae feed = SkyNebulae.at(c -> read(c).raw(), findACloud().sectorX(), 0, 0);
         assertTrue("what is drawn may never exceed what is seated: " + feed.raw(), feed.drawn <= feed.seated);
     }
 

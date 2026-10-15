@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.space;
 
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.universe.SystemBody;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 /**
  * Where a body's atmosphere ends — the surface a ship crosses to enter it.

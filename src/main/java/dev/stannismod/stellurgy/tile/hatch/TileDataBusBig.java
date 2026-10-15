@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.tile.hatch;
 
-import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import net.minecraft.nbt.NBTTagCompound;
 
 public class TileDataBusBig extends TileDataBus {
 

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockStructure;
+import dev.stannismod.stellurgy.libvulpes.tile.TileMaterial;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.item.EntityItem;
@@ -11,8 +13,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockStructure;
-import dev.stannismod.stellurgy.libvulpes.tile.TileMaterial;
 
 import javax.annotation.Nonnull;
 

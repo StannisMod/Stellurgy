@@ -1,39 +1,25 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.network.*;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.Asteroid;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.math.BlockPos;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.network.PacketAirParticle;
-import dev.stannismod.stellurgy.network.PacketAsteroidInfo;
-import dev.stannismod.stellurgy.network.PacketConfigSync;
-import dev.stannismod.stellurgy.network.PacketDimInfo;
-import dev.stannismod.stellurgy.network.PacketFluidParticle;
-import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
-import dev.stannismod.stellurgy.network.PacketLaserGun;
-import dev.stannismod.stellurgy.network.PacketMoveRocketInSpace;
-import dev.stannismod.stellurgy.network.PacketSatellite;
-import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
-import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.Asteroid;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Network packet wire-format round-trip — the four packets
@@ -94,6 +80,8 @@ public class PacketSerializationTest {
 
     // ---- PacketDimInfo --------------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetDimInfoNullPropertiesIsDeleteSignal() {
         // ctor with null DimensionProperties -> wire format collapses to
@@ -130,6 +118,8 @@ public class PacketSerializationTest {
         @Override public double failureChance() { return 0; }
     }
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetSatelliteRoundTrip() {
         SatelliteProperties props =
@@ -179,6 +169,8 @@ public class PacketSerializationTest {
 
     // ---- PacketConfigSync -----------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetConfigSyncRoundTrip() {
         // Start from a current-config copy (matches what production StellurgyConfiguration
@@ -250,6 +242,8 @@ public class PacketSerializationTest {
 
     // ---- PacketAsteroidInfo --------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetAsteroidInfoRoundTrip() {
         Asteroid original = new Asteroid();

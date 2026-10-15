@@ -1,21 +1,20 @@
 package dev.stannismod.stellurgy.tile.hatch;
 
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.inventory.modules.ModuleAutoData;
+import dev.stannismod.stellurgy.item.IDataItem;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.util.IDataInventory;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.api.DataStorage.DataType;
-import dev.stannismod.stellurgy.inventory.modules.ModuleAutoData;
-import dev.stannismod.stellurgy.item.IDataItem;
-import dev.stannismod.stellurgy.item.ItemData;
-import dev.stannismod.stellurgy.util.IDataInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;

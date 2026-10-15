@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.weapon.GunSpec;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Random;
-
-import dev.stannismod.stellurgy.api.weapon.GunSpec;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.weapon.TurretFireControl;
 
 /**
  * Where a body leaves a gun and what motion it inherits, as an event: {@code turret_muzzle}.
@@ -23,7 +21,7 @@ import dev.stannismod.stellurgy.weapon.TurretFireControl;
  * the ground), the world muzzle {@code px/py/pz}, the world direction {@code dx/dy/dz} and the
  * inherited motion {@code cx/cy/cz} — production's own numbers, in blocks per tick. A reader compares
  * the inherited motion against what the hull was measured doing. Server log. Read by
- * {@code TurretOnAShipE2ETest#aRoundFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
+ * {@code TurretOnAShipTest#aRoundFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
  *
  * <p>SILENT about a gun that may not fire at all (a null muzzle: no clear line of fire, a gun in the
  * shipyard that no ship owns, an inoperable build).</p>

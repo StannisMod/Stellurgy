@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.damage.DamageState;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.damage.DamageState;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A block's damage stage being written, as an event: {@code block_stage_set}.

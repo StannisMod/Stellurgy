@@ -1,25 +1,23 @@
 package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.EvictionReports;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Weapons;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * What a restart must give back — split by who owns it.
@@ -35,7 +33,8 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * and the shield console's resistance bias come back with the same VALUES (their tiles persisted
  * them). A regression in either direction is invisible in a single-boot test.</p>
  */
-public class SubsystemNetworkRestartTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
 
     /** One chunk, so a single probe pulls every node of both networks back into memory. */
     private static final int Y = 64;
@@ -64,7 +63,7 @@ public class SubsystemNetworkRestartTest {
     /** Not the default rule, so a network that came back with a fresh default would not look like a pass. */
     private static final String WEAPON_RULE = "NONE";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -75,7 +74,7 @@ public class SubsystemNetworkRestartTest {
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-subnet-restart-");
+        workDir = ServerRoot.fresh("forge-server-subnet-restart-");
     }
 
     @After
@@ -85,20 +84,6 @@ public class SubsystemNetworkRestartTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}
-     * not re-registering a duct restored from the save: "the ventilation graph must come back with the
-     * same cable count … \"cables\":0". SOURCES — the same in {@code TileLifeSupportPlant#onLoad} at
-     * {@code SubsystemNetworkManager.of(world).register(this);}: "and the same source count: … \"sources\":0".
-     * SINKS — the same in {@code TileOxygenVent#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}:
-     * "and the same sink count: … \"sinks\":0". PRIORITY — {@code TileOxygenVent#readFromNBT} at {@code zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger("zonePriority")));} not reading the priority back: "the vent's zone priority must survive the
-     * restart … expected:&lt;1&gt; but was:&lt;0&gt;". BIAS — {@code TileEntityShieldConsole#readFromNBT} at {@code shieldEnergyResistanceBias = compound.hasKey("shieldEnergyResistanceBias")} not
-     * reading the bias back: "the console's resistance bias must survive the restart … expected:&lt;0.75&gt;
-     * but was:&lt;0.5&gt;". The first boot's premises are arrangements and are not witnessed. (CABLES,
-     * SOURCES and SINKS were recorded against each {@code onLoad}'s declaration line; the quoted call
-     * is the one their prose names, supplied when the records were converted to symbols on 2026-09-30.
-     * All three were taken on the pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the
-     * same registration made through the static registry; the quote is today's spelling of it.)</p>
-     *
      * <p>Not asserted: that the ventilation network's membership comes back the same. The verdict
      * compares two builds by the same code, and the member set is the positions of the component's
      * role maps — so it can only differ across the restart if some node came back with a different
@@ -106,13 +91,27 @@ public class SubsystemNetworkRestartTest {
      * would drop it before the restart too and leave the comparison equal; that is not this test's
      * contract.)</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}"
+            + " not re-registering a duct restored from the save: \"the ventilation graph must come back with the"
+            + " same cable count … \\\"cables\\\":0\". SOURCES — the same in {@code TileLifeSupportPlant#onLoad} at"
+            + " {@code SubsystemNetworkManager.of(world).register(this);}: \"and the same source count: … \\\"sources\\\":0\"."
+            + " SINKS — the same in {@code TileVentilationPort#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}:"
+            + " \"and the same sink count: … \\\"sinks\\\":0\". PRIORITY — {@code TileVentilationPort#readFromNBT} at {@code zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger(\"zonePriority\")));} not reading the priority back: \"the vent's zone priority must survive the"
+            + " restart … expected:&lt;1&gt; but was:&lt;0&gt;\". (SINKS and PRIORITY were taken while the zone's"
+            + " sink was the oxygen vent; both lines moved unchanged to the port on 2026-10-05.) BIAS — {@code TileEntityShieldConsole#readFromNBT} at {@code shieldEnergyResistanceBias = compound.hasKey(\"shieldEnergyResistanceBias\")} not"
+            + " reading the bias back: \"the console's resistance bias must survive the restart … expected:&lt;0.75&gt;"
+            + " but was:&lt;0.5&gt;\". The first boot's premises are arrangements and are not witnessed. (CABLES,"
+            + " SOURCES and SINKS were recorded against each {@code onLoad}'s declaration line; the quoted call"
+            + " is the one their prose names, supplied when the records were converted to symbols on 2026-09-30."
+            + " All three were taken on the pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the"
+            + " same registration made through the static registry; the quote is today's spelling of it.)")
     @Test
     public void theNetworkIsRebuiltFromTheWorldWhileItsSettingsAreRestoredFromTheirBlocks()
             throws Exception {
         // ─────── Boot 1: build both networks, set both settings ───────
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        place(firstBoot, "stellurgy:oxygenVent", VENT);
+        place(firstBoot, "stellurgy:ventilationPort", VENT);
         place(firstBoot, "stellurgy:ventilationDuct", DUCT_A);
         place(firstBoot, "stellurgy:ventilationDuct", DUCT_B);
         place(firstBoot, "stellurgy:lifeSupportPlant", PLANT);
@@ -120,7 +119,7 @@ public class SubsystemNetworkRestartTest {
         place(firstBoot, "affs:field_generator", SHIELD_SINK);
         place(firstBoot, "affs:shield_console", SHIELD_CONSOLE);
 
-        Reply priorityWrite = arrange(firstBoot,
+        Reply priorityWrite = act(firstBoot,
                 "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z + " " + ZONE_PRIORITY);
         assertEquals("priority write failed: " + priorityWrite,
                 ZONE_PRIORITY, priorityWrite.integer("priority"));
@@ -128,7 +127,7 @@ public class SubsystemNetworkRestartTest {
         arrange(firstBoot, "stellurgytest shield console-bias 0 " + SHIELD_CONSOLE + " "
                 + Y + " " + Z + " " + RESISTANCE_BIAS);
 
-        arrange(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
+        act(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
         Reply ventilationBefore = subnet(firstBoot, DUCT_A);
         int cablesBefore = ventilationBefore.integer("cables");
         int sourcesBefore = ventilationBefore.integer("sources");
@@ -136,13 +135,13 @@ public class SubsystemNetworkRestartTest {
         assertEquals("premise: two ducts must be in the network before the restart: "
                 + ventilationBefore, 2, cablesBefore);
         assertEquals("premise: the plant must be its source: " + ventilationBefore, 1, sourcesBefore);
-        assertEquals("premise: the vent must be its sink: " + ventilationBefore, 1, sinksBefore);
+        assertEquals("premise: the port must be its sink: " + ventilationBefore, 1, sinksBefore);
 
         firstBoot.close();
         firstBoot = null;
 
         // ─────── Boot 2: same world, nothing saved the network itself ───────
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         // Bring the chunk in FIRST. Nothing about the network is restored by loading a save: the
         // tiles re-register from onLoad and the graph is rebuilt from their adjacency, so with the
@@ -150,7 +149,7 @@ public class SubsystemNetworkRestartTest {
         // does this; here it is explicit, because a probe that quietly loaded the chunk would be
         // changing the thing it measures.
         arrange(secondBoot, "stellurgytest chunk forceload 0 " + (VENT >> 4) + " " + (Z >> 4));
-        arrange(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
+        act(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
         Reply ventilationAfter = subnet(secondBoot, DUCT_A);
         assertEquals("the ventilation graph must come back with the same cable count — it is "
                 + "rebuilt from the world, and the world did not change: " + ventilationAfter,
@@ -161,12 +160,13 @@ public class SubsystemNetworkRestartTest {
                 sinksBefore, ventilationAfter.integer("sinks"));
 
         // The settings, by contrast, are only here because their own tiles wrote them to NBT.
-        Reply priorityAfter = arrange(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
-        assertEquals("the vent's zone priority must survive the restart — it is the vent's own "
+        Reply priorityAfter = read(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z)
+                .requireOk();
+        assertEquals("the port's zone priority must survive the restart — it is the port's own "
                         + "setting, not the network's: " + priorityAfter,
                 ZONE_PRIORITY, priorityAfter.integer("priority"));
 
-        Reply consoleAfter = ask(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
+        Reply consoleAfter = read(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
                 + " " + Y + " " + Z);
         assertEquals("the console's resistance bias must survive the restart, and it is the only "
                         + "thing that re-seeds the rebuilt shield network: " + consoleAfter,
@@ -184,25 +184,26 @@ public class SubsystemNetworkRestartTest {
      * <p>Read per BLOCK first and per LOOP second, deliberately. The loop's figure alone could not
      * tell energy that came back from the blocks from energy that was never gone.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code TileHeatLoopBlock#readFromNBT} at {@code storedHeat = nbt.getLong(NBT_STORED_HEAT);} not reading the stored heat back: "every heat unit must come back off the
-     * blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;". REBUILT —
-     * {@code TileHeatLoopBlock#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);} not
-     * re-registering a block restored from the save: "the loop must be REBUILT with the same membership
-     * — nothing persisted it: … \"members\":0". The first boot's premises are arrangements and are not
-     * witnessed. (REBUILT was recorded against {@code onLoad}'s declaration line; the quoted call is the
-     * one its prose names, supplied when the record was converted to symbols on 2026-09-30. Taken on the
-     * pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the same registration made through
-     * the static registry; the quote is today's spelling of it.)</p>
-     *
      * <p>Not asserted: the loop's capacity, stored heat and temperature after the restart, because
      * the loop re-sums capacity and heat from its member blocks on every solve and derives its
      * temperature from those two, so none of them could differ while the per-block energy and the
      * membership verdicts hold.</p>
+     * Pins INV-HEAT-06 (A loop's energy survives a server restart, and comes back OFF THE BLOCKS).
      */
+    @Pins("INV-HEAT-06")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code TileHeatLoopBlock#readFromNBT} at {@code storedHeat = nbt.getLong(NBT_STORED_HEAT);} not reading the stored heat back: \"every heat unit must come back off the"
+            + " blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;\". REBUILT —"
+            + " {@code TileHeatLoopBlock#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);} not"
+            + " re-registering a block restored from the save: \"the loop must be REBUILT with the same membership"
+            + " — nothing persisted it: … \\\"members\\\":0\". The first boot's premises are arrangements and are not"
+            + " witnessed. (REBUILT was recorded against {@code onLoad}'s declaration line; the quoted call is the"
+            + " one its prose names, supplied when the record was converted to symbols on 2026-09-30. Taken on the"
+            + " pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the same registration made through"
+            + " the static registry; the quote is today's spelling of it.)")
     @Test
     public void aCoolantLoopsEnergyComesBackFromItsBlocks() throws Exception {
         // ─────── Boot 1: a loop, and some energy in it ───────
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         place(firstBoot, "stellurgy:heatPipe", PIPE_A);
         place(firstBoot, "stellurgy:heatPipe", PIPE_B);
@@ -217,7 +218,7 @@ public class SubsystemNetworkRestartTest {
 
         // One tick, so the loop finds itself and spreads the energy over its members at one
         // temperature — which is the state a real ship would be saved in, not a lump in one pipe.
-        arrange(firstBoot, "stellurgytest subnet solve heat 0 1");
+        act(firstBoot, "stellurgytest subnet solve heat 0 1");
         Reply loopBefore = subnetHeat(firstBoot, PIPE_A);
         long loopHeatBefore = loopBefore.longInteger("heatStored");
         assertEquals("premise: all three blocks must be one loop: " + loopBefore,
@@ -229,7 +230,7 @@ public class SubsystemNetworkRestartTest {
         firstBoot = null;
 
         // ─────── Boot 2: same world, and the loop is a fresh object ───────
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         arrange(secondBoot, "stellurgytest chunk forceload 0 " + (PIPE_A >> 4) + " " + (Z >> 4));
 
@@ -237,7 +238,7 @@ public class SubsystemNetworkRestartTest {
         // come from — nothing saved the loop.
         long fromBlocks = 0L;
         for (int x : new int[]{PIPE_A, PIPE_B, ACCUMULATOR}) {
-            Reply block = arrange(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z);
+            Reply block = read(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z).requireOk();
             assertTrue("the loop block at " + x + " must be back: " + block, block.bool("isLoopBlock"));
             fromBlocks += block.longInteger("heatStored");
         }
@@ -245,7 +246,7 @@ public class SubsystemNetworkRestartTest {
                         + "the whole reason the energy lives on blocks and not in the network",
                 STORED_HEAT, fromBlocks);
 
-        arrange(secondBoot, "stellurgytest subnet solve heat 0 1");
+        act(secondBoot, "stellurgytest subnet solve heat 0 1");
         Reply loopAfter = subnetHeat(secondBoot, PIPE_A);
         assertEquals("the loop must be REBUILT with the same membership — nothing persisted it: "
                 + loopAfter, 3, loopAfter.integer("members"));
@@ -265,31 +266,30 @@ public class SubsystemNetworkRestartTest {
      * ship); they are carried by the same writer and reader as the point target. And a code-carrying
      * PLAYER not being engaged, which needs a player; what is asserted instead is the code the gun
      * judges a body by, read off the gun, which is that decision's only input from the network.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-10-05. The HOLD, CODE and RULE breaks are made
-     * where the orders come OFF THE SAVE, because the same adoption also runs on every in-session
-     * rebuild and a break there already fails boot 1's premise. ALL (the defect as filed) —
-     * {@code TileWeaponConsole#readFromNBT} at {@code savedOrders = nbt.getCompoundTag(NBT_ORDERS);}
-     * made {@code savedOrders = null;}: "the gun told to hold fire before the restart never held after
-     * it — no `turret_hold_decided` carrying pos = 4802,151,4802 and held = true was recorded within
-     * 600 ticks". HOLD — the same line followed by {@code savedOrders.setBoolean("holdFire", false);}:
-     * the same message. CODE — followed by {@code savedOrders.setString("accessCode", "");}: "the
-     * network's access code must survive the restart … expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;".
-     * RULE — followed by {@code savedOrders.removeTag("hullAllegiance");}: "and its hull rule …
-     * expected:&lt;[NONE]&gt; but was:&lt;[CODE_ON_WEAPONS]&gt;". GUN'S CODE —
-     * {@code TileTurret#getEffectiveAccessCode} at {@code return state.getAccessCode();} made
-     * {@code return accessCode;}: "the gun must judge a body by the network's code after the restart …
-     * expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;". The TARGET verdict was not separately witnessed:
-     * a gun without its target never reaches the hold record, which stops the chain first. The
-     * "fired while holding" verdict was not separately witnessed either: under HOLD the chain stops
-     * at the hold record before it.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-10-05. The HOLD, CODE and RULE breaks are made"
+            + " where the orders come OFF THE SAVE, because the same adoption also runs on every in-session"
+            + " rebuild and a break there already fails boot 1's premise. ALL (the defect as filed) —"
+            + " {@code TileWeaponConsole#readFromNBT} at {@code savedOrders = nbt.getCompoundTag(NBT_ORDERS);}"
+            + " made {@code savedOrders = null;}: \"the gun told to hold fire before the restart never held after"
+            + " it — no `turret_hold_decided` carrying pos = 4802,151,4802 and held = true was recorded within"
+            + " 600 ticks\". HOLD — the same line followed by {@code savedOrders.setBoolean(\"holdFire\", false);}:"
+            + " the same message. CODE — followed by {@code savedOrders.setString(\"accessCode\", \"\");}: \"the"
+            + " network's access code must survive the restart … expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;\"."
+            + " RULE — followed by {@code savedOrders.removeTag(\"hullAllegiance\");}: \"and its hull rule …"
+            + " expected:&lt;[NONE]&gt; but was:&lt;[CODE_ON_WEAPONS]&gt;\". GUN'S CODE —"
+            + " {@code TileTurret#getEffectiveAccessCode} at {@code return state.getAccessCode();} made"
+            + " {@code return accessCode;}: \"the gun must judge a body by the network's code after the restart …"
+            + " expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;\". The TARGET verdict was not separately witnessed:"
+            + " a gun without its target never reaches the hold record, which stops the chain first. The"
+            + " \"fired while holding\" verdict was not separately witnessed either: under HOLD the chain stops"
+            + " at the hold record before it.")
     @Test
     public void aWeaponNetworksOrdersComeBackFromItsConsolesAndTheBatteryObeysThem() throws Exception {
         // ─────── Boot 1: a gun between two consoles, ordered through one of them ───────
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         FixtureSite site = FixtureSite.openAir(0, WEAPON_SITE, WEAPON_SITE);
-        site.requireClear(probe(firstBoot), 1, 2, "a gun between two weapon consoles");
+        site.requireClear(command -> String.join("\n", firstBoot.client().arrange(command)), 1, 2, "a gun between two weapon consoles");
         int y = site.y + 1;
         int z = site.z + 2;
         int gun = site.x + 2;
@@ -313,7 +313,7 @@ public class SubsystemNetworkRestartTest {
         order(firstBoot, "stellurgytest weaponconsole holdfire" + console + "true");
         arrange(firstBoot, "stellurgytest fill 0 " + ordering + " " + y + " " + z + " " + ordering + " "
                 + y + " " + z + " minecraft:air");
-        Reply kept = arrange(firstBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z);
+        Reply kept = read(firstBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z).requireOk();
         requireArranged("premise: the remaining console must still see the ordered network: " + kept,
                 kept.bool("network") && WEAPON_CODE.equals(kept.text("code")) && kept.bool("holdFire"));
 
@@ -321,7 +321,7 @@ public class SubsystemNetworkRestartTest {
         firstBoot = null;
 
         // ─────── Boot 2: the network is new; only the remaining console carries the orders ───────
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         Events after = events(secondBoot);
         long restarted = after.markInstrumented();
         arrange(secondBoot, "stellurgytest chunk forceload 0 " + (gun >> 4) + " " + (z >> 4));
@@ -333,7 +333,7 @@ public class SubsystemNetworkRestartTest {
                 "the gun told to hold fire before the restart never held after it",
                 Weapons.ARRANGEMENT_TICKS, "pos", Weapons.at(gun, y, z), "held", "true");
 
-        Reply orders = arrange(secondBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z);
+        Reply orders = read(secondBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z).requireOk();
         assertEquals("the network's access code must survive the restart: " + orders,
                 WEAPON_CODE, orders.text("code"));
         assertEquals("and its hull rule: " + orders, WEAPON_RULE, orders.text("allegiance"));
@@ -343,7 +343,7 @@ public class SubsystemNetworkRestartTest {
         assertEquals("(y): " + orders, targetY, orders.number("targetY"), 0.0D);
         assertEquals("(z): " + orders, targetZ, orders.number("targetZ"), 0.0D);
 
-        Reply gunRead = arrange(secondBoot, "stellurgytest turret read 0 " + gun + " " + y + " " + z);
+        Reply gunRead = read(secondBoot, "stellurgytest turret read 0 " + gun + " " + y + " " + z).requireOk();
         assertEquals("the gun must judge a body by the network's code after the restart, as it did"
                 + " before it: " + gunRead, WEAPON_CODE, gunRead.text("code"));
 
@@ -361,12 +361,8 @@ public class SubsystemNetworkRestartTest {
     }
 
     private Events events(RealDedicatedServerHarness harness) {
-        return new Events(probe(harness),
+        return new Events(command -> String.join("\n", harness.client().read(command)),
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), new EvictionReports());
-    }
-
-    private static Events.Probe probe(RealDedicatedServerHarness harness) {
-        return command -> String.join("\n", harness.client().execute(command));
     }
 
     /** A console order, refused unless the console was on a network and took it. */
@@ -383,7 +379,7 @@ public class SubsystemNetworkRestartTest {
     }
 
     private Reply subnetHeat(RealDedicatedServerHarness harness, int x) throws Exception {
-        return ask(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
+        return read(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
     }
 
     private void place(RealDedicatedServerHarness harness, String block, int x) throws Exception {
@@ -392,14 +388,21 @@ public class SubsystemNetworkRestartTest {
     }
 
     private Reply subnet(RealDedicatedServerHarness harness, int x) throws Exception {
-        return ask(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
+        return read(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
     }
 
-    private static Reply ask(RealDedicatedServerHarness harness, String command) throws Exception {
-        return Reply.of(command, String.join("\n", harness.client().execute(command)));
+    /** A verb that OBSERVES, sent in its role. */
+    private static Reply read(RealDedicatedServerHarness harness, String command) throws Exception {
+        return Reply.of(command, String.join("\n", harness.client().read(command)));
     }
 
+    /** A step of the arrangement, sent in its role and refused unless it reported ok. */
     private static Reply arrange(RealDedicatedServerHarness harness, String command) throws Exception {
-        return ask(harness, command).requireOk(command);
+        return Reply.of(command, String.join("\n", harness.client().arrange(command))).requireOk(command);
+    }
+
+    /** A production entry called, sent in its role and refused unless it reported ok. */
+    private static Reply act(RealDedicatedServerHarness harness, String command) throws Exception {
+        return Reply.of(command, String.join("\n", harness.client().act(command))).requireOk(command);
     }
 }

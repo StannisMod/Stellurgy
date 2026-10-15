@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.ShipFrameCamera;
+import dev.stannismod.stellurgy.test.trace.RemoteModelWindow;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.EntityLivingBase;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.client.ShipFrameCamera;
-import dev.stannismod.stellurgy.test.trace.RemoteModelWindow;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Every model-rotation decision the client takes about a body, folded into the open window.

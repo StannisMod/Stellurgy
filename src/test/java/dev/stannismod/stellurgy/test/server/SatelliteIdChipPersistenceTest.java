@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertTrue;
 
@@ -27,14 +27,15 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class SatelliteIdChipPersistenceTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class SatelliteIdChipPersistenceTest extends AbstractMechanicsTest {
 
     /** The power this scenario stores before the restart, read back after it. Not a threshold. */
     private static final int STORED_POWER = 4000;
 
     private static final String ID = "id";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -44,7 +45,7 @@ public class SatelliteIdChipPersistenceTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-satellite-persistence-");
+        workDir = ServerRoot.fresh("forge-server-satellite-persistence-");
     }
 
     @After
@@ -55,9 +56,9 @@ public class SatelliteIdChipPersistenceTest {
 
     @Test
     public void satelliteIdSurvivesRestartOnSameWorkDir() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        String create = String.join("\n", firstBoot.client().execute(
+        String create = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest satellite create 0 composition 200 4000 2048"));
         assertTrue("satellite create failed on first boot: " + create,
                 Reply.of(create).ok());
@@ -65,7 +66,7 @@ public class SatelliteIdChipPersistenceTest {
         assertTrue("create response missing satellite id: " + create, mReply.has(ID));
         long satId = Long.parseLong(mReply.text(ID));
 
-        String preStop = String.join("\n", firstBoot.client().execute(
+        String preStop = String.join("\n", firstBoot.client().read(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("pre-stop satellite info must report composition: " + preStop,
                 "composition".equals(Reply.of(preStop).text("type")));
@@ -73,8 +74,8 @@ public class SatelliteIdChipPersistenceTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        String postBoot = String.join("\n", secondBoot.client().execute(
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
+        String postBoot = String.join("\n", secondBoot.client().read(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("satellite must survive restart and resolve by id "
                 + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));

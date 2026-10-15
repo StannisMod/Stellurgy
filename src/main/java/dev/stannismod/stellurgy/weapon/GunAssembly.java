@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.weapon;
 
+import dev.stannismod.stellurgy.api.weapon.GunSpec;
+import dev.stannismod.stellurgy.api.weapon.IGunPart;
+import dev.stannismod.stellurgy.damage.DamageState;
+import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.weapon.GunSpec;
-import dev.stannismod.stellurgy.api.weapon.IGunPart;
-import dev.stannismod.stellurgy.damage.DamageState;
-import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.projectile.Shot;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.projectile.Shot;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A thrown round paying energy, as an event: {@code shot_energy_spent}.
@@ -17,7 +16,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * tick the round paid nothing. A round only lives on the server, so the record lands in the SERVER
  * log stamped with the overworld clock — the {@code tick} a reader orders it by against
  * {@code shot_ended} ({@link MixinShotRegistryEvents}). Read by
- * {@code ShotBoresOverTimeE2ETest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
+ * {@code ShotBoresOverTimeTest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
  *
  * <p>SILENT about the final tick of a bore that stops the round outright — the substrate returns
  * before writing the residual, and the ending is {@code shot_ended}'s to say. {@code shot} is the

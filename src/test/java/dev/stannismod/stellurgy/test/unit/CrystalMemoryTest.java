@@ -1,19 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for what a memory crystal promises its owner: an address written into it stays

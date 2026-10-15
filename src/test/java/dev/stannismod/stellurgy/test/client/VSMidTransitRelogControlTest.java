@@ -1,27 +1,17 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.space.CellSeam;
+import dev.stannismod.stellurgy.space.CellWorldMapper;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-
-import dev.stannismod.stellurgy.space.CellSeam;
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
@@ -86,22 +76,31 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who relogs while his ship is in transit is re-seated on it at the far end and flies it.
      *
-     * <p>red-witnessed: the regains-control verdict, the one contract verdict the wait rewrite touched
-     * — the others it touched are arrangement reads (the ship's id, the cell entry, the transit
-     * beginning); the re-seat and placement verdicts are not witnessed. With
-     * {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the
-     * craft is in a world other than the one it was first flown in, this fails with "held input must
-     * MOVE THE ARRIVED SHIP", every one of the client's gate readings open and his inputs sent — the
-     * fault named as the computer's, not the wire's — 2026-09-28.</p>
+     * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
+    @Pins("SHIPCTL-16")
+    @LegacyWitness(prose = "the regains-control verdict, the one contract verdict the wait rewrite touched"
+            + " — the others it touched are arrangement reads (the ship's id, the cell entry, the transit"
+            + " beginning); the re-seat and placement verdicts are not witnessed. With"
+            + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the"
+            + " craft is in a world other than the one it was first flown in, this fails with \"held input must"
+            + " MOVE THE ARRIVED SHIP\", every one of the client's gate readings open and his inputs sent — the"
+            + " fault named as the computer's, not the wire's — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(LEVEL_WINDOW_TICKS);",
+            why = "a converging attitude, where nothing decides it has arrived — the hold never publishes"
+                    + " \"level\". Reading both ends lets a red say whether the hull was slewing (short window)"
+                    + " or never moved (a command accepted and not obeyed, which no window repairs). Sized from"
+                    + " the computer's own limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a"
+                    + " half-turn is about 45 ticks. Overshoot is lenient, and the gate it feeds is an"
+                    + " ARRANGEMENT, never the verdict.")
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 
         // Headless: pin ships loaded so the assembled ship survives between probe calls.
 
         // ---- ARRANGE: the transit stack over an EMPTY origin cell, then a real FLYABLE piloted
         // ship built there with the real assembler. --------------------------------------------
-        int originDim = TransitSetup.empty(this::exec).originDim;
+        int originDim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
 
         // The origin CELL is a void world, so this lift is not about escaping terrain — it is about
         // there being ONE definition of where a fixture stands, shared with every other class,
@@ -115,13 +114,12 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // would be a real risk taken for no contract.
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(originDim, 40, 40);
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleAt(
-                site, this::exec, "with-pilot-seat", 2, 16,
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16,
                 "the craft that is flown, relogged and flown again inside this cell");
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
-                + originDim + ")", waitForLoadedShip(originDim) >= 1);
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The scenario's ship, by IDENTITY, from the assembler that minted its durable name. This
         // was a bounded lookup at the build site, defended as the one place "no other craft could
@@ -131,17 +129,20 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
         // scenario's leavings.
         String durableId = ShipIdentity.nameFromAssembly(assembled);
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), originDim,
+        disposeOfShipAtEnd(durableId);
+        // Loaded in the pool cell before the transit is driven: the link is this craft's own
+        // `ship_usable`, which the await below waits on.
+        String shipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), originDim,
                 durableId, 200);
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
         // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
         // relogging pilot is sent to spawn as SHIP_UNKNOWN (measured 2026-09-05, this very class).
-        String named = exec("stellurgytest space transit-name " + originDim + " " + shipId);
+        String named = arrange("stellurgytest space transit-name " + originDim + " " + shipId).raw();
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
                 Reply.of(named).bool("afcFound") && !"".equals(Reply.of(named).text("durableId")));
 
-        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
         // A WORLD-frame pose, and everything below is built on it — the platform, and the cell the
@@ -158,17 +159,17 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // void cell he would be dead before the arrival could re-seat him. Geometry measured off
         // the ship's own world pose, not assumed.
         scenario().requireArranged("the landing platform must build: ",
-                Reply.of(exec("stellurgytest fill " + originDim + " " + (sx - 12) + " " + (sy - 8) + " " + (sz - 12)
-                        + " " + (sx + 12) + " " + (sy - 8) + " " + (sz + 12) + " minecraft:stone")
+                Reply.of(arrange("stellurgytest fill " + originDim + " " + (sx - 12) + " " + (sy - 8) + " " + (sz - 12)
+                        + " " + (sx + 12) + " " + (sy - 8) + " " + (sz + 12) + " minecraft:stone").raw()
                         ).ok());
 
-        String botName = PlayerState.botName(this::exec);
+        String botName = PlayerState.botName(c -> read(c).raw());
 
         // The CLIENT's mark BEFORE the transfer is ordered: the twenty ticks that stood here were a
         // guess at one round trip plus a world teardown, and the read below is the client's own.
         long enterMark = clientEvents().mark();
-        String enter = exec("stellurgytest space enter " + botName + " " + originDim
-                + " " + sx + " " + sy + " " + sz);
+        String enter = arrange("stellurgytest space enter " + botName + " " + originDim
+                + " " + sx + " " + sy + " " + sz).raw();
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
         awaitClientDim(enterMark, originDim,
                 "everything this scenario does next is aimed at a ship in that cell");
@@ -190,10 +191,10 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // separate "the wrong world was asked" from "it is not there at all". They now arrive in
         // the failure of the one attempt instead of being overwritten by the next.
         long seatClientMark = clientEvents().mark();
-        String mountAt = exec("stellurgytest vs seat-mount-at " + originDim
-                + " " + seatX + " " + seatY + " " + seatZ);
+        String mountAt = arrange("stellurgytest vs seat-mount-at " + originDim
+                + " " + seatX + " " + seatY + " " + seatZ).raw();
         assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-        String mount = exec("stellurgytest player mount-entity " + readInt(mountAt, "dummyId"));
+        String mount = arrange("stellurgytest player mount-entity " + readInt(mountAt, "dummyId")).raw();
         // A read of the command's own verdict, not a wait. `mounted` is missing only from the probe's
         // "entity not found" reply, which names `playerDim`, `foundInDim` and `gone` — so
         // absence is the answer: a refused mount, failing here with that reply printed.
@@ -215,7 +216,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // and a full gate dump for a live one, which is the cheapest discriminator in the tree; it is
         // read only on the failing path, so a green pays nothing for it.
         if (!bot().reportRidingEntity().get("riding").getAsBoolean()) {
-            String dummyNow = exec("stellurgytest vs deck-capture " + originDim + " " + dummyId);
+            String dummyNow = read("stellurgytest vs deck-capture " + originDim + " " + dummyId).raw();
             scenario().arrangementFailed("the bot must be seated BEFORE the jump (control) — the"
                     + " mount reported success and he is off ten ticks later. Whether the seat dummy"
                     + " (entity " + dummyId + ") still EXISTS is the difference between something"
@@ -223,7 +224,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
                     + " riding=" + bot().reportRidingEntity()
                     + " mountReply=" + mount
                     + " dummyNow=" + dummyNow
-                    + " serverSaysRiding=" + exec("stellurgytest player riding-of " + botName));
+                    + " serverSaysRiding=" + read("stellurgytest player riding-of " + botName).raw());
         }
 
         // CONTROL LEG (pre-transit): the seated pilot's REAL key must fly the ship in the origin
@@ -273,14 +274,8 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // which is exactly this craft's state.
         String poseBeforeLevel = shipInfoById(originDim, shipId);
         assertTrue("the craft must accept a level attitude command before it is flown",
-                Reply.of(exec("stellurgytest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
+                Reply.of(arrange("stellurgytest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0").raw()
                         ).bool("commanded"));
-        // WINDOW: a converging attitude, where nothing decides it has arrived — the hold never
-        // publishes "level". Reading both ends lets a red say whether the hull was slewing (short
-        // window) or never moved (a command accepted and not obeyed, which no window repairs). Sized
-        // from the computer's own limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a
-        // half-turn is about 45 ticks. Overshoot is lenient, and the gate it feeds is an ARRANGEMENT,
-        // never the verdict.
         advanceServerAndClient(LEVEL_WINDOW_TICKS);
         String poseBeforeClimb = shipInfoById(originDim, shipId);
         System.out.println("[relog] level window :: before=" + poseBeforeLevel
@@ -297,7 +292,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // (up-Y 0.9999), stationary (velY ~1e-18) and all 96 inputs received and delivered.
         assertTrue("the probe's attitude hold must be released before the pilot is asked to fly:"
                         + " it commands a zero velocity, so a craft still under it cannot climb",
-                Reply.of(exec("stellurgytest vs force-clear-by-id " + originDim + " " + shipId)
+                Reply.of(arrange("stellurgytest vs force-clear-by-id " + originDim + " " + shipId).raw()
                         ).ok());
         long clientPilotMark = clientEvents().mark();
         if (!climbedOnADose("control leg: the pilot's held vertical key must reach his flight computer"
@@ -324,17 +319,17 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // instead of racing a single-tick jump. ---------------------------------------------------
         // The mark is taken BEFORE the departure: every link of the jump, and the relog inside it,
         // is then in the log, in order.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
-        String begin = exec("stellurgytest space transit-begin " + originDim
-                + " " + ax + " " + ay + " " + az + " " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim
+                + " " + ax + " " + ay + " " + az + " " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
                 + " id a nameless fixture gets: " + begin, !"t".equals(Reply.of(begin).text("shipId")));
         // READ, not driven. This scenario's whole subject is a relog that happens WHILE the ship is
         // in transit, so a pump here would be advancing the jump towards the exit for the sake of
         // one field — and the server is advancing it on its own tick anyway.
-        String firstTick = exec("stellurgytest space transit-status");
+        String firstTick = arrange("stellurgytest space transit-status").raw();
         assertTrue("the ship must actually be IN TRANSIT when the pilot relogs — otherwise this "
                 + "pins an ordinary relog, not the mid-transit one: " + firstTick,
                 TransitStatus.of(firstTick).inTransit >= 1);
@@ -357,7 +352,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         events.assertChain(mark, "a pilot who relogged mid-transit must be re-seated on his ship ON"
                 + " ARRIVAL: the jump must pick him up, board him on the parked hull, land, put him"
                 + " back aboard and only then settle", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::exec);
+        int targetDim = arrivedTargetDim(cmd -> arrange(cmd).raw());
 
         // The CLIENT's half: the server's re-seat is a link above; whether his own client followed
         // it is read here as the LINK it is — his own `startRiding` — off the mark taken before the
@@ -400,7 +395,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // renders it, and the client's own player. A break between any two adjacent pair names the
         // hop; all four agreeing on a wrong number is a different bug from the client alone being
         // wrong, and this assertion used to report only the last of them.
-        PlayerState serverPlayer = PlayerState.read(this::exec);
+        PlayerState serverPlayer = PlayerState.read(c -> read(c).raw());
         String arrivedShip = shipInfoById(targetDim, shipId);
         double ridingY = riding.has("posY") ? riding.get("posY").getAsDouble() : Double.NaN;
         // "not loaded" rather than NaN: a ship the destination world does not hold has no altitude,
@@ -418,7 +413,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // `requireFound` and not the bare read: the three offsets below are what the arrival is
         // measured against, and an absent row answers them NaN — which casts to a long zero and
         // names the cell CENTRE, a coordinate that looks exactly like a settled pose.
-        EntryStatus ledgerRow = EntryStatus.forShip(this::exec, durableId)
+        EntryStatus ledgerRow = EntryStatus.forShip(c -> read(c).raw(), durableId)
                 .requireFound("the ship this pilot relogged aboard must be in the entry ledger before"
                         + " its settled pose can be read off the row");
         double[] settled = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
@@ -452,7 +447,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
     @After
     public void cleanup() {
         try {
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount");
         } catch (Exception ignored) {
         }
     }
@@ -518,16 +513,6 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
     private double clientPlayerY() throws Exception {
         JsonObject state = bot().reportState();
         return state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
-    }
-
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(this::exec, dim,
-                "this scenario's craft must be loaded before the transit is driven");
     }
 
     private static int readInt(String json, String key) {

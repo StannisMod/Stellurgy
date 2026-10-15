@@ -1,5 +1,18 @@
 package dev.stannismod.stellurgy.tile.station;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
+import dev.stannismod.stellurgy.network.PacketStationUpdate;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -9,19 +22,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
-import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import java.util.LinkedList;
 import java.util.List;

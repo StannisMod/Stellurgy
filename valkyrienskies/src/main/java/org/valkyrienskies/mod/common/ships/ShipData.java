@@ -98,6 +98,14 @@ public class ShipData {
      */
     private transient boolean dead;
     /**
+     * Counts block changes on this craft since the record was created. Stellurgy's flight model is
+     * derived from the hull, and it compares this against the count it was last built at to know the
+     * hull moved under it — which is cheaper than being told, and cannot be missed by a change that
+     * arrives on a path nobody subscribed to. Only CHANGE is meaningful, never the value, so a record
+     * that starts again at zero after a copy or a load is correctly read as "rebuild".
+     */
+    private transient volatile int constructionRevision;
+    /**
      * Stellurgy's DURABLE ship id for this craft, or {@code null} for a craft Stellurgy does not
      * own.
      *
@@ -217,6 +225,15 @@ public class ShipData {
     @java.lang.SuppressWarnings("all")
     public ShipInertiaData getInertiaData() {
         return this.inertiaData;
+    }
+
+    /** See {@link #constructionRevision}. */
+    public int getConstructionRevision() {
+        return constructionRevision;
+    }
+
+    void markConstructionChanged() {
+        constructionRevision++;
     }
 
     /**

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.Item;
@@ -8,7 +9,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
-import dev.stannismod.stellurgy.Stellurgy;
 
 import javax.annotation.Nonnull;
 import javax.xml.parsers.DocumentBuilder;

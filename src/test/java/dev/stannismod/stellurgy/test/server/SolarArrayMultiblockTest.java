@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -30,19 +30,21 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7500;
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
+    @Pins("INV-MBM-09")
     @Test
     public void solarArrayMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock solar-array 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock solar-array failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileSolarArray tile at controller pos: " + info,
                 "TileSolarArray", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -50,10 +52,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
                 Reply.of(tryComplete).bool("isComplete"));
     }
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
+    @Pins("INV-MBM-09")
     @Test
     public void solarArrayMultiblockInvalidatesWhenFlankingPlugRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -61,21 +65,23 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         // Replacing with stone (NOT removing the plug TE — stone doesn't match 'p',
         // so the validator fails, and the plug TE's invalidate is bypassed since
         // we never invoked try-complete first).
-        String breakPlug = join(client().execute(
+        String breakPlug = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace plug: " + breakPlug,
                 Reply.of(breakPlug).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing 'p' plug: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
     }
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
+    @Pins("INV-MBM-09")
     @Test
     public void solarArrayMultiblockInvalidatesWhenWildcardCellFilledWithStone() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -83,12 +89,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         // stone. Replace a mid-array panel with stone and the validator
         // should reject. Row z=10 (mid-array), x=1 centre — globalY = cy,
         // globalX = cx, globalZ = cz + 10.
-        String breakCell = join(client().execute(
+        String breakCell = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + cy + " " + (cz + 10) + " minecraft:stone"));
         assertTrue("could not replace panel: " + breakCell,
                 Reply.of(breakCell).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite stone in '*' wildcard cell: " + broken,
                 (!Reply.of(broken).bool("isComplete")));

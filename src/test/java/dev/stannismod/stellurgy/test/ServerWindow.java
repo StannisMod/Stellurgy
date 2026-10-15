@@ -26,8 +26,21 @@ public final class ServerWindow {
         this.handle = handle;
     }
 
-    /** Open a window of {@code windowClass} on the server, passing its factory's own arguments. */
+    /** The only package a window may come from: the test source set's own recorders. */
+    private static final String TRACE_PACKAGE = "dev.stannismod.stellurgy.test.trace.";
+
+    /**
+     * Open a window of {@code windowClass} on the server, passing its factory's own arguments.
+     *
+     * <p>Refuses a class outside {@link #TRACE_PACKAGE}: {@code invoke-static} calls whatever it is
+     * handed, so a window handle is how an e2e could otherwise reach a decision of the mod by
+     * reflection. The e2e census admits this method on that guard.</p>
+     */
     public static ServerWindow open(Probe probe, String windowClass, int... args) throws Exception {
+        if (!windowClass.startsWith(TRACE_PACKAGE)) {
+            throw new IllegalArgumentException("a server window must be a test recorder under "
+                    + TRACE_PACKAGE + ", not " + windowClass);
+        }
         StringBuilder cmd = new StringBuilder("stellurgytest invoke-static ").append(windowClass)
                 .append(" open");
         for (int a : args) {

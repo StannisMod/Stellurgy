@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.affs.network;
 
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.client.ClientForceFieldRenderCache;
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import dev.stannismod.stellurgy.affs.world.FieldSource;

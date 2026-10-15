@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.space;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Production {@link DescentController.PasteResolver}: works out where a descending ship arrives in a

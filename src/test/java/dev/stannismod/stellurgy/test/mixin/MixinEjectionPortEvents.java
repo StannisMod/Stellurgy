@@ -46,6 +46,15 @@ public abstract class MixinEjectionPortEvents {
                                                   World world, BlockPos pos, EnumFacing facing,
                                                   ItemStack stack) {
         TestTrace.instrument(world, INSTRUMENT);
+        // Described before the spawn, so the record holds the stack as the port threw it. The result is the
+        // only local of this frame after the description: it keeps a slot of its own.
+        String described = stellurgyTest$describe(item, world, pos);
+        boolean spawned = spawnWorld.spawnEntity(item);
+        TestTrace.record(world, "ejection_released", described + ",\"spawned\":" + spawned);
+        return spawned;
+    }
+
+    private static String stellurgyTest$describe(Entity item, World world, BlockPos pos) {
         String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
         StringBuilder payload = new StringBuilder()
                 .append("\"portX\":").append(pos.getX())
@@ -75,9 +84,6 @@ public abstract class MixinEjectionPortEvents {
                         .append(",\"hullOmegaZ\":").append(omega[2]);
             }
         }
-        boolean spawned = spawnWorld.spawnEntity(item);
-        payload.append(",\"spawned\":").append(spawned);
-        TestTrace.record(world, "ejection_released", payload.toString());
-        return spawned;
+        return payload.toString();
     }
 }

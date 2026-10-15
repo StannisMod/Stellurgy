@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.integration.theoneprobe;
 
-import java.util.Stack;
-
+import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
 import mcjty.theoneprobe.api.IProbeInfo;
 import mcjty.theoneprobe.api.NumberFormat;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextFormatting;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
+
+import java.util.Stack;
 
 public class TOPDataContext extends AbstractDataContext {
 

@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.weapon;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
@@ -11,11 +15,6 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 
 /**
  * A pilot names a ship as his own ship's target by looking at it.

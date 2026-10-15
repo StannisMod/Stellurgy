@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.world;
 
-import net.minecraft.world.WorldType;
-import net.minecraft.world.storage.DerivedWorldInfo;
-import net.minecraft.world.storage.WorldInfo;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.dimension.TerrainResolution;
+import net.minecraft.world.WorldType;
+import net.minecraft.world.storage.DerivedWorldInfo;
+import net.minecraft.world.storage.WorldInfo;
 
 /**
  * The {@link WorldInfo} a Stellurgy dimension publishes, replacing the plain

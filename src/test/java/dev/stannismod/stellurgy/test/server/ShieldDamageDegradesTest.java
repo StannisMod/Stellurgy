@@ -1,11 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-import java.util.List;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.Test;
+
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -45,17 +48,20 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private static final String STAGE_COST = "stageCost";
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
-     * red-witnessed: with {@code TileEntityFieldGenerator#refreshEffectiveRadius} at {@code int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);} deriving the effective radius as
-     * the declared one, this fails with "a damaged emitter must project a SMALLER field than it did
-     * pristine (4 vs 4)"; with {@code TileEntityFieldGenerator#protects} at {@code return distanceSqToCenter(target.getX() + 0.5D, target.getY() + 0.5D, target.getZ() + 0.5D) <= getFieldRadiusSq();}'s {@code protects} measured
-     * against the declared radius, it fails with "the shell drew in and the hull it uncovered is still
-     * reported as covered: {...covered:true...}"; with {@code TileEntityFieldGenerator#getShieldCycleCost} at {@code return estimateShieldCost(radius);}
-     * pricing the cycle off the effective radius, it fails with "a shrunken emitter was billed less
-     * than the field it declared (12060 -> 6780)". 2026-09-30.
+     * Pins INV-SHD-18 (a damaged emitter covers strictly less ground than the same emitter pristine).
+     * Pins INV-SHD-19 (damage never moves the declared radius nor the cycle cost).
      */
+    @Pins({"INV-SHD-18", "INV-SHD-19"})
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#refreshEffectiveRadius} at {@code int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);} deriving the effective radius as"
+            + " the declared one, this fails with \"a damaged emitter must project a SMALLER field than it did"
+            + " pristine (4 vs 4)\"; with {@code TileEntityFieldGenerator#protects} at {@code return distanceSqToCenter(target.getX() + 0.5D, target.getY() + 0.5D, target.getZ() + 0.5D) <= getFieldRadiusSq();}'s {@code protects} measured"
+            + " against the declared radius, it fails with \"the shell drew in and the hull it uncovered is still"
+            + " reported as covered: {...covered:true...}\"; with {@code TileEntityFieldGenerator#getShieldCycleCost} at {@code return estimateShieldCost(radius);}"
+            + " pricing the cycle off the effective radius, it fails with \"a shrunken emitter was billed less"
+            + " than the field it declared (12060 -> 6780)\". 2026-09-30.")
     @Test
     public void aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared() throws Exception {
         int gx = 1200, ex = 1201;
@@ -109,16 +115,18 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * emitters — each live one takes out of the blast what it protects — and the emitters' lit-ness and
      * radius are read off the same handler call that decided, so neither can drift between the two.
      *
-     * <p>red-witnessed, one inversion per line, 2026-09-30: with {@code ForceFieldExplosionHandler.java:41}
-     * (each emitter's {@code filterAffectedBlocks}) removed, this fails at "a hole left by a damaged
-     * emitter must be closed by the neighbour that still reaches it ... the blast took the block there:
-     * {...destroyed:[...,"1234,64,830",...]} | as heard: {...emitters:[{pos:1238,64,830,powered:true,
-     * radius:4},{pos:1230,64,830,powered:true,radius:3}]}"; with {@code TileEntityFieldGenerator.java:327}'s
-     * {@code protects} measured against the declared radius, it fails at "the far side, which only the
-     * damaged emitter ever reached, is still protected from a blast while that emitter is lit and
-     * shrunk ... {...destroyed:["1225,64,830"]}" — the emitter at 1230 read powered:true, radius:3 in
-     * the same handler call.</p>
+     * Pins INV-SHD-20 (a neighbour that still reaches closes a shrunken emitter's hole).
      */
+    @Pins("INV-SHD-20")
+    @LegacyWitness(prose = "one inversion per line, 2026-09-30: with {@code ForceFieldExplosionHandler.java:41}"
+            + " (each emitter's {@code filterAffectedBlocks}) removed, this fails at \"a hole left by a damaged"
+            + " emitter must be closed by the neighbour that still reaches it ... the blast took the block there:"
+            + " {...destroyed:[...,\"1234,64,830\",...]} | as heard: {...emitters:[{pos:1238,64,830,powered:true,"
+            + " radius:4},{pos:1230,64,830,powered:true,radius:3}]}\"; with {@code TileEntityFieldGenerator.java:327}'s"
+            + " {@code protects} measured against the declared radius, it fails at \"the far side, which only the"
+            + " damaged emitter ever reached, is still protected from a blast while that emitter is lit and"
+            + " shrunk ... {...destroyed:[\"1225,64,830\"]}\" — the emitter at 1230 read powered:true, radius:3 in"
+            + " the same handler call.")
     @Test
     public void aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt() throws Exception {
         // Two independent single-emitter shields eight blocks apart, so their fields just meet.
@@ -192,8 +200,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         long mark = events.markInstrumented();
         // Strength 1: enough to take the block it is centred in (dirt resists far less than one
         // ray's weakest start), and too weak to reach an emitter four blocks away.
-        Reply.of(exec("stellurgytest shield explode " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
-                + (Z + 0.5D) + " 1.0")).requireOk("set off the blast");
+        Reply.of(act("stellurgytest shield explode " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
+                + (Z + 0.5D) + " 1.0").raw()).requireOk("set off the blast");
         String at = (x + 0.5D) + "," + (Y + 0.5D) + "," + (Z + 0.5D);
         String heard = events.awaitRecordWithFields(mark, "shield_explosion_heard",
                 "the shield's explosion handler never heard the blast at " + x, 20, "at", at);
@@ -244,13 +252,15 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed, one inversion per block: {@code TileEntityShieldGenerator.java:159} returning the
-     * rated conversion fails this with "a damaged shield generator must convert less than an intact one
-     * (4000 vs 4000)"; {@code TileEntityShieldCable.java:109} returning the rated throughput fails it
-     * with "a damaged cable must carry less than an intact one (20000 vs 20000)";
-     * {@code TileEntityShieldAccumulator.java:141} returning the full capacity fails it with "a damaged
-     * accumulator must hold less than an intact one (500000 vs 500000)". 2026-09-30.
+     * Pins INV-SHD-21 (a generator, a cable and an accumulator each deliver less when damaged).
      */
+    @Pins("INV-SHD-21")
+    @LegacyWitness(prose = "one inversion per block: {@code TileEntityShieldGenerator.java:159} returning the"
+            + " rated conversion fails this with \"a damaged shield generator must convert less than an intact one"
+            + " (4000 vs 4000)\"; {@code TileEntityShieldCable.java:109} returning the rated throughput fails it"
+            + " with \"a damaged cable must carry less than an intact one (20000 vs 20000)\";"
+            + " {@code TileEntityShieldAccumulator.java:141} returning the full capacity fails it with \"a damaged"
+            + " accumulator must hold less than an intact one (500000 vs 500000)\". 2026-09-30.")
     @Test
     public void aDamagedGeneratorCableAndAccumulatorEachDeliverLess() throws Exception {
         int genX = 1260, cableX = 1268, accX = 1276;
@@ -287,10 +297,11 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * it settled at. Bounded: an emitter that never shrinks fails on the caller's assertion with the
      * numbers in hand rather than hanging here.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int shot = 0; shot < 12; shot++) {",
+            why = "every iteration IS an impact plus the feed-and-tick that lets the emitter re-read its condition"
+                    + " — all driven by the probe on the server thread, so the read that opens the next"
+                    + " iteration sees what the last one did. Bounded by shot count, never by wall clock.")
     private int shootUntilFieldShrinks(int ex, int radiusBefore) throws Exception {
-        // STIMULUS: every iteration IS an impact plus the feed-and-tick that lets the emitter re-read
-        // its condition — all driven by the probe on the server thread, so the read that opens the
-        // next iteration sees what the last one did. Bounded by shot count, never by wall clock.
         for (int shot = 0; shot < 12; shot++) {
             int radius = (int) readInt(RADIUS, readShield(ex));
             if (radius < radiusBefore) {
@@ -311,17 +322,18 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
             // The FEED is the point — an emitter left to drain goes dark on a slow loop, and this
             // test then fails about power while claiming to be about radius (seen under parallel load
             // 2026-08-17, green serially).
-            exec("stellurgytest energy inject " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 8000");
-            exec("stellurgytest tile force-tick " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 1");
-            exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 2");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 8000").raw();
+            act("stellurgytest tile force-tick " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 1");
+            act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 2");
+            act("stellurgytest shield tick " + DIM);
         }
         return (int) readInt(RADIUS, readShield(ex));
     }
 
     /** Shoot a block until the world records a stage against it. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int shot = 0; shot < 12; shot++) {",
+            why = "each iteration is one synchronous impact; the stage it wrote is read at once.")
     private void shootUntilStaged(int x) throws Exception {
-        // STIMULUS: each iteration is one synchronous impact; the stage it wrote is read at once.
         for (int shot = 0; shot < 12; shot++) {
             // the producer always writes `stage` on a `damage stage` reply, so refusing on a missing
             // one is the right failure.
@@ -359,8 +371,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      */
     private void hit(int x) throws Exception {
         int budget = (int) Math.ceil(readInt(STAGE_COST, readStage(x)) * STAGES_PER_IMPACT);
-        String resp = exec("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
-                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + nextImpactId());
+        String resp = act("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
+                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + nextImpactId()).raw();
         Reply.of(resp).requireOk("declare the impact");
         assertTrue("the impact spent nothing — it is not reaching the block, and every assertion"
                 + " after this would be about an undamaged one: " + resp,
@@ -370,12 +382,14 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     /** Feed the generator until its emitter lights up. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 16 &&"
+            + " !Reply.of(readShield(ex)).bool(\"powered\"); i++) {",
+            why = "each iteration is a feed plus one probe-driven solve pass.")
     private void powerUp(int gx, int ex) throws Exception {
-        // STIMULUS: each iteration is a feed plus one probe-driven solve pass.
         for (int i = 0; i < 16 && !Reply.of(readShield(ex)).bool("powered"); i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
         assertTrue("precondition: the shield at " + ex + " never powered up:\n" + readShield(ex),
                 Reply.of(readShield(ex)).bool("powered"));
@@ -387,9 +401,9 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      */
     private void requireLit(int ex) throws Exception {
         long max = readInt("shieldMax", readShield(ex));
-        Reply.of(exec("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + Z + " " + max))
+        Reply.of(arrange("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + Z + " " + max).raw())
                 .requireOk("fill the emitter's coil");
-        Reply.of(exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 1"))
+        Reply.of(act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 1").raw())
                 .requireOk("tick the emitter so it re-reads whether it is lit");
         String now = readShield(ex);
         requireArranged("the emitter at " + ex + " is dark with a full coil, so no coverage reading"
@@ -397,17 +411,17 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     private void clearSite(int minX, int maxX) throws Exception {
-        Reply.of(exec("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
-                + (maxX >> 4) + " " + ((Z + 8) >> 4))).requireOk("warm the site's chunks");
+        Reply.of(arrange("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
+                + (maxX >> 4) + " " + ((Z + 8) >> 4)).raw()).requireOk("warm the site's chunks");
         // A lid first, then the clearing under it: the site lies under sand, and a cleared column with
         // sand above it fills again before the first shot (measured 2026-10-03: a sand block at
         // 1268,64,828, two blocks in front of the cable, stopped every round aimed at it). Until
         // kinetic rounds too poor for a stage were stopped by what they met, they passed through
         // that sand unseen.
-        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y + 7) + " " + (Z - 6) + " " + maxX
-                + " " + (Y + 7) + " " + (Z + 6) + " minecraft:stone")).requireOk("roof the site");
-        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
-                + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air")).requireOk("clear the site");
+        Reply.of(arrange("stellurgytest fill " + DIM + " " + minX + " " + (Y + 7) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 7) + " " + (Z + 6) + " minecraft:stone").raw()).requireOk("roof the site");
+        Reply.of(arrange("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air").raw()).requireOk("clear the site");
     }
 
     // ---- reading the world
@@ -418,19 +432,19 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     private String readZone(int x) throws Exception {
-        return exec("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private String readShield(int x) throws Exception {
-        return exec("stellurgytest shield read " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest shield read " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private String readStage(int x) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private void place(String block, int x) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + Z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

@@ -1,18 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -77,22 +68,29 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
     private static final int TOUCH_TICKS = 100;
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);",
+            why = "the subject's position was read aboard (`before`) and is read again after this stretch of the"
+                    + " hull rotating; the verdict is the horizontal distance between the two, and its message"
+                    + " names both. The bar is an UPPER bound, so overshoot gives the hull longer to throw the"
+                    + " body and can only turn a green red.")
     public void aBodyLeftBehindByAJumpingShipIsNotThrownByIt() throws Exception {
 
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
+        long buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft that jumps away from the body");
+        builtShip = birth.physicsId;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
-        // THIS ship, by the name the assembler minted for it — then the physics id it maps to. The
-        // build site is in a world this class shares with its siblings, so a lookup there answers
-        // with a neighbour's craft in exactly the same shape as with this one.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        // THIS ship, by the name the assembler minted for it — then the physics id it maps to, once
+        // its own announcement says it is usable.
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
         // The ship is loaded before its world transform has propagated, so "is a ship here yet?" is a
         // POLL, not a question with an answer the moment the count goes up.
@@ -106,10 +104,8 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // the check was never unsatisfied. And the comment above it claimed the poll was waiting for
         // "the world transform to propagate"; the condition never tested that — it tested whether
         // the ship could be resolved at all, which is what the message now says.
-        String info = exec("stellurgytest vs ship-info 0 id " + shipId);
-        assertTrue("VS could not resolve a state for this ship at its own build site: " + info
-                + " countAll=" + exec("stellurgytest vs ship-count-all 0")
-                + " loaded=" + exec("stellurgytest vs ship-count 0"),
+        String info = read("stellurgytest vs ship-info 0 id " + shipId).raw();
+        assertTrue("VS could not resolve a state for this ship at its own build site: " + info,
                 ShipInfo.isLoaded(info));
         ShipInfo atBuildSite = ShipInfo.of(info);
         double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
@@ -119,7 +115,7 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // Marked before the drop: the association is formed on one of the ticks the item spends
         // falling, and a mark taken after it would be waiting for the body to touch a second ship.
         long touchMark = events.mark();
-        String dropped = exec("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
+        String dropped = arrange("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz).raw();
         int subjectId = extractInt(dropped, "entityId");
         assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
 
@@ -137,7 +133,7 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // The reference position is still READ, not taken from the record: it is where the body
         // stands once it is aboard, which is what the drift below is measured against, and it is
         // the same reading the assertion at the hazard makes.
-        String touch = exec("stellurgytest vs player-ship-data 0 " + subjectId);
+        String touch = read("stellurgytest vs player-ship-data 0 " + subjectId).raw();
         double beforeX = extractDouble(touch, "playerX");
         double beforeZ = extractDouble(touch, "playerZ");
 
@@ -145,22 +141,22 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // would leave the window before the measurement is taken.
         // Sized against the probe's own 32 768-block fill cap, and centred on the SUBJECT rather than
         // on the build site: what has to stay empty is the shaft the subject falls down, not the pad.
-        String column = exec("stellurgytest fill 0 " + ((int) beforeX - 4) + " " + (SRC_Y - 40) + " "
+        String column = arrange("stellurgytest fill 0 " + ((int) beforeX - 4) + " " + (SRC_Y - 40) + " "
                 + ((int) beforeZ - 4) + " " + ((int) beforeX + 4) + " " + (SRC_Y + 12) + " "
-                + ((int) beforeZ + 4) + " minecraft:air");
+                + ((int) beforeZ + 4) + " minecraft:air").raw();
         assertTrue("the subject's fall shaft was not cleared, so it would land and release the ship"
                 + " before being measured: " + column, Reply.of(column).ok());
 
         // The jump: the production rigid relocation, aimed sideways so the lever arm is horizontal.
-        String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + ((int) sx + JUMP_DX) + " " + (int) sy + " " + (int) sz);
+        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
+                + ((int) sx + JUMP_DX) + " " + (int) sy + " " + (int) sz).raw();
         assertTrue("the jump failed: " + tp, Reply.of(tp).ok());
         // CONTROL 4, taken BEFORE the hazard rather than after it: the subject must still be
         // associated with the ship at the moment the rotation starts. Every probe call costs the
         // server several ticks, and the association only lives 20 of them — a run that spent them on
         // its own setup would introduce the hazard to a body the substrate had already let go, and
         // report a green that means "too slow", not "correct".
-        String atHazard = exec("stellurgytest vs player-ship-data 0 " + subjectId);
+        String atHazard = read("stellurgytest vs player-ship-data 0 " + subjectId).raw();
         int sinceAtHazard = extractInt(atHazard, "ticksSinceTouchedShip");
         assertTrue("sensitivity control — the subject was released by the ship before the rotation"
                 + " even began, so the defect had no path to it: sinceTouched=" + sinceAtHazard
@@ -171,20 +167,16 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
         // back to zero on every unmanned tick, so a one-shot spin is gone before it can be measured
         // (observed: omega read 0.000 on all ten ticks of a re-applied 0.5 rad/s spin). A commanded
         // rotation is held by the same controller instead of fought by it.
-        String rot = exec("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0");
+        String rot = arrange("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0").raw();
         assertTrue("the departed hull could not be commanded to rotate: " + rot,
                 Reply.of(rot).bool("afcResolved"));
 
-        // WINDOW: the subject's position was read aboard (`before`) and is read again after this
-        // stretch of the hull rotating; the verdict is the horizontal distance between the two, and
-        // its message names both. The bar is an UPPER bound, so overshoot gives the hull longer to
-        // throw the body and can only turn a green red.
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
         // One reading at the end is enough for the verdict: a fling is a DISPLACEMENT, and a body
         // that has been thrown does not come back.
-        String after = exec("stellurgytest vs player-ship-data 0 " + subjectId);
-        ShipInfo lastShip = ShipInfo.byId(this::exec, 0, shipId);
+        String after = read("stellurgytest vs player-ship-data 0 " + subjectId).raw();
+        ShipInfo lastShip = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double drift = Math.hypot(extractDouble(after, "playerX") - beforeX,
                 extractDouble(after, "playerZ") - beforeZ);
         double omega = lastShip.omega;
@@ -209,21 +201,23 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
                 drift <= ALLOWED_HORIZONTAL_DRIFT);
     }
 
+    /** The physics id of the craft this scenario built; the jump is a rigid move that keeps it. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
 
-    // --- helpers (mirror VSShipDescentTest) ------------------------------------------------------
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
 
     /**
@@ -239,10 +233,9 @@ public class VSJumpingShipDoesNotFlingBystandersTest extends AbstractSharedServe
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

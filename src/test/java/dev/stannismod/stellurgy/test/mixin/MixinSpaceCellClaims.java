@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.Map;
-
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.SpaceManager;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -9,9 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.Map;
 
 /**
  * Every CLAIM taken on a cell and every one given back, as events.

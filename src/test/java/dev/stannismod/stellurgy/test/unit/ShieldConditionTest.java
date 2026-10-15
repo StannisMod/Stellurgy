@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -79,7 +80,11 @@ public class ShieldConditionTest {
                 oneStageOfFour < declared);
     }
 
-    /** It shrinks; it does not switch off. Losing the field entirely is what destruction is for. */
+    /**
+     * It shrinks; it does not switch off. Losing the field entirely is what destruction is for.
+     * Pins INV-SHD-22 (a standing emitter still projects something and a mended one its whole field).
+     */
+    @Pins("INV-SHD-22")
     @Test
     public void aStandingEmitterAlwaysProjectsSomething() {
         for (int declared = 1; declared <= 16; declared++) {
@@ -91,7 +96,11 @@ public class ShieldConditionTest {
         }
     }
 
-    /** Repair is a re-read, so the same declared radius and no damage gives the field back whole. */
+    /**
+     * Repair is a re-read, so the same declared radius and no damage gives the field back whole.
+     * Pins INV-SHD-22 (a standing emitter still projects something and a mended one its whole field).
+     */
+    @Pins("INV-SHD-22")
     @Test
     public void repairRestoresTheWholeFieldBecauseNothingIsAccumulated() {
         int declared = 10;

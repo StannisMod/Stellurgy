@@ -1,13 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.github.stannismod.forge.testing.TestArtefacts;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.client.render.planet.ApparentSize;
-import dev.stannismod.stellurgy.test.NebulaSearch;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.SkyNebulae;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.CellInfo;
-import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.*;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -15,10 +11,8 @@ import org.junit.runners.MethodSorters;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -117,7 +111,7 @@ import static org.junit.Assert.assertTrue;
  * through the identical production broadcast — so the rendering path under test is the real one.
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETest {
+public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {
@@ -142,7 +136,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
      */
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     /** The slot the settle actually bound the cell to — the one place that decides it. */
@@ -305,26 +299,29 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
     /** Capture altitude inside the slot cell (well clear of the void-death floor). */
     private static final int CELL_CAPTURE_Y = 200;
 
-    private Path outDir;
+    /** The folder under {@code build/} the captured frames are kept in, for a reader of a red. */
+    private static final String SCREENSHOTS = "test-screenshots";
+
     private String botName;
+
+    /** Where the kept frame {@code name} is, for a failure message. */
+    private static Path kept(String name) {
+        return TestArtefacts.where(SCREENSHOTS, name);
+    }
 
     @Test
     public void aPilotInASlotCellSeesTheBodiesAndStars() throws Exception {
-        outDir = Paths.get(System.getProperty("forge.test.client.screenshotDir", "build/test-screenshots"))
-                .toAbsolutePath();
-        Files.createDirectories(outDir);
-
         // Command feedback must not reach the player's chat overlay: a chat line appearing between two
         // captures would be a difference this test did not cause.
-        exec("gamerule sendCommandFeedback false");
-        exec("gamerule logAdminCommands false");
+        arrange("gamerule sendCommandFeedback false").raw();
+        arrange("gamerule logAdminCommands false");
         // Pin the sky: the fog clear colour is fogColor * sunBrightness, so a drifting clock would move
         // the background under the measurements.
-        exec("gamerule doDaylightCycle false");
-        exec("weather clear");
-        exec("time set 6000");
+        arrange("gamerule doDaylightCycle false").raw();
+        arrange("weather clear");
+        arrange("time set 6000");
 
-        botName = PlayerState.botName(this::exec);
+        botName = PlayerState.botName(c -> read(c).raw());
 
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         int previousRenderDistance = rd.get("previous").getAsInt();
@@ -377,22 +374,22 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
                     + " sky at altitude " + OVERWORLD_CAPTURE_Y + " must be a starfield, but only " + owSky
                     + "px differ from the background " + rgb(owBackground) + " " + describe(overworldZenith)
                     + ". Nothing below this line could mean anything. renderDistance=" + rd
-                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
+                    + " (" + kept("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
 
             // Arrange the space stack, then settle a ship in the cell. The settle MATERIALIZES the cell,
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
             // with it and the pilot is put into it.
-            String setup = exec("stellurgytest space entry-setup 1");
+            String setup = arrange("stellurgytest space entry-setup 1").raw();
             assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
             cell = findEmptyCell();
-            String settle = exec("stellurgytest space ledger-settle " + cell + " 0");
+            String settle = arrange("stellurgytest space ledger-settle " + cell + " 0").raw();
             assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle, boundMReply.has(BOUND_DIM));
             slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // Night, so the cell's fog clear is dark and a white starfield can be seen against it.
-            exec("time set 18000");
+            arrange("time set 18000").raw();
 
             // ONE mark for this cell, taken BEFORE the transfer: the arrival and every sky frame are
             // read from it. It has to precede the transfer for a second reason — the renderer records
@@ -457,8 +454,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
                 // The radius is stated, not implied: since 2026-08-16 the sky sizes a body by the
                 // ANGLE it subtends, so a fixture that named no radius would draw six identical
                 // markers and the size legs below would be measuring nothing.
-                String poi = exec("stellurgytest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
-                        + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]);
+                String poi = arrange("stellurgytest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
+                        + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]).raw();
                 assertTrue("add-poi must register the body: " + poi, Reply.of(poi).ok());
             }
 
@@ -482,7 +479,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
 
             // Cross-side oracle: the SERVER's own feed, for this slot dim, carries exactly these bodies
             // on exactly these bearings. Everything below aims with the server's numbers.
-            String feed = exec("stellurgytest space bodies");
+            String feed = read("stellurgytest space bodies").raw();
             assertEquals("the server feed must carry the whole system for this slot dim: " + feed,
                     cellBodies.length, feedBodyCount(feed, slotDim));
             for (int i = 0; i < cellBodies.length; i++) {
@@ -571,8 +568,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
                         + Math.round(distanceOf(NEAREST)) + " blocks)=" + nearArea + "px far("
                         + Math.round(distanceOf(FARTHEST)) + " blocks)=" + farArea + "px in a "
                         + (2 * sizeBox) + "px box ("
-                        + outDir.resolve("after_body" + NEAREST + ".png") + " vs "
-                        + outDir.resolve("after_body" + FARTHEST + ".png") + ")",
+                        + kept("after_body" + NEAREST + ".png") + " vs "
+                        + kept("after_body" + FARTHEST + ".png") + ")",
                 nearArea > farArea);
 
         // ------------------------------------------------- Leg 3: the empty bearing gains nothing.
@@ -585,8 +582,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
         double emptyFrame = diffFraction(emptyBefore, emptyAfter, 0, w, 0, (int) (0.62 * h));
         assertTrue("a bearing with no body within 100 degrees must not gain one; centre="
                 + pct(emptyCentre) + " frame=" + pct(emptyFrame)
-                + " (" + outDir.resolve("before_empty.png") + " vs "
-                + outDir.resolve("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
+                + " (" + kept("before_empty.png") + " vs "
+                + kept("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
 
         // ------------------------------------------------------------------------ Leg 4: the starfield.
         // The empty-bearing frame holds no body and nothing else is drawn in a cell sky, so anything
@@ -596,7 +593,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
         long stars = differsCount(emptyAfter, 0, w, 0, starTop, starBackground);
         assertTrue("an orbit cell must not be an empty void - the sky must carry stars; differing="
                 + stars + "px against background " + rgb(starBackground) + " " + describe(emptyAfter)
-                + " (" + outDir.resolve("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
+                + " (" + kept("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
 
         // ------------------------------------------ Leg 5: every body says what it is - the sky
         // writes each body's name and its distance under the billboard, one label per body, on by
@@ -664,23 +661,23 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
         int previousRenderDistance = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
-        botName = PlayerState.botName(this::exec);
+        botName = PlayerState.botName(c -> read(c).raw());
         try {
-            String setup = exec("stellurgytest space entry-setup 1");
+            String setup = arrange("stellurgytest space entry-setup 1").raw();
             assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
 
             // A universe with clusters in it. Without <galaxyGen> a world has no galaxies, hence no
             // clusters, hence no gas — and an empty sky would be honest for the wrong reason.
-            String gen = exec("stellurgytest space gen-install 0.9 8");
+            String gen = arrange("stellurgytest space gen-install 0.9 8").raw();
             assertTrue("the procedural generator must install: " + gen, Reply.of(gen).ok());
 
             // The reader refuses a walk that found nothing, and refuses to answer a sector for one
             // — which is what the two checks this replaces each stood for.
-            NebulaSearch found = NebulaSearch.walk(this::exec, 512, 64)
+            NebulaSearch found = NebulaSearch.walk(c -> read(c).raw(), 512, 64)
                     .requireFound("the generator must be able to name a cell with a cloud in reach");
             String cloudCell = found.sectorX() + " 0 0";
 
-            String settle = exec("stellurgytest space ledger-settle " + cloudCell + " 0");
+            String settle = arrange("stellurgytest space ledger-settle " + cloudCell + " 0").raw();
             assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle,
@@ -688,12 +685,12 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
             int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // The server's own answer for that cell, as the cross-side oracle: what it will send.
-            SkyNebulae feed = SkyNebulae.at(this::exec, found.sectorX(), 0, 0);
+            SkyNebulae feed = SkyNebulae.at(c -> read(c).raw(), found.sectorX(), 0, 0);
             int serverClouds = feed.drawn;
             assertTrue("the cell the finder chose must actually have a cloud in its sky: "
                     + feed.raw(), serverClouds >= 1);
 
-            exec("time set 18000");
+            arrange("time set 18000");
             long cloudMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
             ClientEvents.awaitDim(clientEvents(), cloudMark, slotDim,
@@ -734,7 +731,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
                     SKY_FRAME_BUDGET_TICKS);
         } finally {
             try {
-                exec("stellurgytest space gen-reset");
+                arrange("stellurgytest space gen-reset");
             } catch (Exception ignored) {
                 // the generator is a JVM global: a shared client run must not inherit this one
             }
@@ -762,7 +759,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
     private String findEmptyCell() throws Exception {
         StringBuilder tried = new StringBuilder();
         for (long sy = 4096L; sy > 0L && sy <= Integer.MAX_VALUE; sy *= 2L) {
-            CellInfo info = CellInfo.atSector(this::exec, 0L, sy, 0L);
+            CellInfo info = CellInfo.atSector(c -> read(c).raw(), 0L, sy, 0L);
             assertEquals("cell-info must answer about the very cell it was asked about, or the sector"
                             + " overflowed the probe's int parse and it silently answered about the"
                             + " origin: " + info.raw(),
@@ -901,8 +898,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
         long minBillboard = Math.round(0.25 * Math.PI * Math.pow(discRadius * h, 2));
         assertTrue("registering the cell's bodies must change what the client draws towards " + where
                 + "; changed=" + appeared + "px, required>=" + minBillboard + " ("
-                + outDir.resolve("before_body" + index + ".png") + " vs "
-                + outDir.resolve("after_body" + index + ".png") + ")", appeared >= minBillboard);
+                + kept("before_body" + index + ".png") + " vs "
+                + kept("after_body" + index + ".png") + ")", appeared >= minBillboard);
 
         int box = (int) (sampleRadius * h);
         double centreChanged = diffFraction(beforeFrame, afterFrame,
@@ -986,7 +983,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
 
     /** Put the player at a known altitude in {@code dim} through the production transfer path. */
     private void seat(int dim, int y) throws Exception {
-        String enter = exec("stellurgytest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5");
+        String enter = arrange("stellurgytest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5").raw();
         assertTrue("space enter must succeed: " + enter, Reply.of(enter).ok());
     }
 
@@ -1072,8 +1069,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         assertTrue("screenshot must come from the framebuffer, not an undefined back buffer: " + shot,
                 shot.get("framebuffer").getAsBoolean());
-        Path dst = outDir.resolve(name + ".png");
-        Files.copy(Paths.get(shot.get("path").getAsString()), dst, StandardCopyOption.REPLACE_EXISTING);
+        Path dst = TestArtefacts.keepCopy(SCREENSHOTS, name + ".png", Paths.get(shot.get("path").getAsString()));
         BufferedImage image = ImageIO.read(new File(dst.toString()));
         assertTrue("screenshot must decode: " + dst, image != null);
         return image;

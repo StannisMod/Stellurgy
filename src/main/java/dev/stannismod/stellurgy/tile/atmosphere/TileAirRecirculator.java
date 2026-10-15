@@ -1,16 +1,16 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -85,7 +85,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
 
     @Override
     public boolean canPerformFunction() {
-        if (world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world.isRemote)
             return false;
         if (++ticksSinceOperation < 20)
             return false;

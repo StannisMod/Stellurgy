@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.client.render.multiblocks;
 
+import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.client.render.RenderLaser;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.tile.multiblock.TileSpaceElevator;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
@@ -10,12 +16,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.client.render.RenderLaser;
-import dev.stannismod.stellurgy.tile.multiblock.TileSpaceElevator;
-import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RendererSpaceElevator extends TileEntitySpecialRenderer {
 

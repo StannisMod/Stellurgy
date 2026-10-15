@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.integration.jei.asteroids;
 
-import mezz.jei.api.IJeiHelpers;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.XMLAsteroidLoader;
+import mezz.jei.api.IJeiHelpers;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Loader;
 
 import java.io.File;
 import java.util.*;

@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test;
 
+import java.util.List;
+
 /**
- * One reading of {@code stellurgytest mission complete-now <missionId>} — what a mission's completion did,
- * and what the returning rocket carries.
- *
- * <p>Measured 2026-09-17: five classes read this reply and spell nine of its field names between
- * them, including the substring pair {@code contains("\"rocketCount\":") && !contains(
- * "\"rocketCount\":0")}, which is "a positive count" written as two string tests.</p>
+ * One completion of a resource mission, driven by {@code stellurgytest mission complete-now <missionId>} —
+ * what the completion did, which rockets it returned, and what the returned rocket carries.
  *
  * <h2>{@code completed} is the EDGE, and the two flags either side of it are not it</h2>
  *
@@ -15,21 +13,15 @@ package dev.stannismod.stellurgy.test;
  * mission already finished before the call answers {@code isDeadAfter:true} and completed nothing,
  * so a caller reading the end state as the event sees a success for a call that did nothing.</p>
  *
- * <h2>The cargo is counted at the LAUNCH pad, and it can fail on its own</h2>
+ * <h2>The returned rocket is named by the completion's own record</h2>
  *
- * <p>{@link #rocketCount} and the entry counts come from a box scan around the mission's launch
- * coordinates, taken inside the same call so the registry's prune cannot race it. That scan has its
- * own failure — a launch dimension that is not loaded answers every count as zero and says so in
- * {@code cargoError} — which is why {@link #requireCargoScanned} exists: three zeros from an
- * unloaded world read exactly like a rocket that came back empty.</p>
+ * <p>A completion that returns a craft writes a {@code rocket_born} record carrying the mission's id;
+ * those records, written inside the call, are the rockets it returned, and their number is how many.
+ * Nothing looks for a rocket near the launch site or of a class. The cargo is then read off the ONE
+ * returned rocket by its entity id ({@code mission rocket-cargo}). Every returned rocket is handed to
+ * the scenario's {@link ScenarioRockets} for disposal.</p>
  */
 public final class MissionCompletion {
-
-    /** How this reader reaches the probe. */
-    @FunctionalInterface
-    public interface Probe {
-        String exec(String command) throws Exception;
-    }
 
     /** The mission this reading is about, as the reply echoed it back. */
     public final long missionId;
@@ -40,107 +32,140 @@ public final class MissionCompletion {
     public final boolean completed;
     /** Where the mission was launched from. */
     public final int launchDim;
-    /** How many craft the launch-pad scan found, and how much cargo they carry. */
-    public final int rocketCount;
-    public final int fluidEntries;
-    public final int itemEntries;
-    /** How many infrastructure tiles the returning craft still considers linked. */
-    public final int infraEntries;
 
     private final Reply reply;
     private final String raw;
+    /** The {@code rocket_born} records this completion wrote. */
+    private final List<String> returned;
+    /** {@code mission rocket-cargo} of the one returned rocket; null unless exactly one was returned. */
+    private final Reply cargo;
 
-    private MissionCompletion(Reply reply, String raw) {
+    private MissionCompletion(Reply reply, String raw, List<String> returned, Reply cargo) {
         this.reply = reply;
         this.raw = raw;
+        this.returned = returned;
+        this.cargo = cargo;
         this.missionId = (long) reply.number("missionId");
         this.wasDeadBefore = reply.bool("wasDeadBefore");
         this.isDeadAfter = reply.bool("isDeadAfter");
         this.completed = reply.bool("completed");
         this.launchDim = reply.integer("launchDim");
-        this.rocketCount = reply.integer("rocketCount");
-        this.fluidEntries = reply.integer("fluidEntries");
-        this.itemEntries = reply.integer("itemEntries");
-        this.infraEntries = reply.integer("infraEntries");
     }
 
     /**
-     * Read one {@code complete-now} reply, or refuse.
+     * Finish one mission now, and read what that did. {@code complete-now} decides the outcome, so it is
+     * sent as an arrangement; the cargo read is a read.
      *
-     * <p>Refuses the verb's two error shapes — a mission id nothing answers to, and a mission
-     * dimension that is not loaded. Neither carries a completion or a cargo count, so every number
-     * below would read as a zero about a mission that was never ticked.</p>
+     * <p>Refuses the verb's two error shapes — a mission id nothing answers to, and a mission dimension
+     * that is not loaded. Neither carries a completion.</p>
      */
-    public static MissionCompletion of(String completionReply) {
-        String text = String.valueOf(completionReply);
-        Reply reply = Reply.of("stellurgytest mission complete-now", text);
+    public static MissionCompletion now(ServerCommands commands, ScenarioRockets rockets, long missionId)
+            throws Exception {
+        String command = "stellurgytest mission complete-now " + missionId;
+        long mark = rockets.mark();
+        String text = String.valueOf(commands.arrange(command).raw());
+        List<String> returned = rockets.returnedByMission(mark, missionId);
+        Reply reply = Reply.of(command, text);
         if (reply.has("error")) {
             ArrangementFailure.arrangementFailed("`stellurgytest mission complete-now` completed nothing ("
-                    + reply.text("error") + "), so the counts this reading is about belong to no"
+                    + reply.text("error") + "), so what this reading is about belongs to no"
                     + " mission: " + text);
         }
         if (!reply.has("completed")) {
             throw new AssertionError("this is not an `stellurgytest mission complete-now` answer: it"
                     + " carries no `completed`, so nothing in it says a mission ended: " + text);
         }
-        return new MissionCompletion(reply, text);
+        Reply cargo = null;
+        if (returned.size() == 1) {
+            String read = "stellurgytest mission rocket-cargo " + (int) Events.number(returned.get(0), "e");
+            cargo = commands.read(read);
+        }
+        return new MissionCompletion(reply, text, returned, cargo);
     }
 
-    /** Finish one mission now, and read what that did. */
-    public static MissionCompletion now(Probe probe, long missionId) throws Exception {
-        return of(probe.exec("stellurgytest mission complete-now " + missionId));
+    /** How many rockets this completion returned: its {@code rocket_born} records. */
+    public int returnedRocketCount() {
+        return returned.size();
     }
 
     /**
-     * This reading, refusing when the launch-pad scan could not run.
-     *
-     * <p>A caller about to assert on cargo asks for this first: an unloaded launch dimension answers
-     * every count as zero, which is what an empty rocket looks like.</p>
+     * This reading, refusing unless the completion returned exactly one rocket that the server holds and
+     * whose cargo could be read — so a cargo assertion below is about that rocket and nothing else.
      */
-    public MissionCompletion requireCargoScanned(String what) {
-        // absence is the answer: the field exists only when the scan FAILED, so no field means
-        // the scan ran — which is exactly what this verb is asking.
-        String cargoError = reply.textOr("cargoError", null);
-        if (cargoError != null) {
-            ArrangementFailure.arrangementFailed(what + " — the launch-pad cargo scan did not run ("
-                    + cargoError + "), so its zeros are about the scan and not about the craft: "
-                    + raw);
+    public MissionCompletion requireCargo(String what) {
+        if (cargo == null) {
+            throw new AssertionError(what + " — mission " + missionId + "'s completion returned "
+                    + returned.size() + " rocket(s), not one, so there is no single craft whose cargo"
+                    + " this is: " + returned + "; completion " + raw);
+        }
+        if (!cargo.ok() || !cargo.bool("found")) {
+            throw new AssertionError(what + " — the server does not hold the rocket the completion"
+                    + " returned (" + returned + "), so its cargo cannot be read: " + cargo);
+        }
+        String infraError = cargo.textOr("infraError", null);
+        if (infraError != null) {
+            ArrangementFailure.arrangementFailed(what + " — the returned rocket's linked infrastructure"
+                    + " could not be read (" + infraError + "): " + cargo);
         }
         return this;
     }
 
+    /** The returned rocket's class, as the server names it. */
+    public String returnedClass() {
+        requireCargo("the returned rocket's class");
+        return cargo.text("cls");
+    }
+
+    /** How many non-empty tanks the returned rocket carries. */
+    public int fluidEntries() {
+        requireCargo("the returned rocket's tanks");
+        return cargo.integer("fluidEntries");
+    }
+
+    /** How many non-empty inventory slots the returned rocket carries. */
+    public int itemEntries() {
+        requireCargo("the returned rocket's inventory");
+        return cargo.integer("itemEntries");
+    }
+
+    /** The infrastructure tiles the returned rocket considers linked, as block positions. */
+    public int[][] infrastructure() {
+        requireCargo("the returned rocket's linked infrastructure");
+        return cargo.blockPosArrayOrEmpty("infrastructure");
+    }
+
     /**
-     * The registry names of every item the launch-pad craft carry, in the order the scan found them.
+     * The registry names of every item the returned rocket carries, in the order the read found them.
      *
      * <p>Asked of the {@code items} array rather than of the reply: a {@code contains} for an item
      * id over the whole answer is satisfied by any string in it — an id in the {@code fluids} list,
      * or one the probe happened to mention in an error — and reads as cargo either way.</p>
      */
     public String[] itemIds() {
-        String[] items = reply.objectArray("items");
+        requireCargo("the returned rocket's items");
+        String[] items = cargo.objectArray("items");
         String[] ids = new String[items.length];
         for (int i = 0; i < items.length; i++) {
-            ids[i] = Reply.of("stellurgytest mission complete-now item", items[i]).text("id");
+            ids[i] = Reply.of("stellurgytest mission rocket-cargo item", items[i]).text("id");
         }
         return ids;
     }
 
     /**
-     * How much of fluid {@code type} the returning craft carry, summed across their tanks, or
-     * {@code 0} when they carry none of it.
+     * How much of fluid {@code type} the returned rocket carries, summed across its tanks, or
+     * {@code 0} when it carries none of it.
      *
      * <p>Asked of the {@code fluids} array, in which each entry is a {@code type} with its own
-     * {@code amount}: the pair of substrings this replaces could be satisfied by two DIFFERENT
-     * entries — one naming the fluid, another carrying the number — which reads as a full tank of
-     * something the craft never collected.</p>
+     * {@code amount}: a pair of substrings could be satisfied by two DIFFERENT entries — one naming the
+     * fluid, another carrying the number — which reads as a full tank of something never collected.</p>
      */
     public int fluidAmount(String type) {
+        requireCargo("the returned rocket's " + type);
         int total = 0;
-        for (String entry : reply.objectArray("fluids")) {
-            Reply fluid = Reply.of("stellurgytest mission complete-now fluid", entry);
+        for (String entry : cargo.objectArray("fluids")) {
+            Reply fluid = Reply.of("stellurgytest mission rocket-cargo fluid", entry);
             // the producer always writes `type` beside the amount: an entry is built as one pair
-            // and a tank with no fluid is skipped before it is appended at all. An entry without
-            // it would be a broken probe, not a fluid this craft failed to collect.
+            // and a tank with no fluid is skipped before it is appended at all.
             if (type.equals(fluid.text("type"))) {
                 total += fluid.integer("amount");
             }
@@ -148,7 +173,7 @@ public final class MissionCompletion {
         return total;
     }
 
-    /** Whether the returning craft carry at least one stack of {@code registryName}. */
+    /** Whether the returned rocket carries at least one stack of {@code registryName}. */
     public boolean carriesItem(String registryName) {
         for (String id : itemIds()) {
             if (id.equals(registryName)) {
@@ -158,18 +183,14 @@ public final class MissionCompletion {
         return false;
     }
 
-    /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */
+    /** The completion reply exactly as the probe sent it, with the cargo read beside it. */
     public String raw() {
-        return raw;
+        return raw + (cargo == null ? "" : " cargo " + cargo.raw()) + " returned " + returned;
     }
 
     /**
      * Whether the verb THREW, and with what — the shape an unhandled exception reaches a caller
      * in: the command's top-level catch renders it as {@code {"error":"NullPointerException: …"}}.
-     *
-     * <p>Named here because the callers that ask it are guarding a specific crash and used to ask
-     * the whole rendering — {@code raw().contains("NullPointerException")} — which is satisfied by
-     * the words appearing in any field, and says nothing about whether the verb actually failed.</p>
      */
     public boolean threw(String exceptionSimpleName) {
         return reply.refused() && reply.error().startsWith(exceptionSimpleName);
@@ -177,7 +198,7 @@ public final class MissionCompletion {
 
     @Override
     public String toString() {
-        return "mission " + missionId + " completed=" + completed + " rockets=" + rocketCount
-                + " items=" + itemEntries + " fluids=" + fluidEntries;
+        return "mission " + missionId + " completed=" + completed + " returned=" + returned.size()
+                + (cargo == null ? "" : " cargo=" + cargo.raw());
     }
 }

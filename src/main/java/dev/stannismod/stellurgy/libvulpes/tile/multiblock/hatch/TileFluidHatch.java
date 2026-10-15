@@ -1,5 +1,15 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch;
 
+import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IInventoryUpdateCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
@@ -11,16 +21,6 @@ import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.items.CapabilityItemHandler;
-import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IInventoryUpdateCallback;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
-import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

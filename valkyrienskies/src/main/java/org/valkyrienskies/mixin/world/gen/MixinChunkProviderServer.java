@@ -22,12 +22,13 @@ public class MixinChunkProviderServer {
     public WorldServer world;
 
     /**
-     * Used to prevent the world from unloading the chunks of ships being loaded in the background
+     * Keeps every chunk a ship holds — loaded or loading in the background — out of this tick's
+     * unload pass; see {@link WorldServerShipManager#getHeldShipChunks()}.
      */
     @Inject(method = "tick", at = @At("HEAD"))
     private void preTick(CallbackInfoReturnable<Boolean> cir) {
         WorldServerShipManager physObjectWorld = (WorldServerShipManager) ValkyrienUtils.getPhysObjWorld(world);
-        for (Long chunkPos : physObjectWorld.getBackgroundShipChunks()) {
+        for (Long chunkPos : physObjectWorld.getHeldShipChunks()) {
             droppedChunksSet.remove(chunkPos);
         }
     }

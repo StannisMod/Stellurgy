@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -10,8 +12,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RendererRocketAssemblingMachine extends TileEntitySpecialRenderer {
 

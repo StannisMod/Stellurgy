@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.world.gen.WorldGenCharredTree;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.world.gen.WorldGenCharredTree;
 
 import java.util.Random;
 

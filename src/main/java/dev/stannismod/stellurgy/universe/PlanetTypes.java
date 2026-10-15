@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.DoubleToIntFunction;
 import java.util.function.Predicate;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 /**
  * The catalogue of {@link PlanetTypePreset planet types} and the two draws that use it: which type a

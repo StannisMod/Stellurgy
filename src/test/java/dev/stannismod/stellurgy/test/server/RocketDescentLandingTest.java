@@ -1,18 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.After;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Events;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * descent + landing under the REAL server
@@ -53,9 +47,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(cmd -> ok(client().read(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
@@ -66,7 +59,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
     private static int gi(String field, String s, String label) {
@@ -84,17 +77,19 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built in this volume and then teleported to its descent altitude");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     /** Force-load a 3×3 grid of chunks centered on (worldX, worldZ) in
@@ -106,18 +101,16 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int cz = worldZ >> 4;
         for (int dxc = -1; dxc <= 1; dxc++) {
             for (int dzc = -1; dzc <= 1; dzc++) {
-                ok(client().execute(
+                ok(client().arrange(
                         "stellurgytest chunk forceload " + dim + " " + (cx + dxc) + " " + (cz + dzc)));
             }
         }
     }
 
-    /**
-     * <p>red-witnessed: with the descent gate, {@code EntityRocket#onUpdate} at
-     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the
-     * {@code setInFlight(true)} it guards: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
-     * ticks", 2026-09-28.</p>
-     */
+    @LegacyWitness(prose = "with the descent gate, {@code EntityRocket#onUpdate} at"
+            + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the"
+            + " {@code setInFlight(true)} it guards: \"no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100"
+            + " ticks\", 2026-09-28.")
     @Test
     public void descentTimerGateFlipsInFlightUnderRealTicks_realTick() throws Exception {
         // Production gate (EntityRocket.onUpdate line 1047):
@@ -137,7 +130,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         // Marked before the set-state: the gate may fire on the very next tick.
         long mark = events.markInstrumented();
-        ok(client().execute("stellurgytest rocket set-state " + id
+        ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=" + (DESCENT_TIMER + 1)
                 + " posY=300 motionY=0"));
 
@@ -151,16 +144,19 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.inFlight);
     }
 
-    /**
-     * <p>red-witnessed: with {@code EntityRocket#onUpdate} at
-     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past
-     * tick 3 and to clear the flag again at once — early, and gone before any state read could see it —
-     * this fails with "and nothing may have set it in flight before its counter passed the timer
-     * (DESCENT_TIMER=40): {… "inFlight":true,"ticksExisted":6 …}" (2026-10-01). The verdict it replaced
-     * was red here only under full-tier load, when the timer had legitimately run out before the log
-     * was read. The two premises before it are arrangements and are not witnessed.</p>
-     */
+    @LegacyWitness(prose = "with {@code EntityRocket#onUpdate} at"
+            + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past"
+            + " tick 3 and to clear the flag again at once — early, and gone before any state read could see it —"
+            + " this fails with \"and nothing may have set it in flight before its counter passed the timer"
+            + " (DESCENT_TIMER=40): {… \"inFlight\":true,\"ticksExisted\":6 …}\" (2026-10-01). The verdict it replaced"
+            + " was red here only under full-tier load, when the timer had legitimately run out before the log"
+            + " was read. The two premises before it are arrangements and are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, 5);",
+            why = "ticksExisted is read on both sides of this stretch. The rocket's own counter advancing proves"
+                    + " the gate was ASKED (it runs in the same onUpdate), and its staying at or below the"
+                    + " timer proves it was asked only where it must answer no. Overshoot can only push the"
+                    + " counter past the timer and turn this red; it can never make a firing gate look idle.")
     public void tickBeforeDescentTimerKeepsFlightOff_realTick() throws Exception {
         // Counter-test under real ticking: with ticksExisted well below
         // DESCENT_TIMER, even a few real server ticks must NOT flip the
@@ -172,14 +168,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         forceLoadChunksAround(0, baseX, baseZ);
 
         long mark = events.markInstrumented();
-        String set = ok(client().execute("stellurgytest rocket set-state " + id
+        String set = ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
         int ticksBefore = gi(TICKS_EXISTED, set, "ticksExisted as set");
 
-        // WINDOW: ticksExisted is read on both sides of this stretch. The rocket's own counter
-        // advancing proves the gate was ASKED (it runs in the same onUpdate), and its staying at or
-        // below the timer proves it was asked only where it must answer no. Overshoot can only push
-        // the counter past the timer and turn this red; it can never make a firing gate look idle.
         GameTicks.advanceWorld(client(), 0, 5);
 
         RocketInfo info = rocketInfo(id);
@@ -211,6 +203,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, 5);",
+            why = "posY is read by the set-state itself and again after this stretch, and the claim is that it"
+                    + " FELL. The bar is \"any fall at all\", so overshoot adds descent without being able to"
+                    + " turn a craft that does not fall into one that does.")
     public void inFlightDescentApplesGravityUnderRealTicks_realTick() throws Exception {
         // Production line 1260: when isInOrbit AND descending (motionY
         // negative or burning false), motionY decreases on every tick.
@@ -222,14 +218,11 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        String set = ok(client().execute("stellurgytest rocket set-state " + id
+        String set = ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + DESCENT_START_Y + " motionY=0"));
         double posYBefore = Reply.of(set).number("posY");
 
-        // WINDOW: posY is read by the set-state itself and again after this stretch, and the claim
-        // is that it FELL. The bar is "any fall at all", so overshoot adds descent without being
-        // able to turn a craft that does not fall into one that does.
         GameTicks.advanceWorld(client(), 0, 5);
 
         double posYAfter = rocketInfo(id).posY;
@@ -238,11 +231,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 posYAfter < posYBefore);
     }
 
-    /**
-     * <p>red-witnessed: with the landing branch's post, {@code EntityRocket#onUpdate} at
-     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: "no `rocket_landed` carrying e = … was recorded within 100
-     * ticks", 2026-09-28.</p>
-     */
+    @LegacyWitness(prose = "with the landing branch's post, {@code EntityRocket#onUpdate} at"
+            + " {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: \"no `rocket_landed` carrying e = … was recorded within 100"
+            + " ticks\", 2026-09-28.")
     @Test
     public void landedEventFiresOnGroundCollisionUnderRealTicks_realTick() throws Exception {
         // Drive the line-1284 landed branch via REAL ticking with the
@@ -263,14 +254,14 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        ok(client().execute("stellurgytest fill 0 " + (baseX - 2) + " " + baseY + " " + (baseZ - 2)
+        ok(client().arrange("stellurgytest fill 0 " + (baseX - 2) + " " + baseY + " " + (baseZ - 2)
                 + " " + (baseX + 2) + " " + baseY + " " + (baseZ + 2) + " minecraft:stone"));
 
-        String countsBefore = ok(client().execute("stellurgytest rocket event-counts-full"));
+        String countsBefore = ok(client().read("stellurgytest rocket event-counts-full"));
         int landedBefore = gi(LANDED_COUNT, countsBefore, "landed before");
 
         long mark = events.mark();
-        ok(client().execute("stellurgytest rocket set-state " + id
+        ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (baseY + 2) + " motionY=-10"));
 
@@ -280,7 +271,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 "the rocket must touch down on the stone floor under real ticking", GATE_TICKS,
                 "e", String.valueOf(id));
 
-        String countsAfter = ok(client().execute("stellurgytest rocket event-counts-full"));
+        String countsAfter = ok(client().read("stellurgytest rocket event-counts-full"));
         int landedAfter = gi(LANDED_COUNT, countsAfter, "landed after");
         assertTrue("RocketLandedEvent must fire on ground collision under real ticks: "
                 + landedBefore + " -> " + landedAfter, landedAfter > landedBefore);
@@ -303,7 +294,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         int posY = (int) rocketInfo(id).posY;
 
-        String dismantleResp = ok(client().execute("stellurgytest rocket dismantle " + id));
+        String dismantleResp = ok(client().act("stellurgytest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + dismantleResp,
                 Reply.of(dismantleResp).ok());
 
@@ -312,7 +303,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         for (int dx = -2; dx <= 2 && !foundNonAir; dx++) {
             for (int dz = -2; dz <= 2 && !foundNonAir; dz++) {
                 for (int dy = 0; dy <= 4 && !foundNonAir; dy++) {
-                    String blockResp = ok(client().execute(
+                    String blockResp = ok(client().read(
                             "stellurgytest block at 0 " + (site.x + dx) + " " + (posY + dy)
                                     + " " + (site.z + dz)));
                     // the producer always writes `isAir` for a loaded dimension, and this asks

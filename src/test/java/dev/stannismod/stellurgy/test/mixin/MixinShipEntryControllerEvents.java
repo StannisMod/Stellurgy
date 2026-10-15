@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.ShipEntryController;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.space.ShipEntryController;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.UUID;
 
 /**
  * Every answer the space-entry gate gives, as an event: {@code entry_decided} with the decision's

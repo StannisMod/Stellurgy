@@ -1,25 +1,19 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCoverage;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.SpaceSlotPool;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
+import dev.stannismod.stellurgy.space.*;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.SystemContent;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 import java.util.List;
 

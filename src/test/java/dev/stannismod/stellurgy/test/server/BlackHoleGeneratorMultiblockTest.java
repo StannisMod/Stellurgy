@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EnergyStore;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,13 +36,13 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void blackHoleGeneratorMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
         // Build the multiblock via the new fixture probe.
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock blackhole-gen 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock blackhole-gen failed: " + fixture,
                 Reply.of(fixture).ok());
 
         // Sanity: controller is the right tile class.
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileBlackHoleGenerator tile at controller pos: " + info,
                 "TileBlackHoleGenerator", MachineInfo.of(info).tileSimpleName());
@@ -64,14 +63,14 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
                 {CX,     CY,     CZ + 2},  // backFiller
         };
         for (int[] p : positions) {
-            String b = join(client().execute(
+            String b = join(client().read(
                     "stellurgytest block at 0 " + p[0] + " " + p[1] + " " + p[2]));
             layout.append("  (").append(p[0]).append(',').append(p[1]).append(',').append(p[2])
                     .append("): ").append(b).append('\n');
         }
 
         // try-complete: production attemptCompleteStructure must accept the layout.
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -84,24 +83,24 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         // Independent fixture patch — shifted by 30 blocks east to avoid
         // collision with the previous method's structure.
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
         // First validate — should pass.
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline try-complete should pass: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Break the lower1Mid column block (directly under centre at y=cy-1).
         // Production validator must notice and flip isComplete back to false.
-        String breakBlock = join(client().execute(
+        String breakBlock = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy - 1) + " " + (cz + 1) + " minecraft:air"));
         assertTrue("could not replace lower1 with air: " + breakBlock,
                 Reply.of(breakBlock).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("try-complete after break errored: " + broken,
                 Reply.of(broken).ok());
@@ -114,12 +113,12 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
     public void powerOutputPlugExposesEnergyCapacityAfterFormation() throws Exception {
         // Position-isolated patch.
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
         // Form it so the controller's MultiBattery wires up the output plug.
-        String formed = join(client().execute(
+        String formed = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
                 Reply.of(formed).bool("isComplete"));
@@ -150,11 +149,11 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         // even with a valid formation and force-ticks. A regression that
         // removes the guard would let BHGs produce free power on any dim.
         int cx = CX + 90, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
-        String formed = join(client().execute(
+        String formed = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
                 Reply.of(formed).bool("isComplete"));
@@ -162,7 +161,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         // Drive many controller updates — production update() consults
         // isAroundBlackHole() each call. With no black-hole context, the
         // guard returns false and powerMadeLastTick must stay 0.
-        String tick = join(client().execute(
+        String tick = join(client().act(
                 "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
         assertTrue("force-tick must complete without exception: " + tick,
                 Reply.of(tick).ok());
@@ -178,7 +177,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int x, int y, int z) throws Exception {
-        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
+        return EnergyStore.at(cmd -> join(client().read(cmd)), 0, x, y, z);
     }
 
     private static String join(java.util.List<String> resp) {

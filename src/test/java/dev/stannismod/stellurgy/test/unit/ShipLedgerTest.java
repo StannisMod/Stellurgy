@@ -1,15 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.UUID;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
+import java.util.UUID;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the ship ledger — the authoritative shipId&rarr;(coordinate, state) record.

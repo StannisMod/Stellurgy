@@ -107,16 +107,16 @@ public class BlockDamageSavedData extends WorldSavedData {
         if (block == null || block.getRegistryName() == null) {
             return;
         }
-        recordDestroyed(pos, block.getRegistryName().toString(), meta);
+        recordDestroyedName(pos, block.getRegistryName().toString(), meta);
     }
 
     /**
-     * Record a provenance by NAME, exactly as given — for a record being carried rather than
-     * observed. The name is never resolved here: a record naming a block this install does not have
-     * is still the only statement of what stood there, and resolving it would turn it into a
-     * different statement or into none.
+     * Record what stood at {@code pos} by its registry NAME — for a copy of a record that already
+     * exists, which carries the name as it was written. Never resolved through the registry on the way:
+     * a name whose mod is gone must arrive as that name, since it is the only statement of what the
+     * hole should be filled with.
      */
-    void recordDestroyed(BlockPos pos, String registryName, int meta) {
+    public void recordDestroyedName(BlockPos pos, String registryName, int meta) {
         long key = pos.toLong();
         Entry entry = entries.get(key);
         if (entry == null) {

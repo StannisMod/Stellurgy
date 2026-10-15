@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import java.util.*;
 
 /**
  * Production {@link ShipTransitManager.Crosser}: carries the transit state machine's depart/arrive
@@ -94,6 +88,15 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * information. Cleared when that slot's arrival gets past the guard.
      */
     private final Map<Integer, String> arrivalGuardWarned = new HashMap<>();
+
+    /**
+     * Ship id &rarr; why its stowed bodies could not be put down on the last retry. Same instrument as
+     * {@link #arrivalGuardWarned} and for the same reason — the placement is retried every tick — but
+     * keyed by SHIP, because two ships arriving into one slot fail for their own reasons. Cleared when
+     * that ship's bodies are down, so a later stall reports itself again instead of being swallowed as
+     * a repeat.
+     */
+    private final Map<String, String> bodyReleaseWarned = new HashMap<>();
 
     /**
      * What the last arrival cut was about to take, in the two vocabularies a jump holds at once: the
@@ -665,11 +668,37 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // a destination that has been arrived into before is holding a craft at exactly this pose.
         BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(world, vsShipUuid, toUuid(shipId),
                 anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
-        if (afcPos == null || AboardBodies.release(world, afcPos, bodies) == 0) {
+        // The two halves are REPORTED apart, because they are different failures with one appearance:
+        // no flight computer of this ship at the anchor means the hull is not rebuilt here at all,
+        // while a release of zero means the hull is here and cannot yet say where a point on it is.
+        // Both used to return the same `false` in silence, so a jump that quietly dropped what was on
+        // its deck was indistinguishable in the log from one that delivered it.
+        if (afcPos == null) {
+            warnBodyReleaseOnce(shipId, bodies.size(), anchor,
+                    "no flight computer of this ship stands at the arrival anchor, so there is no ship "
+                            + "here to put them on yet");
             return false;
         }
+        if (AboardBodies.release(world, afcPos, bodies) == 0) {
+            warnBodyReleaseOnce(shipId, bodies.size(), anchor,
+                    "the ship at that anchor cannot yet map its own subspace points into the world, so "
+                            + "the bodies have nowhere to land");
+            return false;
+        }
+        bodyReleaseWarned.remove(shipId);
         bodyStash.remove(shipId);
         return true;
+    }
+
+    /** Report a body placement that is still waiting - once per ship, per distinct cause. */
+    private void warnBodyReleaseOnce(String shipId, int count, BlockPos anchor, String cause) {
+        if (cause.equals(bodyReleaseWarned.put(shipId, cause))) {
+            return;
+        }
+        LOGGER.warn("[SPACE] the {} body(ies) stowed off ship {} are still waiting to be put down at "
+                        + "{}: {}. They are safe in the stash and the arrival retries next tick; if "
+                        + "the transit gives up first, they are lost with it and THIS is the cause.",
+                count, shipId, anchor, cause);
     }
 
     @Override
@@ -737,7 +766,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // them would mean force-loading a shipyard to delete blocks nobody can reach. What has to
         // stop is the ship EXISTING as a ship in a permanently loaded world; the caller retires the
         // lane so nothing is ever pasted on top of what is left.
-        return VSIntegration.releaseShipIfNothingLoaded(hyper, uuid);
+        return VSIntegration.discardShip(hyper, uuid);
     }
 
     @Override

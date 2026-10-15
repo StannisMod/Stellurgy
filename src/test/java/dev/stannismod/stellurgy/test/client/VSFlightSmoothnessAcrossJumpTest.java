@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
@@ -9,20 +10,8 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Does a ship fly as SMOOTHLY after a jump as it did before one?
@@ -111,8 +100,12 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
      * also makes the control arm what the subject arms already are: steady-state flight.</p>
      */
     private static final double LIFT_CLEAR_BLOCKS = 5.0;
-    private static final int LIFT_POLL_TICKS = 40;
-    private static final int LIFT_ATTEMPTS = 8;
+
+    /** The deadline on that lift: the eight 40-tick passes the lift always allowed. */
+    private static final int LIFT_BUDGET_TICKS = 320;
+
+    /** The deadline on the arrived computer's first tick: the twenty 10-tick reads it always allowed. */
+    private static final int ARRIVED_COMPUTER_BUDGET_TICKS = 200;
 
     /**
      * The fastest cruise the pilot can dial in, in blocks per TICK — {@code FA_SETPOINT_MAX_SPEED},
@@ -219,6 +212,9 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             + " window read 0.667 per step with zero variation. RE-ENABLE when a ridden entity"
             + " rides that prediction too; the acceptance is this class green in eight parallel"
             + " instances, because four green out of eight is what it already does.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(SETTLE_TICKS);",
+            why = "leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the variable that"
+                    + " tells a transient from a lasting change.")
     public void aShipFliesAsSmoothlyAfterAJumpAsBeforeOne() throws Exception {
 
         // The rendered frame is one of the four clocks this test reads, and the harness seeds
@@ -242,7 +238,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // ---- ARRANGE: the transit stack over an empty origin cell, and a real flyable ship built
         // in it by the real assembler. The piloted setup fixture's bare deck has no propulsion, so
         // a held key could move nothing and every number below would describe a parked craft. ----
-        int originDim = TransitSetup.empty(this::exec).originDim;
+        int originDim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
 
         // The cell is a void world, so this is not about escaping terrain — it is about ONE
         // definition of where a fixture stands instead of a 64 nobody chose. The first link still
@@ -256,26 +252,27 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         final dev.stannismod.stellurgy.test.FixtureSite site =
                 dev.stannismod.stellurgy.test.FixtureSite.openAir(originDim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        String assembled = dev.stannismod.stellurgy.test.RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 2, 16,
-                "the craft whose flight smoothness is measured across the jump");
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integer("rocketCount") == 0));
-        scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
-                waitForLoadedShip(originDim) >= 1);
+        ShipAssembly built = ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
+                "with-pilot-seat", 2, 16, "the craft whose flight smoothness is measured across the jump");
+        String assembled = built.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
 
         // The ship's IDENTITY, from the assembler that minted its durable name. This used to be a
         // bounded lookup at the build site, defended as "the one moment a positional lookup is
         // defensible" — but a bound is a statement about DISTANCE and ships do not collide, so it
         // says nothing about how many hulls are in the box. The name is not a distance.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        disposeOfShipAtEnd(durableShipId);
+        // Loaded in its cell before the jump is flown: the link is this craft's own `ship_usable`.
         String shipId = awaitPhysicsId(originDim, durableShipId);
         // Name the craft to the transit stack, by its durable id: a jump begun for a ship the stack
         // cannot name captures nobody (measured 2026-09-05 — the pilot arrived in nothing).
-        String named = exec("stellurgytest space transit-name " + originDim + " " + shipId);
+        String named = arrange("stellurgytest space transit-name " + originDim + " " + shipId).raw();
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
                 Reply.of(named).bool("afcFound") && !"".equals(Reply.of(named).text("durableId")));
-        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
         int[] afcOrigin = {seat.afcX, seat.afcY, seat.afcZ};
@@ -284,8 +281,8 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         int sz = (int) Math.round(seat.shipWorldZ);
 
         long enterMark = clientEvents().mark();
-        String enter = exec("stellurgytest space enter " + botName() + " " + originDim
-                + " " + sx + " " + sy + " " + sz);
+        String enter = arrange("stellurgytest space enter " + botName() + " " + originDim
+                + " " + sx + " " + sy + " " + sz).raw();
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 readBool(enter, "ok"));
         // WAS `waitTicks(20)` and a read of the weather report's dim. The client publishes
@@ -296,7 +293,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         mountTheSeat(originDim, seatX, seatY, seatZ);
 
         // ---- LEG A (the control): fly in the origin cell, before anything has jumped. -----------
-        liftClear(originDim, afcOrigin);
+        liftClear(shipId);
         Leg before = measure("before-jump", originDim, afcOrigin);
 
         // ---- ACT: the jump. Probe-driven so the park cannot race the measurement either side. ---
@@ -306,18 +303,18 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // BY IDENTITY: the control leg above LIFTS the ship clear of the ground, so its berth is
         // exactly the place it is no longer at. A bounded read there answers managed:false and an
         // unbounded one answers about whatever else is loaded; neither is this ship.
-        ShipInfo shipNow = ShipInfo.byId(this::exec, originDim, shipId);
+        ShipInfo shipNow = ShipInfo.byId(c -> read(c).raw(), originDim, shipId);
         // The mark before the departure, so every link of the jump is in the log in order — and the
         // CLIENT's own beside it, for the remount his client performs when the arrival tells it who
         // is riding what.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim
+        String begin = act("stellurgytest space transit-begin " + originDim
                 + " " + (int) Math.round(shipNow.x)
                 + " " + (int) Math.round(shipNow.y)
                 + " " + (int) Math.round(shipNow.z)
-                + " " + HYPERSPACE_JUMP_SPEED);
+                + " " + HYPERSPACE_JUMP_SPEED).raw();
         scenario().requireArranged("the transit must begin (departure crossing): " + begin,
                 readBool(begin, "began"));
         scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
@@ -328,7 +325,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // a post-jump leg with no pilot, and the chain names the link that left him.
         requireChain(events, mark, "the pilot must arrive SEATED in the target cell, or the post-jump"
                 + " leg has no pilot and measures a drifting hulk", pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::exec);
+        int targetDim = arrivedTargetDim(cmd -> arrange(cmd).raw());
         JsonObject arrivedRiding =
                 ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         scenario().requireArranged("the arrived pilot's client must be in the target cell: riding="
@@ -343,18 +340,16 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // — but the durable name crosses with it, and `(0,200,0)` in the target cell was never an
         // address of this craft at all: it named whatever the yard lookup reached from there.
         String arrivedShipId = awaitPhysicsId(targetDim, durableShipId);
-        PilotSeat arrivedSeat = null;
-        int[] afcArrived = null;
-        for (int i = 0; i < 20 && afcArrived == null; i++) {
-            arrivedSeat = PilotSeat.byId(this::exec, targetDim, arrivedShipId);
-            if (arrivedSeat.found && arrivedSeat.hasAfc) {
-                afcArrived = new int[]{arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
-            } else {
-                advanceServerAndClient(10);
-            }
-        }
+        // The re-pasted computer is a NEW tile, and its first tick is its own record — under the craft's
+        // durable name, which crosses with it. Awaited from the mark before the departure, so the
+        // origin computer's first tick, written long before, cannot answer it.
+        ArrangementFailure.arranged(() -> serverEvents().awaitField(mark, "afc_first_tick", "ship", durableShipId,
+                "the arrived ship's flight computer must tick in the target cell, or the post-jump recorder"
+                        + " has nothing to key on", ARRIVED_COMPUTER_BUDGET_TICKS));
+        PilotSeat arrivedSeat = PilotSeat.byId(c -> read(c).raw(), targetDim, arrivedShipId);
         scenario().requireArranged("the arrived ship must expose its flight computer, or the post-jump "
-                + "recorder has nothing to key on: " + arrivedSeat, afcArrived != null);
+                + "recorder has nothing to key on: " + arrivedSeat, arrivedSeat.found && arrivedSeat.hasAfc);
+        int[] afcArrived = {arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
 
         // ---- LEG B (the subject): the same pilot, the same key, the same craft, after a jump. ---
         Leg after = measure("after-jump", targetDim, afcArrived);
@@ -367,8 +362,6 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // defect. Measured 6 of 6 in leg B before this leg existed: one 199-266 ms tick, with ZERO
         // chunks arriving in the window — so whatever it is, it is not the loading the report
         // suspected.
-        // EXPERIMENT: leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the
-        // variable that tells a transient from a lasting change.
         advanceServerAndClient(SETTLE_TICKS);
         Leg settled = measure("after-jump-settled", targetDim, afcArrived);
 
@@ -560,7 +553,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             if (previousFrameRate > 0) {
                 bot().setFrameRate(previousFrameRate);
             }
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount");
             resetServerMotionTrace();
         } catch (Exception ignored) {
         }
@@ -568,8 +561,8 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
 
     /** Empty the server's flight-recorder rings, so a leg starts from an empty recorder. */
     private void resetServerMotionTrace() throws Exception {
-        Reply.of("MotionTrace.resetServer", exec("stellurgytest invoke-static " + MOTION_TRACE
-                + " resetServer")).requireOk("the server's flight recorder must reset");
+        Reply.of("MotionTrace.resetServer", read("stellurgytest invoke-static " + MOTION_TRACE
+                + " resetServer").raw()).requireOk("the server's flight recorder must reset");
     }
 
     /**
@@ -577,8 +570,8 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
      * trailing {@code windowMs} — its physics and server-tick channels, as their own JSON.
      */
     private String serverMotionTrace(int dim, int[] afc, int windowMs) throws Exception {
-        String reply = exec("stellurgytest invoke-static " + MOTION_TRACE + " serverReading "
-                + dim + " " + afc[0] + " " + afc[1] + " " + afc[2] + " " + windowMs);
+        String reply = read("stellurgytest invoke-static " + MOTION_TRACE + " serverReading "
+                + dim + " " + afc[0] + " " + afc[1] + " " + afc[2] + " " + windowMs).raw();
         return Reply.of("MotionTrace.serverReading", reply).text("returned");
     }
 
@@ -747,35 +740,34 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
      * uncertain: the ship is named, so the only question is whether it exists yet.
      */
     private String awaitPhysicsId(int dim, String durableShipId) throws Exception {
-        return ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, durableShipId, 200);
+        return ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), dim, durableShipId, 200);
     }
 
-    private void liftClear(int dim, int[] afc) throws Exception {
-        double moved = 0.0;
+    /**
+     * Hold the climb key until his own client shows the craft, with him seated on it, risen clear of
+     * its pad — the client's record of carrying a seated rider ({@code seat_carried}), from a mark taken
+     * before the key goes down.
+     */
+    private void liftClear(String shipId) throws Exception {
+        long liftMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < LIFT_ATTEMPTS && moved < LIFT_CLEAR_BLOCKS; attempt++) {
-                resetServerMotionTrace();
-                advanceServerAndClient(LIFT_POLL_TICKS);
-                moved = netMoveLength(section(serverMotionTrace(dim, afc, WINDOW_MS), "phys"));
-            }
+            ArrangementFailure.arranged(() -> SeatCarry.awaitShownClimb(clientEvents(), liftMark, shipId,
+                    LIFT_CLEAR_BLOCKS, "the craft must get under way on its own pad under a held climb key. A"
+                            + " craft pushing at the authority ceiling while it does not rise is being held by its"
+                            + " surroundings, so nothing below would be a reading about the jump",
+                    LIFT_BUDGET_TICKS));
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        scenario().requireArranged("the craft never got under way on its own pad. It was given "
-                        + (LIFT_ATTEMPTS * LIFT_POLL_TICKS) + " ticks of held climb key and moved "
-                        + Leg.round(moved) + " blocks, against " + LIFT_CLEAR_BLOCKS + " asked for. "
-                        + "A craft pushing at the authority ceiling while its net move stays near "
-                        + "zero is being held by its surroundings, so nothing below would be a "
-                        + "reading about the jump.",
-                moved >= LIFT_CLEAR_BLOCKS);
     }
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(FLY_TICKS);",
+            why = "held climb — the flight each leg's traces describe.")
     private Leg measure(String label, int dim, int[] afc) throws Exception {
         resetServerMotionTrace();
         bot().holdKey(Keyboard.KEY_R);
         try {
-            // STIMULUS: held climb — the flight each leg's traces describe.
             advanceServerAndClient(FLY_TICKS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -977,21 +969,16 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // below waits for, and a mark taken after it could not tell "he was seated before I looked"
         // from "he was never seated".
         long clientMark = clientEvents().mark();
-        String mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("stellurgytest vs seat-mount-at " + dim
-                    + " " + seatX + " " + seatY + " " + seatZ);
-            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
-                    readBool(mountAt, "ok"));
-            mount = exec("stellurgytest player mount-entity " + readInt(mountAt, "dummyId"));
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                advanceServerAndClient(10);
-            }
-        }
-        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
+        String mountAt = arrange("stellurgytest vs seat-mount-at " + dim
+                + " " + seatX + " " + seatY + " " + seatZ).raw();
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                readBool(mountAt, "ok"));
+        // Once. The mount is decided on the server thread before the verb answers, so a refusal is the
+        // answer and not a "not yet": there is nothing a later attempt would find changed.
+        String mount = arrange("stellurgytest player mount-entity " + readInt(mountAt, "dummyId")).raw();
+        // absence is the answer: a reply with no `mounted` is a mount that did not happen.
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
         // The base raises a TYPED arrangement failure carrying the server's own mount/dismount
         // record, so a red here says whether the client was merely behind or the product dropped
         // him. This class used to keep its own copy of that logic with a comment explaining why it
@@ -1000,15 +987,6 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // client's own mount record is the thing being waited for, and it cannot be arrived at too
         // early off a mark taken before the attempt.
         ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
-    }
-
-    private int waitForLoadedShip(int dim) throws Exception {
-        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
-        // branch of this helper never executed on the server tier, at one fork or at six, because
-        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
-        // and names whether the craft never REGISTERED or registered and did not LOAD.
-        return ShipReadiness.requireLoaded(this::exec, dim,
-                "this scenario's craft must be loaded before the jump is flown");
     }
 
     private static boolean readBool(String json, String key) {

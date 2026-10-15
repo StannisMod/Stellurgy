@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
+import dev.stannismod.stellurgy.libvulpes.api.material.Material;
+import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
+import dev.stannismod.stellurgy.libvulpes.items.ItemOreProduct;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.color.IBlockColor;
@@ -7,9 +10,6 @@ import net.minecraft.client.renderer.color.IItemColor;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-import dev.stannismod.stellurgy.libvulpes.api.material.Material;
-import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
-import dev.stannismod.stellurgy.libvulpes.items.ItemOreProduct;
 
 import javax.annotation.Nonnull;
 

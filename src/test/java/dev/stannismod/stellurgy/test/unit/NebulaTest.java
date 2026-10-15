@@ -1,22 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Optional;
 
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.Galaxy;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.Nebula;
-import dev.stannismod.stellurgy.universe.NebulaField;
-import dev.stannismod.stellurgy.universe.StarCluster;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for nebulae — the diffuse cloud a star cluster is wrapped in.

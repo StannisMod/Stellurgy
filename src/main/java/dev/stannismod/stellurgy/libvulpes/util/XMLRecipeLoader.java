@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.recipe.NumberedOreDictStack;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityMachine;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -10,11 +15,6 @@ import net.minecraftforge.oredict.OreDictionary;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.recipe.NumberedOreDictStack;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.TileEntityMachine;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;

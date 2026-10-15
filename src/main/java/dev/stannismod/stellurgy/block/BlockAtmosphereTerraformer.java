@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -7,10 +11,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
-import dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 public class BlockAtmosphereTerraformer extends BlockMultiblockMachine {
 

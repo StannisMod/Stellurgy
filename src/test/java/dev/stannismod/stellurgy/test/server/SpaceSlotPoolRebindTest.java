@@ -22,7 +22,7 @@ public class SpaceSlotPoolRebindTest extends AbstractSharedServerTest {
     public void slotRebindsBetweenCellsAndBlockRoundTrips() throws Exception {
         // The whole rebind round-trip runs synchronously inside the probe (see `space roundtrip`),
         // so there are no cross-tick timing hazards here -- we assert the single result envelope.
-        String r = exec("stellurgytest space roundtrip");
+        String r = arrange("stellurgytest space roundtrip").raw();
         assertTrue("space roundtrip must complete: " + r, Reply.of(r).ok());
         assertTrue("a slot must rebind between on-disk cells with per-cell block isolation "
                 + "(A marker persists, B marker does not bleed into A): " + r, Reply.of(r).bool("pass"));

@@ -1,20 +1,14 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import dev.stannismod.stellurgy.network.PacketOxygenState;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.network.PacketOxygenState;
+
+import java.util.*;
 
 /**
  * Everything one atmosphere is doing to the people in it, as a set of rows.
@@ -40,6 +34,14 @@ public final class HazardExposure {
     private final boolean needsSuppliedOxygen;
 
     HazardExposure(List<HazardEffect> rows) {
+        this(rows, true);
+    }
+
+    /**
+     * @param oxygenMayBeNeeded false when breathing needs no oxygen: then no row can make a suit
+     *                          supply it, whatever the row says
+     */
+    private HazardExposure(List<HazardEffect> rows, boolean oxygenMayBeNeeded) {
         this.rows = Collections.unmodifiableList(new ArrayList<>(rows));
         Set<AtmosphereHazard> found = EnumSet.noneOf(AtmosphereHazard.class);
         boolean full = false;
@@ -51,7 +53,22 @@ public final class HazardExposure {
         }
         this.hazards = Collections.unmodifiableSet(found);
         this.needsFullSuit = full;
-        this.needsSuppliedOxygen = supplied;
+        this.needsSuppliedOxygen = supplied && oxygenMayBeNeeded;
+    }
+
+    /**
+     * This exposure for a body that does not need oxygen: no suffocation, no oxygen toxicity, and
+     * nothing a suit has to supply. What is left — vacuum, pressure, heat, poison — still acts, and a
+     * suit still has to be whole to keep it out.
+     */
+    HazardExposure withoutOxygenNeed() {
+        List<HazardEffect> kept = new ArrayList<>(rows.size());
+        for (HazardEffect row : rows) {
+            if (row.hazard() != AtmosphereHazard.SUFFOCATION && row.hazard() != AtmosphereHazard.OXYGEN_TOXICITY) {
+                kept.add(row);
+            }
+        }
+        return new HazardExposure(kept, false);
     }
 
     public boolean isEmpty() {

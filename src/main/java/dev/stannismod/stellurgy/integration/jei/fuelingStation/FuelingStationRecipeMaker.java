@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.jei.fuelingStation;
 
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 import mezz.jei.api.IJeiHelpers;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 
 import java.util.ArrayList;
 import java.util.List;

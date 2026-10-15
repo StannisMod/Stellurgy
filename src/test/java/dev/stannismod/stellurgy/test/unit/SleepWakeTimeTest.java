@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -24,6 +25,8 @@ public class SleepWakeTimeTest {
                 + ", wake=" + wake + ", rp=" + rp + ")", wake - current <= rp);
     }
 
+    /** Pins INV-WGEN-11 (computeSleepWakeTime always lands on a dawn and moves strictly forward). */
+    @Pins("INV-WGEN-11")
     @Test
     public void rp24000MatchesVanillaRounding() {
         // With a 24000 day, the helper must reproduce vanilla's i - i%24000.
@@ -34,6 +37,8 @@ public class SleepWakeTimeTest {
         }
     }
 
+    /** Pins INV-WGEN-11 (computeSleepWakeTime always lands on a dawn and moves strictly forward). */
+    @Pins("INV-WGEN-11")
     @Test
     public void nonVanillaPeriodsLandOnDawn() {
         for (int rp : new int[]{13888, 46875, 128000, 1, 7777}) {
@@ -43,6 +48,8 @@ public class SleepWakeTimeTest {
         }
     }
 
+    /** Pins INV-WGEN-11 (computeSleepWakeTime always lands on a dawn and moves strictly forward). */
+    @Pins("INV-WGEN-11")
     @Test
     public void alreadyAtDawnSkipsToNextDay() {
         // current exactly on a dawn boundary -> advance a full day, not stay put.
@@ -51,6 +58,8 @@ public class SleepWakeTimeTest {
         assertEquals(3L * rp, wake);
     }
 
+    /** Pins INV-WGEN-11 (computeSleepWakeTime always lands on a dawn and moves strictly forward). */
+    @Pins("INV-WGEN-11")
     @Test
     public void nonPositivePeriodFallsBackTo24000() {
         // Defensive: a bad rotationalPeriod must not divide-by-zero or loop.

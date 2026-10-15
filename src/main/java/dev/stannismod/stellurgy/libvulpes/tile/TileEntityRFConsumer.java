@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
+import dev.stannismod.stellurgy.libvulpes.Configuration;
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
+import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
+import dev.stannismod.stellurgy.libvulpes.energy.IPower;
+import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -9,12 +15,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.energy.CapabilityEnergy;
-import dev.stannismod.stellurgy.libvulpes.Configuration;
-import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
-import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
-import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
-import dev.stannismod.stellurgy.libvulpes.energy.IPower;
-import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 
 public abstract class TileEntityRFConsumer extends TileEntity implements IPower, IUniversalEnergy, ITickable {
 	protected UniversalBattery energy;

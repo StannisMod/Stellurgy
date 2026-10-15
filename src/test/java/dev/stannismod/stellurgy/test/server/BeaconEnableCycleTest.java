@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Before;
@@ -8,8 +9,6 @@ import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -102,14 +101,14 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
     private int generateSharedPlanet() throws Exception {
         Set<Integer> before = stellurgyDims();
-        exec("ar planet generate 0 BeaconPhase3");
+        arrange("ar planet generate 0 BeaconPhase3");
         Set<Integer> diff = stellurgyDims();
         diff.removeAll(before);
         assertTrue("planet generate must add exactly one dim — diff=" + diff,
                 diff.size() == 1);
         int generated = diff.iterator().next();
 
-        String load = exec("stellurgytest dim load " + generated);
+        String load = arrange("stellurgytest dim load " + generated).raw();
         assertTrue("planet dim load failed: " + load,
                 Reply.of(load).bool("loaded"));
         return generated;
@@ -170,8 +169,8 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         // the old block's breakBlock callback in Forge 1.12, which is
         // how BlockBeacon.breakBlock gets a chance to clean up the
         // registry entry.
-        String breakResp = exec("stellurgytest place " + planetDim + " "
-                + CX_BREAK + " " + CY + " " + CZ + " minecraft:air");
+        String breakResp = arrange("stellurgytest place " + planetDim + " "
+                + CX_BREAK + " " + CY + " " + CZ + " minecraft:air").raw();
         assertTrue("could not air-replace controller block: " + breakResp,
                 Reply.of(breakResp).ok());
 
@@ -186,31 +185,31 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
     // ─── helpers ───────────────────────────────────────────────────────
 
     private void buildFixture(int cx) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock beacon "
-                + planetDim + " " + cx + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture multiblock beacon "
+                + planetDim + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("beacon fixture build failed: " + fixture,
                 Reply.of(fixture).ok());
-        String tryComplete = exec("stellurgytest machine try-complete "
-                + planetDim + " " + cx + " " + CY + " " + CZ);
+        String tryComplete = act("stellurgytest machine try-complete "
+                + planetDim + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("beacon structure failed to complete: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
     }
 
     private void enableMachine(int cx, boolean enabled) throws Exception {
-        String resp = exec("stellurgytest machine set-enabled " + planetDim + " "
-                + cx + " " + CY + " " + CZ + " " + enabled);
+        String resp = arrange("stellurgytest machine set-enabled " + planetDim + " "
+                + cx + " " + CY + " " + CZ + " " + enabled).raw();
         assertTrue("machine set-enabled failed: " + resp,
                 String.valueOf(enabled).equals(Reply.of(resp).text("enabled")));
     }
 
     /** The server's ordered event log, read through this tier's command channel. */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
     }
 
     private String readBeaconList() throws Exception {
-        return exec("stellurgytest beacon list " + planetDim);
+        return read("stellurgytest beacon list " + planetDim).raw();
     }
 
     /**
@@ -278,7 +277,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
      */
     private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
+        for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw()).intArray("stellurgyDimensions")) {
             ids.add(dim);
         }
         return ids;

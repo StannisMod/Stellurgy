@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.jei.fuelingStation;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeWrapper;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 public class FuelingStationWrapper implements IRecipeWrapper {
 

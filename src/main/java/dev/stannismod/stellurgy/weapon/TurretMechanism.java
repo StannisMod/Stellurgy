@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.weapon;
 
+import dev.stannismod.stellurgy.api.weapon.TurretDriveState;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
-import dev.stannismod.stellurgy.api.weapon.TurretDriveState;
 
 /**
  * The traverse: a bearing, the limits it may take, the rate it may change at, and what happens when

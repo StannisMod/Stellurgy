@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
-
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -37,13 +36,15 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
 
     private static final String VALUE_PAT = "value";
 
+    /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
+    @Pins("INV-ATM-10")
     @Test
     public void emptyScrubberReportsZeroComparatorOutput() throws Exception {
         int x = PX, y = PY, z = PZ;
         ok("stellurgytest place 0 " + x + " " + y + " " + z
                 + " stellurgy:oxygenScrubber");
-        String resp = exec("stellurgytest infra comparator-override 0 "
-                + x + " " + y + " " + z);
+        String resp = read("stellurgytest infra comparator-override 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("comparator-override must succeed: " + resp,
                 Reply.of(resp).ok());
         int value = extract(resp);
@@ -52,6 +53,8 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
                 value == 0);
     }
 
+    /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
+    @Pins("INV-ATM-10")
     @Test
     public void freshCartridgeReportsNonZeroComparatorOutput() throws Exception {
         int x = PX + 30, y = PY, z = PZ;
@@ -61,8 +64,8 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         // damage starts at 0; max is Short.MAX_VALUE-1.
         ok("stellurgytest hatch fill 0 " + x + " " + y + " " + z
                 + " 0 stellurgy:carbonScrubberCartridge 1 0");
-        String resp = exec("stellurgytest infra comparator-override 0 "
-                + x + " " + y + " " + z);
+        String resp = read("stellurgytest infra comparator-override 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("comparator-override must succeed: " + resp,
                 Reply.of(resp).ok());
         int value = extract(resp);
@@ -74,7 +77,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }

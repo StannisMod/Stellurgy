@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.api.fuel;
 
-import java.util.HashSet;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fluids.Fluid;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.fluids.Fluid;
+import java.util.HashSet;
 
 public class FuelRegistry {
 

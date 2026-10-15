@@ -1,19 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * TileRocketLoader's redstone-output polarity logic.
@@ -84,6 +83,8 @@ public class RocketLoaderRedstonePolarityTest {
         }
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
+    @Pins("INV-INFRA-11")
     @Test
     public void onStateEmitsRedstoneWhenConditionTrue() {
         assertTrue("state=ON + condition=true must emit redstone "
@@ -91,6 +92,8 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.ON, true));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
+    @Pins("INV-INFRA-11")
     @Test
     public void onStateStaysOffWhenConditionFalse() {
         assertFalse("state=ON + condition=false must NOT emit "
@@ -98,6 +101,8 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.ON, false));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
+    @Pins("INV-INFRA-11")
     @Test
     public void invertedStateFlipsTruthOutput() {
         assertFalse("state=INVERTED + condition=true must NOT emit "
@@ -105,6 +110,8 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.INVERTED, true));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
+    @Pins("INV-INFRA-11")
     @Test
     public void invertedStateFlipsFalseOutput() {
         assertTrue("state=INVERTED + condition=false MUST emit "

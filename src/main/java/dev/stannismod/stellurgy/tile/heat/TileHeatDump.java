@@ -1,24 +1,23 @@
 package dev.stannismod.stellurgy.tile.heat;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraftforge.common.capabilities.Capability;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.capability.CapabilityHeatSink;
 import dev.stannismod.stellurgy.api.capability.IHeatSink;
-import dev.stannismod.stellurgy.subsystem.ejection.EjectionPort;
-import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
+import dev.stannismod.stellurgy.subsystem.ejection.EjectionPort;
+import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraftforge.common.capabilities.Capability;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

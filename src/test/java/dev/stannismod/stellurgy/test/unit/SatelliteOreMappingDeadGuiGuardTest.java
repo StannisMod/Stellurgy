@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
+import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 

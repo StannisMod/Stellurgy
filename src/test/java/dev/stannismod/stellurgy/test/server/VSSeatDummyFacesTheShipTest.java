@@ -1,21 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -70,53 +59,58 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
     private static final double YAW_TOLERANCE_DEG = 6.0;
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);",
+            why = "not a wait, and the difference is what this line is for. A yaw slewing round is a converging"
+                    + " VALUE — nothing announces it and there is no edge to link on — so the shape it owes is"
+                    + " two reads with a stretch of the subject's own clock between them, and an assertion that"
+                    + " names both. The poll it replaces asked the same question the assertion below asks (`>"
+                    + " 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised"
+                    + " claim about how fast the box is: a slow one expires and reds, a fast one leaves early"
+                    + " and the assertion is a formality. The slew is driven by the attitude controller's own"
+                    + " tick at a fixed rate per tick, so a fixed stretch of that controller's world turns the"
+                    + " ship the same amount on every machine, and the window is spent on purpose. Overshoot"
+                    + " eases the lower-bound gate below, but only up to the commanded heading, where the hold"
+                    + " parks; the verdict itself is the mount-vs-ship agreement, which extra ticks cannot"
+                    + " loosen.")
     public void theSeatMountTurnsWithItsShip() throws Exception {
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        long buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft whose seat mount must turn with it");
+        builtShip = birth.physicsId;
+        assertTrue("the pilot-seat build must route to a ship, not a rocket: " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The craft this scenario built, by the name its assembler minted, and the physics id that
-        // name maps to. The build site is in a world every server-tier class shares.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        // name maps to once its own announcement says it is usable.
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or nothing below is measured");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
-        String mountAt = exec("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
+        String mountAt = arrange("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ).raw();
         assertTrue("the seat's mount dummy must spawn: " + mountAt, Reply.of(mountAt).ok());
 
         // Where the ship points BEFORE the turn, and where its mount thinks it points. Asked by the
         // id resolved above: a lookup at the build site was defended as "the one positional lookup
         // this scenario can defend — the ship has not moved", but not having moved is a fact about
         // THIS craft and says nothing about how many others are standing there.
-        double shipYawBefore = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
+        double shipYawBefore = shipYawOf(ShipInfo.byId(c -> read(c).raw(), 0, shipId));
         double mountYawBefore = mountYaw(seatX, seatY, seatZ);
 
         // ── TURN THE SHIP ───────────────────────────────────────────────────────────────────────
         // Commanded on an UNMANNED ship: a seated pilot's own input would overwrite the attitude
         // target every tick. The ship hovers while the controller slews it round.
         assertTrue("the attitude hold must accept the yaw command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + shipId
-                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + shipId
+                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0").raw()).bool("commanded"));
 
-        // WINDOW: not a wait, and the difference is what this line is for. A yaw slewing round is a
-        // converging VALUE — nothing announces it and there is no edge to link on — so the shape it
-        // owes is two reads with a stretch of the subject's own clock between them, and an assertion
-        // that names both. The poll it replaces asked the same question the assertion below asks
-        // (`> 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised
-        // claim about how fast the box is: a slow one expires and reds, a fast one leaves early and
-        // the assertion is a formality. The slew is driven by the attitude controller's own tick at a
-        // fixed rate per tick, so a fixed stretch of that controller's world turns the ship the same
-        // amount on every machine, and the window is spent on purpose. Overshoot eases the
-        // lower-bound gate below, but only up to the commanded heading, where the hold parks; the
-        // verdict itself is the mount-vs-ship agreement, which extra ticks cannot loosen.
         GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
-        double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
+        double shipYawAfter = shipYawOf(ShipInfo.byId(c -> read(c).raw(), 0, shipId));
 
         // The gate: unless the SHIP really turned, "the mount agrees with the ship" is a comparison
         // of two zeroes and would be green on a build where nothing writes the mount at all.
@@ -138,15 +132,29 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
                 Math.abs(wrapDegrees(mountYawAfter - shipYawAfter)) <= YAW_TOLERANCE_DEG);
     }
 
+    /** The physics id of the craft this scenario built; turning it keeps the id. */
+    private String builtShip;
+
     @After
-    public void cleanup() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtShip != null) {
+            Disposal.ship(c -> arrange(c).raw(), events, 0, builtShip);
+            builtShip = null;
+        }
     }
+
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     // --- observation --------------------------------------------------------------------------------
 
     /** The mount's own yaw, off the seat block it is bound to. */
     private double mountYaw(int seatX, int seatY, int seatZ) throws Exception {
-        String status = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String status = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         assertTrue("the seat's bound mount must be found for its rotation to be read: " + status,
                 Reply.of(status).bool("dummyFound"));
         return extractDouble(status, "dummyYaw");
@@ -169,12 +177,6 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
         return d;
     }
 
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
-
 
     /**
      * WHERE this scenario's craft stands, and the first link that says the volume is empty.
@@ -189,10 +191,9 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String extractString(String json, String key) {

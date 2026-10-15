@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.client.render.planet;
 
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.world.WorldRuntime;
+import net.minecraft.world.World;
 
 /**
  * Whether the cell sky writes a body's name and distance beside it.

@@ -1,13 +1,9 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+
+import java.util.*;
 
 /**
  * Whether a ship may jump, and what the pilot should be told if it may not.
@@ -111,6 +107,14 @@ public final class JumpGate {
          */
         default GalacticCoord currentCell() {
             return null;
+        }
+
+        /**
+         * Whether the server could load the target's cell right now. Defaulted to {@code true}: a
+         * context that cannot ask the pool simply never warns.
+         */
+        default boolean destinationCellAvailable() {
+            return true;
         }
 
         // ─── What the drive can answer ─────────────────────────────────────────
@@ -234,6 +238,8 @@ public final class JumpGate {
     public static final String MSG_ALREADY_THERE = "msg.jumpgate.alreadythere";
     /** The ship is aimed at a body it can no longer locate — there is nowhere to aim. */
     public static final String MSG_TARGET_LOST = "msg.jumpgate.targetlost";
+    /** No world slot is free for the target's cell now: the arrival may have to wait for one. */
+    public static final String MSG_DESTINATION_FULL = "msg.jumpgate.destinationfull";
     /** No field generator aboard: there is no machine to open a window with. */
     public static final String MSG_NO_DRIVE = "msg.jumpgate.nodrive";
     /** The window does not enclose the whole hull — possible, and it will cost the hull. */
@@ -318,6 +324,16 @@ public final class JumpGate {
                 GalacticCoord there = ship.target();
                 return here == null || there == null || !here.sameCell(there) ? null
                         : new Objection(Severity.HARD, MSG_ALREADY_THERE);
+            }
+        });
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
+            @Override
+            public Objection check(ShipContext ship) {
+                // ADVISORY, not HARD: the pool is a snapshot and the departure itself releases the
+                // origin cell, which is often the very slot the arrival will get - refusing here would
+                // forbid jumps that land. A full pool at arrival makes the ship wait in its lane.
+                return ship.target() == null || ship.destinationCellAvailable() ? null
+                        : new Objection(Severity.ADVISORY, MSG_DESTINATION_FULL);
             }
         });
         clauses.get(Stage.DRIVE).add(new Predicate() {

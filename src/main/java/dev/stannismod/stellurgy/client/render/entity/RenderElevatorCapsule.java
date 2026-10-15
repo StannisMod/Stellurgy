@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.client.render.entity;
 
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.entity.EntityElevatorCapsule;
 import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.client.renderer.entity.Render;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.entity.EntityElevatorCapsule;
 
 public class RenderElevatorCapsule extends Render<EntityElevatorCapsule> implements IRenderFactory<EntityElevatorCapsule> {
 

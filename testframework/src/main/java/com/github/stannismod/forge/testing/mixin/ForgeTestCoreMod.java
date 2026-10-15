@@ -1,19 +1,12 @@
 package com.github.stannismod.forge.testing.mixin;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Map;
-
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-
 import zone.rong.mixinbooter.IEarlyMixinLoader;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The harness's own coremod, whose entire job is to get {@code mixins.forgetestframework.json}
@@ -43,22 +36,24 @@ import zone.rong.mixinbooter.IEarlyMixinLoader;
  * coremod: touching Mixin internals from the AppClassLoader raises a loader-constraint violation and
  * poisons the host's tweaker.</p>
  *
- * <h2>Configurations the CONSUMER owns</h2>
+ * <h2>The configuration the CONSUMER owns — named here, in code</h2>
  *
- * <p>The harness is generic and must not name the mod under test. A consuming project that wants its
- * own test-only mixins ships {@value #CONSUMER_INDEX} in its TEST resources, one config file name per
- * line ({@code #} starts a comment); every copy of that resource on the classpath is read here and
- * its configs are queued alongside the harness's own. This inverts the dependency — the harness
- * offers the moment, the consumer names the file. What was queued is printed in the launch log; a
- * consumer proves its OWN configuration applied the way the harness proves its own — by what the
- * configuration weaves (a recorder that hangs on {@code MinecraftServer} by one of its mixins answers
- * only if the configuration was applied), so a test can tell "the mixin recorded nothing" from "the config was never accepted".</p>
+ * <p>This harness is vendored into the project it tests and edited in place, so the project's one test
+ * mixin configuration is named here, {@value #CONSUMER_CONFIG}. Until 2026-10-09 it was discovered from a
+ * text index on the test classpath, and every copy of that index was read — so a second index, or a line
+ * added to the first under the build directory, queued a configuration nobody had classified, with no
+ * plugin to keep its mixins out of an e2e's children. A name in code is the only one queued; the build's
+ * test bindings check holds the configuration's every mixin to a declared kind, and its observations to
+ * what an observation may do. A consumer proves its configuration applied the way the harness proves its
+ * own — by what the configuration weaves (a recorder that hangs on {@code MinecraftServer} by one of its
+ * mixins answers only if the configuration was applied), so a test can tell "the mixin recorded nothing"
+ * from "the config was never accepted".</p>
  */
 @MCVersion("1.12.2")
 public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
 
-    /** Classpath resource a consuming project ships to name its own test-only mixin configs. */
-    public static final String CONSUMER_INDEX = "META-INF/forge-test-mixins.txt";
+    /** The consuming project's test-only mixin configuration, the one queued beside the harness's own. */
+    public static final String CONSUMER_CONFIG = "mixins.stellurgy.test.json";
 
     /** The harness's own configuration — always queued. */
     private static final String OWN_CONFIG = "mixins.forgetestframework.json";
@@ -77,42 +72,9 @@ public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
     public List<String> getMixinConfigs() {
         List<String> configs = new ArrayList<>();
         configs.add(OWN_CONFIG);
-        StringBuilder discoveryError = new StringBuilder();
-        configs.addAll(discoverConsumerConfigs(discoveryError));
-        System.out.println("[forge-test-framework] queueing mixin configs " + configs
-                + (discoveryError.length() == 0 ? "" : " (consumer discovery failed: " + discoveryError + ")"));
+        configs.add(CONSUMER_CONFIG);
+        System.out.println("[forge-test-framework] queueing mixin configs " + configs);
         return configs;
-    }
-
-    /**
-     * Read every {@value #CONSUMER_INDEX} on the classpath. Uses this class's own loader, which at
-     * this point is the {@code LaunchClassLoader} carrying the full test classpath. A failure is
-     * appended to {@code error}, never swallowed: a consumer whose index cannot be read must be able
-     * to see that, rather than reading an empty recorder as "the event did not happen".
-     */
-    private static List<String> discoverConsumerConfigs(StringBuilder error) {
-        List<String> found = new ArrayList<>();
-        try {
-            Enumeration<URL> indexes = ForgeTestCoreMod.class.getClassLoader().getResources(CONSUMER_INDEX);
-            while (indexes.hasMoreElements()) {
-                URL index = indexes.nextElement();
-                try (InputStream in = index.openStream();
-                     BufferedReader reader = new BufferedReader(
-                             new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        int comment = line.indexOf('#');
-                        String name = (comment < 0 ? line : line.substring(0, comment)).trim();
-                        if (!name.isEmpty() && !found.contains(name)) {
-                            found.add(name);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            error.append(e.getClass().getSimpleName()).append(": ").append(e.getMessage());
-        }
-        return found;
     }
 
     @Override

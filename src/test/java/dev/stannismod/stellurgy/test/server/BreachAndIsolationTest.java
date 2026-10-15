@@ -2,12 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * What happens when a hull is opened, and what the ship can do about it (D127-9 / D127-6).
@@ -39,18 +40,19 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
     /**
      * D127-9: the air leaves through the hole, over seconds, and it is really gone.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: "a breached room is no
-     * longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;". IN NO ZONE —
-     * {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the
-     * position: "the position is in no zone any more — that is what the breach did: …
-     * \"airSource\":\"zone\"". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air
-     * for a zone with no cells: "but the air must still be reachable from the VENT … \"ventHasAir\":false".
-     * LEAVES — {@code TileOxygenVent#ventBreachedAir} at {@code air.drawNitrogen(ratePerSecond);} venting nothing: "the air must actually leave (before=100
-     * after=100)". UNTIL VACUUM — {@code TileOxygenVent#ventBreachedAir} at {@code if (air == null || air.getTotalPressure() <= 0L)} stopping at half an atmosphere: "and keep
-     * leaving until the room is vacuum: … expected:&lt;0&gt; but was:&lt;49&gt;". The two premises
-     * at its head are arrangements and are not witnessed.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: \"a breached room is no"
+            + " longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;\". IN NO ZONE —"
+            + " {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the"
+            + " position: \"the position is in no zone any more — that is what the breach did: …"
+            + " \\\"airSource\\\":\\\"zone\\\"\". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air"
+            + " for a zone with no cells: \"but the air must still be reachable from the VENT … \\\"ventHasAir\\\":false\"."
+            + " LEAVES — {@code SealedZone#ventBreachedAir} at {@code air.drawNitrogen(ratePerSecond);} venting nothing: \"the air must actually leave (before=100"
+            + " after=100)\". UNTIL VACUUM — {@code SealedZone#ventBreachedAir} at {@code if (air == null || air.getTotalPressure() <= 0L)} stopping at half an atmosphere: \"and keep"
+            + " leaving until the room is vacuum: … expected:&lt;0&gt; but was:&lt;49&gt;\". (LEAVES and UNTIL"
+            + " VACUUM were taken in the oxygen vent's own ventBreachedAir; the method moved unchanged into the"
+            + " zone every port shares on 2026-10-05.) The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aBreachedRoomLosesItsAirToSpaceInsteadOfLosingItToBookkeeping() throws Exception {
         int cx = stand("a sealed room about to be breached");
@@ -91,29 +93,36 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      *
      * <p>The probe answers {@code sinkRequested: 0} for a position that is in NO network at all, so
      * "requests nothing" is only a reading about the breached zone once {@code inNetwork} says the
-     * vent is still a node — without it, a breach that tore the network apart would pass here.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —
-     * {@code TileOxygenVent#performFunction} at {@code breached = true;} also leaving the ventilation network when it marks itself breached:
-     * "the vent must still be a node on the network after the breach: … \"inNetwork\":false". STOPS
-     * ASKING — {@code TileOxygenVent#zoneAirForNetwork} at {@code if (world == null || world.isRemote || !isMaintainingAtmosphere()} no longer withholding the zone's air from the network once
-     * the vent stops maintaining it: "a breached zone must stop asking the plant for air …
-     * \"sinkRequested\":124105". The two premises at its head are arrangements and are not
-     * witnessed.</p>
+     * port is still a node — without it, a breach that tore the network apart would pass here.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, both read at the zone's sink, which was"
+            + " then the oxygen vent; re-aimed 2026-10-05 at the code that now makes each decision. STILL A NODE —"
+            + " {@code SealedZone#tick} at {@code breached = true;} also leaving the ventilation network when it marks itself breached:"
+            + " \"the vent must still be a node on the network after the breach: … \\\"inNetwork\\\":false\". STOPS"
+            + " ASKING — {@code TileVentilationPort#zoneAirForNetwork} at {@code if (world == null || world.isRemote || !zone.isSealed()} no longer withholding the zone's air from the network once"
+            + " the zone stops being sealed: \"a breached zone must stop asking the plant for air …"
+            + " \\\"sinkRequested\\\":124105\". The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aBreachedZoneStopsDrawingFromThePlant() throws Exception {
         int cx = stand("a sealed room on a ventilation network, about to be breached");
-        buildSealedRoom(cx);
+        buildWalls(cx);
+        place(cx, "stellurgy:ventilationPort");
         placeDuct(cx + 1);
         placePlant(cx + 2);
         arrange("stellurgytest energy inject 0 " + (cx + 2) + " " + cy + " " + cz + " 1000000");
-        // A vent asks its network for exactly its zone's carbon dioxide
-        // (`TileOxygenVent.getRequested`), so a room of fresh air asks for nothing whether it is
+        // The plant pays the port's running cost through the duct; only then can the port seal.
+        act("stellurgytest subnet solve lifesupport 0 1").requireOk();
+        forceTick(cx, 1);
+        Reply portSealed = arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        requireArranged("the port must hold its room as a sealed zone: " + portSealed,
+                portSealed.bool("sealed"));
+        // A port asks its network for exactly its zone's carbon dioxide
+        // (`TileVentilationPort.getRequested`), so a room of fresh air asks for nothing whether it is
         // sealed or open to space. Breathed-down air is what makes "it stopped asking" a reading.
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        arrange("stellurgytest subnet solve lifesupport 0 2");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
+        act("stellurgytest subnet solve lifesupport 0 2").requireOk();
 
         Reply connected = subnetInfo(cx + 1);
         assertEquals("premise: a sealed room must be a sink on the ventilation network: " + connected,
@@ -123,15 +132,15 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         breach(cx);
         forceTick(cx, 5);
-        arrange("stellurgytest subnet solve lifesupport 0 2");
+        act("stellurgytest subnet solve lifesupport 0 2").requireOk();
 
-        // Read at the VENT, not at the duct: the duct and the plant stay a network of their own
-        // whatever happens to the vent, so only the vent's own position can say that it is still in
-        // one — and a vent that left the network answers `inNetwork:false` here.
+        // Read at the PORT, not at the duct: the duct and the plant stay a network of their own
+        // whatever happens to the port, so only the port's own position can say that it is still in
+        // one — and a port that left the network answers `inNetwork:false` here.
         Reply afterBreach = subnetInfo(cx);
-        assertTrue("the vent must still be a node on the network after the breach: " + afterBreach,
+        assertTrue("the port must still be a node on the network after the breach: " + afterBreach,
                 afterBreach.bool("inNetwork"));
-        assertEquals("a breached zone must stop asking the plant for air — the vent is still a node, "
+        assertEquals("a breached zone must stop asking the plant for air — the port is still a node, "
                 + "but it requests nothing: " + afterBreach, 0L, afterBreach.longInteger("sinkRequested"));
     }
 
@@ -140,12 +149,12 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * added for life support: a closed airlock door counts as a sealing block, so it divides a hull
      * into separately-maintained volumes. Pinned because the whole isolation story rests on it, and
      * nothing said so.
-     *
-     * <p>red-witnessed: with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state);} answering an airlock door as never
-     * sealed: "a closed bulkhead must divide the hall … (51 → 51)", 2026-09-30. The two readings
-     * before it (the open hall, the hall through the doorway) are arrangements and are not
-     * witnessed.</p>
      */
+    @LegacyWitness(prose = "with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state, doors);} answering an airlock door as never"
+            + " sealed: \"a closed bulkhead must divide the hall … (51 → 51)\", 2026-09-30 — taken on the form"
+            + " before the call gained its {@code doors} argument; the code named is the call as it now stands. The two readings"
+            + " before it (the open hall, the hall through the doorway) are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aClosedBulkheadDividesTheHullIntoTwoZones() throws Exception {
         int west = stand("one long hall about to be divided by a bulkhead");
@@ -153,15 +162,15 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         // One long hall, a vent at each end, and a doorway between them.
         arrange("stellurgytest fill 0 " + (west - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (east + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (east + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (west - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (east + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (east + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (west - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (east + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (east + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (west - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (east + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (east + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
         commissionVent(west);
         commissionVent(east);
@@ -176,10 +185,10 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
         // pass the comparison with no door at all.
         int wall = (west + east) / 2;
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + (cz - 1)
-                + " " + wall + " " + (cy + 2) + " " + (cz - 1) + " minecraft:stone");
+                + " " + wall + " " + (cy + 2) + " " + (cz - 1) + " minecraft:stone").requireOk();
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + (cz + 1)
-                + " " + wall + " " + (cy + 2) + " " + (cz + 1) + " minecraft:stone");
-        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz);
+                + " " + wall + " " + (cy + 2) + " " + (cz + 1) + " minecraft:stone").requireOk();
+        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz).requireOk();
         forceTick(west, 5);
         Reply gapped = ventInfo(west);
         int throughTheDoorway = gapped.integer("blobSize");
@@ -189,8 +198,8 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         // Now close a bulkhead in the doorway.
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + cz
-                + " " + wall + " " + (cy + 2) + " " + cz + " stellurgy:airlock_door");
-        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz);
+                + " " + wall + " " + (cy + 2) + " " + cz + " stellurgy:airlock_door").requireOk();
+        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz).requireOk();
         forceTick(west, 5);
 
         // A door that did NOT seal leaves one zone that has lost at most the door's own two cells;
@@ -206,33 +215,38 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
     // ─── helpers ───────────────────────────────────────────────────────
 
     private void buildSealedRoom(int cx) throws Exception {
+        buildWalls(cx);
+        commissionVent(cx);
+    }
+
+    /** A closed room with nothing in its floor yet. */
+    private void buildWalls(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
-        commissionVent(cx);
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
     }
 
     private void commissionVent(int cx) throws Exception {
         place(cx, "stellurgy:oxygenVent");
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
         forceTick(cx, 5);
     }
 
     /** Open the ceiling. One block is a hull breach. */
     private void breach(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + cx + " " + (cy + 3) + " " + cz + " "
-                + cx + " " + (cy + 3) + " " + cz + " minecraft:air");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+                + cx + " " + (cy + 3) + " " + cz + " minecraft:air").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
     }
 
     private void placeDuct(int x) throws Exception {
@@ -244,19 +258,19 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     private void forceTick(int cx, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + ticks);
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + ticks).requireOk();
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private Reply subnetInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
+        return read("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
     }
 }

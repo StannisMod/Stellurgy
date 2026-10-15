@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.space.ShipAboardTag;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.space.ShipAboardTag;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The durable aboard record's two writes as events: a player is STAMPED aboard a ship (or his record

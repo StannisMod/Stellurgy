@@ -1,19 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -85,15 +79,17 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who logs out in his seat comes back in it, and his keys still fly the ship.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy
-     * refusing to be saved with its rider (a {@code writeToNBTOptional} override on
-     * {@code EntityDummy} returning false): "no `mount` … within 400 ticks". CONTROL AFTER THE RELOG —
-     * the client's ship-input send ({@code KeyBindings#handleShipPilotInput} at
-     * {@code PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT))}) gated to the first
-     * {@code WorldClient} the session built: "after the relog the CLIENT's own pilot gate must re-open
-     * against the restored mount and put input on the wire". The first wait the wave touched is the control leg's link before the relog, which
-     * says the key reached the ship at all.</p>
+     * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
+    @Pins("SHIPCTL-16")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy"
+            + " refusing to be saved with its rider (a {@code writeToNBTOptional} override on"
+            + " {@code EntityDummy} returning false): \"no `mount` … within 400 ticks\". CONTROL AFTER THE RELOG —"
+            + " the client's ship-input send ({@code KeyBindings#handleShipPilotInput} at"
+            + " {@code PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT))}) gated to the first"
+            + " {@code WorldClient} the session built: \"after the relog the CLIENT's own pilot gate must re-open"
+            + " against the restored mount and put input on the wire\". The first wait the wave touched is the control leg's link before the relog, which"
+            + " says the key reached the ship at all.")
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 
@@ -106,7 +102,7 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
         // what is under the hull.
         final FixtureSite site = site();
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (site.x + 600) + " 120 " + (site.z + 600) + " 0 0");
+        arrange("tp @a " + (site.x + 600) + " 120 " + (site.z + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, site.x + 600, site.z + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         // The LOAD wait's budget: what it waits on is wall-clock work — VS building the ship off the
@@ -118,13 +114,13 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
         int budget = 40;
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly built = assembleFixture(site);
+        scenario().requireArranged("a with-pilot-seat build must route to a ship, making no rocket: "
+                + built, built.madeNoRocket());
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (site.x + 0.5) + " " + (site.y + 6) + " " + (site.z + 0.5) + " 0 0");
+        arrange("tp @a " + (site.x + 0.5) + " " + (site.y + 6) + " " + (site.z + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, site.x + 0.5, site.z + 0.5,
                 "the client's ARRIVAL is what loads the ship, so the load wait below is waiting on"
                         + " something only an arrived client can cause");
@@ -150,9 +146,9 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
         awaitShipUsable(events, spawnMark, shipId, budget * 5);
         liftClearOfThePad(shipId, PAD_CLEARANCE_BLOCKS);
 
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // The control leg below asks whether the chain works BEFORE the relog; a client that has not
@@ -339,8 +335,8 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
      * <p>The chunk warmup that stood beside the old pre-clear is gone with it: the air fill
      * force-loads every chunk in its own box, so the first link was already doing that job.</p>
      */
-    private String assembleFixture(FixtureSite site) throws Exception {
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
                 "the hull, and the first blocks of the climb the relogged pilot commands");
     }
 

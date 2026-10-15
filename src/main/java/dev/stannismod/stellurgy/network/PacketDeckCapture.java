@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
-
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server -> client: capture the recipient (a just-dismounted pilot) in his ship's frame, standing on a

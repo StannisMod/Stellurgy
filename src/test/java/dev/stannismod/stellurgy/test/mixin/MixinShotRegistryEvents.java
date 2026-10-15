@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
+import dev.stannismod.stellurgy.projectile.ShotRegistry;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.Vec3d;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.projectile.ShotRegistry;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A thrown round leaving the air, as an event: {@code shot_ended}, with {@code reason}.
@@ -17,7 +15,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>The HEAD of {@code ShotRegistry.end}, which every ending in the substrate goes through — an
  * impact, an expiry, a field that absorbed it, and the off switch emptying the air. Server log,
  * overworld clock, as {@link MixinShotEvents}. Read by
- * {@code ShotBoresOverTimeE2ETest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
+ * {@code ShotBoresOverTimeTest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
  */
 @Mixin(ShotRegistry.class)
 public abstract class MixinShotRegistryEvents {

@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.tile.hyperdrive;
 
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.tile.TileShipComponent;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.EnergyStorage;
 
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.tile.TileShipComponent;
+import javax.annotation.Nullable;
 
 /**
  * What stands between a crew and the bulkhead when a jump ends the wrong way.

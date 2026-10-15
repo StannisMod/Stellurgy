@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.sensor;
 
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
+import dev.stannismod.stellurgy.api.sensor.SensorMode;
+import dev.stannismod.stellurgy.api.sensor.TargetTrack;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.IMob;
@@ -8,9 +11,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.sensor.SensorMode;
-import dev.stannismod.stellurgy.api.sensor.TargetTrack;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 import java.util.ArrayList;
 import java.util.Collections;

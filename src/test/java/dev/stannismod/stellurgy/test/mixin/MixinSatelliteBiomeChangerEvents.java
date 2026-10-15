@@ -1,22 +1,19 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.satellite.SatelliteBiomeChanger;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.satellite.SatelliteBiomeChanger;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * A biome-changer satellite being ASKED to terraform around a point, as an event.

@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.damage.DamageState;
+import dev.stannismod.stellurgy.damage.RepairCost;
+import dev.stannismod.stellurgy.damage.RepairOutcome;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -17,13 +21,6 @@ import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
 
 import javax.annotation.Nullable;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.damage.DamageState;
-import dev.stannismod.stellurgy.damage.RepairCost;
-import dev.stannismod.stellurgy.damage.RepairOutcome;
-
-import java.util.List;
 
 /**
  * The hand tool at the bottom of the repair ladder: right-click a damaged block to take one stage of

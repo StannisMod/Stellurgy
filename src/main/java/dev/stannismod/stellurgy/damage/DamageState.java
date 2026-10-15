@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.damage;
 
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.capability.CapabilityWear;
-import dev.stannismod.stellurgy.api.capability.IPartWear;
 
 /**
  * The one place that answers "how damaged is the block at this position", whichever of the two homes

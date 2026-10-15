@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.item.ItemJackHammer;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -7,8 +9,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.item.ItemJackHammer;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderNebula;
 import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.Nebula;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import dev.stannismod.stellurgy.universe.UniverseScale;
+
+import java.util.*;
 
 /**
  * Server-side producer for the nebula half of the cell sky: turns the clouds seated around a cell into

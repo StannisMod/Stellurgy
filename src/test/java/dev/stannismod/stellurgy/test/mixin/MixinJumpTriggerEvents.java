@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.hyperdrive.JumpSpool;
+import dev.stannismod.stellurgy.hyperdrive.JumpTrigger;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.hyperdrive.JumpSpool;
-import dev.stannismod.stellurgy.hyperdrive.JumpTrigger;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.UUID;
 
 /**
  * What one press of the helm's jump key DID — the trigger's own verdict, as an event.

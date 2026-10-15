@@ -1,11 +1,17 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+
+import dev.stannismod.stellurgy.test.contract.Pins;
+
 import org.junit.Test;
 
+import dev.stannismod.stellurgy.test.Disposal;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 
@@ -53,7 +59,7 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
     private static final int UNLOAD_LINK_TICKS = 200;
 
     /** This class's reader of the server's ordered event log, stepped on the hull's own world. */
-    private final Events events = new Events(this::exec,
+    private final Events events = new Events(c -> read(c).raw(),
             ticks -> GameTicks.advance(client(), GameTicks.world(DIM), ticks), evictionReports());
 
     /**
@@ -99,6 +105,25 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
      *       silencing the pre-unload link.</li>
      * </ul>
      */
+    @RedWitness(verdict = "READY",
+            member = "ShipFieldFrame#isReady",
+            at = "return VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) != null;",
+            replacedBy = "return true;",
+            fails = "an emitter aboard a hull with no physics object reports its frame ready",
+            on = "2026-10-07")
+    @RedWitness(verdict = "DOMAIN while simulated",
+            member = "ShieldDomains#forBlock",
+            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            replacedBy = "String shipId = null;",
+            fails = "while the hull is simulated, its emitter must be in the hull's shield domain",
+            on = "2026-10-07")
+    @RedWitness(verdict = "the aboard-and-ready link",
+            member = "FieldFrames#forBlock",
+            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            replacedBy = "String shipId = null;",
+            fails = "the emitter never resolved its frame onto hull",
+            on = "2026-10-07")
+    @Pins("PORT-16")
     @Test
     public void anEmitterAboardAHullNobodyIsNearIsStillThatHullsShield() throws Exception {
         // The rocket fixture lays a 6x6 pad at the site, its structure tower one block outside the
@@ -106,18 +131,28 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
         // outside the -Z edge: a halo of 1 and a height of 7 contain all of it.
         FixtureSite site = clearedSite(1, 7, "the craft whose emitter is the subject");
         long mark = events.markInstrumented();
-        Reply fixture = ask("stellurgytest fixture rocket " + DIM + " " + site.x + " " + site.y + " "
+        Reply fixture = arrange("stellurgytest fixture rocket " + DIM + " " + site.x + " " + site.y + " "
                 + site.z + " with-shield-emitter").requireOk("lay the craft with an emitter in it");
         int[] builder = fixture.blockPos("builderPos");
-        Reply assembled = ask("stellurgytest rocket assemble " + DIM + " " + builder[0] + " "
+        Reply assembled = act("stellurgytest rocket assemble " + DIM + " " + builder[0] + " "
                 + builder[1] + " " + builder[2]).requireOk("assemble the craft");
-        requireArranged("the build did not become one ship (rockets " + assembled.integer("rocketCount")
+        java.util.List<String> rockets = RocketFixture.rocketsBornAt(events, mark, builder);
+        requireArranged("the build did not become one ship (rockets " + rockets
                         + ", flight computers " + assembled.integer("afcCount") + "): " + assembled,
-                assembled.integer("rocketCount") == 0 && assembled.integer("afcCount") == 1);
+                rockets.isEmpty() && assembled.integer("afcCount") == 1);
         String durable = assembled.text("shipId");
         String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durable,
                 "the assembly never registered a hull named " + durable, ASSEMBLY_LINK_TICKS);
         String hull = Events.text(spawned, "vsShip");
+        try {
+            observeTheEmitterAcrossTheUnload(mark, hull);
+        } finally {
+            Disposal.ship(c -> arrange(c).raw(), events, DIM, hull);
+        }
+    }
+
+    /** The scenario after the assembly: {@code mark} is the one taken before the build. */
+    private void observeTheEmitterAcrossTheUnload(long mark, String hull) throws Exception {
 
         // The emitter's subspace position, off its own frame record: the first resolution that puts
         // it on THIS hull, with the hull simulated (the test server holds every ship loaded).
@@ -128,7 +163,7 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
         int ex = Integer.parseInt(at[0]);
         int ey = Integer.parseInt(at[1]);
         int ez = Integer.parseInt(at[2]);
-        ShieldTile simulated = ShieldTile.at(this::exec, DIM, ex, ey, ez)
+        ShieldTile simulated = ShieldTile.at(c -> read(c).raw(), DIM, ex, ey, ez)
                 .require(ShieldTile.EMITTER, "the block the frame record named");
         assertEquals("while the hull is simulated, its emitter must be in the hull's shield domain — or"
                 + " the verdict after the unload compares against nothing: " + simulated,
@@ -136,25 +171,35 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
 
         // Let the substrate do what it does to a hull nobody is near: drop its physics object.
         long unloadMark = events.markInstrumented();
-        ShipReadiness.letShipsUnload(this::exec, "the subject is a hull with no physics object");
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the subject is a hull with no physics object");
+        try {
+            observeTheUnsimulatedEmitter(unloadMark, hull, ex, ey, ez);
+        } finally {
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "this scenario's opt-out ends with it");
+        }
+    }
+
+    /** The verdicts on the emitter once its hull has no physics object; {@code unloadMark} precedes it. */
+    private void observeTheUnsimulatedEmitter(long unloadMark, String hull, int ex, int ey, int ez)
+            throws Exception {
         events.awaitRecordWithField(unloadMark, "ship_unloaded", "vsShip", hull,
                 "the substrate never dropped the physics object of hull " + hull + " with nobody near it",
                 UNLOAD_LINK_TICKS);
         // A read of the emitter: if the substrate's unload let its chunk go, this loads it again (and
         // the tile resolves its frame on load); if not, the tile resolves on its next tick.
-        ShieldTile.at(this::exec, DIM, ex, ey, ez).require(ShieldTile.EMITTER, "the emitter after the unload");
+        ShieldTile.at(c -> read(c).raw(), DIM, ex, ey, ez).require(ShieldTile.EMITTER, "the emitter after the unload");
         String unsimulated = events.awaitRecordWithField(unloadMark, "field_frame_resolved", "pos",
                 ex + "," + ey + "," + ez, "the emitter never resolved its frame after hull " + hull
                         + " lost its physics object", UNLOAD_LINK_TICKS);
 
         // THE STATE, measured before any verdict: the record still claims the emitter's block, and
         // the substrate has no physics object for the hull.
-        Reply owner = ask("stellurgytest vs managed-by " + DIM + " " + ex + " " + ey + " " + ez)
+        Reply owner = read("stellurgytest vs managed-by " + DIM + " " + ex + " " + ey + " " + ez)
                 .requireOk("ask which ship's record claims the emitter");
         requireArranged("the registry no longer names hull " + hull + " for the emitter's block, so"
                 + " this is a remnant and not an unsimulated hull: " + owner,
                 hull.equals(owner.text("shipId")));
-        Reply physics = ask("stellurgytest vs phys-diag " + DIM + " " + hull + " " + ex + " " + ey + " "
+        Reply physics = read("stellurgytest vs phys-diag " + DIM + " " + hull + " " + ex + " " + ey + " "
                 + ez);
         requireArranged("hull " + hull + " still has a physics object, so it is simulated and the"
                 + " verdicts below would be about a hull somebody is near: " + physics,
@@ -171,7 +216,7 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
                 Boolean.parseBoolean(Events.text(unsimulated, "ready")));
 
         // DOMAIN: the emitter is still the hull's shield, not the dimension's.
-        ShieldTile after = ShieldTile.at(this::exec, DIM, ex, ey, ez)
+        ShieldTile after = ShieldTile.at(c -> read(c).raw(), DIM, ex, ey, ez)
                 .require(ShieldTile.EMITTER, "the emitter, read for its domain");
         assertEquals("an emitter aboard a hull nobody is near left the hull's shield domain: " + after,
                 "ship:" + hull, after.domainId());

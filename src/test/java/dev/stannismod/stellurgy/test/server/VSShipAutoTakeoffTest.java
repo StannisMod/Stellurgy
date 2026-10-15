@@ -1,24 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: the tier-2 AUTO-TAKEOFF autopilot — the AUTOMATED half of the entry on-ramp. Two legs on one
@@ -60,39 +48,41 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
     @Test
     public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
 
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Build + assemble a piloted ship in the overworld.
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("AFC build must route to a ship: " + asm, (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("source ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft the autopilot flies");
+        builtDurable = birth.durable;
+        assertTrue("AFC build must route to a ship: " + birth, birth.rocketsBorn.isEmpty());
 
         // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
-        // mints the durable id on the pad and hands it back, and `vs ship-uuid` crosses from that
-        // name to the physics id every `vs` verb is keyed on. Nothing here asks the world what is
-        // standing at a coordinate — the shared overworld holds every other scenario's craft too,
-        // and a proximity answer is indistinguishable from the right one.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        // mints the durable id on the pad and hands it back, and the physics id every `vs` verb is
+        // keyed on is resolved from it once the craft's own announcement says it is usable.
+        String durableId = birth.durable;
+        String shipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
 
         // ---- DECLINE leg: put a solid slab directly overhead, engage, expect a self-disengage. ----
         // The corridor is a 45-degree diagonal, so it moves ~1 block sideways per block of climb; a
         // blocking slab must be CLOSE overhead and WIDE enough to intercept it before it exits the span.
         int slabY = (int) sy + 5;
-        assertTrue("slab fill failed", Reply.of(exec("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
-                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:stone")
+        assertTrue("slab fill failed", Reply.of(arrange("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
+                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:stone").raw()
                 ).ok());
         // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
         // cleared any stale static input channel.
         // Marked before the engage, because the refusal below is announced once, on the first AFC
         // tick that raycasts the blocked corridor — which can be the tick the engage itself lands on.
         long declineMark = events.mark();
-        String engaged = exec("stellurgytest space auto-takeoff 0 id " + shipId);
+        String engaged = arrange("stellurgytest space auto-takeoff 0 id " + shipId).raw();
         assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged"));
 
         // Linked on the autopilot's own refusal, narrowed to THIS craft's ship id. The raycast runs
@@ -103,25 +93,25 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         // yet was indistinguishable from a corridor it had refused.
         events.awaitField(declineMark, "auto_takeoff_declined", "ship", shipId,
                 "auto-takeoff must decline a blocked corridor", DECLINE_TICKS);
-        String status = exec("stellurgytest space auto-takeoff 0 id " + shipId + " status");
+        String status = read("stellurgytest space auto-takeoff 0 id " + shipId + " status").raw();
         // The bare verb: `engaged` is missing when the seat was not found (`seatFound:false`), and a
         // default of false there would PASS this assertFalse about a craft nobody located.
         assertFalse("the autopilot announced a decline, so it must no longer be engaged: " + status,
                 Reply.of(status).bool("engaged"));
 
         // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
-        assertTrue("slab clear failed", Reply.of(exec("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
-                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air")
+        assertTrue("slab clear failed", Reply.of(arrange("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
+                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air").raw()
                 ).ok());
-        String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + (OrbitLine.of(this::exec, 0).entryCeiling() - BELOW_CEILING_HOP)
-                + " " + (int) sz);
+        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
+                + (int) sx + " " + (OrbitLine.of(c -> read(c).raw(), 0).entryCeiling() - BELOW_CEILING_HOP)
+                + " " + (int) sz).raw();
         assertTrue("hop teleport failed: " + tp, Reply.of(tp).ok());
-        exec("stellurgytest vs unpark-by-id 0 " + shipId);
+        arrange("stellurgytest vs unpark-by-id 0 " + shipId);
         // Marked before the re-engage is allowed to carry the craft up: the arrival is announced
         // once, and a mark taken afterwards would wait for a second climb.
         long climbMark = events.mark();
-        String reEngage = exec("stellurgytest space auto-takeoff 0 id " + shipId);
+        String reEngage = arrange("stellurgytest space auto-takeoff 0 id " + shipId).raw();
         assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
                 Reply.of(reEngage).bool("engaged"));
 
@@ -129,31 +119,31 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         // durable id — "somebody settled" is a different question, and a slot the entry stack has
         // ledgered twice used to answer it with a neighbour's row.
         awaitEnteredSpace(events, climbMark, durableId,
-                "auto-takeoff must climb the ship into space", CLIMB_TICKS,
-                () -> loadAllEntrySlots(setup));
+                "auto-takeoff must climb the ship into space", CLIMB_TICKS, null);
     }
 
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
+        arrange("stellurgytest space entry-clear");
     }
 
     // --- helpers ------------------------------------------------------------------------------------
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
 
     /**
@@ -169,10 +159,9 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

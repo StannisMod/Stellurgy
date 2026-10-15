@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
-
-import net.minecraft.util.math.BlockPos;
 
 /**
  * Read access to a structure crossing's own answer — how far along the segment the first solid

@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.api.capability;
 
+import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityInject;
 import net.minecraftforge.common.capabilities.CapabilityManager;
-import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 
 public class CapabilitySpaceArmor {
 

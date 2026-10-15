@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.render.planet.BoundarySky;
+import dev.stannismod.stellurgy.test.trace.RenderFrameWindow;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.client.render.planet.BoundarySky;
-import dev.stannismod.stellurgy.test.trace.RenderFrameWindow;
 
 /**
  * Counts the sky renderer's frames into every open {@link RenderFrameWindow} — the denominator for

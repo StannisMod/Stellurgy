@@ -1,10 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -64,22 +62,22 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
      */
     @Test
     public void railgunOnReceiveCargoDepositsStackToOutputPort() throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock railgun 0 "
-                + CX + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture multiblock railgun 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("fixture multiblock railgun failed: " + fixture,
                 Reply.of(fixture).ok());
 
         // Validate structure so libVulpes' integrateTile populates
         // itemOutPorts (the field the probe reads via reflection).
-        String tryComplete = exec("stellurgytest machine try-complete 0 "
-                + CX + " " + CY + " " + CZ);
+        String tryComplete = act("stellurgytest machine try-complete 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("railgun must validate (precondition for itemOutPorts "
                         + "to be populated): " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
 
         // Probe call: receive 16 cobblestone on the controller-side tile.
-        String receive = exec("stellurgytest infra railgun-receive-cargo 0 "
-                + CX + " " + CY + " " + CZ + " minecraft:cobblestone 16");
+        String receive = act("stellurgytest infra railgun-receive-cargo 0 "
+                + CX + " " + CY + " " + CZ + " minecraft:cobblestone 16").raw();
         assertTrue("railgun-receive-cargo probe must succeed: " + receive,
                 Reply.of(receive).ok());
         assertTrue("canReceiveCargo must be true on freshly-assembled "

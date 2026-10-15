@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
-
 import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -36,7 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final String ENT_ID = "entityId";
     private static final String TOTAL_PLACED = "totalPlaced";
     private static final String TILES_WITH_CAP = "tilesWithCapability";
 
@@ -51,7 +50,9 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      * {@code storage.getInventoryTiles()} and inserts items via the
      * ITEM_HANDLER capability or IInventory — same surface the loader writes
      * against, but driven directly from the test).</p>
+     * Pins INV-INFRA-14 (the item unloader pulls items out of a rocket).
      */
+    @Pins("INV-INFRA-14")
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {
         // THE PAIR MOVES TOGETHER: the unloader sat one block above the rocket's base, a RELATIVE
@@ -67,8 +68,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
         // Pre-fill rocket's storage inventory tiles (the with-cargo
         // chest) with cobblestone via the dedicated probe.
-        String fillResp = exec("stellurgytest rocket storage-item-fill " + rocketId
-                + " minecraft:cobblestone 32");
+        String fillResp = arrange("stellurgytest rocket storage-item-fill " + rocketId
+                + " minecraft:cobblestone 32").raw();
         assertTrue("storage-item-fill must succeed: " + fillResp,
                 Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
@@ -80,7 +81,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                 totalPlaced > 0);
 
         // Sanity: storage-inventory probe agrees with fill result.
-        String preStorage = exec("stellurgytest rocket storage-inventory " + rocketId);
+        String preStorage = read("stellurgytest rocket storage-inventory " + rocketId).raw();
         // The CONTAINER is what this claim is about, and it is already addressed: the reply was
         // fetched for THIS rocket. Its contents are then an existence question — the fixture chose
         // no slot, and two stacks of one item is a stocked rocket, not an ambiguity.
@@ -89,8 +90,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                         .holdsElement("items", "item", "minecraft:cobblestone"));
 
         // Link rocket to unloader.
-        String link = exec("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).bool("linked"));
 
@@ -98,36 +99,38 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         // chunk may contain multiple inventory tiles (engine TEs etc.)
         // that the unloader iterates first; 60 ticks comfortably cover
         // the first-empty-slot scan even on the longest TE list.
-        ok("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // Unloader's own inventory must contain at least one cobblestone
         // — that's the player-visible "drain returning rocket" contract.
-        String postUnloader = exec("stellurgytest hatch read 0 " + ux + " " + uy + " " + uz);
-        String postStorage = exec("stellurgytest rocket storage-inventory " + rocketId);
+        String postUnloader = read("stellurgytest hatch read 0 " + ux + " " + uy + " " + uz).raw();
+        String postStorage = read("stellurgytest rocket storage-inventory " + rocketId).raw();
         assertTrue("the unloader's own inventory must hold what it drained: " + postUnloader,
                 Reply.of("stellurgytest hatch read", postUnloader)
                         .holdsElement("slots", "item", "minecraft:cobblestone"));
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }
 
     private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
-        // this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
+        // this ASSERTS rather than digs. The rocket is the one the press's own `rocket_born` record
+        // names.
+        return rockets.assembleAt(site, c -> act(c).raw(), variant, 2, 10,
                 "the craft the unloader empties stands in this volume");
-        assertTrue("rocket assemble failed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply emReply = Reply.of(assemble);
-        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
-        return Integer.parseInt(emReply.text(ENT_ID));
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private static int extract(String src, String field) {

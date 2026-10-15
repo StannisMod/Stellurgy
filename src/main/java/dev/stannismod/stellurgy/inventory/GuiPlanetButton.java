@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.inventory;
 
+import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.gui.GuiImageButton;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.libvulpes.gui.GuiImageButton;
 
 public class GuiPlanetButton extends GuiImageButton {
 

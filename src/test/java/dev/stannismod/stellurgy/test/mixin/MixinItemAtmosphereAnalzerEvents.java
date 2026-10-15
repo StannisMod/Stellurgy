@@ -1,20 +1,18 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.item.ItemAtmosphereAnalzer;
+import dev.stannismod.stellurgy.test.trace.AtmosphereReadoutMemory;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.item.ItemAtmosphereAnalzer;
-import dev.stannismod.stellurgy.test.trace.AtmosphereReadoutMemory;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * The atmosphere analyser COMPOSED its two-line readout, as an event — the one fact both of the

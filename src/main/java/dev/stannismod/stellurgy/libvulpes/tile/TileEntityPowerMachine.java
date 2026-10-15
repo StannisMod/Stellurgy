@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.energy.CapabilityEnergy;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
 import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
 import dev.stannismod.stellurgy.libvulpes.energy.IPower;
 import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.energy.CapabilityEnergy;
 
 public abstract class TileEntityPowerMachine extends TileEntityMachine implements IPower, IUniversalEnergy {
 

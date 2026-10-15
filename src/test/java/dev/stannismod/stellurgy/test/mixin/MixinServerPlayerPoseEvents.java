@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetHandlerPlayServer;
 import net.minecraft.network.play.client.CPacketEntityAction;
 import net.minecraft.network.play.client.CPacketPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The SERVER's idea of a player's pose, as an event: {@code player_pose_received}, with {@code who},
@@ -26,7 +24,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *
  * <p>EDGE-ONLY per connection on the whole payload: a movement packet arrives every tick or so, and
  * the record is the change, not the stream. SILENT about position. Read by
- * {@code ALinkerNamesTheBatteryItsTargetE2ETest}.</p>
+ * {@code ALinkerNamesTheBatteryItsTargetTest}.</p>
  */
 @Mixin(NetHandlerPlayServer.class)
 public abstract class MixinServerPlayerPoseEvents {

@@ -1,7 +1,15 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
-
+import dev.stannismod.stellurgy.util.AudioRegistry;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -11,15 +19,6 @@ import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import java.util.List;
 

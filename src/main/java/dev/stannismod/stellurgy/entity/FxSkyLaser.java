@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.entity;
 
 
+import dev.stannismod.stellurgy.client.render.RenderLaser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -8,7 +9,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.RenderLaser;
 
 public class FxSkyLaser extends Particle {
 

@@ -53,6 +53,8 @@ public class StellurgyBlocks {
     public static Block blockLightwoodWood, sblockLightwoodLeaves, blockLightwoodSapling;
     public static Block blockGuidanceComputer;
     public static Block blockAdvancedFlightComputer;
+    /** Turns a ship about any axis without pushing it; see {@code BlockReactionWheel}. */
+    public static Block blockReactionWheel;
     public static Block blockNavigationComputer;
     /**
      * The gun family: a controller, and the parts a gun's numbers are derived from. A turret is
@@ -124,6 +126,7 @@ public class StellurgyBlocks {
     public static Block blockGasSeparator;
     public static Block blockLifeSupportPlant;
     public static Block blockVentilationDuct;
+    public static Block blockVentilationPort;
     public static Block blockJettisonPort;
     public static Block blockHeatPipe;
     public static Block blockHeatAccumulator;

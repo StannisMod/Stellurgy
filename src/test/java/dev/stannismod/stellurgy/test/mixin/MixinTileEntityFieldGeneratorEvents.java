@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.affs.world.FieldFrame;
+import dev.stannismod.stellurgy.affs.world.ShipFieldFrame;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
-import dev.stannismod.stellurgy.affs.world.FieldFrame;
-import dev.stannismod.stellurgy.affs.world.ShipFieldFrame;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A shield emitter's FRAME — standalone or on one VS ship, and whether that frame currently resolves —

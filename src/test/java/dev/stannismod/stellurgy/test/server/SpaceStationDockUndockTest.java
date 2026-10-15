@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.StationPads;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * dock / undock contract on
@@ -67,7 +66,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     private static final String ID_PATTERN = "id";
 
     private int createStation() throws Exception {
-        String resp = String.join("\n", client().execute("stellurgytest station create 0"));
+        String resp = String.join("\n", client().arrange("stellurgytest station create 0"));
         assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not parse station id: " + resp, mReply.has(ID_PATTERN));
@@ -78,10 +77,12 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
+    /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
+    @Pins("INV-STN-23")
     @Test
     public void addPadGrowsListWithExpectedDefaults() throws Exception {
         int id = createStation();
-        String add = ok(client().execute("stellurgytest station add-pad " + id + " 10 20 alpha"));
+        String add = ok(client().arrange("stellurgytest station add-pad " + id + " 10 20 alpha"));
         assertTrue("add-pad must succeed: " + add, Reply.of(add).ok());
         // `add-pad` writes its own `padCount`, so it is read as ITS reply and not as a station
         // reading — and as a NUMBER: the substring form was a prefix, satisfied by 10 pads.
@@ -99,14 +100,16 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertEquals("new pad must carry the supplied name: " + pad.raw(), "alpha", pad.name());
     }
 
+    /** Pins INV-STN-07 (a dock claims only free pads that opted into auto-land). */
+    @Pins("INV-STN-07")
     @Test
     public void dockRejectsPadWithoutAutoLandOptIn() throws Exception {
         // Critical: getNextLandingPad gates on BOTH not-occupied AND
         // allowedForAutoLanding. A pad just added via addLandingPad starts
         // with allowAutoLand=false — dock must NOT silently consume it.
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " 10 20 alpha"));
-        String dock = ok(client().execute("stellurgytest station dock " + id));
+        ok(client().arrange("stellurgytest station add-pad " + id + " 10 20 alpha"));
+        String dock = ok(client().act("stellurgytest station dock " + id));
         // `has("ok") && !ok()` and not a bare `!ok()`: the claim is that the verb REPORTED a
         // refusal, and a reply that says nothing at all also fails `ok()`.
         Reply dockRefusal = Reply.of("stellurgytest station dock", dock);
@@ -115,13 +118,18 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
                         && "no free landing pad".equals(dockRefusal.text("reason")));
     }
 
+    /**
+     * Pins INV-STN-07 (a dock claims only free pads that opted into auto-land).
+     * Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it).
+     */
+    @Pins({"INV-STN-07", "INV-STN-24"})
     @Test
     public void dockClaimsAutoLandPadAndMarksOccupied() throws Exception {
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " " + PAD_BETA_X + " " + PAD_BETA_Z + " beta"));
-        ok(client().execute("stellurgytest station set-autoland " + id + " 30 40 true"));
+        ok(client().arrange("stellurgytest station add-pad " + id + " " + PAD_BETA_X + " " + PAD_BETA_Z + " beta"));
+        ok(client().arrange("stellurgytest station set-autoland " + id + " 30 40 true"));
 
-        String dock = ok(client().execute("stellurgytest station dock " + id));
+        String dock = ok(client().act("stellurgytest station dock " + id));
         assertTrue("dock must succeed once pad is auto-land enabled: " + dock,
                 Reply.of(dock).ok());
         // Read as NUMBERS: `contains("\"x\":30")` is satisfied by a pad at x=300, and the same
@@ -135,24 +143,26 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertTrue("dock must mark the pad occupied=true", pads(id).at(30, 40).occupied);
 
         // A second dock against the only pad MUST return no-free-pad.
-        String dock2 = ok(client().execute("stellurgytest station dock " + id));
+        String dock2 = ok(client().act("stellurgytest station dock " + id));
         Reply secondDock = Reply.of("stellurgytest station dock", dock2);
         assertTrue("second dock with no other free pad must fail: " + dock2,
                 secondDock.has("ok") && !secondDock.ok());
     }
 
+    /** Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it). */
+    @Pins("INV-STN-24")
     @Test
     public void undockReturnsPadToFreePool() throws Exception {
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " 50 60 gamma"));
-        ok(client().execute("stellurgytest station set-autoland " + id + " 50 60 true"));
-        ok(client().execute("stellurgytest station dock " + id));  // consume
+        ok(client().arrange("stellurgytest station add-pad " + id + " 50 60 gamma"));
+        ok(client().arrange("stellurgytest station set-autoland " + id + " 50 60 true"));
+        ok(client().act("stellurgytest station dock " + id));  // consume
 
         // Pre-undock: the pad reports occupied=true.
         StationPads.Pad pre = pads(id).at(50, 60);
         assertTrue("pre-undock pad must read occupied=true: " + pre.raw(), pre.occupied);
 
-        String undock = ok(client().execute("stellurgytest station undock " + id + " 50 60"));
+        String undock = ok(client().arrange("stellurgytest station undock " + id + " 50 60"));
         assertTrue("undock must succeed: " + undock, Reply.of(undock).ok());
 
         // Post-undock: pad is free again.
@@ -160,7 +170,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertFalse("post-undock pad must read occupied=false: " + post.raw(), post.occupied);
 
         // And the next dock call must successfully reclaim it.
-        String reclaim = ok(client().execute("stellurgytest station dock " + id));
+        String reclaim = ok(client().act("stellurgytest station dock " + id));
         assertTrue("post-undock dock must reclaim the just-freed pad: " + reclaim,
                 Reply.of(reclaim).ok() && (Reply.of(reclaim).integer("x") == PAD_RECLAIMED_X));
     }
@@ -171,10 +181,10 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // path used for "preview which pad WOULD I land on?" checks. The
         // pad must NOT flip to occupied.
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " 70 80 delta"));
-        ok(client().execute("stellurgytest station set-autoland " + id + " 70 80 true"));
+        ok(client().arrange("stellurgytest station add-pad " + id + " 70 80 delta"));
+        ok(client().arrange("stellurgytest station set-autoland " + id + " 70 80 true"));
 
-        String preview = ok(client().execute("stellurgytest station dock " + id + " false"));
+        String preview = ok(client().read("stellurgytest station dock " + id + " false"));
         assertTrue("preview dock must report ok and the pad coords: " + preview,
                 Reply.of(preview).ok() && (Reply.of(preview).integer("x") == PAD_PREVIEW_X));
 
@@ -183,14 +193,16 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
                 previewed.occupied);
     }
 
+    /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
+    @Pins("INV-STN-23")
     @Test
     public void addPadIsIdempotentForSamePosition() throws Exception {
         // Production gate: spawnLocations.contains(pos) check uses
         // StationLandingLocation.equals which compares by position. Two
         // adds at the same (x,z) MUST collapse to one entry.
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " 90 90 first"));
-        String second = ok(client().execute(
+        ok(client().arrange("stellurgytest station add-pad " + id + " 90 90 first"));
+        String second = ok(client().arrange(
                 "stellurgytest station add-pad " + id + " 90 90 second"));
         // padCount stays 1 even after the duplicate add.
         assertEquals("duplicate add at same (x,z) must NOT grow padCount: " + second,
@@ -200,10 +212,10 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     @Test
     public void removePadShrinksList() throws Exception {
         int id = createStation();
-        ok(client().execute("stellurgytest station add-pad " + id + " 100 100 toremove"));
-        ok(client().execute("stellurgytest station add-pad " + id + " 110 110 keep"));
+        ok(client().arrange("stellurgytest station add-pad " + id + " 100 100 toremove"));
+        ok(client().arrange("stellurgytest station add-pad " + id + " 110 110 keep"));
 
-        String remove = ok(client().execute("stellurgytest station remove-pad " + id + " 100 100"));
+        String remove = ok(client().arrange("stellurgytest station remove-pad " + id + " 100 100"));
         assertTrue("remove-pad must succeed and report removed=1: " + remove,
                 Reply.of(remove).ok() && (Reply.of(remove).integer("removed") == 1));
         assertEquals("padCount must drop to 1 after remove: " + remove,
@@ -216,6 +228,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertFalse("removed pad must be gone from list: " + pads.raw(), pads.has(100, 100));
     }
 
+    /** Pins INV-STN-25 (pad ownership is per station). */
+    @Pins("INV-STN-25")
     @Test
     public void multipleStationsTrackPadsIndependently() throws Exception {
         // Per-station pad state must not bleed across stations. A regression
@@ -225,8 +239,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         int b = createStation();
         assertNotEquals("station ids must be unique", a, b);
 
-        ok(client().execute("stellurgytest station add-pad " + a + " 200 200 a1"));
-        ok(client().execute("stellurgytest station add-pad " + b + " 300 300 b1"));
+        ok(client().arrange("stellurgytest station add-pad " + a + " 200 200 a1"));
+        ok(client().arrange("stellurgytest station add-pad " + b + " 300 300 b1"));
 
         StationPads padsA = pads(a);
         StationPads padsB = pads(b);
@@ -250,7 +264,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertFalse("empty station: hasFreePad=false (no pads at all): " + empty.raw(),
                 empty.hasFreePad());
 
-        ok(client().execute("stellurgytest station add-pad " + id + " 400 400 p1"));
+        ok(client().arrange("stellurgytest station add-pad " + id + " 400 400 p1"));
         StationInfo oneOccupied = station(id);
         assertEquals("after add: padCount=1: " + oneOccupied.raw(), 1, oneOccupied.padCount());
         // hasFreeLandingPad checks for ANY pad with occupied=false, NOT
@@ -263,11 +277,11 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(cmd -> ok(client().execute(cmd)), stationId);
+        return StationInfo.byId(cmd -> ok(client().read(cmd)), stationId);
     }
 
     /** Every landing pad the station holds, addressable by position. */
     private StationPads pads(int stationId) throws Exception {
-        return StationPads.byId(cmd -> ok(client().execute(cmd)), stationId);
+        return StationPads.byId(cmd -> ok(client().read(cmd)), stationId);
     }
 }

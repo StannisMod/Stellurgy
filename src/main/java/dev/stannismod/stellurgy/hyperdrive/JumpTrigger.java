@@ -1,18 +1,13 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.navigation.JumpGate;
+import dev.stannismod.stellurgy.navigation.ShipNavigation;
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.tile.TileNavigationComputer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.navigation.JumpGate;
-import dev.stannismod.stellurgy.navigation.ShipNavigation;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
-import dev.stannismod.stellurgy.tile.TileNavigationComputer;
+import java.util.UUID;
 
 /**
  * The act of jumping: what a press of the helm key does, and when it costs anything.
@@ -82,6 +77,7 @@ public final class JumpTrigger {
     public static final String MSG_BURST_FAILED = "msg.jump.burstfailed";
     public static final String MSG_NO_POSITION = "msg.jump.nopositionrecord";
     public static final String MSG_DEPART_FAILED = "msg.jump.departfailed";
+    public static final String MSG_NO_MASS = "msg.jump.nomass";
     /** The ship's own cell is bound to no slot world, so there is nothing to depart from. Free. */
     public static final String MSG_CELL_NOT_LIVE = "msg.jump.cellnotlive";
     public static final String MSG_CONFIRM = "msg.jump.confirm";
@@ -179,8 +175,15 @@ public final class JumpTrigger {
             // the burst, so it is still free.
             return new Result(Outcome.FAILED, MSG_NO_POSITION);
         }
-        long speed = JumpSpeed.blocksPerTick(nav.drive().stats().drivePower(),
-                ShipMassProvider.massOf(world, flightComputerPos, shipId),
+        // A hull that cannot be weighed has no speed to fly at, and the forecast the gate passed read
+        // it as a flight costing nothing — so it is refused here, above the commit line, still free.
+        java.util.OptionalLong mass = ShipMassProvider.massOf(world, shipId);
+        if (!mass.isPresent()) {
+            LOGGER.warn("[SPACE] jump refused for ship {}: its hull could not be weighed in dim {}",
+                    shipId, world.provider.getDimension());
+            return new Result(Outcome.FAILED, MSG_NO_MASS);
+        }
+        long speed = JumpSpeed.blocksPerTick(nav.drive().stats().drivePower(), mass.getAsLong(),
                 nav.drive().stats().tier());
 
         // Which world the ship must be cut out of is asked of the thing that binds cells to slots,

@@ -3,46 +3,48 @@ package dev.stannismod.stellurgy.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.CraftCensus;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Assume;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.test.Plot;
-
 /**
  * One class run of an {@link AbstractSharedServerTest}: the ONE dedicated server every method of the
  * class shares, and the plots handed out in that server's world.
  *
- * <p>Owned by the runner's run of the class; booted before the class's first test and closed after its
- * last. Each class boots its own server and therefore its own world, so the plot index starts at zero
- * for every class.</p>
+ * <p>Owned by the runner's run of the class; closed after its last test. Each class boots its own
+ * server and therefore its own world, so the plot index starts at zero for every class.</p>
+ *
+ * <p><b>Booted on the first scenario that asks for it, not when the scope opens</b>: the game directory
+ * a class declares ({@link AbstractSharedServerTest#seedGameDirectory}) is asked of a test INSTANCE, and
+ * none exists when the runner opens the scope. A boot that fails is not retried: every later scenario of
+ * the class is handed the same failure.</p>
  */
 public final class SharedServerScope extends TestClassScope {
 
     private RealDedicatedServerHarness harness;
+    private RuntimeException bootFailure;
     private final Map<String, Plot> plots = new HashMap<>();
     private int nextPlotIndex;
+    /** The eviction announcements made by the census's reader of this server's log. */
+    private final EvictionReports evictions = new EvictionReports();
 
     @Override
-    protected void open(Class<?> testClass) throws Exception {
+    protected void open(Class<?> testClass) {
         Assume.assumeTrue(
                 "Server harness disabled — set -D"
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        // Cold-start once for the whole class — over a seeded game directory when the class declares one.
-        SeededWorld seeded = testClass.getAnnotation(SeededWorld.class);
-        dev.stannismod.stellurgy.test.client.GameDirSeed seed =
-                dev.stannismod.stellurgy.test.client.GameDirSeed.forTheSharedHarness();
-        if (seeded != null) {
-            seeded.value().getDeclaredConstructor().newInstance().seed(seed);
-        }
-        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-server-");
-        String written = seed.writeInto(root);
-        harness = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
-        // A scenario whose premise is a seeded galaxy must be able to show the galaxy was there.
-        System.out.println("[shared-server] " + testClass.getSimpleName() + " seeded:" + written);
     }
 
     @Override
@@ -56,13 +58,49 @@ public final class SharedServerScope extends TestClassScope {
         }
     }
 
-    /** The class's server; throws when its boot failed. */
-    RealDedicatedServerHarness harness() {
+    /**
+     * The class's server, booted on the first call over the game directory {@code asking}'s class
+     * declares; throws the boot's failure, on this call and every later one, when it did not start.
+     */
+    synchronized RealDedicatedServerHarness harness(AbstractSharedServerTest asking) {
+        if (bootFailure != null) {
+            throw bootFailure;
+        }
         if (harness == null) {
-            throw new IllegalStateException(
-                    "Shared harness not started — the class's boot failed or has already been closed.");
+            try {
+                GameDirSeed seed = GameDirSeed.forTheSharedHarness();
+                asking.seedGameDirectory(seed);
+                ServerRoot root = ServerRoot.fresh("forge-shared-server-").seed(seed);
+                harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
+                // A scenario whose premise is a seeded galaxy must be able to show the galaxy was there.
+                System.out.println("[shared-server] " + asking.getClass().getSimpleName() + " seeded:"
+                        + seed.describe());
+            } catch (Exception e) {
+                bootFailure = new IllegalStateException("the shared server of "
+                        + asking.getClass().getSimpleName() + " did not boot", e);
+                throw bootFailure;
+            }
         }
         return harness;
+    }
+
+    /**
+     * After every scenario the class's server holds no craft — see {@link CraftCensus}. A scenario that
+     * reached no server (a boot that failed, or one not yet asked for) left nothing to judge.
+     */
+    @Override
+    protected void afterScenario(String scenario) throws Exception {
+        RealDedicatedServerHarness booted;
+        synchronized (this) {
+            booted = harness;
+        }
+        if (booted == null) {
+            return;
+        }
+        TestClient server = booted.client();
+        Events events = new Events(c -> Reply.answering(c, server.read(c)).raw(),
+                ticks -> GameTicks.advance(server, GameTicks.server(), ticks), evictions);
+        CraftCensus.requireNoneLeft(scenario, server, events);
     }
 
     /** {@code key}'s own plot on {@code lane}, allocated once in this class run, never recycled. */

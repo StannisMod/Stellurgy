@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.fuelingStation;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 public class FuelingStationRecipeHandler implements IRecipeHandler<FuelingStationWrapper> {
     @Override public Class<FuelingStationWrapper> getRecipeClass() { return FuelingStationWrapper.class; }

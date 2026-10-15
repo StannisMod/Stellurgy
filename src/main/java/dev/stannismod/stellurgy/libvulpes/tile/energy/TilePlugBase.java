@@ -1,12 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.tile.energy;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.energy.CapabilityEnergy;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
 import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
@@ -17,6 +10,13 @@ import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
 import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
 import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.energy.CapabilityEnergy;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

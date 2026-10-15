@@ -1,13 +1,6 @@
 package dev.stannismod.stellurgy.command;
 
-import net.minecraft.command.ICommandSender;
-import net.minecraftforge.server.command.CommandTreeBase;
-import net.minecraftforge.server.command.CommandTreeHelp;
-import dev.stannismod.stellurgy.command.sub.AddSealantCommand;
-import dev.stannismod.stellurgy.command.sub.AddTorchCommand;
-import dev.stannismod.stellurgy.command.sub.FillDataCommand;
-import dev.stannismod.stellurgy.command.sub.ReloadRecipesCommand;
-import dev.stannismod.stellurgy.command.sub.SetGravityCommand;
+import dev.stannismod.stellurgy.command.sub.*;
 import dev.stannismod.stellurgy.command.sub.dev.DevCommand;
 import dev.stannismod.stellurgy.command.sub.planet.PlanetCommand;
 import dev.stannismod.stellurgy.command.sub.redirect.WeatherCommand;
@@ -16,6 +9,9 @@ import dev.stannismod.stellurgy.command.sub.station.StationCommand;
 import dev.stannismod.stellurgy.command.sub.teleport.FetchCommand;
 import dev.stannismod.stellurgy.command.sub.teleport.GoToCommand;
 import dev.stannismod.stellurgy.command.sub.universe.UniverseCommand;
+import net.minecraft.command.ICommandSender;
+import net.minecraftforge.server.command.CommandTreeBase;
+import net.minecraftforge.server.command.CommandTreeHelp;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;

@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -20,7 +20,7 @@ import static org.junit.Assert.assertEquals;
  * what one particular packet DID, never how a packet was handed over.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientE2ETest {
+public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientTest {
 
     private static final String ARMING = "dev.stannismod.stellurgy.test.trace.RespawnPacketArming";
     /** The dimension the respawn carries the player into: the nether, which every server has. */
@@ -56,20 +56,19 @@ public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientE2ETes
      * <p>What it does not see: the decode on the network thread (the packet is handed to the handler,
      * not sent), and the server's handler, which is the same shape on the other side and needs a
      * server-side respawn to exercise.</p>
-     *
-     * <p>red-witnessed: with {@code BasePacketHandlerClient#onMessage} at
-     * {@code mc.addScheduledTask(() -> message.executeClient(mc.player));} put back to the shape it had
-     * — the player read into a local on arrival and that local handed to the task — this fails at "a
-     * mod packet queued behind a respawn ran for the player the client had when it ARRIVED, in the
-     * world he was leaving ... expected:playerDim=-1 current=true but was:playerDim=0 current=false"
-     * (2026-10-03).</p>
      */
+    @LegacyWitness(prose = "with {@code BasePacketHandlerClient#onMessage} at"
+            + " {@code mc.addScheduledTask(() -> message.executeClient(mc.player));} put back to the shape it had"
+            + " — the player read into a local on arrival and that local handed to the task — this fails at \"a"
+            + " mod packet queued behind a respawn ran for the player the client had when it ARRIVED, in the"
+            + " world he was leaving ... expected:playerDim=-1 current=true but was:playerDim=0 current=false\""
+            + " (2026-10-03).")
     @Test
     public void aModPacketQueuedBehindARespawnRunsForTheNewPlayer() throws Exception {
         Events client = clientEvents();
         int handle = Integer.parseInt(bot().invokeStaticInt(ARMING, "open").get("returned").getAsString());
         long armed = client.mark();
-        Reply moved = Reply.of(exec("stellurgytest tp " + NETHER));
+        Reply moved = Reply.of(arrange("stellurgytest tp " + NETHER).raw());
         requireArranged("the server would not move the player to the nether: " + moved, moved.ok());
 
         String queued = client.awaitRecordWithFields(armed, "client_respawn_queued",

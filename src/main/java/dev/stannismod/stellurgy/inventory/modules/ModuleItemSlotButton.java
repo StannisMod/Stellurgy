@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -7,10 +11,6 @@ import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
-import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 import javax.annotation.Nonnull;
 

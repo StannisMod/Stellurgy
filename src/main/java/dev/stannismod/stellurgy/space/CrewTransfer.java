@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
@@ -10,9 +10,8 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
 
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Moves a tier-2 ship's crew across a per-ship crossing. {@link VSIntegration#crossShip} moves

@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.block;
 
-import net.minecraft.block.material.Material;
-import net.minecraft.init.Blocks;
-import dev.stannismod.stellurgy.damage.StructureDamageEngine;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.damage.Contact;
 import dev.stannismod.stellurgy.api.damage.ContactResult;
 import dev.stannismod.stellurgy.api.damage.ImpactKind;
+import dev.stannismod.stellurgy.damage.StructureDamageEngine;
 import dev.stannismod.stellurgy.projectile.ContactResolver;
+import net.minecraft.block.material.Material;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 /**
  * Mirror plating — glass with a thin film of metal behind it, and what that means when shot at.

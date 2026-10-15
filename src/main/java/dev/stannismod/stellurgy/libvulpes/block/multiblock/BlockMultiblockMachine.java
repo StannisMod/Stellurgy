@@ -1,6 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.block.multiblock;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.entity.player.EntityPlayer;
@@ -13,14 +18,9 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 import javax.annotation.Nonnull;
 import java.util.List;
-import dev.stannismod.stellurgy.api.Constants;
 
 /**
  * hosts a multiblock machine master tile

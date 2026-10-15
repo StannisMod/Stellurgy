@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.entity.player.EntityPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * Resolves a creative-FLYING aboard player's movement in his ship's frame.

@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayerMP;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * What the server's movement bound actually SAW — the step it was asked about and the verdict it

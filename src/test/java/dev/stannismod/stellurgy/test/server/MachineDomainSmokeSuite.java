@@ -1,16 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.MachineInfo;
-import dev.stannismod.stellurgy.test.PlanetAir;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -106,7 +102,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     @Test
     public void allMachineControllersPlaceTickAndHaveRecipes() throws Exception {
         // recipes-summary baseline.
-        String summary = join(client().execute("stellurgytest machine recipes-summary"));
+        String summary = join(client().read("stellurgytest machine recipes-summary"));
         assertTrue("recipes-summary errored: " + summary,
                 !Reply.of(summary).has("error"));
 
@@ -126,7 +122,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             int x = xOff + idx * 5;
             idx++;
 
-            String place = join(client().execute(
+            String place = join(client().arrange(
                     "stellurgytest place 0 " + x + " " + y + " " + z + " " + blockId));
             // absence is the answer: this suite RECORDS a verdict per block rather
             // than ending on the first one, so a probe that answered nothing is one
@@ -139,7 +135,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             // The table above holds SIMPLE names and the probe reports QUALIFIED ones, so this
             // used to be a substring test — satisfied by `TileBeaconAdvanced` where `TileBeacon`
             // was meant, and by the name appearing in an error message about something else.
-            MachineInfo info = MachineInfo.of(join(client().execute(
+            MachineInfo info = MachineInfo.of(join(client().read(
                     "stellurgytest machine info 0 " + x + " " + y + " " + z)));
             if (!info.isTile(tileClass)) {
                 failures.append(blockId).append("=WRONG_TILE_CLASS(expected ")
@@ -147,7 +143,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            String tryComplete = join(client().execute(
+            String tryComplete = join(client().act(
                     "stellurgytest machine try-complete 0 " + x + " " + y + " " + z));
             // absence is the answer: this suite RECORDS a verdict per block rather
             // than ending on the first one, so a probe that answered nothing is one
@@ -158,7 +154,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            String tick = join(client().execute(
+            String tick = join(client().act(
                     "stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
             if (!Reply.of(tick).ok()) {
                 failures.append(blockId).append("=TICK_FAILED(").append(tick).append(");\n");
@@ -170,7 +166,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            MachineInfo postInfo = MachineInfo.of(join(client().execute(
+            MachineInfo postInfo = MachineInfo.of(join(client().read(
                     "stellurgytest machine info 0 " + x + " " + y + " " + z)));
             if (!postInfo.isTile(tileClass)) {
                 failures.append(blockId).append("=POST_TICK_TILE_LOST(")
@@ -197,10 +193,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     public void cuttingMachineMultiblockValidatesAndInvalidates() throws Exception {
         final int probeY = FixtureSite.OPEN_AIR_Y;
         // Step 0 — fixture-builder primitives still healthy.
-        String emptyInfo = join(client().execute("stellurgytest machine info 0 200 " + probeY + " 200"));
+        String emptyInfo = join(client().read("stellurgytest machine info 0 200 " + probeY + " 200"));
         assertTrue("empty position machine info wrong: " + emptyInfo,
                 "no tile entity".equals(Reply.of(emptyInfo).text("error")));
-        String fill = join(client().execute(
+        String fill = join(client().arrange(
                 "stellurgytest fill 0 210 " + probeY + " 210 212 " + (probeY + 2) + " 212 minecraft:stone"));
         assertTrue("fill 3x3x3 stone failed: " + fill,
                 Reply.of(fill).ok() && (Reply.of(fill).integer("volume") == FILL_3X3X3_VOLUME));
@@ -209,7 +205,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // validated by its own STRUCTURE, so it wants nothing under it.
         final FixtureSite site = FixtureSite.openAir(0, 300, 300);
         int cx = site.x, cy = site.y, cz = site.z;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,
                 Reply.of(fixture).ok());
@@ -220,31 +216,31 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         int sx = sawBlade[0], sy = sawBlade[1], sz = sawBlade[2];
 
         // Step 2 — try-complete on the controller -> isComplete=true.
-        String complete = join(client().execute(
+        String complete = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("try-complete errored: " + complete, Reply.of(complete).ok());
         assertTrue("structure didn't validate (isComplete=false): " + complete,
                 Reply.of(complete).bool("isComplete"));
 
         // Step 3 — break the sawblade -> re-validate -> isComplete=false.
-        String breakBlock = join(client().execute(
+        String breakBlock = join(client().arrange(
                 "stellurgytest place 0 " + sx + " " + sy + " " + sz + " minecraft:air"));
         assertTrue("could not replace sawBlade with air: " + breakBlock,
                 Reply.of(breakBlock).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("try-complete errored after break: " + broken, Reply.of(broken).ok());
         assertTrue("structure stayed complete after sawBlade removal — validator broken: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
 
         // Step 4 — restore the sawblade -> re-validate -> isComplete=true again.
-        String restore = join(client().execute(
+        String restore = join(client().arrange(
                 "stellurgytest place 0 " + sx + " " + sy + " " + sz + " stellurgy:sawBlade"));
         assertTrue("could not restore sawBlade: " + restore,
                 Reply.of(restore).bool("placed"));
 
-        String recomplete = join(client().execute(
+        String recomplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("validator failed to re-detect a restored structure: " + recomplete,
                 Reply.of(recomplete).bool("isComplete"));
@@ -267,12 +263,12 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // 1. Empty-pos NPE guard. LEFT RAW: the subject of this line IS the error shape, which
         // `EnergyStore` refuses — and refuses precisely so the readings below cannot be satisfied
         // by a block that is not there.
-        String empty = join(client().execute("stellurgytest energy stored 0 1000 " + siteY + " 1000"));
+        String empty = join(client().read("stellurgytest energy stored 0 1000 " + siteY + " 1000"));
         assertEquals("expected 'no tile entity' on empty pos: " + empty,
                 "no tile entity", Reply.of(empty).error());
 
         // 2. libVulpes creative battery — Forge-energy capability presence (optional).
-        String placeBattery = join(client().execute(
+        String placeBattery = join(client().arrange(
                 "stellurgytest place 0 1000 " + siteY + " 1000 libvulpes:creativepowerbattery"));
         // absence is the answer: this suite RECORDS a verdict per block rather
         // than ending on the first one, so a probe that answered nothing is one
@@ -284,9 +280,9 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         }
 
         // 3. Solar panel real generation.
-        client().execute("time set day");
-        client().execute("weather clear 100000");
-        String placeSolar = join(client().execute(
+        client().arrange("time set day");
+        client().arrange("weather clear 100000");
+        String placeSolar = join(client().arrange(
                 "stellurgytest place 0 1100 " + siteY + " 1100 stellurgy:solarGenerator"));
         assertTrue("could not place solarGenerator: " + placeSolar,
                 Reply.of(placeSolar).bool("placed"));
@@ -295,7 +291,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 .requireEnergy("solarGenerator missing IEnergyStorage");
         long initial = s0.stored();
 
-        String tick = join(client().execute(
+        String tick = join(client().act(
                 "stellurgytest tile force-tick 0 1100 " + siteY + " 1100 100"));
         assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
 
@@ -319,52 +315,52 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         final FixtureSite site = FixtureSite.openAir(0, 1500, 1500);
         int bx = site.x, by = site.y, bz = site.z;
 
-        ok(client().execute("stellurgytest fill 0 " + (bx - 2) + " " + (by - 1) + " " + (bz - 2)
+        ok(client().arrange("stellurgytest fill 0 " + (bx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (bx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone"));
 
         for (int yy = by + 1; yy <= by + 2; yy++) {
-            ok(client().execute("stellurgytest fill 0 " + (bx - 2) + " " + yy + " " + (bz - 2)
+            ok(client().arrange("stellurgytest fill 0 " + (bx - 2) + " " + yy + " " + (bz - 2)
                     + " " + (bx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone"));
-            ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + yy + " " + (bz - 1)
+            ok(client().arrange("stellurgytest fill 0 " + (bx - 1) + " " + yy + " " + (bz - 1)
                     + " " + (bx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air"));
         }
 
-        ok(client().execute("stellurgytest fill 0 " + (bx - 2) + " " + (by + 3) + " " + (bz - 2)
+        ok(client().arrange("stellurgytest fill 0 " + (bx - 2) + " " + (by + 3) + " " + (bz - 2)
                 + " " + (bx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone"));
 
-        String place = join(client().execute(
+        String place = join(client().arrange(
                 "stellurgytest place 0 " + bx + " " + by + " " + bz + " stellurgy:oxygenVent"));
         assertTrue("vent did not place: " + place, Reply.of(place).bool("placed"));
 
-        String preTick = join(client().execute(
+        String preTick = join(client().read(
                 "stellurgytest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("probe must recognise the vent tile: " + preTick,
                 Reply.of(preTick).bool("isVent"));
 
-        String fluidFill = join(client().execute(
+        String fluidFill = join(client().arrange(
                 "stellurgytest fluid inject 0 " + bx + " " + by + " " + bz + " oxygen 16000"));
         assertTrue("oxygen fill failed: " + fluidFill, Reply.of(fluidFill).ok());
 
-        String energyFill = join(client().execute(
+        String energyFill = join(client().arrange(
                 "stellurgytest energy inject 0 " + bx + " " + by + " " + bz + " 1000000"));
         assertTrue("energy fill failed: " + energyFill, Reply.of(energyFill).ok());
 
-        String fueled = join(client().execute(
+        String fueled = join(client().read(
                 "stellurgytest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("vent should report fluid after inject: " + fueled,
                 Reply.of(fueled).has(VENT_FLUID_AMT)
                         && Integer.parseInt(matchOrFail(VENT_FLUID_AMT, fueled)) > 0);
 
-        client().execute("stellurgytest tile force-tick 0 " + bx + " " + by + " " + bz + " 1");
+        client().act("stellurgytest tile force-tick 0 " + bx + " " + by + " " + bz + " 1");
 
-        String reseal = join(client().execute(
+        String reseal = join(client().arrange(
                 "stellurgytest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("vent reseal probe failed: " + reseal,
                 Reply.of(reseal).ok());
 
-        client().execute("stellurgytest tile force-tick 0 " + bx + " " + by + " " + bz + " 5");
+        client().act("stellurgytest tile force-tick 0 " + bx + " " + by + " " + bz + " 5");
 
-        String sealed = join(client().execute(
+        String sealed = join(client().read(
                 "stellurgytest vent info 0 " + bx + " " + by + " " + bz));
         assertEquals("vent must be sealed after reseal+tick: " + sealed,
                 "true", matchOrFail(VENT_SEALED, sealed));
@@ -372,21 +368,21 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("vent blob must include the interior (>=18): " + sealed,
                 sealedBlobSize >= SEALED_INTERIOR_CELLS);
 
-        String atm = join(client().execute(
+        String atm = join(client().read(
                 "stellurgytest atmosphere get 0 " + bx + " " + (by + 1) + " " + bz));
         assertEquals("interior must be breathable when sealed: " + atm,
                 "true", matchOrFail(VENT_BREATHABLE, atm));
 
         // Break one wall — blob must react.
-        ok(client().execute("stellurgytest place 0 " + (bx + 2) + " " + (by + 1) + " " + bz
+        ok(client().arrange("stellurgytest place 0 " + (bx + 2) + " " + (by + 1) + " " + bz
                 + " minecraft:air"));
 
-        String reseal2 = join(client().execute(
+        String reseal2 = join(client().arrange(
                 "stellurgytest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("second reseal probe failed: " + reseal2,
                 Reply.of(reseal2).ok());
 
-        String leaked = join(client().execute(
+        String leaked = join(client().read(
                 "stellurgytest vent info 0 " + bx + " " + by + " " + bz));
         int leakedBlobSize = Integer.parseInt(matchOrFail(VENT_BLOB_SIZE, leaked));
         boolean leakDetected =
@@ -402,6 +398,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     // No world placement. Atmosphere density mutation restored in finally.
     // ─────────────────────────────────────────────────────────────────────
 
+    /** Pins INV-CAP-07 (all four suit pieces expose the IProtectiveArmor capability). */
+    @Pins("INV-CAP-07")
     @Test
     public void suitItemsAndEnchantAreWiredUp() throws Exception {
         // 1. All four suit pieces registered + expose IProtectiveArmor capability.
@@ -411,7 +409,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "stellurgy:spaceLeggings",
                 "stellurgy:spaceBoots"
         }) {
-            String resp = join(client().execute(
+            String resp = join(client().read(
                     "stellurgytest item check " + id + " protective-armor"));
             assertTrue(id + " not registered: " + resp,
                     Reply.of(resp).bool("registered"));
@@ -420,28 +418,28 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         }
 
         // 2. SpaceBreathing enchantment registered.
-        String ench = join(client().execute(
+        String ench = join(client().read(
                 "stellurgytest enchant check stellurgy:spacebreathing"));
         assertTrue("spacebreathing enchant missing: " + ench,
                 Reply.of(ench).bool("registered"));
 
         // 3. Vacuum precondition: Earth -> density 0 -> non-breathable.
         // Snapshot original so we restore it after.
-        PlanetAir originalAir = PlanetAir.snapshot(c -> join(client().execute(c)), 0);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> join(client().read(c)), 0);
 
         try {
-            String setVac = join(client().execute(
+            String setVac = join(client().arrange(
                     "stellurgytest atmosphere set-density 0 0"));
             assertTrue("set-density 0 failed: " + setVac,
                     Reply.of(setVac).ok());
 
-            String atm = join(client().execute(
+            String atm = join(client().read(
                     "stellurgytest atmosphere get 0 0 70 0"));
             assertTrue("density=0 must yield non-breathable atmosphere: " + atm,
                     (!Reply.of(atm).bool("breathable")));
         } finally {
             // The gases, not the pressure: an emptied world cannot be thickened back by a number.
-            originalAir.restore(c -> join(client().execute(c)));
+            originalAir.restore(c -> join(client().arrange(c)));
         }
     }
 
@@ -468,7 +466,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         for (Map.Entry<String, Integer> e : devices.entrySet()) {
             String blockId = e.getKey();
             int x = baseX + e.getValue();
-            String place = join(client().execute(
+            String place = join(client().arrange(
                     "stellurgytest place 0 " + x + " " + y + " " + baseZ + " " + blockId));
             // absence is the answer: this suite RECORDS a verdict per block rather
             // than ending on the first one, so a probe that answered nothing is one
@@ -482,7 +480,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             // told me none does. Any third shape is the probe failing, and that used to be
             // detected by looking for the word "Exception" anywhere in the rendering, which is
             // also satisfied by a tile whose own class name carries it.
-            MachineInfo info = MachineInfo.of(join(client().execute(
+            MachineInfo info = MachineInfo.of(join(client().read(
                     "stellurgytest machine info 0 " + x + " " + y + " " + baseZ)));
             if (!info.hasTile() && !info.reportsNoTile()) {
                 failures.append(blockId).append("=INFO_BAD;");
@@ -490,7 +488,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
             if (info.hasTile()) {
-                Reply tick = Reply.of(join(client().execute(
+                Reply tick = Reply.of(join(client().act(
                         "stellurgytest tile force-tick 0 " + x + " " + y + " " + baseZ + " 5")));
                 // The producer builds this one around a count — "tile.update() threw after N
                 // ticks: …" — so a prefix is the reading, and it is a reading OF THE FIELD.
@@ -518,7 +516,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         int x0 = site.x, y = site.y, z0 = site.z;
         int xC = x0 + 2, zC = z0 + 2;
 
-        String fill = join(client().execute(
+        String fill = join(client().arrange(
                 "stellurgytest fill 0 " + x0 + " " + y + " " + z0 + " "
                         + (x0 + 4) + " " + y + " " + (z0 + 4)
                         + " stellurgy:solarPanel"));
@@ -532,27 +530,27 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 {x0 + 4, z0 + 1}, {x0 + 4, z0 + 2}, {x0 + 4, z0 + 3}
         };
         for (int[] p : airPositions) {
-            client().execute("stellurgytest place 0 " + p[0] + " " + y + " " + p[1] + " minecraft:air");
+            client().arrange("stellurgytest place 0 " + p[0] + " " + y + " " + p[1] + " minecraft:air");
         }
 
-        String place = join(client().execute(
+        String place = join(client().arrange(
                 "stellurgytest place 0 " + xC + " " + y + " " + zC
                         + " stellurgy:microwaveReciever"));
         assertTrue("controller place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        MachineInfo info = MachineInfo.of(join(client().execute(
+        MachineInfo info = MachineInfo.of(join(client().read(
                 "stellurgytest machine info 0 " + xC + " " + y + " " + zC)));
         assertEquals("expected microwave-receiver tile: " + info,
                 "TileMicrowaveReciever", info.tileSimpleName());
 
-        String tick = join(client().execute(
+        String tick = join(client().act(
                 "stellurgytest tile force-tick 0 " + xC + " " + y + " " + zC + " 40"));
         assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 40 iterations",
                 40, extractInt(tick, "ticked"));
 
-        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+        MachineInfo postInfo = MachineInfo.of(join(client().read(
                 "stellurgytest machine info 0 " + xC + " " + y + " " + zC)));
         assertEquals("tile must survive tick burst: " + postInfo,
                 "TileMicrowaveReciever", postInfo.tileSimpleName());
@@ -569,24 +567,24 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // in what is under it, and the Y was a hard-coded 64 until 2026-09-14.
         int x = 1800, y = FixtureSite.OPEN_AIR_Y, z = 1800;
 
-        String place = join(client().execute(
+        String place = join(client().arrange(
                 "stellurgytest place 0 " + x + " " + y + " " + z
                         + " stellurgy:blackholegenerator"));
         assertTrue("controller place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        MachineInfo info = MachineInfo.of(join(client().execute(
+        MachineInfo info = MachineInfo.of(join(client().read(
                 "stellurgytest machine info 0 " + x + " " + y + " " + z)));
         assertEquals("expected black-hole-generator tile: " + info,
                 "TileBlackHoleGenerator", info.tileSimpleName());
 
-        String tick = join(client().execute(
+        String tick = join(client().act(
                 "stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 50"));
         assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 50 iterations",
                 50, extractInt(tick, "ticked"));
 
-        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+        MachineInfo postInfo = MachineInfo.of(join(client().read(
                 "stellurgytest machine info 0 " + x + " " + y + " " + z)));
         assertEquals("tile must survive tick burst: " + postInfo,
                 "TileBlackHoleGenerator", postInfo.tileSimpleName());
@@ -595,7 +593,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     /** Every core processing machine has at least one registered recipe. */
     @Test
     public void recipesSummaryReportsNonZeroCounts() throws Exception {
-        String summary = join(client().execute("stellurgytest machine recipes-summary"));
+        String summary = join(client().read("stellurgytest machine recipes-summary"));
         assertTrue("recipes-summary errored: " + summary, !Reply.of(summary).has("error"));
         String[] requiredMachines = {
                 "TileCuttingMachine", "TileElectricArcFurnace", "TileLathe",
@@ -618,7 +616,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     public void cuttingMachineRunsFirstRegisteredRecipe() throws Exception {
         FixtureSite s = site();
         int cx = s.x, cy = s.y, cz = s.z;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture, Reply.of(fixture).ok());
 
@@ -634,7 +632,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String complete = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("multiblock not complete: " + complete, Reply.of(complete).bool("isComplete"));
 
-        String recipe = join(client().execute("stellurgytest machine recipe-info TileCuttingMachine 0"));
+        String recipe = join(client().read("stellurgytest machine recipe-info TileCuttingMachine 0"));
         assertTrue("recipe-info errored: " + recipe, !Reply.of(recipe).has("error"));
         Reply info = Reply.of("stellurgytest machine recipe-info", recipe);
         String[] ingredients = info.objectArray("ingredients");
@@ -649,13 +647,13 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         int ingredientMeta = firstIngredient.integer("meta");
         String expectedOutput = Reply.of(outputs[0]).text("item");
 
-        String hatchFill = join(client().execute("stellurgytest hatch fill 0 " + inPos + " 0 "
+        String hatchFill = join(client().arrange("stellurgytest hatch fill 0 " + inPos + " 0 "
                 + ingredientItem + " " + ingredientCount + " " + ingredientMeta));
         assertTrue("hatch fill failed: " + hatchFill, Reply.of(hatchFill).ok());
-        String inject = join(client().execute("stellurgytest energy inject 0 " + pwrPos + " 10000000"));
+        String inject = join(client().arrange("stellurgytest energy inject 0 " + pwrPos + " 10000000"));
         assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
         // libVulpes machines default to disabled until a player flips the GUI switch.
-        String enable = join(client().execute(
+        String enable = join(client().arrange(
                 "stellurgytest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
                 Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
@@ -665,10 +663,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String out = "n/a";
         boolean found = false;
         for (int batch = 0; batch < 12; batch++) {
-            String tick = join(client().execute(
+            String tick = join(client().act(
                     "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
             assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
-            out = join(client().execute("stellurgytest hatch read 0 " + outPos));
+            out = join(client().read("stellurgytest hatch read 0 " + outPos));
             assertTrue("hatch read errored: " + out, !Reply.of(out).has("error"));
             // A search across batches: a list with no such element is the "not yet" this loop drives
             // past, so absence is the answer and `element`'s refusal would end it on the first pass.
@@ -696,7 +694,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int x, int y, int z) throws Exception {
-        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
+        return EnergyStore.at(cmd -> join(client().read(cmd)), 0, x, y, z);
     }
 
     private static String matchOrFail(String field, String s) {

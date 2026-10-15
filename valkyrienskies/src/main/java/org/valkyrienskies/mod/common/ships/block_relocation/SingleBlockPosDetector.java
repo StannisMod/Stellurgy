@@ -2,6 +2,7 @@ package org.valkyrienskies.mod.common.ships.block_relocation;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 
 /**
  * A detector that will only pick up one block; used for most orbitals
@@ -10,8 +11,9 @@ import net.minecraft.world.World;
  */
 public class SingleBlockPosDetector extends SpatialDetector {
 
-    public SingleBlockPosDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners) {
-        super(start, worldIn, maximum, false);
+    public SingleBlockPosDetector(BlockPos start, World worldIn, int maximum, boolean checkCorners,
+                                  StructureBoundingBox footprint) {
+        super(start, worldIn, maximum, false, footprint);
         startDetection();
     }
 

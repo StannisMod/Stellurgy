@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -42,12 +41,12 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
     @Test
     public void beaconMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock beacon 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock beacon failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileBeacon tile at controller pos: " + info,
                 "TileBeacon", MachineInfo.of(info).tileSimpleName());
@@ -63,7 +62,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void beaconMultiblockInvalidatesWhenRedstoneTipIsRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -73,7 +72,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
         // Replace the redstone tip with a stone block (any non-air, non-
         // redstone block fails the structure check).
-        String breakTip = join(client().execute(
+        String breakTip = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 4) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace redstone tip: " + breakTip,
                 Reply.of(breakTip).ok());
@@ -87,7 +86,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void beaconMultiblockInvalidatesWhenShaftBlockIsRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -98,7 +97,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         // Replace a middle shaft block (y=cy+2 layer) with air. The
         // structure has blockStructureBlock at this position — replacing
         // it with air fails (air-only positions are different cells).
-        String breakShaft = join(client().execute(
+        String breakShaft = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 2) + " " + (cz + 1) + " minecraft:air"));
         assertTrue("could not break shaft block: " + breakShaft,
                 Reply.of(breakShaft).ok());

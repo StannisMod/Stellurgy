@@ -1,17 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-
-import dev.stannismod.stellurgy.test.EntityState;
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -90,12 +85,43 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
     /** How far the hull must actually move before its tracking can be judged, in blocks. */
     private static final double HULL_MOVED_BLOCKS = 1.5;
 
+    /**
+     * The world velocity the hull is driven at to move it, blocks per second (the physics' velocity
+     * unit): straight up, away from anything below the open-air site. Ten a second over
+     * {@link #DRIVE_TICKS} — one physics second — is several times {@link #HULL_MOVED_BLOCKS} after
+     * the ramp, on a craft whose own flight model gives it more than twice its weight upward.
+     */
+    private static final int DRIVE_UP_BLOCKS_PER_S = 10;
+
+    /** Ticks of the hull's world the drive stands for — the dose, read back as a displacement. */
+    private static final int DRIVE_TICKS = 20;
+
     /** How far the shell must move WITH it, in blocks — the test's own sensitivity bar on
      *  "it is not frozen". Deliberately under {@link #HULL_MOVED_BLOCKS}: the claim is that it
      *  followed, not that it matched. */
     private static final double SHELL_MOVED_BLOCKS = 0.5;
 
+    /**
+     * A shield emitter on an assembled craft projects its shell on the flying hull, deflects off it,
+     * and keeps riding the hull — with a live surface velocity — when the craft is flown.
+     *
+     * <p>Its stillness before the drive is the craft's own Flight-Assist hold, and the move is a
+     * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
+     * it being inert.</p>
+     */
+    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}"
+            + " replaced by {@code WorldFieldFrame.INSTANCE}, this fails \"the ship's emitter must resolve a SHIP"
+            + " frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true"
+            + " was recorded within 200 ticks\" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at"
+            + " {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and"
+            + " fails \"the shell's surface velocity stayed zero on a moving ship (speed=0.0)\" — 2026-10-06. The"
+            + " two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);",
+            why = "the dose of drive the hull is given; the displacement it buys is read below and gated as an"
+                    + " arrangement, so a dose that turns out short says so rather than passing.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);",
+            why = "a server command drives the hull; the reads are the server's ship pose and shield report.")
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
@@ -104,7 +130,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         final int bx = site.x, by = site.y, bz = site.z;
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 40) + " 120 " + (bz + 40) + " 0 0");
+        arrange("tp @a " + (bx + 40) + " 120 " + (bz + 40) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 40, bz + 40,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -115,16 +141,17 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
 
-        String assemble = assembleFixture(site);
-        assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-shield-emitter build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The identity, from the registry's record of THIS assembly's own add.
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
 
         // Sit the client on the ship so the hull (and the emitter's chunk) loads server-side.
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -175,7 +202,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // The probe's agreeing view, read ONCE now that the decision has been recorded. It is not
         // the link — it is what the geometry below is measured from, and this asserts the list it
         // leads with is the ship-framed emitter the event named.
-        String emitters = exec("stellurgytest shield emitters 0");
+        String emitters = read("stellurgytest shield emitters 0").raw();
         // THE emitter THIS TEST PLACED, addressed by its own block position, and every number
         // below read off that object. Two earlier forms stood here: a pair that asked "is some
         // emitter ship-framed" and then took the geometry from "the first emitter in the list",
@@ -203,22 +230,22 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // Check 3 (before pushing, while the ship is roughly settled): charge the emitter and deflect an
         // inbound arrow off the ship-framed shell. Re-read the world centre immediately so the arrow is
         // aimed at where the shell actually is this instant.
-        ShieldTile shell = ShieldTile.at(this::exec, 0, spX, spY, spZ);
+        ShieldTile shell = ShieldTile.at(c -> read(c).raw(), 0, spX, spY, spZ);
         int radius = shell.radius();
-        exec("stellurgytest shield charge 0 " + spX + " " + spY + " " + spZ + " 40000");
-        ShieldTile reRead = ShieldTile.at(this::exec, 0, spX, spY, spZ);
+        arrange("stellurgytest shield charge 0 " + spX + " " + spY + " " + spZ + " 40000");
+        ShieldTile reRead = ShieldTile.at(c -> read(c).raw(), 0, spX, spY, spZ);
         assertTrue("charged emitter did not power:\n" + reRead.raw(), reRead.powered());
         double cx = reRead.worldX(), cy = reRead.worldY(), cz = reRead.worldZ();
 
         double sx = cx, sy = cy, sz = cz + radius; // on the +Z shell, aimed inward at the centre
-        String spawn = exec("stellurgytest entity spawn 0 " + sx + " " + sy + " " + sz + " minecraft:arrow");
+        String spawn = arrange("stellurgytest entity spawn 0 " + sx + " " + sy + " " + sz + " minecraft:arrow").raw();
         int arrowId = entityId(spawn);
-        exec("stellurgytest entity set-motion 0 " + arrowId + " 0 0 -0.4");
-        exec("stellurgytest entity tick 0 " + arrowId + " 1");
-        exec("stellurgytest tile force-tick 0 " + spX + " " + spY + " " + spZ + " 1");
-        EntityState arrow = EntityState.byId(this::exec, 0, arrowId);
+        arrange("stellurgytest entity set-motion 0 " + arrowId + " 0 0 -0.4");
+        act("stellurgytest entity tick 0 " + arrowId + " 1");
+        act("stellurgytest tile force-tick 0 " + spX + " " + spY + " " + spZ + " 1");
+        EntityState arrow = EntityState.byId(c -> read(c).raw(), 0, arrowId);
         // Re-read the centre once more; the deflection is measured against where the shell is now.
-        double ncx = ShieldTile.at(this::exec, 0, spX, spY, spZ).worldX();
+        double ncx = ShieldTile.at(c -> read(c).raw(), 0, spX, spY, spZ).worldX();
         double dcx = ncx - cx; // how far the hull drifted while we set this up
         // Survival first, then geometry: an absorbed arrow is a shield interaction too, but the
         // kinetic path must REFLECT, and a dead arrow has no position to measure. (This assertion
@@ -240,17 +267,19 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         double[] shell1 = shellCenter();
         assertTrue("precondition: the shell must sit on the hull before it moves (shell=" + str(shell1)
                 + " ship=" + str(ship1) + ")", dist(shell1, ship1) < SHELL_ON_THE_HULL_BLOCKS);
-        // STIMULUS: a loop deliberately left as one — it is not waiting for a link but accumulating a
-        // physical displacement under repeated velocity writes the substrate keeps overwriting, and
-        // "the hull has moved far enough to test tracking" is a measured quantity, not an event.
-        for (int i = 0; i < 25; i++) {
-            String push = exec("stellurgytest vs push-ship-by-id 0 " + shipId + " 0 14 0");
-            scenario().requireArranged("the push must reach THIS ship: " + push,
-                    Reply.of(push).bool("pushed"));
-            advanceServerAndClient(2);
-        }
+        // THE HULL IS DRIVEN THROUGH ITS OWN FLIGHT COMPUTER. A raw velocity write does not move a
+        // ship — the physics recomputes velocity from forces every step and discards it — and an
+        // unmanned craft now holds station with its own actuators, so nothing else drifts it either.
+        // `force-vel-by-id` hands the computer a world velocity that it realizes as force every physics
+        // step, the path production flies; it stands until the force-clear below.
+        String drive = arrange("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 " + DRIVE_UP_BLOCKS_PER_S
+                + " 0").raw();
+        scenario().requireArranged("the drive must reach THIS ship's own flight computer: " + drive,
+                Reply.of(drive).bool("afcResolved"));
+        GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);
+        arrange("stellurgytest vs force-clear-by-id 0 " + shipId);
         double[] ship2 = shipPos(shipId);
-        String moved = exec("stellurgytest shield emitters 0");
+        String moved = read("stellurgytest shield emitters 0").raw();
         double[] shell2 = new double[]{e(moved, "worldX"), e(moved, "worldY"), e(moved, "worldZ")};
         double speed = Math.sqrt(sq(e(moved, "velX")) + sq(e(moved, "velY")) + sq(e(moved, "velZ")));
         double shipMoved = dist(ship1, ship2);
@@ -301,12 +330,12 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
     /** Where THIS ship is — asked by identity, so it keeps answering about the same hull once the
      *  push has carried it away from the spot it was built on. */
     private double[] shipPos(String shipId) throws Exception {
-        ShipInfo si = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo si = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         return new double[]{si.x, si.y, si.z};
     }
 
     private double[] shellCenter() throws Exception {
-        String em = exec("stellurgytest shield emitters 0");
+        String em = read("stellurgytest shield emitters 0").raw();
         return new double[]{e(em, "worldX"), e(em, "worldY"), e(em, "worldZ")};
     }
 
@@ -344,7 +373,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         return v * v;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the hull and its shield shell occupy is EMPTY, measured by the air
@@ -352,7 +381,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // the ten-block shaft it replaces was a hazard for this subject in particular: a shell whose
         // radius is checked against blocks is checked against the pit's walls as readily as against
         // the craft. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 20,
                 "the hull, and the shell the emitter projects around it");
     }
 }

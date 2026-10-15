@@ -1,6 +1,10 @@
 package dev.stannismod.stellurgy.command.sub.redirect;
 
 import com.google.common.base.Preconditions;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
@@ -8,10 +12,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.WorldInfo;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 
 import javax.annotation.Nullable;
 import java.util.Collections;

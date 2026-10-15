@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
@@ -19,10 +23,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.util.StorageChunk;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.weapon;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 /**
  * The friend-or-foe rules a weapon console can put its network on, in the order its button cycles

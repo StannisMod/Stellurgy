@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import org.junit.After;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,7 +49,6 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
      *  produce when a sibling craft reaches orbit in the same window. */
     private static final int ORBIT_REACHED_DELTA_MAX = 2;
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "stellurgyDimensions";
     private static final String LAUNCH_COUNT = "launch";
     private static final String ORBIT_COUNT = "orbitReached";
@@ -68,23 +64,21 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         return reply.integer(field);
     }
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
-                "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -96,10 +90,10 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // doesn't always execute, this test surfaces it.
         int id = buildAndAssemble(FixtureSite.openAir(0, 3000, 500));
 
-        String before = ok(client().execute("stellurgytest rocket event-counts"));
+        String before = ok(client().read("stellurgytest rocket event-counts"));
         int orbitBefore = parseGroup(ORBIT_COUNT, before, "orbitReached before");
 
-        String resp = ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
+        String resp = ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must succeed: " + resp,
                 Reply.of(resp).ok());
         // Inline-delta check: the probe reports orbitReachedEventDelta in
@@ -108,7 +102,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
                 + resp, (Reply.of(resp).integer("orbitReachedEventDelta") == 1)
                     || (Reply.of(resp).integer("orbitReachedEventDelta") == ORBIT_REACHED_DELTA_MAX));
 
-        String after = ok(client().execute("stellurgytest rocket event-counts"));
+        String after = ok(client().read("stellurgytest rocket event-counts"));
         int orbitAfter = parseGroup(ORBIT_COUNT, after, "orbitReached after");
         assertTrue("global orbitReached counter must advance: before=" + orbitBefore
                 + " after=" + orbitAfter, orbitAfter > orbitBefore);
@@ -118,15 +112,15 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     public void dismantleFiresRocketDismantleEvent() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3100, 500));
 
-        String before = ok(client().execute("stellurgytest rocket event-counts"));
+        String before = ok(client().read("stellurgytest rocket event-counts"));
         int dismantleBefore = parseGroup(DISMANTLE_COUNT, before, "dismantle before");
 
-        String resp = ok(client().execute("stellurgytest rocket dismantle " + id));
+        String resp = ok(client().act("stellurgytest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("dismantle inline delta must be 1: " + resp,
                 (Reply.of(resp).integer("dismantleEventDelta") == 1));
 
-        String after = ok(client().execute("stellurgytest rocket event-counts"));
+        String after = ok(client().read("stellurgytest rocket event-counts"));
         int dismantleAfter = parseGroup(DISMANTLE_COUNT, after, "dismantle after");
         assertTrue("global dismantle counter must advance: " + dismantleBefore
                 + " -> " + dismantleAfter, dismantleAfter > dismantleBefore);
@@ -140,7 +134,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // the post() out of the launch-allowed branch is silently visible
         // in isInFlight but would skip mission/advancement subscribers.
         // Need a destination dim for the real launch path to succeed.
-        String dimList = ok(client().execute("stellurgytest dim list"));
+        String dimList = ok(client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", dimList);
         org.junit.Assume.assumeTrue(listed.has(AR_DIMS_ARRAY));
         int destDim = -1;
@@ -150,14 +144,14 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         org.junit.Assume.assumeTrue(destDim != -1);
 
         int id = buildAndAssemble(FixtureSite.openAir(0, 3200, 500));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
 
-        String before = ok(client().execute("stellurgytest rocket event-counts"));
+        String before = ok(client().read("stellurgytest rocket event-counts"));
         int launchBefore = parseGroup(LAUNCH_COUNT, before, "launch before");
 
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
 
-        String after = ok(client().execute("stellurgytest rocket event-counts"));
+        String after = ok(client().read("stellurgytest rocket event-counts"));
         int launchAfter = parseGroup(LAUNCH_COUNT, after, "launch after");
         assertEquals("real instant-launch must fire exactly one RocketLaunchEvent",
                 launchBefore + 1, launchAfter);
@@ -170,12 +164,12 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // RocketLaunchEvent post. So the counter must NOT advance.
         int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 500));
 
-        String before = ok(client().execute("stellurgytest rocket event-counts"));
+        String before = ok(client().read("stellurgytest rocket event-counts"));
         int launchBefore = parseGroup(LAUNCH_COUNT, before, "launch before");
 
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
 
-        String after = ok(client().execute("stellurgytest rocket event-counts"));
+        String after = ok(client().read("stellurgytest rocket event-counts"));
         int launchAfter = parseGroup(LAUNCH_COUNT, after, "launch after");
         assertEquals("errored launch must NOT fire RocketLaunchEvent",
                 launchBefore, launchAfter);
@@ -189,7 +183,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // reachSpaceManned branch fires. Pin that this branch doesn't
         // crash on a rocket with no programmed chip.
         int id = buildAndAssemble(FixtureSite.openAir(0, 3500, 500));
-        String resp = ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
+        String resp = ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
         assertTrue("orbit-reached on un-programmed rocket must succeed (no crash): "
                 + resp, Reply.of(resp).ok());
     }

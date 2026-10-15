@@ -1,33 +1,24 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.entity.EntityRocket;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
-import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.test.Weapons;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.findSlotWithItem;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf;
+import static org.junit.Assert.*;
 
 /**
  * A machine stands in the world, the player right-clicks it open, and drives it with nothing but
@@ -53,9 +44,9 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf
  *       allocator removes that without anyone having to notice it.</li>
  *   <li><b>An open screen outlives its scenario.</b> Every scenario here opens one; each closes it,
  *       and the shared reset closes anything left and then asserts the screen is gone.</li>
- *   <li><b>A GLOBAL query answering with a neighbour's object.</b>
- *       {@link #clickingScanThenBuildAssemblesRocket()} reads {@code stellurgytest rocket list}, which is
- *       world-wide, and narrows it to {@link Plot#contains}.</li>
+ *   <li><b>A neighbour's object answering for this scenario's.</b>
+ *       {@link #clickingScanThenBuildAssemblesRocket()} learns its rocket from the assembler's own
+ *       {@code rocket_born} record, never from a query of the world.</li>
  *   <li><b>A GUI that must stay open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
  *       works with the console still open — the full client reset would close the very screen it is
  *       about to click. It reads what each click DID (the command reaching the console, the
@@ -73,7 +64,7 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf
  * {@code RocketBuilderGuiE2ETest}, {@code RailgunCargoTransitE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
+public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * The cargo this scenario FIRES, and therefore what the destination must hold.
@@ -192,7 +183,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         int cz1 = (plot().originZ + plot().size - 1) >> 4;
         for (int cx = cx0 - 1; cx <= cx1 + 1; cx++) {
             for (int cz = cz0 - 1; cz <= cz1 + 1; cz++) {
-                exec("stellurgytest chunk forceload " + dim + " " + cx + " " + cz);
+                arrange("stellurgytest chunk forceload " + dim + " " + cx + " " + cz);
             }
         }
     }
@@ -209,7 +200,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("place " + blockId + " at " + x + "," + Y + "," + z);
         warmupPlotChunks();
-        String place = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " " + blockId);
+        String place = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " " + blockId).raw();
         // absence is the answer on the first half: the place verb writes `placed` only on
         // its success path, and the `ok()` beside it accepts the other shape it answers.
         scenario().requireArranged("could not place " + blockId + ": " + place,
@@ -224,7 +215,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // never return — but `client_pos_look_applied` is written for EVERY server-driven placement,
         // gated by nothing, so this one always has something to close on.
         long standMark = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
                 "every scenario in this class opens a GUI from where the player stands");
         return new int[]{x, Y, z};
@@ -407,8 +398,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         warmupPlotChunks();
         // The pad is built in open air on ground of the scenario's own making, so no world seed can
         // put a hill under it — the failure mode FreeFlightModeTest carries a pre-clear for.
-        String footing = exec("stellurgytest fill " + dim + " " + baseX + " " + (Y - 1) + " " + baseZ
-                + " " + (baseX + 12) + " " + (Y - 1) + " " + (baseZ + 12) + " minecraft:stone");
+        String footing = arrange("stellurgytest fill " + dim + " " + baseX + " " + (Y - 1) + " " + baseZ
+                + " " + (baseX + 12) + " " + (Y - 1) + " " + (baseZ + 12) + " minecraft:stone").raw();
         scenario().requireArranged("pad footing fill must succeed: " + footing,
                 Reply.of(footing).ok());
 
@@ -420,18 +411,17 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // coordinates by hand: an allocated site is the one whose working volume is checked against
         // the plot's own bounds, and the halo below (7, sized to the 12-block footing laid above)
         // is exactly the kind of reach that check exists for.
-        int[] bp = RocketFixture.placeAt(plot().siteAt(8, 8), this::exec, "simple", 7, 12,
+        int[] bp = RocketFixture.placeAt(plot().siteAt(8, 8), c -> arrange(c).raw(), "simple", 7, 12,
                 "the craft the player builds from the assembler's GUI, and the platform it stands on");
         int bx = bp[0];
         int by = bp[1];
         int bz = bp[2];
         String builder = dim + " " + bx + " " + by + " " + bz;
-        scenario().record("builderPos", bx + "," + by + "," + bz)
-                .describeOnFailureWith("stellurgytest rocket list " + dim);
+        scenario().record("builderPos", bx + "," + by + "," + bz);
 
         scenario().arranging("stand on the launchpad within reach of the builder");
         long standMark = clientEvents().mark();
-        exec("tp @a " + (baseX + 2.5) + " " + (Y + 1) + " " + (baseZ + 2.5) + " 0 0");
+        arrange("tp @a " + (baseX + 2.5) + " " + (Y + 1) + " " + (baseZ + 2.5) + " 0 0");
         awaitClientPlacedNear(standMark, baseX + 2.5, baseZ + 2.5,
                 "\"within reach of the builder\" is a claim about where the client stands, and the"
                         + " GUI below is opened from there");
@@ -444,7 +434,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         Events events = serverEvents();
         long buildMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        exec("stellurgytest energy inject " + builder + " 100000000");
+        arrange("stellurgytest energy inject " + builder + " 100000000");
         bot().clickButtonById(0);
 
         // TWO PASSES, and each is now waited for on the machine's own record. Scan and Build each
@@ -455,7 +445,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // land after the scan had happened to end, and every press before it was discarded unseen.
         // `assembler_pass_finished` IS that end, so Build is pressed once, after it.
         //
-        // Success is then read off the ROCKET standing in this scenario's own plot, not off
+        // Success is then read off the ROCKET this machine made (its `rocket_born`), not off
         // `rocket_assembled`'s status, and the reason is a property of the recorder rather than a
         // preference: `rocket_assembled` is taken at
         // assembleRocket's RETURN and carries the tile's status AS OF THAT RETURN, and the last
@@ -467,8 +457,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // after setting FINISHED, and every record here says tier2:false.) Measured 2026-09-06: 29
         // assembly exits, all ALREADY_ASSEMBLED, the first of them the successful build.
         //
-        // What the events still buy over the pre-migration form — which polled this same list and,
-        // after three minutes, printed it — is the failure: every press that reached the machine
+        // What the events buy over the pre-migration form — which polled a world-wide rocket list
+        // and, after three minutes, printed it — is the failure: every press that reached the machine
         // with the canScan/isScanning pair it was judged on, and every attempt at an assembly with
         // the status it ended on. That tells a dropped packet from a refused build from a build
         // that never ran, which the list alone cannot.
@@ -484,16 +474,19 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "the BUILD pass must end in an assembly at this machine", PASS_TICKS,
                 "pos", machinePos);
         String assemblies = events.since(buildMark, "rocket_assembled");
-        String list = exec("stellurgytest rocket list " + dim);
-        int rocketId = rocketIdInThisPlot(list);
+        java.util.List<String> born = RocketFixture.rocketsBornAt(events, buildMark, bp);
+        for (String record : born) {
+            disposeOfRocketAtEnd((int) Events.number(record, "e"));
+        }
         String presses = events.since(buildMark, "assembler_command_received");
-        assertTrue("clicking Scan then Build on the real GUI must ASSEMBLE a rocket standing in "
-                        + plot() + "; rocket list was " + list
+        assertEquals("clicking Scan then Build on the real GUI must ASSEMBLE exactly one rocket at this"
+                        + " machine; its rocket_born records were " + born
                         + " | every exit of assembleRocket since the first click, with the status it"
                         + " ended on: " + assemblies
                         + " | every press that reached the machine, with the canScan/isScanning pair"
                         + " that decides whether it was acted on or silently ignored: " + presses,
-                rocketId >= 0);
+                1, born.size());
+        int rocketId = (int) Events.number(born.get(0), "e");
         events.assertChain(buildMark, "a rocket assembled at this machine must have been COMMANDED"
                 + " through the GUI - an assembly with no press behind it would be some other"
                 + " scenario's machine answering", 40,
@@ -519,32 +512,6 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         bot().closeScreen();
     }
 
-    /**
-     * The id of a rocket standing in THIS scenario's plot, or -1.
-     *
-     * <p>{@code stellurgytest rocket list} is a GLOBAL query. Taking "the one that is there" is correct
-     * only while the world holds exactly one rocket, which is precisely what a shared world stops
-     * guaranteeing.</p>
-     */
-    /**
-     * Every rocket the PREVIOUS scenario left behind goes, before this one builds its own — see
-     * {@link RocketList#clearFrom} for what a plot cannot contain and why.
-     *
-     * <p>A {@code @Before} for the same reason the base's whole reset is one: JUnit runs
-     * {@code @After} before the rules finish, so cleanup the next scenario must see belongs at the
-     * next scenario's start.</p>
-     */
-    @Before
-    public void clearRocketsLeftByTheLastScenario() throws Exception {
-        System.out.println("[reset] rockets cleared from this class's world: "
-                + RocketList.clearFrom(this::exec, 0));
-    }
-
-    private int rocketIdInThisPlot(String list) {
-        java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
-        return mine.isEmpty() ? -1 : mine.get(0).id;
-    }
-
     // ── railgun ───────────────────────────────────────────────────────────────
 
     /**
@@ -568,8 +535,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().record("source", sx + "," + Y + "," + sz).record("dest", dx + "," + Y + "," + dz);
 
         scenario().asserting("cargo transits from the source's input to the destination's output");
-        String fire = exec("stellurgytest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
-                + " " + dim + " " + dx + " " + Y + " " + dz + " minecraft:cobblestone 16");
+        String fire = act("stellurgytest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
+                + " " + dim + " " + dx + " " + Y + " " + dz + " minecraft:cobblestone 16").raw();
         scenario().requireArranged("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -601,8 +568,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         buildAndCompleteRailgun(sx, sz);
 
         scenario().asserting("an unloadable destination is refused, out loud, with the cargo kept");
-        String fire = exec("stellurgytest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
-                + " " + unregisteredDim + " 0 64 0 minecraft:cobblestone 16");
+        String fire = act("stellurgytest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
+                + " " + unregisteredDim + " 0 64 0 minecraft:cobblestone 16").raw();
         scenario().requireArranged("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -618,10 +585,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
     private void buildAndCompleteRailgun(int x, int z) throws Exception {
         int dim = plot().dim;
-        String fixture = exec("stellurgytest fixture multiblock railgun " + dim + " " + x + " " + Y + " " + z);
+        String fixture = arrange("stellurgytest fixture multiblock railgun " + dim + " " + x + " " + Y + " " + z).raw();
         scenario().requireArranged("fixture multiblock railgun failed at " + x + "," + Y + "," + z
                 + ": " + fixture, Reply.of(fixture).ok());
-        String tryComplete = exec("stellurgytest machine try-complete " + dim + " " + x + " " + Y + " " + z);
+        String tryComplete = act("stellurgytest machine try-complete " + dim + " " + x + " " + Y + " " + z).raw();
         scenario().requireArranged("railgun must validate at " + x + "," + Y + "," + z + ": "
                 + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }
@@ -635,18 +602,17 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * into a machine slot — i.e. the click drove {@code Container.transferStackInSlot} on the server
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
-     *
-     * <p>red-witnessed: with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:
-     * "`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0",
-     * 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's
-     * quick-move never asks it.</p>
      */
+    @LegacyWitness(prose = "with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:"
+            + " \"`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0\","
+            + " 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's"
+            + " quick-move never asks it.")
     @Test
     public void shiftClickingChipMovesItIntoTheGuidanceComputer() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:guidanceComputer");
         // No advance: the give's slot packet leaves before the window the GUI below opens, on one
         // connection, so a client showing that window already holds the chip.
-        exec("give @a " + CHIP + " 1");
+        arrange("give @a " + CHIP + " 1").raw();
 
         scenario().arranging("open the guidance computer's GUI");
         String screen = openMachineGui(at);
@@ -669,8 +635,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         bot().clickSlot(chipSlot, 0, "QUICK_MOVE");
         clientEvents().await(clickMark, "client_click_confirmed",
                 "the server must handle the shift-click at all", GUI_LINK_BUDGET_TICKS);
-        String machineInventory = exec("stellurgytest hatch read " + plot().dim + " " + at[0] + " " + at[1]
-                + " " + at[2]);
+        String machineInventory = read("stellurgytest hatch read " + plot().dim + " " + at[0] + " " + at[1]
+                + " " + at[2]).raw();
         // The SERVER must have moved the chip into the guidance computer — a positive claim, so the
         // reply's refusing reader: it fails naming the machine's whole inventory if the chip is not
         // one of its slots.
@@ -704,8 +670,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("build the observatory multiblock at " + x + "," + Y + "," + z);
         warmupPlotChunks();
-        String fixture = exec("stellurgytest fixture multiblock observatory " + dim + " " + x + " " + Y
-                + " " + z);
+        String fixture = arrange("stellurgytest fixture multiblock observatory " + dim + " " + x + " " + Y
+                + " " + z).raw();
         scenario().requireArranged("fixture multiblock observatory failed: " + fixture,
                 Reply.of(fixture).ok());
 
@@ -713,7 +679,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // inside the probe call, so no amount of ticking turns a refusal into a success. An eight-ask
         // retry stood here; with every ask logged (2026-09-28), this validation and the 26 others in
         // the server tier succeeded on the first. A refusal is the fixture's to explain.
-        String completed = exec("stellurgytest machine try-complete " + dim + " " + x + " " + Y + " " + z);
+        String completed = act("stellurgytest machine try-complete " + dim + " " + x + " " + Y + " " + z).raw();
         scenario().requireArranged("the observatory structure must validate on the first ask: "
                         + completed,
                 Reply.of(completed).bool("isComplete"));
@@ -724,8 +690,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // because the server silently drops an interaction from out of reach.
         StringBuilder footing = new StringBuilder();
         for (int dx = -1; dx <= 1; dx++) {
-            footing.append(exec("stellurgytest place " + dim + " " + (x + dx) + " " + Y + " " + (z - 1)
-                    + " minecraft:stone")).append(' ');
+            footing.append(arrange("stellurgytest place " + dim + " " + (x + dx) + " " + Y + " " + (z - 1)
+                    + " minecraft:stone").raw()).append(' ');
         }
         // Stand in the MIDDLE of the footing block, not at its edge: the block at z-1 spans
         // [z-1, z), so z-1.5 is half a block beyond it and over open air.
@@ -761,18 +727,16 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>The aim is read back from the SERVER after the clicks and the fixture system is placed at
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
-     *
-     * <p>red-witnessed: with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")))}) skipped:
-     * "clicking the distance button twice must move the aim out from 1: … aimDistance:1",
-     * 2026-09-28.</p>
-     *
-     * <p>red-witnessed: NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at
-     * {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in
-     * {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}
-     * and {@code client_pos_look_applied}, both of which vanilla decides (the chunk send and the
-     * teleport's position packet) — no Stellurgy code sits on that path to invert, so the only red
-     * this wait can show is an arrangement failure, which is the outcome it exists to name.</p>
      */
+    @LegacyWitness(prose = "with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")))}) skipped:"
+            + " \"clicking the distance button twice must move the aim out from 1: … aimDistance:1\","
+            + " 2026-09-28.")
+    @NotYetRed(prose = "NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at"
+            + " {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in"
+            + " {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}"
+            + " and {@code client_pos_look_applied}, both of which vanilla decides (the chunk send and the"
+            + " teleport's position packet) — no Stellurgy code sits on that path to invert, so the only red"
+            + " this wait can show is an arrangement failure, which is the outcome it exists to name.")
     @Test
     public void theOperatorAimsTheTelescopeAndObservesWithNothingButClicks() throws Exception {
         int dim = plot().dim;
@@ -783,17 +747,17 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // The default game: without the research master switch a survey is not a matter of time —
         // what the instrument reaches, it resolves. That is what the player at this GUI sees, so it
         // is what this drives.
-        exec("stellurgytest config set planetsMustBeDiscovered false");
-        exec("stellurgytest config set telescopeScanBaseTicks 0");
-        exec("stellurgytest config set telescopeLimitingMagnitude 30");
-        exec("stellurgytest config set telescopeConeHalfAngleDegrees 20");
-        String crystal = exec("stellurgytest telescope crystal " + where);
+        arrange("stellurgytest config set planetsMustBeDiscovered false").raw();
+        arrange("stellurgytest config set telescopeScanBaseTicks 0");
+        arrange("stellurgytest config set telescopeLimitingMagnitude 30");
+        arrange("stellurgytest config set telescopeConeHalfAngleDegrees 20");
+        String crystal = arrange("stellurgytest telescope crystal " + where).raw();
         scenario().requireArranged("could not put a crystal in the observatory: " + crystal,
                 Reply.of(crystal).ok());
 
         // The reader REFUSES a world with no galactic address, so the arrangement check that used to
         // stand here — a `contains` on the rendered `"origin":"` — is the read itself.
-        TelescopeReading before = TelescopeReading.at(this::exec, where);
+        TelescopeReading before = TelescopeReading.at(c -> read(c).raw(), where);
         long[] home = before.originSectors();
         scenario().record("origin", before.originCellKey());
 
@@ -811,7 +775,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         clickAndAwaitReopen(5, "the first aim-distance press");
         clickAndAwaitReopen(5, "the second aim-distance press");
 
-        TelescopeReading aimed = TelescopeReading.at(this::exec, where);
+        TelescopeReading aimed = TelescopeReading.at(c -> read(c).raw(), where);
         long aimDistance = aimed.aimDistance;
         assertTrue("clicking the distance button twice must move the aim out from 1: " + aimed.raw(),
                 aimDistance > 1);
@@ -821,9 +785,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // cell it lands on is that many strides out; the seat is offset inside the territory, since
         // what a look must find is the system that OWNS the cell and not a star standing on it.
         long stepCells = aimed.stepCells;
-        String system = exec("stellurgytest telescope system "
+        String system = arrange("stellurgytest telescope system "
                 + (home[0] + aimDistance * stepCells + 13L)
-                + " " + home[1] + " " + home[2]);
+                + " " + home[1] + " " + home[2]).raw();
         scenario().requireArranged("could not place a system to be found: " + system,
                 Reply.of(system).ok());
 
@@ -855,7 +819,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "carrying a non-zero discovery count",
                 "a survey driven entirely from the GUI must resolve at least one look into a"
                         + " discovery before the crystal can hold an address", 400);
-        TelescopeReading done = TelescopeReading.at(this::exec, where);
+        TelescopeReading done = TelescopeReading.at(c -> read(c).raw(), where);
         assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done.raw()
                         + " surveySteps=" + events.since(scanMark, "region_scan_advanced"),
                 done.addressesOnCrystal() >= 1);
@@ -874,11 +838,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code /stellurgytest selector info} probe then confirms — the whole client&rarr;server selection
      * round-trip rather than just "the GUI opened".
      *
-     * <p>red-witnessed: with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:
-     * "clicking planet button 0 did not register a selection server-side: … hasSelection:false",
-     * 2026-09-28. The link before it records at the handler's RETURN and stays green by design —
-     * it says the packet arrived, not that it was applied.</p>
+     * Pins INV-IVC-03 (clicking a planet button on the selector registers a server-side selection).
      */
+    @Pins("INV-IVC-03")
+    @LegacyWitness(prose = "with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:"
+            + " \"clicking planet button 0 did not register a selection server-side: … hasSelection:false\","
+            + " 2026-09-28. The link before it records at the handler's RETURN and stays green by design —"
+            + " it says the packet arrived, not that it was applied.")
     @Test
     public void selectingPlanetUpdatesServerSelection() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -904,8 +870,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "clicking planet button " + planetId + " must reach THIS selector's server copy",
                 GUI_LINK_BUDGET_TICKS);
 
-        String selectorInfo = exec("stellurgytest selector info " + plot().dim + " " + at[0] + " " + at[1]
-                + " " + at[2]);
+        String selectorInfo = read("stellurgytest selector info " + plot().dim + " " + at[0] + " " + at[1]
+                + " " + at[2]).raw();
         assertTrue("clicking planet button " + planetId
                 + " did not register a selection server-side: " + selectorInfo,
                 Reply.of(selectorInfo).bool("hasSelection"));
@@ -934,13 +900,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>What this does not see: the planetary view (a planet and its moons), pinned by
      * {@link #thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150}, and the rocket's own selector, which
      * opens the same module over a rocket.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit
-     * radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):
-     * "Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:
-     * &lt;150.0&gt; but was:&lt;1496028.93842148&gt;". The two {@code requireArranged} lines are
-     * arrangements.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit"
+            + " radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):"
+            + " \"Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:"
+            + " &lt;150.0&gt; but was:&lt;1496028.93842148&gt;\". The two {@code requireArranged} lines are"
+            + " arrangements.")
     @Test
     public void theStarMapDrawsAPlanetAtAHundredPixelsPerAu() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -949,7 +914,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         String screen = openMachineGui(at);
         scenario().record("screen", screen);
 
-        Reply earth = Reply.of(exec("stellurgytest planet info 0"));
+        Reply earth = Reply.of(read("stellurgytest planet info 0").raw());
         double orbitAu = earth.longInteger("orbitalDistance")
                 / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         scenario().record("earthOrbitAu", orbitAu);
@@ -1007,15 +972,14 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>What this does not see: the rocket's own selector, which opens the same module; and a moon
      * at any distance but the one the world's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at
-     * {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}
-     * back on the raw distance ({@code properties.orbitalDist}), this fails with "each moon must be
-     * drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:
-     * expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];
-     * expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;". The {@code requireArranged} lines are
-     * arrangements.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at"
+            + " {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}"
+            + " back on the raw distance ({@code properties.orbitalDist}), this fails with \"each moon must be"
+            + " drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:"
+            + " expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];"
+            + " expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;\". The {@code requireArranged} lines are"
+            + " arrangements.")
     @Test
     public void thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -1023,8 +987,8 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().arranging("open the planet selector and click Earth twice to enter its planetary view");
         scenario().record("screen", openMachineGui(at));
         java.util.Map<Integer, Long> moonOrbits = new java.util.HashMap<>();
-        for (int dim : dev.stannismod.stellurgy.test.DimList.from(this::exec).registered()) {
-            Reply body = Reply.of(exec("stellurgytest planet info " + dim));
+        for (int dim : dev.stannismod.stellurgy.test.DimList.from(c -> read(c).raw()).registered()) {
+            Reply body = Reply.of(read("stellurgytest planet info " + dim).raw());
             // `planet info` on a registered dimension: the producer always writes parent.
             if (body.integer("parent") == 0) {
                 moonOrbits.put(dim, body.longInteger("orbitalDistance"));
@@ -1133,19 +1097,18 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         int[] at = placeMachineAndStandOnIt("stellurgy:navigationComputer");
         int navX = at[0], navY = at[1], navZ = at[2];
         String where = dim + " " + navX + " " + navY + " " + navZ;
-        scenario().describeOnFailureWith("stellurgytest nav status " + where,
-                "stellurgytest nav modules " + where);
+        scenario().describeOnFailureWith("stellurgytest nav status " + where);
 
         scenario().arranging("seed the brought crystal and give the ship a blank one to copy into");
-        String seed = exec("stellurgytest nav crystal " + where + " 0 " + SEEDED + " " + FIRST_SECTOR);
+        String seed = arrange("stellurgytest nav crystal " + where + " 0 " + SEEDED + " " + FIRST_SECTOR).raw();
         scenario().requireArranged("the source slot must hold a crystal carrying " + SEEDED
                 + " addresses: " + seed, String.valueOf(SEEDED).equals(Reply.of(seed).text("addresses")));
         // The ship's own crystal is the DESTINATION, and the copy is add-only into it: with that
         // slot empty there is nowhere to copy to and the button is a silent no-op.
-        String shipCrystal = exec("stellurgytest nav crystal " + where + " 1 0");
+        String shipCrystal = arrange("stellurgytest nav crystal " + where + " 1 0").raw();
         scenario().requireArranged("the ship slot must hold a (blank) crystal to copy INTO: "
                 + shipCrystal, (Reply.of(shipCrystal).integer("addresses") == 0));
-        NavStatus before = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus before = NavStatus.of(read("stellurgytest nav status " + where).raw());
         scenario().requireArranged("ARRANGEMENT CONTROL: the ship's own crystal must start EMPTY, "
                 + "or the copy leg below cannot tell a successful copy from a pre-loaded console: "
                 + before.raw(), before.shipCrystals == 0);
@@ -1185,7 +1148,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         assertTrue("arming with nowhere to go must be refused FOR WANT OF A DESTINATION — the only"
                         + " meaning production's arm() has for false: " + refusals,
                 Events.countRecords(refusals, "outcome", "REFUSED_NO_TARGET") > 0);
-        NavStatus afterRefusal = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus afterRefusal = NavStatus.of(read("stellurgytest nav status " + where).raw());
         assertFalse("arming with no destination chosen must leave the console UNARMED: "
                 + afterRefusal.raw(), afterRefusal.armed);
 
@@ -1201,7 +1164,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         String copies = events.since(copyMark, "crystal_copied");
         assertTrue("the console must have had a ship crystal to copy INTO, or the counts below are"
                 + " measuring the arrangement: " + copies, Events.anyRecordHas(copies, "shipCrystal", "true"));
-        NavStatus copied = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus copied = NavStatus.of(read("stellurgytest nav status " + where).raw());
         assertEquals("clicking COPY must write the brought crystal's addresses into the ship's own "
                 + "crystal: " + copied.raw() + " copies=" + copies, SEEDED, copied.shipCrystals);
         assertEquals("and the brought crystal must KEEP them — the console exchanges knowledge, it "
@@ -1238,7 +1201,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                         + " null looks the same as a slow round trip", 150,
                 "nav_command_received", "nav_target_picked");
         String picked = events.since(pickMark, "nav_target_picked");
-        NavStatus aimed = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus aimed = NavStatus.of(read("stellurgytest nav status " + where).raw());
         String expected = FIRST_SECTOR + "_0_0";
         assertEquals("clicking the first listed address must aim the ship at THAT address — the "
                 + "list's order is what the pilot picks by, so aiming at some other entry is the "
@@ -1261,7 +1224,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         String arms = events.since(armMark, "nav_arm_decided");
         assertTrue("clicking ARM with a destination chosen must ARM the console, not refuse it: "
                         + arms, Events.countRecords(arms, "outcome", "ARMED") > 0);
-        NavStatus armedStatus = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus armedStatus = NavStatus.of(read("stellurgytest nav status " + where).raw());
         assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus.raw(),
                 armedStatus.armed);
 
@@ -1279,7 +1242,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         assertTrue("the second click must be the console STANDING DOWN — a record of anything else"
                         + " means the first click did not leave it armed: " + disarms,
                 Events.countRecords(disarms, "outcome", "DISARMED") > 0);
-        NavStatus disarmedStatus = NavStatus.of(exec("stellurgytest nav status " + where));
+        NavStatus disarmedStatus = NavStatus.of(read("stellurgytest nav status " + where).raw());
         assertFalse("a disarmed console must not stay armed: " + disarmedStatus.raw(),
                 disarmedStatus.armed);
 
@@ -1333,36 +1296,32 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
      * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
-     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerE2ETest} drives, and a press
+     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      *
-     * <p>The witnesses below the first one were taken on the pre-2026-10-06 form, in which the console
+     * <p>The records below the first three were taken on the pre-2026-10-06 form, in which the console
      * judged its own presses inside {@code TileWeaponConsole#useNetworkData}; that check is gone and
      * the judgement is {@code PacketMachine#executeServer}'s, recorded as {@code machine_packet_judged}.
-     * They are kept as history of what this method caught; the ones that count today are the two
+     * They are kept as history of what this method caught; the ones that count today are the
      * {@code PacketMachine} / {@code MachineReach} records.</p>
-     *
-     * <p>red-witnessed: with {@code MachineReach#reaches} at {@code <= REACH_SQ} answering for any
-     * distance ({@code >= 0}, both overloads), this fails at "the console judged a press from 24 blocks
-     * away as within reach: {...machine_packet_judged,machine:TileWeaponConsole,...usable:true}"
-     * (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code return;} removed from the
-     * refusal (it logs and reads the press anyway), this fails at "a press from beyond reach held the
-     * battery's fire anyway: {...network:true,...holdFire:true...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#canBeUsedBy} at
-     * {@code return MachineReach.reaches(player, this);} answering {@code false}, this fails at "the
-     * console refused a press from the player standing on it: {...usable:false}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed (pre-2026-10-06 form, history): with {@code TileWeaponConsole#useNetworkData}
-     * at {@code setHoldFire(!isHoldFire());} removed, this fails at "a press from the player standing
-     * on the console did not hold fire: {...holdFire:false...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}
-     * removed, this fails at the arrangement wait "the console never joined a weapon network ... no
-     * `weapon_orders_seeded` carrying consoles = 4144,150,4016" (2026-10-06).</p>
      */
+    @LegacyWitness(prose = "with {@code MachineReach#reaches} at {@code <= REACH_SQ} answering for any"
+            + " distance ({@code >= 0}, both overloads), this fails at \"the console judged a press from 24 blocks"
+            + " away as within reach: {...machine_packet_judged,machine:TileWeaponConsole,...usable:true}\""
+            + " (2026-10-06).")
+    @LegacyWitness(prose = "with {@code PacketMachine#executeServer} at {@code return;} removed from the"
+            + " refusal (it logs and reads the press anyway), this fails at \"a press from beyond reach held the"
+            + " battery's fire anyway: {...network:true,...holdFire:true...}\" (2026-10-06).")
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#canBeUsedBy} at"
+            + " {@code return MachineReach.reaches(player, this);} answering {@code false}, this fails at \"the"
+            + " console refused a press from the player standing on it: {...usable:false}\" (2026-10-06).")
+    @LegacyWitness(prose = "(pre-2026-10-06 form, history): with {@code TileWeaponConsole#useNetworkData}"
+            + " at {@code setHoldFire(!isHoldFire());} removed, this fails at \"a press from the player standing"
+            + " on the console did not hold fire: {...holdFire:false...}\" (2026-10-06).")
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
+            + " removed, this fails at the arrangement wait \"the console never joined a weapon network ... no"
+            + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\" (2026-10-06).")
+    @Pins("INV-NW-08")
     @Test
     public void aWeaponConsolePressFromBeyondReachChangesNothing() throws Exception {
         int dim = plot().dim;
@@ -1373,23 +1332,23 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("a weapon console with a turret beside it, so it commands a network");
         warmupPlotChunks();
-        String turret = exec("stellurgytest place " + dim + " " + (x + 1) + " " + Y + " " + z + " stellurgy:turret");
+        String turret = arrange("stellurgytest place " + dim + " " + (x + 1) + " " + Y + " " + z + " stellurgy:turret").raw();
         scenario().requireArranged("the turret must place: " + turret, Reply.of(turret).bool("placed"));
         long joined = events.markInstrumented();
-        String placed = exec("stellurgytest place " + console + " stellurgy:weaponConsole");
+        String placed = arrange("stellurgytest place " + console + " stellurgy:weaponConsole").raw();
         scenario().requireArranged("the console must place: " + placed, Reply.of(placed).bool("placed"));
         events.awaitRecordWithFields(joined, "weapon_orders_seeded",
                 "the console never joined a weapon network, so a press has nothing to change",
                 Weapons.ARRANGEMENT_TICKS, "consoles", Weapons.at(x, Y, z));
-        Reply before = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        Reply before = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         scenario().requireArranged("the console must command a network that is not holding fire: " + before,
                 before.bool("network") && !before.bool("holdFire"));
 
         // FAR: on a block of its own, down the plot — FAR_FROM_CONSOLE squared against the 64 a chest allows.
         int farZ = z + FAR_FROM_CONSOLE;
-        exec("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
+        arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
         long farStand = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
         awaitClientPlacedNear(farStand, x + 0.5, farZ + 0.5, "the press must leave from where he now stands");
         double farSq = serverDistanceSqTo(x, Y, z);
         scenario().requireArranged("the far press must leave from beyond reach: squared distance " + farSq
@@ -1403,7 +1362,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the console judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
                 + farJudged, "false", Events.text(farJudged, "usable"));
-        Reply afterFar = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        Reply afterFar = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         scenario().requireArranged("the console lost its network during the far press: " + afterFar,
                 afterFar.bool("network"));
         assertFalse("a press from beyond reach held the battery's fire anyway: " + afterFar,
@@ -1411,7 +1370,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("the same press from the player standing on the console holds fire");
         long nearStand = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(nearStand, x + 0.5, z + 0.5, "the press must leave from beside the console");
         double nearSq = serverDistanceSqTo(x, Y, z);
         scenario().requireArranged("the near press must leave from within reach: squared distance " + nearSq
@@ -1423,7 +1382,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the console refused a press from the player standing on it: " + nearJudged,
                 "true", Events.text(nearJudged, "usable"));
-        Reply afterNear = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        Reply afterNear = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         assertTrue("a press from the player standing on the console did not hold fire: " + afterNear,
                 afterNear.bool("holdFire"));
     }
@@ -1433,23 +1392,22 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * before the server reads the press, so a press from beyond a chest's reach leaves its mode alone,
      * and the same press from the player standing on it switches it to illuminating. Both presses are
      * forged by the real client ({@link ForgedMachinePress}); the screen's own button is
-     * {@code WeaponGuiButtonsReachTheServerE2ETest}'s.
-     *
-     * <p>red-witnessed (2026-10-06, one inversion per run): {@code MachineReach#reaches} at
-     * {@code <= REACH_SQ} answering for any distance fails "the sensor judged a press from 24 blocks
-     * away as within reach: {...usable:true}"; {@code PacketMachine#executeServer} at {@code return;}
-     * removed from the refusal fails "a press from beyond reach switched the sensor anyway
-     * {...mode:ACTIVE...}"; {@code TileFireControlSensor#canBeUsedBy} at
-     * {@code return MachineReach.reaches(player, this);} answering {@code false} fails "the sensor
-     * refused a press from the player standing on it: {...usable:false}".</p>
-     *
-     * <p>red-witnessed (pre-2026-10-06 form, history): {@code TileFireControlSensor#useNetworkData} at
-     * {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);} removed
-     * fails "a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}".</p>
+     * {@code WeaponGuiButtonsReachTheServerTest}'s.
      *
      * <p>The placement waits link on vanilla's own position packet ({@code client_pos_look_applied}
      * after {@code /tp}); no Stellurgy code decides it, so there is nothing of ours to break.</p>
      */
+    @LegacyWitness(prose = "(2026-10-06, one inversion per run): {@code MachineReach#reaches} at"
+            + " {@code <= REACH_SQ} answering for any distance fails \"the sensor judged a press from 24 blocks"
+            + " away as within reach: {...usable:true}\"; {@code PacketMachine#executeServer} at {@code return;}"
+            + " removed from the refusal fails \"a press from beyond reach switched the sensor anyway"
+            + " {...mode:ACTIVE...}\"; {@code TileFireControlSensor#canBeUsedBy} at"
+            + " {@code return MachineReach.reaches(player, this);} answering {@code false} fails \"the sensor"
+            + " refused a press from the player standing on it: {...usable:false}\".")
+    @LegacyWitness(prose = "(pre-2026-10-06 form, history): {@code TileFireControlSensor#useNetworkData} at"
+            + " {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);} removed"
+            + " fails \"a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}\".")
+    @Pins("INV-NW-08")
     @Test
     public void aFireControlSensorPressFromBeyondReachChangesNothing() throws Exception {
         int dim = plot().dim;
@@ -1460,16 +1418,16 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("a fire-control sensor, listening");
         warmupPlotChunks();
-        String placed = exec("stellurgytest place " + sensor + " stellurgy:fireControlSensor");
+        String placed = arrange("stellurgytest place " + sensor + " stellurgy:fireControlSensor").raw();
         scenario().requireArranged("the sensor must place: " + placed, Reply.of(placed).bool("placed"));
-        Reply before = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        Reply before = Reply.of(read("stellurgytest sensor read " + sensor).raw()).requireOk("read the sensor");
         scenario().requireArranged("a fresh sensor must be listening, or switching it proves nothing: " + before,
                 "PASSIVE".equals(before.text("mode")));
 
         int farZ = z + FAR_FROM_CONSOLE;
-        exec("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
+        arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
         long farStand = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
         awaitClientPlacedNear(farStand, x + 0.5, farZ + 0.5, "the press must leave from where he now stands");
         double farSq = serverDistanceSqTo(x, Y, z);
         scenario().requireArranged("the far press must leave from beyond reach: squared distance " + farSq
@@ -1483,13 +1441,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the sensor judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
                 + farJudged, "false", Events.text(farJudged, "usable"));
-        Reply afterFar = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        Reply afterFar = Reply.of(read("stellurgytest sensor read " + sensor).raw()).requireOk("read the sensor");
         assertEquals("a press from beyond reach switched the sensor anyway: " + afterFar,
                 "PASSIVE", afterFar.text("mode"));
 
         scenario().asserting("the same press from the player standing on the sensor switches it");
         long nearStand = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(nearStand, x + 0.5, z + 0.5, "the press must leave from beside the sensor");
         double nearSq = serverDistanceSqTo(x, Y, z);
         scenario().requireArranged("the near press must leave from within reach: squared distance " + nearSq
@@ -1501,7 +1459,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the sensor refused a press from the player standing on it: " + nearJudged,
                 "true", Events.text(nearJudged, "usable"));
-        Reply afterNear = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        Reply afterNear = Reply.of(read("stellurgytest sensor read " + sensor).raw()).requireOk("read the sensor");
         assertEquals("a press from the player standing on the sensor did not switch it: " + afterNear,
                 "ACTIVE", afterNear.text("mode"));
     }
@@ -1517,7 +1475,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
     /** {@link #serverDistanceSqTo}, to a point rather than a block's centre — an entity's position. */
     private double serverDistanceSqToPoint(double x, double y, double z) throws Exception {
-        Reply at = Reply.of(exec("stellurgytest player position-of " + PlayerState.botName(this::exec)))
+        Reply at = Reply.of(read("stellurgytest player position-of " + PlayerState.botName(c -> read(c).raw())).raw())
                 .requireOk("read the player's position on the server");
         double dx = at.number("playerPosX") - x;
         double dy = at.number("playerPosY") - y;
@@ -1552,6 +1510,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * reason, which no Stellurgy code makes here. The client taking the screen down is vanilla's
      * answer to the server's close packet; nothing of ours decides it.</p>
      */
+    @RedWitness(member = "MachineReach#reaches",
+            at = "tile.getPos().getZ() + 0.5D) <= REACH_SQ",
+            replacedBy = "tile.getPos().getZ() + 0.5D) >= 0",
+            fails = "the server never closed the machine's screen after he walked",
+            on = "2026-10-06")
+    @Pins("INV-NW-09")
     @Test
     public void aMachineScreenClosesWhenItsUserWalksOutOfReach() throws Exception {
         int dim = plot().dim;
@@ -1569,12 +1533,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 Events.anyRecordHasAll(openChecks, "container", MACHINE_CONTAINER, "allowed", "true"));
 
         int farZ = at[2] + FAR_FROM_CONSOLE;
-        exec("stellurgytest place " + dim + " " + at[0] + " " + Y + " " + farZ + " minecraft:stone");
+        arrange("stellurgytest place " + dim + " " + at[0] + " " + Y + " " + farZ + " minecraft:stone");
 
         scenario().asserting("walking out of reach closes the machine's screen, on the server's own check");
         long walkMark = events.markInstrumented();
         long walkOnClient = clientEvents().mark();
-        exec("tp @a " + (at[0] + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        arrange("tp @a " + (at[0] + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
         awaitClientPlacedNear(walkOnClient, at[0] + 0.5, farZ + 0.5, "he must have walked away");
         double farSq = serverDistanceSqTo(at[0], at[1], at[2]);
         scenario().requireArranged("he must stand beyond reach of the machine: squared distance " + farSq
@@ -1612,6 +1576,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * at {@code if (storage != null)} sends the push only when the rocket has a block store, so the
      * break tried above silences the record instead of emptying it.</p>
      */
+    @RedWitness(member = "EntityRocket#addTrackingPlayer",
+            at = "if (storage != null)",
+            replacedBy = "if (false)",
+            fails = "a player who came within sight of the rocket was never given its blocks",
+            on = "2026-10-06")
+    @Pins("INV-NW-10")
     @Test
     public void aRocketIsShownToAPlayerWhoSeesItFromBeyondReach() throws Exception {
         scenario().arranging("a rocket assembled while the player stands out of its sight");
@@ -1654,6 +1624,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code return MachineReach.reaches(player, this);} answering {@code false}, this fails at "the
      * rocket refused a packet from the player standing beside it: {...usable:false}" (2026-10-06).</p>
      */
+    @RedWitness(verdict = "the same packet from beside the rocket is accepted",
+            member = "EntityRocket#canBeUsedBy",
+            at = "return MachineReach.reaches(player, this);",
+            replacedBy = "return false;",
+            fails = "the rocket refused a packet from the player standing beside it",
+            on = "2026-10-06")
+    @Pins("INV-NW-08")
     @Test
     public void aRocketRefusesAPacketFromBeyondReach() throws Exception {
         int dim = plot().dim;
@@ -1684,9 +1661,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         int besideX = (int) Math.floor(where.number("posX")) + BESIDE_ROCKET;
         int besideZ = (int) Math.floor(where.number("posZ"));
         int floorY = (int) Math.floor(where.number("posY")) - 1;
-        exec("stellurgytest place " + dim + " " + besideX + " " + floorY + " " + besideZ + " minecraft:stone");
+        arrange("stellurgytest place " + dim + " " + besideX + " " + floorY + " " + besideZ + " minecraft:stone");
         long nearStand = clientEvents().mark();
-        exec("tp @a " + (besideX + 0.5) + " " + (floorY + 1) + " " + (besideZ + 0.5) + " 90 0");
+        arrange("tp @a " + (besideX + 0.5) + " " + (floorY + 1) + " " + (besideZ + 0.5) + " 90 0");
         awaitClientPlacedNear(nearStand, besideX + 0.5, besideZ + 0.5, "the packet must leave from beside the rocket");
         double nearSq = serverDistanceSqToPoint(where.number("posX"), where.number("posY"), where.number("posZ"));
         scenario().requireArranged("he must stand within reach of the rocket's own position (inside its box):"
@@ -1710,7 +1687,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     /** Lays the rocket fixture's blocks, loose, at {@link #rocketSite}; returns the assembler's position. */
     private int[] buildRocketFixture() throws Exception {
         warmupPlotChunks();
-        return RocketFixture.placeAt(rocketSite(), this::exec, "simple", ROCKET_SITE_HALO,
+        return RocketFixture.placeAt(rocketSite(), c -> arrange(c).raw(), "simple", ROCKET_SITE_HALO,
                 (int) ROCKET_BOX_BOUND, "the rocket stands still on its pad; only the watcher moves");
     }
 
@@ -1723,27 +1700,35 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     private void standDownThePad(int blocks, String what) throws Exception {
         FixtureSite site = rocketSite();
         int standZ = site.z + blocks;
-        exec("stellurgytest place " + site.dim + " " + site.x + " " + site.y + " " + standZ + " minecraft:stone");
+        arrange("stellurgytest place " + site.dim + " " + site.x + " " + site.y + " " + standZ + " minecraft:stone");
         long stand = clientEvents().mark();
-        exec("tp @a " + (site.x + 0.5) + " " + (site.y + 1) + " " + (standZ + 0.5) + " 180 0");
+        arrange("tp @a " + (site.x + 0.5) + " " + (site.y + 1) + " " + (standZ + 0.5) + " 180 0");
         awaitClientPlacedNear(stand, site.x + 0.5, standZ + 0.5, what);
     }
 
     /** The player's horizontal offset from (x, z) on the server, as {@code {dx, dz}}. */
     private double[] serverOffsetTo(double x, double z) throws Exception {
-        Reply at = Reply.of(exec("stellurgytest player position-of " + PlayerState.botName(this::exec)))
+        Reply at = read("stellurgytest player position-of " + PlayerState.botName(c -> read(c).raw()))
                 .requireOk("read the player's position on the server");
         return new double[]{at.number("playerPosX") - x, at.number("playerPosZ") - z};
     }
 
-    /** Assembles the fixture's rocket; returns its entity id. */
+    /**
+     * Assembles the fixture's rocket; returns its entity id, read off the assembler's own
+     * {@code rocket_born} record, and disposed of when the scenario ends.
+     */
     private int assembleRocket(int[] builder) throws Exception {
-        return RocketFixture.rocketEntityId(RocketFixture.assembleBuilt(rocketSite(), this::exec, builder));
+        long pressed = serverEvents().mark();
+        String assembled = RocketFixture.assembleBuilt(rocketSite(), c -> act(c).raw(), builder);
+        scenario().requireArranged("the fixture's rocket must assemble: " + assembled, Reply.of(assembled).ok());
+        int rocket = RocketFixture.rocketBornAt(serverEvents(), pressed, builder);
+        disposeOfRocketAtEnd(rocket);
+        return rocket;
     }
 
     /** The rocket's own readout. It answers its fields with no {@code ok}, so the position IS the receipt. */
     private Reply rocketInfo(int rocket) throws Exception {
-        Reply info = Reply.of(exec("stellurgytest rocket info " + rocket));
+        Reply info = read("stellurgytest rocket info " + rocket);
         scenario().requireArranged("the server must know the rocket's position: " + info, info.has("posX"));
         return info;
     }
@@ -1769,12 +1754,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("place a biome scanner with an all-air column below it at " + x + "," + Y + "," + z);
         warmupPlotChunks();
-        String place = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " stellurgy:biomeScanner");
+        String place = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " stellurgy:biomeScanner").raw();
         scenario().requireArranged("scanner must place: " + place, Reply.of(place).bool("placed"));
-        exec("fill " + x + " 1 " + z + " " + x + " " + (Y - 1) + " " + z + " minecraft:air");
+        arrange("fill " + x + " 1 " + z + " " + x + " " + (Y - 1) + " " + z + " minecraft:air");
 
         long standMark = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
                 "the scanner and its cleared column reach the client before the move does");
 
@@ -1799,7 +1784,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Two phases: bypass ON — teleport far past vanilla's 8-block reach, GUI must stay open;
      * bypass OFF — the GUI must close on the next tick. A vanilla chest is the container so the
      * redirect target is the exact vanilla signature the mixin pins.</p>
+     * Pins INV-HLP-02 (a bypass player keeps a container open regardless of distance).
      */
+    @Pins("INV-HLP-02")
     @Test
     public void mixinRedirectKeepsContainerOpenAcrossDistance() throws Exception {
         int dim = plot().dim;
@@ -1808,12 +1795,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().arranging("place a vanilla chest and stand on it");
         warmupPlotChunks();
-        exec("stellurgytest player inv-bypass remove");
-        String place = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " minecraft:chest");
+        arrange("stellurgytest player inv-bypass remove");
+        String place = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " minecraft:chest").raw();
         scenario().requireArranged("chest place must succeed: " + place,
                 Reply.of(place).bool("placed"));
         long standMark = clientEvents().mark();
-        exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
                 "the container below is opened for a player standing at the chest, and the GUI it"
                         + " produces is rendered by the client that got there");
@@ -1825,7 +1812,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         Events events = serverEvents();
         long openMark = events.mark();
         long openOnClient = clientEvents().mark();
-        String open = exec("stellurgytest player open-chest " + dim + " " + x + " " + Y + " " + z);
+        String open = act("stellurgytest player open-chest " + dim + " " + x + " " + Y + " " + z).raw();
         scenario().requireArranged("server-side open-chest must succeed: " + open,
                 Reply.of(open).ok());
         events.await(openMark, "container_opened", "the server must actually OPEN a container: with"
@@ -1839,13 +1826,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 + " screensDisplayed=" + displayed, Events.anyRecordHas(displayed, "gui", "GuiChest"));
 
         scenario().asserting("with the bypass on, the GUI survives a 200-block teleport");
-        String addResp = exec("stellurgytest player inv-bypass add");
+        String addResp = arrange("stellurgytest player inv-bypass add").raw();
         scenario().requireArranged("inv-bypass add must report inBypass:true: " + addResp,
                 Reply.of(addResp).bool("inBypass"));
 
         long farMark = events.markInstrumented();
         long farClientMark = clientEvents().mark();
-        exec("tp @a " + (x + 200) + " " + (Y + 1) + " " + (z + 200) + " 0 0");
+        arrange("tp @a " + (x + 200) + " " + (Y + 1) + " " + (z + 200) + " 0 0");
         // The claim is that the GUI SURVIVES this teleport, so the teleport has to have reached the
         // client before its screen is read — forty ticks were a bet on that, and on a loaded box the
         // bet decides the verdict.
@@ -1856,7 +1843,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // Diagnostic: re-check bypass status post-teleport so a failure can distinguish "bypass
         // dropped from the set" from "the mixin redirect didn't fire". The bypass map uses
         // WeakReferences.
-        String statusAfterTp = exec("stellurgytest player inv-bypass status");
+        String statusAfterTp = read("stellurgytest player inv-bypass status").raw();
         // This half is an ABSENCE — "the server did not close it" — so the instrument has to prove
         // it was listening, or the silence says nothing. The redirect's observation point runs on
         // EVERY EntityPlayerMP.onUpdate tick whether or not its answer changed, so its presence in
@@ -1880,7 +1867,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().asserting("with the bypass off, vanilla's distance check closes it");
         long closeMark = events.markInstrumented();
         long closeOnClient = clientEvents().mark();
-        String removeResp = exec("stellurgytest player inv-bypass remove");
+        String removeResp = arrange("stellurgytest player inv-bypass remove").raw();
         scenario().requireArranged("inv-bypass remove must report inBypass:false: " + removeResp,
                 (!Reply.of(removeResp).bool("inBypass")));
 

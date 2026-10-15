@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock;
 
+import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -7,8 +9,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
-import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 //Used to store info about the block previously at the location
 public class TilePlaceholder extends TilePointer {

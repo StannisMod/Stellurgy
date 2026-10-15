@@ -1,10 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.sensor.TargetTrack;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.WorldServer;
-
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -13,10 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.sensor.TargetTrack;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor;
+import java.util.List;
 
 /**
  * A fire-control sensor's sweep, as an event: {@code sensor_swept}.
@@ -31,8 +29,8 @@ import dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor;
  * (production's own {@code isLocked} against the configured lock floor), plus the sensor's
  * {@code mode} as it actually worked this sweep and whether it is {@code emitting}. Per sweep and not
  * per change, because a reader judging "never acquired over N sweeps" needs the sweeps it was not
- * acquired in. Server log. Read by {@code SensorFriendIsNeverAcquiredE2ETest},
- * {@code FireControlSensorE2ETest} and {@code ASensorAboardAShipE2ETest}.</p>
+ * acquired in. Server log. Read by {@code SensorFriendIsNeverAcquiredTest},
+ * {@code FireControlSensorTest} and {@code ASensorAboardAShipTest}.</p>
  *
  * <p>And the refusal that stands in front of every sweep, as its own event: {@code sensor_gate_refused},
  * documented at its seam below.</p>

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.integration.jei.gasgiants;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import mezz.jei.api.gui.IDrawable;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeWrapper;
@@ -13,7 +14,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidUtil;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 import java.util.ArrayList;
 import java.util.Collections;

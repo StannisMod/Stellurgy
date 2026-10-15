@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.api.StellurgyAPI;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.armor.IFillableArmor;
+import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyAPI;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.armor.IFillableArmor;
-import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 
 import javax.annotation.Nonnull;
 
@@ -174,7 +173,9 @@ public class ItemAirUtils implements IFillableArmor {
                                     boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
                                     boolean commitProtection) {
             if (!stack.isEmpty() && stack.getItem() instanceof ItemArmor) {
-                if (((ItemArmor) stack.getItem()).armorType == EntityEquipmentSlot.CHEST)
+                // A body that needs no oxygen spends none, and the chest seals as the suit's does.
+                if (((ItemArmor) stack.getItem()).armorType == EntityEquipmentSlot.CHEST
+                        && dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2)
                     return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;
 
                 return true;

@@ -1,19 +1,9 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraftforge.fml.relauncher.Side;
-import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.modules.ModulePlanetSelector;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.ITilePlanetSystemSelectable;
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IProgressBar;
@@ -23,6 +13,16 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import dev.stannismod.stellurgy.util.ITilePlanetSystemSelectable;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraftforge.fml.relauncher.Side;
+import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.LinkedList;
 import java.util.List;

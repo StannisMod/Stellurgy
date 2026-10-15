@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import net.minecraft.entity.Entity;
-
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import net.minecraft.entity.Entity;
 
 /**
  * A fixed deck point of the current aboard episode and its world image at the last two client ticks —

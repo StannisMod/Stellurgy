@@ -72,14 +72,14 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     @Before
     public void snapshotAndPrepare() throws Exception {
         // Snapshot Sol's black-hole flag so we can restore in @After.
-        String solInfo = exec("stellurgytest star get 0");
+        String solInfo = read("stellurgytest star get 0").raw();
         Reply sol = Reply.of("stellurgytest star get", solInfo);
         assertTrue("could not read Sol's black-hole flag: " + solInfo, sol.has(STAR_BLACKHOLE));
         originalSolBlackHole = sol.bool(STAR_BLACKHOLE);
 
         // Load the space dim — BHG production checks
         // world.provider.getDimension() == spaceDimId.
-        String load = exec("stellurgytest dim load " + SPACE_DIM);
+        String load = arrange("stellurgytest dim load " + SPACE_DIM).raw();
         assertTrue("space dim load failed: " + load,
                 Reply.of(load).bool("loaded"));
     }
@@ -93,7 +93,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         }
         // Restore Sol's flag unconditionally — even if we never flipped
         // it (e.g. the assertion before the flip threw).
-        exec("stellurgytest star set-blackhole 0 " + originalSolBlackHole);
+        arrange("stellurgytest star set-blackhole 0 " + originalSolBlackHole).raw();
     }
 
     /** Happy path: station orbits a black-hole Sol, BHG is on the space
@@ -162,7 +162,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     // ─── helpers ───────────────────────────────────────────────────────
 
     private void flipSolBlackHole(boolean value) throws Exception {
-        String resp = exec("stellurgytest star set-blackhole 0 " + value);
+        String resp = arrange("stellurgytest star set-blackhole 0 " + value).raw();
         assertTrue("Sol black-hole flip failed: " + resp,
                 Reply.of(resp).ok() && String.valueOf(value).equals(Reply.of(resp).text("after")));
     }
@@ -170,7 +170,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     /** Creates a station orbiting Sol (dim {@link #SOL_DIM}), returns its
      *  spawn coords as {@code [x, y, z]} in the space dim. */
     private int[] createStationAndQuerySpawn() throws Exception {
-        String create = exec("stellurgytest station create " + SOL_DIM);
+        String create = arrange("stellurgytest station create " + SOL_DIM).raw();
         assertTrue("station create failed: " + create,
                 Reply.of(create).ok());
         Reply created = Reply.of("stellurgytest station create", create);
@@ -179,13 +179,13 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
 
         // The reader refuses a station the manager does not hold, and its spawn accessors refuse a
         // station that has no spawn — which is what the two-field has-check stood for.
-        StationInfo station = StationInfo.byId(this::exec, stationId);
+        StationInfo station = StationInfo.byId(c -> read(c).raw(), stationId);
         return new int[]{station.spawnX(), 128, station.spawnZ()};
     }
 
     private String buildFixture(int dim, int cx, int cy, int cz) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock blackhole-gen "
-                + dim + " " + cx + " " + cy + " " + cz);
+        String fixture = arrange("stellurgytest fixture multiblock blackhole-gen "
+                + dim + " " + cx + " " + cy + " " + cz).raw();
         assertTrue("BHG fixture build failed: " + fixture,
                 Reply.of(fixture).ok());
         assertTrue("no controllerPos in fixture response: " + fixture,
@@ -196,8 +196,8 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         // triggers BHG.update()'s lazy completeStructure check, but we
         // also explicitly run try-complete here so the diagnostic surface
         // is clean.
-        String tryComplete = exec("stellurgytest machine try-complete "
-                + dim + " " + cx + " " + cy + " " + cz);
+        String tryComplete = act("stellurgytest machine try-complete "
+                + dim + " " + cx + " " + cy + " " + cz).raw();
         assertTrue("BHG structure failed to complete: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
         return fixture;
@@ -209,23 +209,23 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         // the first non-empty stack each fire. defaultItemTimeBlackHole
         // is 500 ticks per fire, so 64 items = up to 64 fires of 500
         // ticks each.
-        String resp = exec("stellurgytest hatch fill " + dim + " "
+        String resp = arrange("stellurgytest hatch fill " + dim + " "
                 + inputPos[0] + " " + inputPos[1] + " " + inputPos[2]
-                + " 0 minecraft:dirt 64 0");
+                + " 0 minecraft:dirt 64 0").raw();
         assertTrue("hatch fill failed: " + resp,
                 Reply.of(resp).ok() || (Reply.of(resp).integer("count") == FULL_STACK));
     }
 
     private void enableMachine(int dim, int cx, int cy, int cz) throws Exception {
-        String resp = exec("stellurgytest machine set-enabled " + dim + " "
-                + cx + " " + cy + " " + cz + " true");
+        String resp = arrange("stellurgytest machine set-enabled " + dim + " "
+                + cx + " " + cy + " " + cz + " true").raw();
         assertTrue("machine set-enabled failed: " + resp,
                 Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int dim, int cx, int cy, int cz, int ticks) throws Exception {
-        String resp = exec("stellurgytest tile force-tick " + dim + " "
-                + cx + " " + cy + " " + cz + " " + ticks);
+        String resp = act("stellurgytest tile force-tick " + dim + " "
+                + cx + " " + cy + " " + cz + " " + ticks).raw();
         assertTrue("force-tick errored: " + resp, Reply.of(resp).ok());
     }
 
@@ -234,7 +234,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     }
 
     private long readEnergyStored(int dim, int[] pos) throws Exception {
-        return EnergyStore.at(this::exec, dim, pos[0], pos[1], pos[2])
+        return EnergyStore.at(c -> read(c).raw(), dim, pos[0], pos[1], pos[2])
                 .requireEnergy("the plug must expose a store, or its reading is an absence")
                 .stored();
     }

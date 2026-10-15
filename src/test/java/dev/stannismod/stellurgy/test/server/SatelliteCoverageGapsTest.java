@@ -53,21 +53,21 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         long satId = createSat("weatherController", 100, 10_000, 1000);
         int x = 5200, y = 200, z = 5200;
 
-        client().execute("stellurgytest fill 0 " + x + " " + y + " " + z + " "
+        client().arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " "
                 + x + " " + y + " " + z + " minecraft:water");
-        String preBlock = String.join("\n", client().execute(
+        String preBlock = String.join("\n", client().read(
                 "stellurgytest block at 0 " + x + " " + y + " " + z));
         String preBlockName = stringField(BLOCK, preBlock, "block");
         assertTrue("test setup: pre-block must be water or flowing_water; " + preBlock,
                 "minecraft:water".equals(preBlockName)
                         || "minecraft:flowing_water".equals(preBlockName));
 
-        client().execute("stellurgytest satellite weather-mode 0 " + satId + " 1");
-        client().execute("stellurgytest satellite weather-add-pos 0 " + satId
+        client().arrange("stellurgytest satellite weather-mode 0 " + satId + " 1");
+        client().arrange("stellurgytest satellite weather-add-pos 0 " + satId
                 + " " + x + " " + y + " " + z);
-        client().execute("stellurgytest satellite tick 0 " + satId + " 1");
+        client().act("stellurgytest satellite tick 0 " + satId + " 1");
 
-        String postBlock = String.join("\n", client().execute(
+        String postBlock = String.join("\n", client().read(
                 "stellurgytest block at 0 " + x + " " + y + " " + z));
         String b = stringField(BLOCK, postBlock, "block");
         assertEquals("mode-1 WeatherController tick must replace a water "
@@ -82,14 +82,14 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         long satId = createSat("weatherController", 100, 10_000, 1000);
         int x = 5300, y = 200, z = 5300;
 
-        client().execute("stellurgytest fill 0 " + x + " " + y + " " + z + " "
+        client().arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " "
                 + x + " " + y + " " + z + " minecraft:air");
-        client().execute("stellurgytest satellite weather-mode 0 " + satId + " 2");
-        client().execute("stellurgytest satellite weather-add-pos 0 " + satId
+        client().arrange("stellurgytest satellite weather-mode 0 " + satId + " 2");
+        client().arrange("stellurgytest satellite weather-add-pos 0 " + satId
                 + " " + x + " " + y + " " + z);
-        client().execute("stellurgytest satellite tick 0 " + satId + " 1");
+        client().act("stellurgytest satellite tick 0 " + satId + " 1");
 
-        String postBlock = String.join("\n", client().execute(
+        String postBlock = String.join("\n", client().read(
                 "stellurgytest block at 0 " + x + " " + y + " " + z));
         String b = stringField(BLOCK, postBlock, "block");
         assertEquals("mode-2 WeatherController tick must replace an air "
@@ -119,21 +119,21 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
 
         // Set up AIR blocks. Without a mode change, mode 2 would
         // convert these to WATER.
-        client().execute("stellurgytest fill 0 " + x + " " + y + " " + z + " "
+        client().arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " "
                 + (x + n - 1) + " " + y + " " + z + " minecraft:air");
 
         // Atomic: queue N AIR-targeting positions, switch mode_id to 2
         // (last_mode_id stays 0), invoke tickEntity once — all on the
         // same server-thread call, so the mode-mismatch IS the state
         // visible to that single tickEntity.
-        client().execute("stellurgytest satellite weather-discard-test 0 " + satId
+        client().act("stellurgytest satellite weather-discard-test 0 " + satId
                 + " 2 " + x + " " + y + " " + z + " " + n);
 
         // None of the queued positions must have been converted to
         // water — the mode-change discarded the work.
         for (int i = 0; i < n; i++) {
             int px = x + i;
-            String b = stringField(BLOCK, String.join("\n", client().execute(
+            String b = stringField(BLOCK, String.join("\n", client().read(
                     "stellurgytest block at 0 " + px + " " + y + " " + z)), "block");
             assertEquals("queued positions must NOT be processed when "
                     + "mode changes between queue-build and tick; pos=("
@@ -157,32 +157,32 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         int n = 5;
 
         // Pre-load chunks at the synthetic test positions.
-        client().execute("stellurgytest fill 0 " + baseX + " " + y + " " + z + " "
+        client().arrange("stellurgytest fill 0 " + baseX + " " + y + " " + z + " "
                 + (baseX + n - 1) + " " + y + " " + z + " minecraft:air");
 
         // Snapshot the pre-terraform biome — for the assertion to be
         // meaningful, the target must differ from this. Use desert
         // (id=2); fall back to plains if pre is already desert.
-        String preBiomeResp = String.join("\n", client().execute(
+        String preBiomeResp = String.join("\n", client().read(
                 "stellurgytest block biome-at 0 " + baseX + " " + y + " " + z));
         String preBiome = stringField(BIOME, preBiomeResp, "biome");
         int targetBiomeId = preBiome.endsWith("desert") ? 1 : 2;
 
-        client().execute("stellurgytest satellite biome-set 0 " + satId + " " + targetBiomeId);
-        client().execute("stellurgytest satellite force-charge 0 " + satId + " 5000");
+        client().arrange("stellurgytest satellite biome-set 0 " + satId + " " + targetBiomeId);
+        client().arrange("stellurgytest satellite force-charge 0 " + satId + " 5000");
         for (int i = 0; i < n; i++) {
-            client().execute("stellurgytest satellite biome-add-pos 0 " + satId
+            client().arrange("stellurgytest satellite biome-add-pos 0 " + satId
                     + " " + (baseX + i) + " " + y + " " + z);
         }
         // Give the satellite a generous tick budget — the contract is
         // "all queued positions eventually terraform with power"; the
         // exact tick count is impl. 5 ticks is enough even under
         // pessimistic per-tick throughput.
-        client().execute("stellurgytest satellite tick 0 " + satId + " 5");
+        client().act("stellurgytest satellite tick 0 " + satId + " 5");
 
         for (int i = 0; i < n; i++) {
             int px = baseX + i;
-            String b = stringField(BIOME, String.join("\n", client().execute(
+            String b = stringField(BIOME, String.join("\n", client().read(
                     "stellurgytest block biome-at 0 " + px + " " + y + " " + z)), "biome");
             assertTrue("queued position must be terraformed after the "
                     + "satellite ticks with sufficient power; pos=("
@@ -202,19 +202,19 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
         int x = 5600, y = dev.stannismod.stellurgy.test.FixtureSite.OPEN_AIR_Y, z = 5600;
 
-        client().execute("stellurgytest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
+        client().arrange("stellurgytest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
                 + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air");
-        String preBiome = stringField(BIOME, String.join("\n", client().execute(
+        String preBiome = stringField(BIOME, String.join("\n", client().read(
                 "stellurgytest block biome-at 0 " + x + " " + y + " " + z)), "biome");
 
         // Null biomeId BEFORE queueing so any background tick can only
         // observe the null state.
-        client().execute("stellurgytest satellite biome-null 0 " + satId);
-        client().execute("stellurgytest satellite force-charge 0 " + satId + " 5000");
-        client().execute("stellurgytest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
-        client().execute("stellurgytest satellite tick 0 " + satId + " 1");
+        client().arrange("stellurgytest satellite biome-null 0 " + satId);
+        client().arrange("stellurgytest satellite force-charge 0 " + satId + " 5000");
+        client().arrange("stellurgytest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
+        client().act("stellurgytest satellite tick 0 " + satId + " 1");
 
-        String postBiome = stringField(BIOME, String.join("\n", client().execute(
+        String postBiome = stringField(BIOME, String.join("\n", client().read(
                 "stellurgytest block biome-at 0 " + x + " " + y + " " + z)), "biome");
         assertEquals("biome at pos must be unchanged when satellite has "
                 + "no configured biome; preBiome=" + preBiome
@@ -243,7 +243,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
      */
     @Test
     public void satelliteWithCanTickFalseIsNotAddedToTickingList() throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create-spy-telescope 0"));
         assertTrue("create-spy-telescope failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
@@ -255,12 +255,12 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "false", stringField(CAN_TICK, resp, "canTick"));
 
         // The SpyTelescope must be in the satellites lifecycle list...
-        String lifecycle = String.join("\n", client().execute(
+        String lifecycle = String.join("\n", client().read(
                 "stellurgytest satellite list 0"));
         Reply.of(lifecycle).element("satellites", "id", String.valueOf(spyId));
 
         // ...but NOT in the tickingSatellites map.
-        String ticking = String.join("\n", client().execute(
+        String ticking = String.join("\n", client().read(
                 "stellurgytest satellite ticking-list 0"));
         // The field is a JSON ARRAY; its text comes back bracketed and the reader below asks whether
         // an id is IN it, so the brackets go rather than being matched around.
@@ -284,7 +284,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         long satId = createSat("oreScanner", 100, 1000, 1000);
 
         // Sanity: freshly-created satellite is queryable.
-        String pre = String.join("\n", client().execute(
+        String pre = String.join("\n", client().read(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("freshly-created satellite must be queryable via "
                 + "satellite info; resp=" + pre,
@@ -293,10 +293,10 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         // Mark dead + drive one DimensionProperties.tick() so the
         // production removal branch fires synchronously (instead of
         // waiting for the next background dim tick).
-        client().execute("stellurgytest satellite set-dead 0 " + satId);
-        client().execute("stellurgytest satellite force-tick-dim 0");
+        client().arrange("stellurgytest satellite set-dead 0 " + satId);
+        client().act("stellurgytest satellite force-tick-dim 0");
 
-        String post = String.join("\n", client().execute(
+        String post = String.join("\n", client().read(
                 "stellurgytest satellite info 0 " + satId));
         // absence is the answer: a reply with NO `error` is the success shape, and "the
         // verb refused, with this reason" is exactly what this claim measures.
@@ -308,7 +308,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     // -- helpers ----------------------------------------------------------
 
     private long createSat(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,

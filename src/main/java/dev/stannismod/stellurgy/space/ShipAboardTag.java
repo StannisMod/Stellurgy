@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.player.CapabilityPlayerBindings;
+import dev.stannismod.stellurgy.player.IPlayerBindings;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 
-import dev.stannismod.stellurgy.player.CapabilityPlayerBindings;
-import dev.stannismod.stellurgy.player.IPlayerBindings;
+import java.util.UUID;
 
 /**
  * The per-player durable record "<i>I am aboard tier-2 ship X, at Y</i>", stored in the player's

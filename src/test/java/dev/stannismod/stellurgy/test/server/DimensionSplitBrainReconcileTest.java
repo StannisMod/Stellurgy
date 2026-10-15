@@ -1,24 +1,23 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertNotEquals;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -43,7 +42,8 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class DimensionSplitBrainReconcileTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class DimensionSplitBrainReconcileTest extends AbstractMechanicsTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
     /**
@@ -52,7 +52,7 @@ public class DimensionSplitBrainReconcileTest {
     private static final Pattern PLANET_DIMID =
             Pattern.compile("<planet\\b[^>]*\\bDIMID=\"(-?\\d+)\"");
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -62,7 +62,7 @@ public class DimensionSplitBrainReconcileTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-c129-splitbrain-");
+        workDir = ServerRoot.fresh("forge-server-c129-splitbrain-");
     }
 
     @After
@@ -76,7 +76,7 @@ public class DimensionSplitBrainReconcileTest {
     }
 
     private static Set<Integer> stellurgyDims(RealDedicatedServerHarness h) throws Exception {
-        String list = ok(h.client().execute("stellurgytest dim list"));
+        String list = ok(h.client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", list);
         assertTrue("dim list missing stellurgyDimensions: " + list, listed.has(AR_DIMS));
         Set<Integer> out = new HashSet<>();
@@ -86,25 +86,32 @@ public class DimensionSplitBrainReconcileTest {
         return out;
     }
 
-    private static Path planetDefsPath(RealDedicatedServerHarness h) throws Exception {
-        String save = ok(h.client().execute("stellurgytest server save-dimensions"));
+    /**
+     * Save the galaxy now, and require that the file the save wrote is the one the edit below changes
+     * ({@link SavedWorldEdit#PLANET_DEFS}): the two must agree or the edit would change a file the next
+     * boot never reads.
+     */
+    private static void saveTheGalaxyWhereTheEditLands(RealDedicatedServerHarness h) throws Exception {
+        String save = ok(h.client().act("stellurgytest server save-dimensions"));
         assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
-        String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath");
-        return Paths.get(xmlPath.replace("\\\\", "\\"));
+        String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath")
+                .replace("\\\\", "/").replace('\\', '/');
+        requireArranged("the galaxy must be saved to " + SavedWorldEdit.PLANET_DEFS + ": " + xmlPath,
+                xmlPath.endsWith("/" + SavedWorldEdit.PLANET_DEFS));
     }
 
     @Test
     public void planetInTempDatButRemovedFromXmlStaysRegistered() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         Set<Integer> before = stellurgyDims(firstBoot);
-        Path xmlPath = planetDefsPath(firstBoot);
+        saveTheGalaxyWhereTheEditLands(firstBoot);
         firstBoot.close();
         firstBoot = null;
 
         // Pick a positive planet dim that is BOTH written in the XML (a non-moon
         // <planet> node) and registered — removing it from the XML creates the
         // temp.dat/XML divergence.
-        String content = new String(Files.readAllBytes(xmlPath), StandardCharsets.UTF_8);
+        String content = workDir.readText(SavedWorldEdit.PLANET_DEFS);
         int target = Integer.MIN_VALUE;
         Matcher pm = PLANET_DIMID.matcher(content);
         while (pm.find()) {
@@ -118,16 +125,15 @@ public class DimensionSplitBrainReconcileTest {
                         + "(before=" + before + "):\n" + content,
                 target != Integer.MIN_VALUE);
 
-        // Delete the whole <planet ... DIMID="target" ...>...</planet> node.
+        // Delete the whole <planet ... DIMID="target" ...>...</planet> node, while no server runs on the
+        // directory. An edit that removed nothing is refused there.
+        // NOT-A-PROBE-REPLY: the saved planet catalogue (XML on disk), not a reply
         Pattern node = Pattern.compile(
                 "<planet\\b[^>]*\\bDIMID=\"" + target + "\"[^>]*>.*?</planet>\\s*",
                 Pattern.DOTALL);
-        String edited = node.matcher(content).replaceFirst("");
-        assertNotEquals("target planet node must have been removed from the XML",
-                content, edited);
-        Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
+        workDir.editWhileDown(SavedWorldEdit.planetDefs(saved -> node.matcher(saved).replaceFirst("")));
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         Set<Integer> after = stellurgyDims(secondBoot);
 
         assertTrue("a planet persisted in temp.dat but removed from planetDefs.xml "
@@ -135,7 +141,7 @@ public class DimensionSplitBrainReconcileTest {
                         + " missing from " + after,
                 after.contains(target));
 
-        DimInfo info = DimInfo.forDim(cmd -> ok(secondBoot.client().execute(cmd)), target);
+        DimInfo info = DimInfo.forDim(cmd -> ok(secondBoot.client().read(cmd)), target);
         assertTrue("dim " + target + " must be a Stellurgy planet after reload, not the "
                         + "overworld fallback: " + info.raw(),
                 info.stellurgyPlanet);

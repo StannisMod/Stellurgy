@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;

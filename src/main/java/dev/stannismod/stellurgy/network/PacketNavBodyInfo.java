@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.network;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.universe.InfoTier;
+import dev.stannismod.stellurgy.universe.PlanetInfoField;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 
-import dev.stannismod.stellurgy.universe.InfoTier;
-import dev.stannismod.stellurgy.universe.PlanetInfoField;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * The navigation computer's <b>redacted</b> answer about one body: server&rarr;client, carrying only the

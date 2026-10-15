@@ -1,7 +1,10 @@
 package dev.stannismod.stellurgy.tile;
 
+import dev.stannismod.stellurgy.api.FreeFlightInput;
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 import io.netty.buffer.ByteBuf;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -12,11 +15,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
-
-import dev.stannismod.stellurgy.api.FreeFlightInput;
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Pilot seat for a tier-2 (Valkyrien Skies) ship: the in-world control station that hands a

@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.JumpGate;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for whether a ship may jump. The gate promises four things to the rest of the game:
@@ -17,6 +17,16 @@ import static org.junit.Assert.assertTrue;
  * costs nothing, so a pilot may ask as often as he likes.
  */
 public class JumpGateTest {
+
+    /**
+     * Every check runs the drive-heat clause, which reads the configuration in force, and that loads the
+     * mod class, whose static initialiser needs vanilla's registries. Without this the class passed only
+     * when some earlier test in the same JVM had bootstrapped them, and failed whole when run alone.
+     */
+    @BeforeClass
+    public static void bootstrapVanillaRegistries() {
+        MinecraftBootstrap.ensure();
+    }
 
     /**
      * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
@@ -42,6 +52,12 @@ public class JumpGateTest {
         long storedEnergy = 1_000_000L;
         long flightEnergyCost = 400_000L;
         double driveCoolantKelvin = 0.0D;
+        boolean destinationCellAvailable = true;
+
+        @Override
+        public boolean destinationCellAvailable() {
+            return destinationCellAvailable;
+        }
 
         @Override
         public boolean hasNavComputer() {
@@ -107,6 +123,31 @@ public class JumpGateTest {
         public double driveCoolantKelvin() {
             return driveCoolantKelvin;
         }
+    }
+
+    /**
+     * A target whose cell the server cannot load now is a WARNING the pilot confirms, never a
+     * refusal: the pool is a snapshot, and the departure itself frees the slot the arrival often gets.
+     */
+    @Pins("INV-HYP-08")
+    @RedWitness(verdict = "warns", member = "JumpGate#clauses",
+            at = "new Objection(Severity.ADVISORY, MSG_DESTINATION_FULL)",
+            replacedBy = "new Objection(Severity.HARD, MSG_DESTINATION_FULL)",
+            fails = "a full destination warns, it does not forbid", on = "2026-10-06")
+    @RedWitness(verdict = "confirm", member = "JumpGate#clauses",
+            at = "ship.destinationCellAvailable() ? null", replacedBy = "true ? null",
+            fails = "the pilot must be asked to confirm a jump into a full region", on = "2026-10-06")
+    @Test
+    public void aFullDestinationIsAWarningThePilotConfirmsNotARefusal() {
+        FakeShip ship = new FakeShip();
+        ship.destinationCellAvailable = false;
+
+        JumpGate.Verdict verdict = JumpGate.check(ship);
+
+        assertTrue("a full destination warns, it does not forbid: " + verdict, verdict.allowed());
+        assertTrue("the pilot must be asked to confirm a jump into a full region: " + verdict,
+                verdict.needsConfirmation());
+        assertEquals(JumpGate.MSG_DESTINATION_FULL, verdict.firstMessage());
     }
 
     @Test

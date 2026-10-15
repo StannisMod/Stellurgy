@@ -1,5 +1,16 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyFluids;
+import dev.stannismod.stellurgy.api.armor.IFillableArmor;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumerTank;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
+import dev.stannismod.stellurgy.util.ItemAirUtils;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.inventory.IInventory;
@@ -11,17 +22,6 @@ import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyFluids;
-import dev.stannismod.stellurgy.api.armor.IFillableArmor;
-import dev.stannismod.stellurgy.util.ItemAirUtils;
-import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumerTank;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
-import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import org.junit.After;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -60,8 +60,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String PARTS_COUNT = "partsToRepairCount";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
     private static final String INITIAL_COUNT = "initialPartToRepairCount";
     private static final String ASM_COUNT = "assemblersCount";
     private static final String PROC_COUNT = "partsProcessingCount";
@@ -87,13 +93,13 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         int cz1 = (Math.min(ROCKET_CZ - 2, FIXTURE_CZ - 5)) >> 4;
         int cx2 = (Math.max(ROCKET_CX + 12, FIXTURE_CX + 5)) >> 4;
         int cz2 = (Math.max(ROCKET_CZ + 7, FIXTURE_CZ + 5)) >> 4;
-        exec("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
+        arrange("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
 
         // Build a precision-assembler multiblock. The fixture
         // probe overlays I/O/P hatches onto the wildcard structure and
         // runs attemptCompleteStructure.
-        String asmResp = exec("stellurgytest fixture machine precision-assembler 0 "
-                + FIXTURE_CX + " " + FIXTURE_CY + " " + FIXTURE_CZ);
+        String asmResp = arrange("stellurgytest fixture machine precision-assembler 0 "
+                + FIXTURE_CX + " " + FIXTURE_CY + " " + FIXTURE_CZ).raw();
         assertTrue("precision-assembler fixture must build: " + asmResp,
                 Reply.of(asmResp).ok());
         int[][] outputs = Reply.of("stellurgytest fixture multiblock", asmResp)
@@ -109,19 +115,13 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // FIRST link, ASSERTING where the fill DUG and threw its own answer away. Halo 7, because
         // the old volume reached `ROCKET_CX+12` to keep the craft's own lane clear of the assembler
         // footprint this scenario stands beside it.
-        String assemble = RocketFixture.assembleAt(
-                FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ),
-                cmd -> exec(cmd), "simple", 7, 10,
-                "the craft the repair cycle works on, in its own lane beside the assembler");
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
-        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
+        // The rocket is the one the press's own `rocket_born` record names.
+        int rocketId = rockets.assembleAt(FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ), c -> act(c).raw(),
+                "simple", 7, 10, "the craft the repair cycle works on, in its own lane beside the assembler");
 
         // Mark one of the rocket's advRocketmotor TileBrokenParts as
         // stage 5.
-        String inject = exec("stellurgytest infra inject-broken-part " + rocketId + " 5");
+        String inject = arrange("stellurgytest infra inject-broken-part " + rocketId + " 5").raw();
         assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         // Place service station within 5 blocks of the assembler
@@ -131,25 +131,25 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         int sx = FIXTURE_CX + 2, sy = FIXTURE_CY, sz = FIXTURE_CZ;
         // The assembler structure may overlap (sx, sy, sz) — pre-clear
         // it to AIR so the station can be placed.
-        exec("stellurgytest fill 0 " + sx + " " + sy + " " + sz + " "
-                + sx + " " + sy + " " + sz + " minecraft:air");
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        arrange("stellurgytest fill 0 " + sx + " " + sy + " " + sz + " "
+                + sx + " " + sy + " " + sz + " minecraft:air").raw();
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
-        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).ok());
 
         // Apply redstone power (performFunction requires
         // getEquivalentPower=true).
-        exec("stellurgytest place 0 " + sx + " " + (sy + 1) + " " + sz
-                + " minecraft:redstone_block");
+        arrange("stellurgytest place 0 " + sx + " " + (sy + 1) + " " + sz
+                + " minecraft:redstone_block").raw();
 
         // Baseline: 1 part queued, no assemblers discovered yet, none
         // processing.
-        String pre = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String pre = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("baseline: 1 worn part queued", 1, extract(pre, PARTS_COUNT));
         assertEquals("baseline: 0 assemblers discovered yet",
                 0, extract(pre, ASM_COUNT));
@@ -161,12 +161,12 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // discovers the assembler, then giveWorkToAssemblers calls
         // consumePartToRepair. Part moves from partsToRepair into
         // partsProcessing[0].
-        String pf1 = exec("stellurgytest infra service-perform-function 0 "
-                + sx + " " + sy + " " + sz);
+        String pf1 = act("stellurgytest infra service-perform-function 0 "
+                + sx + " " + sy + " " + sz).raw();
         assertTrue("performFunction call #1 must succeed: " + pf1,
                 Reply.of(pf1).ok());
 
-        String mid = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String mid = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("phase 1: assembler must be discovered: " + mid,
                 1, extract(mid, ASM_COUNT));
         assertEquals("phase 1: part must move out of partsToRepair: " + mid,
@@ -183,17 +183,17 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // item whose unlocalized name contains "rocket" satisfies the
         // gate. advrocketmotor block-item's name is "tile.advrocketmotor"
         // which matches.
-        String fillOut = exec("stellurgytest hatch fill 0 " + outX + " " + outY + " " + outZ
-                + " 0 stellurgy:advrocketmotor 1");
+        String fillOut = arrange("stellurgytest hatch fill 0 " + outX + " " + outY + " " + outZ
+                + " 0 stellurgy:advrocketmotor 1").raw();
         assertTrue("hatch fill on assembler output must succeed: " + fillOut,
                 Reply.of(fillOut).ok());
 
-        String pf2 = exec("stellurgytest infra service-perform-function 0 "
-                + sx + " " + sy + " " + sz);
+        String pf2 = act("stellurgytest infra service-perform-function 0 "
+                + sx + " " + sy + " " + sz).raw();
         assertTrue("performFunction call #2 must succeed: " + pf2,
                 Reply.of(pf2).ok());
 
-        String end = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String end = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("phase 2: partsProcessing must be cleared by "
                         + "processAssemblerResult: " + end,
                 0, extract(end, PROC_COUNT));
@@ -208,7 +208,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // part picks the first stage-0 motor) must still succeed — meaning
         // the rocket storage's TileBrokenPart inventory is non-empty,
         // which it would NOT be if the repaired part had been lost.
-        String reInject = exec("stellurgytest infra inject-broken-part " + rocketId + " 7");
+        String reInject = arrange("stellurgytest infra inject-broken-part " + rocketId + " 7").raw();
         assertTrue("post-cycle inject must succeed — rocket storage must still "
                         + "contain at least one stage-0 TileBrokenPart, proving "
                         + "the repaired part was restored (not lost): " + reInject,

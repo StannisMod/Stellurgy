@@ -1,11 +1,5 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.api.damage.Contact;
 import dev.stannismod.stellurgy.api.damage.DamageReport;
 import dev.stannismod.stellurgy.api.damage.ImpactRequest;
@@ -13,6 +7,10 @@ import dev.stannismod.stellurgy.api.damage.TravellingBody;
 import dev.stannismod.stellurgy.damage.ShipDamageService;
 import dev.stannismod.stellurgy.projectile.ContactResolver;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
  * What the damage service ANSWERED a body that met an ordinary block — the second half of the

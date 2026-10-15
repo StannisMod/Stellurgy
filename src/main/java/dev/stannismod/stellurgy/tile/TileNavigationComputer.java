@@ -1,10 +1,23 @@
 package dev.stannismod.stellurgy.tile;
 
-import java.util.LinkedList;
-import java.util.List;
-
-import javax.annotation.Nonnull;
-
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.item.ItemMemoryCrystal;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+import dev.stannismod.stellurgy.navigation.*;
+import dev.stannismod.stellurgy.network.PacketNavBodyInfo;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.ShipLedger;
+import dev.stannismod.stellurgy.space.SpaceSubsystem;
+import dev.stannismod.stellurgy.universe.InfoTier;
+import dev.stannismod.stellurgy.universe.SystemBody;
+import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -12,37 +25,9 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.relauncher.Side;
 
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.item.ItemMemoryCrystal;
-import dev.stannismod.stellurgy.navigation.TargetPrediction;
-import dev.stannismod.stellurgy.navigation.CrystalEntry;
-import dev.stannismod.stellurgy.navigation.CrystalMemory;
-import dev.stannismod.stellurgy.navigation.CrystalSync;
-import dev.stannismod.stellurgy.navigation.JumpGate;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.navigation.NavBodyView;
-import dev.stannismod.stellurgy.navigation.NavInfoRedaction;
-import dev.stannismod.stellurgy.network.PacketNavBodyInfo;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
-import dev.stannismod.stellurgy.universe.InfoTier;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleNumericTextbox;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+import javax.annotation.Nonnull;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * The ship's navigation computer: it holds the addresses the ship can jump to, and the one it is

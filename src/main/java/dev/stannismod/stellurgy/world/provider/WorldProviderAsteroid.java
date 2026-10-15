@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.world.provider;
 
+import dev.stannismod.stellurgy.api.StellurgyBiomes;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.client.render.planet.RenderAsteroidSky;
+import dev.stannismod.stellurgy.world.ChunkProviderAsteroids;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.biome.BiomeProviderSingle;
 import net.minecraft.world.gen.IChunkGenerator;
 import net.minecraftforge.client.IRenderHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBiomes;
-import dev.stannismod.stellurgy.client.render.planet.RenderAsteroidSky;
-import dev.stannismod.stellurgy.world.ChunkProviderAsteroids;
 
 public class WorldProviderAsteroid extends WorldProviderPlanet {
     private IRenderHandler skyRender;

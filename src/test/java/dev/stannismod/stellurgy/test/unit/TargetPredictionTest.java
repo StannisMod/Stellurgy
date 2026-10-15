@@ -1,17 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.TargetPrediction;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.CellFrames;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What a navigation computer promises when it aims at a moving destination: the ship is aimed at
@@ -74,6 +70,8 @@ public class TargetPredictionTest {
         };
     }
 
+    /** Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time). */
+    @Pins("ADDR-14")
     @Test
     public void theAimIsWhereTheBodyWillBeWhenTheFlightEnds() {
         TargetPrediction.Ephemeris body = slidingInsideItsCell(1_000L);
@@ -93,7 +91,9 @@ public class TargetPredictionTest {
      * An aim resolves to a NAME. The cell is the destination and the cell is durable, so no amount
      * of leading may change which cell the ship is aimed at — the pilot chose a body, not a place
      * the body happens to pass through.
+     * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
+    @Pins("ADDR-14")
     @Test
     public void theAimedCellIsTheBodysDurableNameWhateverTheFlightCosts() {
         for (long flightTicks : new long[]{0L, 40L, 100_000L}) {
@@ -143,7 +143,9 @@ public class TargetPredictionTest {
      * The pricing reads the frames. Without this the iteration converges on pass one against a
      * static grid and the ship is aimed at a rendezvous the destination left minutes ago — which is
      * exactly what the old {@code sameCell} convergence test did once names became durable.
+     * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
+    @Pins("ADDR-14")
     @Test
     public void aMovingFrameChangesTheAnswer() {
         TargetPrediction.Flight proportional = new TargetPrediction.Flight() {

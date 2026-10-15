@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
@@ -14,8 +16,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.RayTraceResult;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 
 public class RendererPhantomBlock extends TileEntitySpecialRenderer {
 

@@ -1,9 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.OrbitLine;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -36,8 +38,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class MonitoringStationComparatorOverrideTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
-    private static final String ENTITY_ID = "entityId";
     private static final String COMPARATOR_OVERRIDE = "comparatorOverride";
     private static final String LINKED_ENTITY_ID = "linkedEntityId";
 
@@ -59,17 +59,19 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
      * dereferences a null rocket and either NPEs or returns a junk
      * value — both would break players who place a monitor in advance
      * of building a rocket.
+     * Pins INV-INFRA-01 (a freshly placed unlinked monitor reports an unpowered state and comparator zero).
      */
+    @Pins("INV-INFRA-01")
     @Test
     public void unlinkedMonitorReportsZeroComparatorOverride() throws Exception {
         int mx = CX_NO_ROCKET, my = CY + 2, mz = CZ;
         // Ensure the chunk under the monitor is loaded.
-        exec("stellurgytest fill 0 " + (mx - 1) + " " + CY + " " + (mz - 1) + " "
-                + (mx + 1) + " " + CY + " " + (mz + 1) + " minecraft:stone");
-        exec("stellurgytest place 0 " + mx + " " + my + " " + mz
+        arrange("stellurgytest fill 0 " + (mx - 1) + " " + CY + " " + (mz - 1) + " "
+                + (mx + 1) + " " + CY + " " + (mz + 1) + " minecraft:stone").raw();
+        arrange("stellurgytest place 0 " + mx + " " + my + " " + mz
                 + " stellurgy:monitoringStation");
 
-        String info = exec("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz);
+        String info = read("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz).raw();
         assertTrue("monitor-info must succeed: " + info, Reply.of(info).ok());
         assertEquals("freshly-placed monitor with no linked rocket must "
                         + "report linkedEntityId=-1: " + info,
@@ -99,28 +101,28 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
         // monitor's chunk and the rocket's chunk are always loaded
         // together; the rocket is the chunk-load source).
         int mx = CX_ALTITUDE + 5, my = CY + 2, mz = CZ;
-        exec("stellurgytest fill 0 " + (mx - 1) + " " + CY + " " + (mz - 1) + " "
+        arrange("stellurgytest fill 0 " + (mx - 1) + " " + CY + " " + (mz - 1) + " "
                 + (mx + 1) + " " + CY + " " + (mz + 1) + " minecraft:stone");
-        exec("stellurgytest place 0 " + mx + " " + my + " " + mz
+        arrange("stellurgytest place 0 " + mx + " " + my + " " + mz
                 + " stellurgy:monitoringStation");
 
         // Link rocket to monitor via the infra-link probe.
-        String linkResp = exec("stellurgytest infra link 0 " + mx + " " + my + " " + mz
-                + " " + rocketId);
+        String linkResp = arrange("stellurgytest infra link 0 " + mx + " " + my + " " + mz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + linkResp,
                 Reply.of(linkResp).bool("linked"));
 
         // Read comparator with the rocket at a LOW altitude.
-        exec("stellurgytest rocket set-state " + rocketId + " posY=68");
-        String lowInfo = exec("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz);
+        arrange("stellurgytest rocket set-state " + rocketId + " posY=68").raw();
+        String lowInfo = read("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz).raw();
         int lowComparator = extract(lowInfo, COMPARATOR_OVERRIDE);
 
         // Read comparator with the rocket at the world's own orbit line — the top of the scale the
         // monitor reads against, so the reading there is the saturated one. Asked of the server: the
         // line is the body's atmosphere, not a number this class can know.
-        int highPosY = OrbitLine.of(this::exec, 0).line();
-        exec("stellurgytest rocket set-state " + rocketId + " posY=" + highPosY);
-        String highInfo = exec("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz);
+        int highPosY = OrbitLine.of(c -> read(c).raw(), 0).line();
+        arrange("stellurgytest rocket set-state " + rocketId + " posY=" + highPosY);
+        String highInfo = read("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz).raw();
         int highComparator = extract(highInfo, COMPARATOR_OVERRIDE);
 
         assertTrue("monitor comparator output must strictly increase as "
@@ -134,15 +136,21 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
 
     // -- helpers ----------------------------------------------------------
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(int baseX, int baseZ) throws Exception {
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. The site is in the band, so this ASSERTS rather
         // than digs, and its fill force-loads every chunk in the box, which is what the warmup did.
-        return dev.stannismod.stellurgy.test.RocketFixture.rocketEntityId(
-                dev.stannismod.stellurgy.test.RocketFixture.assembleAt(
-                        dev.stannismod.stellurgy.test.FixtureSite.openAir(0, baseX, baseZ),
-                        cmd -> exec(cmd), "simple", 2, 10,
-                        "the craft the monitoring station reports on stands in this volume"));
+        return rockets.assembleAt(dev.stannismod.stellurgy.test.FixtureSite.openAir(0, baseX, baseZ),
+                c -> act(c).raw(), "simple", 2, 10,
+                "the craft the monitoring station reports on stands in this volume");
     }
 
     private static int extract(String src, String field) {

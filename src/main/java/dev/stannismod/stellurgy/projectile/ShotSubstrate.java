@@ -3,14 +3,14 @@ package dev.stannismod.stellurgy.projectile;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrike;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeResult;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeService;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.damage.ImpactKind;
 import dev.stannismod.stellurgy.api.damage.TravellingBody;
 import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
 import dev.stannismod.stellurgy.api.projectile.ShotSpec;
 import dev.stannismod.stellurgy.damage.ImpactKindMapping;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.List;
 

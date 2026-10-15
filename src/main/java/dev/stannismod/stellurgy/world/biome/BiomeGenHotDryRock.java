@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.world.biome;
 
-import net.minecraft.world.biome.Biome;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import net.minecraft.world.biome.Biome;
 
 public class BiomeGenHotDryRock extends Biome {
 

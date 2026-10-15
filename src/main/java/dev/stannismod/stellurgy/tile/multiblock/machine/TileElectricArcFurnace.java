@@ -1,19 +1,18 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
-import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
-
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Blocks;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.SoundEvent;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.util.AudioRegistry;
 import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+import dev.stannismod.stellurgy.util.AudioRegistry;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.SoundEvent;
 
 import java.util.List;
 

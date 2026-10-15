@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.affs.client;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -11,7 +12,6 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.Constants;
 
 @Mod.EventBusSubscriber(modid = Constants.modId, value = Side.CLIENT)
 public final class ForceFieldWorldRenderer {

@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.projectile.BeamReplication;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.projectile.BeamReplication;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * A gun's beam being ANNOUNCED to the players around it, as an event: {@code turret_beam_announced}.
@@ -22,7 +20,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * only once the channel's own decision ({@code offer}) has said this tick's state goes out. Carries
  * the gun's {@code pos} and {@code lit}: the channel's {@code announcedLit} as {@code offer} just set
  * it, i.e. exactly the state the packet carries. Server log. Read by
- * {@code ABeamIsHeldNotThrownE2ETest#clearingTheTargetPutsTheBeamOut}.</p>
+ * {@code ABeamIsHeldNotThrownTest#clearingTheTargetPutsTheBeamOut}.</p>
  *
  * <p>Records the decision to announce, not who received it: a server with no player in range still
  * records it, because the radius filter is the broadcaster's and not the channel's. SILENT about a

@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import dev.stannismod.stellurgy.util.OreGenProperties;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.OreGenProperties;
 
 /**
  * A <b>planet type</b>: the named region of physical parameter space a world can land in, together with

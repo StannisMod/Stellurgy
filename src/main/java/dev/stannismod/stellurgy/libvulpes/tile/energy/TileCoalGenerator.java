@@ -1,8 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.tile.energy;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntityFurnace;
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
@@ -10,6 +7,9 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedForgePowerMachine;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntityFurnace;
 
 import javax.annotation.Nonnull;
 import java.util.List;

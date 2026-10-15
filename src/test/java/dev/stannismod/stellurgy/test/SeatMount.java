@@ -10,11 +10,9 @@ package dev.stannismod.stellurgy.test;
  * <h2>{@code seatFound:false} here is not {@code find-seat}'s</h2>
  *
  * <p>This verb answers about the LOADED seats of one world: a false means no loaded pilot seat
- * belongs to the craft that was named — which the reply says out loud by carrying
- * {@link #seatsLoaded}, the number of seats it looked through. Zero seats loaded and five seats
- * belonging to other hulls are the same word and a different arrangement, so the count travels in
- * every failure this reader raises. {@link PilotSeat} answers the sibling question — where a craft's
- * seat is in its own subspace — and is not interchangeable with it.</p>
+ * belongs to the craft that was named. It does not say how many seats the world holds — that is a
+ * count of other crafts' parts, and no scenario reads one. {@link PilotSeat} answers the sibling
+ * question — where a craft's seat is in its own subspace — and is not interchangeable with it.</p>
  *
  * <h2>The verb MOUNTS, so its reply carries whether it had to</h2>
  *
@@ -33,8 +31,6 @@ public final class SeatMount {
 
     /** Whether a pilot seat belonging to the named craft was found among the world's loaded seats. */
     public final boolean seatFound;
-    /** How many pilot seats the world held when it looked — the discriminator in the class note. */
-    public final int seatsLoaded;
     /** Whether the seat already carried a bound dummy, so none was spawned. */
     public final boolean reused;
 
@@ -45,8 +41,7 @@ public final class SeatMount {
         this.reply = reply;
         this.raw = raw;
         this.seatFound = reply.bool("seatFound");
-        this.seatsLoaded = reply.integer("seatsLoaded");
-        this.reused = reply.bool("reused");
+        this.reused = seatFound && reply.bool("reused");
     }
 
     /**
@@ -72,34 +67,16 @@ public final class SeatMount {
         return new SeatMount(reply, text);
     }
 
-    /**
-     * Bind a dummy to the seat of the craft NAMED by {@code shipId}.
-     *
-     * <p>The id-keyed form, which is the only one that names a craft: the bare form takes the first
-     * loaded seat in the world, and on a world holding several hulls that is a coin toss reported as
-     * a fact — it once mounted a pilot onto a ship 16 000 000 blocks from the one under test.</p>
-     */
+    /** Bind a dummy to the seat of the craft NAMED by {@code shipId} — the only form there is. */
     public static SeatMount onShip(Probe probe, int dim, String shipId) throws Exception {
         return of(probe.exec("stellurgytest vs seat-mount " + dim + " id " + shipId));
     }
 
-    /**
-     * Bind a dummy to whatever pilot seat this world loaded FIRST.
-     *
-     * <p>Named for what it does. Legitimate only where the world provably holds one seat, and
-     * {@link #seatsLoaded} is what says so — which is why it is in every failure message here.</p>
-     */
-    public static SeatMount firstLoadedSeat(Probe probe, int dim) throws Exception {
-        return of(probe.exec("stellurgytest vs seat-mount " + dim));
-    }
-
-    /** This reading, refusing when no seat was found — with the seat count in the message. */
+    /** This reading, refusing when no seat was found. */
     public SeatMount requireSeatFound(String what) {
         if (!seatFound) {
-            ArrangementFailure.arrangementFailed(what + " — no pilot seat of that craft is loaded."
-                    + " The world held " + seatsLoaded + " loaded seat(s) when it looked, so a zero"
-                    + " there is a world that has not built the craft yet and a positive number is"
-                    + " seats belonging to other hulls: " + raw);
+            ArrangementFailure.arrangementFailed(what + " — no loaded pilot seat belongs to that craft: "
+                    + raw);
         }
         return this;
     }
@@ -140,7 +117,6 @@ public final class SeatMount {
 
     @Override
     public String toString() {
-        return "seat-mount found=" + seatFound + " seatsLoaded=" + seatsLoaded
-                + " reused=" + reused;
+        return "seat-mount found=" + seatFound + " reused=" + reused;
     }
 }

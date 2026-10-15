@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
 import static org.junit.Assert.assertNull;
 

@@ -19,7 +19,7 @@ public class SpaceManagerRoundTripTest extends AbstractSharedServerTest {
 
     @Test
     public void controllerFlushesReloadsIsolatesAndGarbageCollects() throws Exception {
-        String r = exec("stellurgytest space manager");
+        String r = arrange("stellurgytest space manager").raw();
         assertTrue("space manager probe must complete: " + r, Reply.of(r).ok());
         assertTrue("dirty cell must round-trip through the store, a clean cell must stay isolated, "
                 + "and GC must delete the stored folder: " + r, Reply.of(r).bool("pass"));

@@ -1,22 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-import dev.stannismod.stellurgy.test.MaterializedCell;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.PlayerShipData;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -57,8 +48,8 @@ import static org.junit.Assert.assertTrue;
  *       settled craft leaves a cell by descending, and evicting one would make every later assertion
  *       about a subsystem no player can reach;</li>
  *   <li>each scenario MEASURES the state its premise names instead of assuming it — the refusing one
- *       occupies until the pool says exhausted, and claims only that its own entry ledgered nothing
- *       (a delta), never that space is globally empty.</li>
+ *       occupies until the pool says exhausted, and claims only that its own craft is not in the
+ *       ledger (asked by its durable id), never that space is globally empty.</li>
  * </ol>
  *
  * <p>So neither scenario depends on which of them ran first.</p>
@@ -185,24 +176,24 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
 
         // The low line every scenario here climbs through, stated before each one and read back: a
         // scenario that ran against Earth's own line would sit out its climb budget below it.
-        OrbitLine stated = OrbitLine.state(this::exec, 0, ORBIT_LINE);
+        OrbitLine stated = OrbitLine.state(c -> arrange(c).raw(), 0, ORBIT_LINE);
         assertEquals("the overworld's orbit line must be the one this family states: " + stated,
                 ORBIT_LINE, stated.line());
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         if (!status.registered) {
             // Nothing to hand back — the subsystem is not up, and the scenario's own arrangement says
             // so far more usefully than a reset would.
             return;
         }
         for (int cell : pressureCells) {
-            String released = exec("stellurgytest space release " + cell + " 0 0");
+            String released = arrange("stellurgytest space release " + cell + " 0 0").raw();
             assertTrue("a probe-held cell must be handed back between scenarios, or the next"
                     + " scenario's pool is full for a reason that has nothing to do with its own"
                     + " premise. cell=" + cell + " reply=" + released,
                     Reply.of(released).ok());
         }
-        scenario().record("spaceAtStart", exec("stellurgytest space subsystem-status").replace('\n', ' '));
+        scenario().record("spaceAtStart", read("stellurgytest space subsystem-status").raw().replace('\n', ' '));
     }
 
     // ── granted: he flies up, and arrives seated and in control ─────────────────────────────────
@@ -210,28 +201,41 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who flies his own ship through the orbit line arrives in its cell still seated, not
      * falling, in control of it, and carrying the aboard record.
-     *
-     * <p>red-witnessed: the entry chain and the IN-CONTROL verdict, both halves, 2026-09-28 — the two
-     * the wait rewrite touched; the seated, not-falling and aboard-record verdicts are not witnessed.
-     * THE ENTRY — with {@code requestEntry} deciding {@code COOLDOWN} before anything else
-     * (inserted in {@code ShipEntryController#requestEntry} ahead of its first decision,
-     * {@code return decided(Decision.NO_SHIP_ID, null, now)}): "a ship climbing under its own power
-     * past the orbit line (255)
-     * must be taken by the entry crossing … no `cell_crossing_begun` was recorded within 4000 ticks".
-     * THE KEY REACHES THE COMPUTER — with
-     * {@code CrewTransfer#boundDummyForMount} at {@code dummy.setSeatPos(seatPos)} binding the
-     * arrival's fresh mount to
-     * {@code seatPos.up(3)}: "no `pilot_input_set` with input = set in dim 3". THE KEY LIFTS THE SHIP —
-     * with {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input}
-     * replacing every input off the overworld by
-     * an idle one: "clientY 77.99 -> 77.99 after 20 ticks of thrust". That second inversion first left
-     * this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it
-     * climbed on that alone. The cruise is now zeroed by probe before the key is judged.</p>
      */
+    @LegacyWitness(prose = "the entry chain and the IN-CONTROL verdict, both halves, 2026-09-28 — the two"
+            + " the wait rewrite touched; the seated, not-falling and aboard-record verdicts are not witnessed."
+            + " THE ENTRY — with {@code requestEntry} deciding {@code COOLDOWN} before anything else"
+            + " (inserted in {@code ShipEntryController#requestEntry} ahead of its first decision,"
+            + " {@code return decided(Decision.NO_SHIP_ID, null, now)}): \"a ship climbing under its own power"
+            + " past the orbit line (255)"
+            + " must be taken by the entry crossing … no `cell_crossing_begun` was recorded within 4000 ticks\"."
+            + " THE KEY REACHES THE COMPUTER — with"
+            + " {@code CrewTransfer#boundDummyForMount} at {@code dummy.setSeatPos(seatPos)} binding the"
+            + " arrival's fresh mount to"
+            + " {@code seatPos.up(3)}: \"no `pilot_input_set` with input = set in dim 3\". THE KEY LIFTS THE SHIP —"
+            + " with {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input}"
+            + " replacing every input off the overworld by"
+            + " an idle one: \"clientY 77.99 -> 77.99 after 20 ticks of thrust\". That second inversion first left"
+            + " this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it"
+            + " climbed on that alone. The cruise is now zeroed by probe before the key is judged.")
+    @LegacyWitness(prose = "{@code ShipEntryController} returning {@code COOLDOWN} before every other"
+            + " decision (inserted at {@code ShipEntryController#requestEntry} at {@code if (shipId == null)}) fails the entry chain — the window now opened before the control leg's key — \"…must be"
+            + " taken by the entry crossing and SETTLE in a cell … `cell_crossing_begun` is missing from the"
+            + " chain\" within 4000 ticks, 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "a fall is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_BRAKE_TICKS);",
+            why = "CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the constant for the"
+                    + " measurement).")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, \"the pilot must still CONTROL his\"",
+            why = "a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival at its computer"
+                    + " — that arrival is the first half of the contract and a link, so a seat binding that"
+                    + " does not carry his input fails naming it rather than as a ship that would not climb —"
+                    + " and one reading of his rendered altitude once the release has arrived.")
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                 + "config opts it in: " + status.raw(), status.registered);
 
@@ -248,8 +252,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // A dose of thrust from the key's arrival, and one reading: the key's ARRIVAL at the computer
         // is the link, and the altitude it bought is read while the key is still down, because the
         // entry leg below goes on climbing on the same held key.
-        long entryMark;
-        long clientMark;
+        // BOTH MARKS GO BEFORE THE KEY, because the key is the climb: it is held from the control leg
+        // straight through the entry, and nothing but the craft's own authority decides how soon it
+        // reaches the line. Measured 2026-09-30: a hull with actuators tracks the cruise ramp
+        // (40/60 blocks per second per tick) and was already cut into its cell when marks taken after
+        // the control reading were placed — `ledger_settled` was the fifth record of the window and
+        // `cell_crossing_begun` preceded it. The control leg itself writes none of the chain's links.
+        Events events = serverEvents();
+        long entryMark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
         try {
             holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "control leg: the pilot's held vertical key"
                     + " must reach his flight computer before any climb can be asked of it");
@@ -270,9 +281,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             // plus a re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the
             // climb through the client's TICK rate. NOT per rendered frame — that reading was
             // refuted 2026-08-21. 4 000 ticks is the old 800 polls of 5.
-            Events events = serverEvents();
-            entryMark = events.markInstrumented();
-            clientMark = clientEvents().mark();
             int climbBudget = 4000;
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a cell - the"
@@ -286,7 +294,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         }
 
         // ---- ARRIVAL: the three play-reported symptoms, measured from the client. -------------
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         int[] pooledDims = statusAfter.slotDims();
         scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter.raw(),
                 pooledDims.length > 0);
@@ -346,7 +354,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // child workdirs on close, so the only way to read the writers post-run is through the
         // test's own stdout. Both halves come from their side's event log, which test-only mixins
         // feed — the client half used to be a static-field read of a ring that production carried.
-        System.out.println("[ARRIVAL-TRACE server] " + exec("stellurgytest vs arrival-trace"));
+        System.out.println("[ARRIVAL-TRACE server] " + read("stellurgytest vs arrival-trace").raw());
         for (String writer : new String[]{"pos_jump", "vel_jump", "mount", "dismount"}) {
             System.out.println("[ARRIVAL-TRACE server " + writer + "] " + serverEvents().since(0, writer));
         }
@@ -361,7 +369,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
         double y0 = clientPlayerY();
-        // WINDOW: a fall is a value, not an event; no record answers.
         advanceServerAndClient(40);
         double y1 = clientPlayerY();
         assertTrue("the arrived pilot must NOT be in free fall (clientY " + y0 + " -> " + y1
@@ -378,20 +385,14 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // So the cruise is zeroed by probe — not by his keys, which are what is under test — and the
         // hull is given time to brake before the key is asked anything.
         String arrivedShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                this::exec, serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
-        String zeroed = exec("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
-                + " 0 0 0");
+                c -> read(c).raw(), serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
+        String zeroed = arrange("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
+                + " 0 0 0").raw();
         scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
                 + " judged, or its own climb answers the question: " + zeroed,
                 Reply.of(zeroed).bool("afcResolved"));
-        // EXPERIMENT: CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the
-        // constant for the measurement).
         advanceServerAndClient(CRUISE_BRAKE_TICKS);
         final double before = clientPlayerY();
-        // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
-        // at its computer — that arrival is the first half of the contract and a link, so a seat
-        // binding that does not carry his input fails naming it rather than as a ship that would not
-        // climb — and one reading of his rendered altitude once the release has arrived.
         try {
             climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, "the pilot must still CONTROL his"
                     + " ship after the crossing - the fresh seat binding on the re-assembled ship must"
@@ -417,9 +418,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         serverEvents().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
                 + " must be STAMPED with a durable aboard record - it is the only evidence the login"
                 + " restore has that he was ever aboard", arrivalBudget * 5);
-        String tag = exec("stellurgytest space aboard-tag " + BOT);
+        String tag = read("stellurgytest space aboard-tag " + BOT).raw();
         assertTrue("...and the record must READ as aboard once stamped: tag=" + tag + " riding="
-                        + bot().reportRidingEntity() + " status=" + exec("stellurgytest space subsystem-status"),
+                        + bot().reportRidingEntity() + " status=" + read("stellurgytest space subsystem-status").raw(),
                 Reply.of(tag).bool("tagged"));
     }
 
@@ -447,17 +448,16 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     /**
      * A ship that climbs through the orbit line while every slot is held is refused, and its pilot
      * keeps his seat.
-     *
-     * <p>red-witnessed: with the pool-full catch of {@code ShipEntryController#requestEntry} at
-     * {@code return decided(Decision.REFUSED_POOL_FULL, shipId, now)} deciding {@code NO_SHIP_POSITION} instead of
-     * {@code REFUSED_POOL_FULL}: "with the pool held full, the entry gate must REFUSE for a full pool -
-     * its first decision was NO_SHIP_POSITION instead", 2026-09-28. The wait before it is the link
-     * that the gate decided at all, which that inversion passes by construction.</p>
      */
+    @LegacyWitness(prose = "with the pool-full catch of {@code ShipEntryController#requestEntry} at"
+            + " {@code return decided(Decision.REFUSED_POOL_FULL, shipId, now)} deciding {@code NO_SHIP_POSITION} instead of"
+            + " {@code REFUSED_POOL_FULL}: \"with the pool held full, the entry gate must REFUSE for a full pool -"
+            + " its first decision was NO_SHIP_POSITION instead\", 2026-09-28. The wait before it is the link"
+            + " that the gate decided at all, which that inversion passes by construction.")
     @Test
     public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                 + "config opts it in: " + status.raw(), status.registered);
 
@@ -468,10 +468,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // slot, but a scenario whose whole premise is "the pool is full" must not take the pool's
         // SIZE on trust from a config file it does not read — and on a shared client it must not
         // assume the previous scenario left it empty either.
-        // The ledger's size BEFORE this scenario: a craft the granted scenario settled is a
-        // legitimate resident of this world, so what this scenario may claim is that ITS OWN entry
-        // ledgered nothing — never that space is globally empty.
-        int ledgerBefore = ledgerSize();
 
         // Every slot must end up held by a cell of THIS scenario's own, and the reason is the
         // difference between a pool that is full and a pool that can be MADE room in. The manager
@@ -494,7 +490,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             }
             // The reader refuses the reply that says NEITHER — an unregistered subsystem, which is
             // what the two-substring arrangement check was standing in for.
-            occupy = MaterializedCell.at(this::exec, cell + " 0 0");
+            occupy = MaterializedCell.at(c -> arrange(c).raw(), cell + " 0 0");
         }
         java.util.Set<Integer> held = slotsHeldByPressureCells();
         scenario().requireArranged("EVERY slot must be held by one of this scenario's own cells, or"
@@ -502,7 +498,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 + " granted for a reason that has nothing to do with the refusal path. pool=" + pool
                 + " heldByThisScenario=" + held
                 + " lastOccupy=" + (occupy == null ? "none" : occupy.raw()), held.containsAll(pool));
-        MaterializedCell further = MaterializedCell.at(this::exec,
+        MaterializedCell further = MaterializedCell.at(c -> arrange(c).raw(),
                 pressureCells[pressureCells.length - 1] + " 0 0");
         scenario().requireArranged("instrument control: with every slot held by an OCCUPIED cell, a"
                 + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
@@ -575,7 +571,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // reached the line, the trigger declined, the entry declined, or nobody was there to tell -
         // and this reading with the craft's altitude separates them. `lastDecision` NEVER-ASKED with
         // the craft under the ceiling is the first of them, and it exonerates the entry path.
-        String gate = exec("stellurgytest space entry-gate 0 " + shipUuid);
+        String gate = read("stellurgytest space entry-gate 0 " + shipUuid).raw();
 
         // THE PRECONDITION, before the verdict: a refusal can only be missing if a refusal was ever
         // ASKED FOR. The gate's own record says whether it was: no `entry_decided` since the mark means
@@ -588,12 +584,13 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             requireUprightForAnAltitudeClaim(shipInfoById(shipUuid),
                     "a climb past the orbit line, which is what makes a refusal possible");
             // "It stopped being reported" has four causes and they need opposite answers: the craft
-            // was TAKEN by the crossing (ledger grew, and the pilot is in a cell), it was UNLOADED
-            // (still counted in the world, not loaded), it is GONE from the world entirely, or it
-            // simply stopped climbing. One reading each, and only on the way to a failure.
-            SubsystemStatus spaceNow = SubsystemStatus.read(this::exec);
-            String loaded = exec("stellurgytest vs ship-count 0");
-            String all = exec("stellurgytest vs ship-count-all 0");
+            // was TAKEN by the crossing (its own ledger entry, and the pilot is in a cell), it was
+            // UNLOADED or is GONE (its own lifecycle records say which), or it simply stopped
+            // climbing. One reading each, by this craft's ids, and only on the way to a failure.
+            SubsystemStatus spaceNow = SubsystemStatus.read(c -> read(c).raw());
+            String ledgered = read("stellurgytest space ledger-get " + durableShipName).raw();
+            String lives = Events.recordsWhere(events.since(refusalMark, "ship_lifecycle"), "ship", shipUuid)
+                    .toString();
             JsonObject where = bot().reportWeather();
             int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : -9999;
             scenario().arrangementFailed("the entry gate recorded NO decision for this climb (the craft"
@@ -602,8 +599,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                     + " The hull is level, so the tilt this class usually dies of is NOT the reason."
                     + " The wait: " + noDecision
                     + " WHICH of the four it is:"
-                    + " subsystem=" + spaceNow.raw() + " shipsLoadedInDim0=" + loaded
-                    + " shipsAtAllInDim0=" + all + " clientDim=" + clientDim
+                    + " subsystem=" + spaceNow.raw() + " thisCraftLedgered=" + ledgered
+                    + " thisCraftLifecycle=" + lives + " clientDim=" + clientDim
                     + " byId=" + shipInfoById(shipUuid)
                     + " delivery=" + seatDeliveryServer() + " gate=" + gate);
         }
@@ -652,13 +649,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         assertTrue("after a refusal the pilot's client must still be in the LAUNCH dimension "
                 + "(0), not a space cell. clientDim=" + clientDim, clientDim == 0);
 
-        // And nothing entered space: the refusal was a refusal, not a half-crossing. Measured as a
-        // DELTA, because a ship an earlier scenario legitimately settled is still in this world's
-        // ledger and is not this scenario's business.
-        int ledgerAfter = ledgerSize();
-        assertTrue("a refused entry must ledger NOTHING into space — the ledger held "
-                        + ledgerBefore + " craft before this scenario and " + ledgerAfter
-                        + " after it", ledgerAfter == ledgerBefore);
+        // And this craft did not enter space: the refusal was a refusal, not a half-crossing. Asked
+        // of the ledger BY THIS CRAFT'S durable id — a craft another scenario settled is none of
+        // this one's business, and a count of the ledger cannot tell the two apart.
+        String ledgered = read("stellurgytest space ledger-get " + durableShipName).raw();
+        Reply ledgerEntry = Reply.of("stellurgytest space ledger-get", ledgered);
+        scenario().requireArranged("the ledger must be live to answer whether this craft entered"
+                + " space: " + ledgered, ledgerEntry.has("found"));
+        assertTrue("a refused entry must ledger NOTHING into space, and the ledger holds this craft ("
+                + durableShipName + "): " + ledgered, !ledgerEntry.bool("found"));
     }
 
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────
@@ -677,7 +676,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         final int bx = site.x, bz = site.z;
         // Stand the client well clear while the fixture is built, then beside it so it stays loaded.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         Events events = serverEvents();
@@ -690,7 +689,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -725,9 +724,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         liftClearOfThePad(shipUuid, PAD_CLEARANCE_BLOCKS);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipUuid);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         awaitClientMount(seatMark, "the pilot's client must perform the seating before he flies",
@@ -743,15 +742,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // this ASSERTS rather than digs — and for this class the pre-clear it replaces was cutting
         // a shaft through a forest canopy, since the refused leg's plot is wooded ground at
         // y=71..79 on the pinned seed.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
-                "the craft that climbs to the orbit line, and the first blocks of that climb");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
+                "the craft that climbs to the orbit line, and the first blocks of that climb"));
     }
 
     // ── observation helpers ─────────────────────────────────────────────────────────────────────
 
     /** The pool's own slot dimension ids, from the subsystem's report. */
     private java.util.Set<Integer> slotDimsOfPool() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         java.util.Set<Integer> dims = new java.util.LinkedHashSet<Integer>();
         for (int dim : status.slotDims()) {
             dims.add(dim);
@@ -769,7 +768,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private java.util.Set<Integer> slotsHeldByPressureCells() throws Exception {
         java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
         for (int cell : pressureCells) {
-            String reply = exec("stellurgytest space cell-slot " + cell + " 0 0");
+            String reply = read("stellurgytest space cell-slot " + cell + " 0 0").raw();
             // absence is the answer: this is the wait, and "the flag is not there yet" is
             // the state it exists to sit through.
             if (!Reply.of(reply).boolOr("managerLoaded", false)) {
@@ -781,15 +780,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             }
         }
         return held;
-    }
-
-    /** How many craft the space ledger holds right now. */
-    private int ledgerSize() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
-        
-        scenario().requireArranged("subsystem-status must report the ledger: " + status.raw(),
-                true /* the reader refuses a status with no ledger count */);
-        return status.ledger;
     }
 
     /** The NAMED ship's altitude, or {@code NaN} while it is reporting none (the cut, for instance). */
@@ -817,7 +807,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private String clientGateStats() throws Exception {
         return "delivery=" + seatDelivery()
                 + " wallMs=" + System.currentTimeMillis()
-                + " shipData=" + exec("stellurgytest vs player-ship-data")
+                + " shipData=" + read("stellurgytest vs player-ship-data").raw()
                 + " riding=" + bot().reportRidingEntity();
     }
 
@@ -843,8 +833,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         if (!gate.has(AFC_X) || !gate.has(AFC_Y) || !gate.has(AFC_Z)) {
             return "(the gate readout named no flight computer, so its state cannot be read)";
         }
-        return exec("stellurgytest vs phys-diag 0 " + shipUuid + " "
-                + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z));
+        return read("stellurgytest vs phys-diag 0 " + shipUuid + " "
+                + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z)).raw();
     }
 
     private static boolean isRiding(JsonObject riding) {

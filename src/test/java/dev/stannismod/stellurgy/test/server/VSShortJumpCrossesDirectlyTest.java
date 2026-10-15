@@ -1,20 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.DIRECT_JUMP_SPEED;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * E2E: a jump short enough to have no cruise moves a real VS ship between two cells in ONE crossing.
@@ -48,8 +42,8 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 "
-                + DIRECT_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 "
+                + DIRECT_JUMP_SPEED).raw();
         assertTrue("the short jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a direct crossing is not a flight — nothing may be in transit the moment it "
                         + "starts, because there is no flight to be in the middle of: " + begin,
@@ -76,8 +70,8 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 "
-                + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 "
+                + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a slow jump IS a flight, and reports one: " + begin,
                 1, extractInt(begin, "inTransit"));
@@ -99,18 +93,20 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
      * descend-target body of the cell it stands in must be farther than the trigger's radius, by the
      * same centre distance the trigger compares. A cell with no body in it would make both trivially
      * true, so the body being there is required first.</p>
-     *
-     * <p>red-witnessed: with {@code SpaceSubsystem#SpaceSubsystem} at
-     * {@code arrivalStandoff(shipId, target, useClock.getAsLong())} — the direct crosser's argument to
-     * {@code requestDirectJump} — replaced by the raw {@code target}, this failed with "Nearest descend-target centre: 0" — the ship
-     * SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.</p>
-     *
-     * <p>red-witnessed: 2026-10-01, with {@code SpaceSubsystem#arrivalStandoff} at
-     * {@code clearance = Math.max(clearance, DescentShell.radiusAround(body))} and its ring line both
-     * dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails
-     * with "Tightest body … "distance":1023,"boundaryDistance":0,"shellRadius":25913".</p>
      */
+    @LegacyWitness(prose = "with {@code SpaceSubsystem#SpaceSubsystem} at"
+            + " {@code arrivalStandoff(shipId, target, useClock.getAsLong())} — the direct crosser's argument to"
+            + " {@code requestDirectJump} — replaced by the raw {@code target}, this failed with \"Nearest descend-target centre: 0\" — the ship"
+            + " SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.")
+    @LegacyWitness(prose = "2026-10-01, with {@code SpaceSubsystem#arrivalStandoff} at"
+            + " {@code clearance = Math.max(clearance, DescentShell.radiusAround(body))} and its ring line both"
+            + " dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails"
+            + " with \"Tightest body … \"distance\":1023,\"boundaryDistance\":0,\"shellRadius\":25913\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);",
+            why = "from the arrival record to the ledger read below, STANDOFF_WATCH_TICKS of the arrival cell's"
+                    + " own clock — the descent trigger runs on its flight computer's tick there, and a ship"
+                    + " inside the radius is taken down on the first of them.")
     public void aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace() throws Exception {
 
         TransitSetup setup = setUpPilotedShip();
@@ -119,28 +115,22 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         long jumpMark = events.markInstrumented();
         // `body 0` aims at the home planet's own address; the speed makes any distance one tick of
         // flight, so the route is the direct crossing — asserted below off the arrival record.
-        String begin = exec("stellurgytest space transit-begin " + setup.originDim + " 1 64 1 "
-                + ONE_TICK_JUMP_SPEED + " body 0");
+        String begin = act("stellurgytest space transit-begin " + setup.originDim + " 1 64 1 "
+                + ONE_TICK_JUMP_SPEED + " body 0").raw();
         assertTrue("the short jump at the home planet must begin: " + begin,
                 Reply.of(begin).bool("began"));
         String arrived = events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
                 "the jump at the home planet never ended; the durable record reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", durableId, "route", "DIRECT");
         int slotDim = extractInt(arrived, "dim");
 
-        // WINDOW: from the arrival record to the ledger read below, STANDOFF_WATCH_TICKS of the
-        // arrival cell's own clock — the descent trigger runs on its flight computer's tick there,
-        // and a ship inside the radius is taken down on the first of them.
         GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);
-        String bodies = exec("stellurgytest space bodies");
-        String row = null;
-        for (String ship : Reply.of("stellurgytest space bodies", bodies).objectArray("ships")) {
-            // Read bare: the producer always writes `ship` on every ledger row.
-            if (durableId.equals(Reply.of(ship).text("ship"))) {
-                row = ship;
-            }
-        }
+        // THIS craft's ledger row, asked for by its durable id: absent when the craft is no longer in
+        // space.
+        String bodies = read("stellurgytest space bodies id " + durableId).raw();
+        String[] rows = Reply.of("stellurgytest space bodies", bodies).objectArray("ships");
+        String row = rows.length == 1 && durableId.equals(Reply.of(rows[0]).text("ship")) ? rows[0] : null;
         assertTrue("a ship that jumped AT a body must still be in space afterwards — its ledger row is"
                         + " gone, which is what a descent does. Descents since the jump: "
                         + events.since(jumpMark, "descent_requested") + " | arrival=" + arrived
@@ -204,30 +194,26 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         // sibling scenario arriving by the same route in the same window satisfies it.
         String arrived = events.awaitRecordWithFields(mark, "ship_transit_ended",
                 "the ship never reached the target cell by the " + route + " route; the durable"
-                        + " record now reads " + exec("stellurgytest space transit-export"),
+                        + " record now reads " + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", durableId, "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
-        assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // Identified by the craft this scenario BUILT, which is now what the wait above is keyed
-        // on. "The only loaded ship in this cell" stood here and was an accident: it worked while
-        // an earlier scenario's hull unloaded once nobody was near it, and stopped the day a test
-        // server began holding ships loaded — the cell then held two and the read could not say
-        // which was this jump's. Re-reading the id off the record stood here next, and it answered
-        // whichever ship the route-only wait had matched.
-        String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
+        // Identified by the craft this scenario BUILT, which is what the wait above is keyed on, and
+        // linked on that craft's own announcement that it is usable in the target cell.
+        String arrivedId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                durableId.trim(), USABLE_TICKS);
         assertTrue("the arrived ship is not VS-managed in the target cell; id=" + arrivedId,
-                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
         return arrived;
     }
 
     private TransitSetup setUpPilotedShip() throws Exception {
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        buildMark = events.mark();
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         // A crossing resolves its ship by IDENTITY, never by the anchor every transit fixture
         // shares, so a setup that minted no durable name cannot be crossed at all.
-        setup.requireDurableId();
+        builtDurable = setup.requireDurableId();
         // ONE SHIP, ONE IDENTITY — production's rule, now pinned on the fixture that used to break
         // it. This build was once assembled off a STONE block of its own deck, so the computer's
         // durable name was never found and the substrate minted a second id; the reply then carried
@@ -240,25 +226,29 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
                         + "found no computer and took a substrate-minted name instead: "
                         + setup.raw(),
                 setup.durableId, setup.shipId);
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
         return setup;
     }
 
+    /** Server ticks for the craft to become usable where it was built or has arrived. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static String extractString(String json, String key) {
         return Reply.of(json).text(key);

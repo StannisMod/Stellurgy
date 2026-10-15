@@ -1,20 +1,18 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.test.trace.DeckGateWindow;
+import dev.stannismod.stellurgy.test.trace.EntityTrace;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.test.trace.DeckGateWindow;
-import dev.stannismod.stellurgy.test.trace.EntityTrace;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The deck capture's life as events, on whichever side it happens: a body is TAKEN by a ship's

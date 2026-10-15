@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.api;
 
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import java.util.List;

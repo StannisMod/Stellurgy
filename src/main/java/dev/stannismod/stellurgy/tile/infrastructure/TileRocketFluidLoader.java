@@ -1,5 +1,22 @@
 package dev.stannismod.stellurgy.tile.infrastructure;
 
+import dev.stannismod.stellurgy.api.EntityRocketBase;
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.api.IMission;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.block.multiblock.BlockStellurgyHatch;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.inventory.modules.ModuleSideSelectorTooltipOverlay;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -18,27 +35,9 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.EntityRocketBase;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.api.IMission;
-import dev.stannismod.stellurgy.block.multiblock.BlockStellurgyHatch;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.inventory.modules.ModuleSideSelectorTooltipOverlay;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.util.List;
 
 public class TileRocketFluidLoader extends TileFluidHatch implements IInfrastructure, ITickable, IButtonInventory, INetworkMachine, IGuiCallback {

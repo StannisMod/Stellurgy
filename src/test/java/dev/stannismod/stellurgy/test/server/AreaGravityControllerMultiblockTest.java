@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,17 +25,17 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
 
     @Test
     public void gravityControllerMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock gravity-controller failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileAreaGravityController tile at controller pos: " + info,
                 "TileAreaGravityController", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -47,22 +46,22 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
     @Test
     public void gravityControllerMultiblockInvalidatesWhenPlugRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock gravity-controller 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Power-input plug directly under controller -> globalY = cy - 1, globalX = cx, globalZ = cz.
-        String breakPlug = join(client().execute(
+        String breakPlug = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy - 1) + " " + cz + " minecraft:stone"));
         assertTrue("could not replace plug: " + breakPlug,
                 Reply.of(breakPlug).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after plug removal — "
                         + "validator broken: " + broken,
@@ -72,22 +71,22 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
     @Test
     public void gravityControllerMultiblockInvalidatesWhenAdvStructureRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock gravity-controller 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // advStructure at (cx+1, cy-1, cz) — east arm of the cross.
-        String breakArm = join(client().execute(
+        String breakArm = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 1) + " " + (cy - 1) + " " + cz + " minecraft:stone"));
         assertTrue("could not break arm: " + breakArm,
                 Reply.of(breakArm).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after arm removal — "
                         + "validator broken: " + broken,

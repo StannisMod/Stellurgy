@@ -1,13 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -36,18 +31,24 @@ public class WearSystemTest extends AbstractSharedServerTest {
      * guarantee it had.</p>
      */
     private int[] buildFixture(FixtureSite site) throws Exception {
-        return RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        return RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 "simple", 2, 10, "the craft is built and worn in this volume");
     }
 
+    /** Press the assembler at {@code builderPos}; the rocket its own {@code rocket_born} record names. */
     private int assembleAndGetId(int[] builderPos) throws Exception {
-        String assemble = String.join("\n", client().execute(
+        long mark = rockets.mark();
+        String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + builderPos[0] + " " + builderPos[1] + " " + builderPos[2]));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-        String list = String.join("\n", client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
+        return rockets.bornAt(mark, builderPos);
+    }
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     private int thrustOf(int entityId) throws Exception {
@@ -56,7 +57,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> String.join("\n", client().read(cmd)), id);
     }
 
     @Test
@@ -67,15 +68,15 @@ public class WearSystemTest extends AbstractSharedServerTest {
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
 
         // Engine, fuel tank, seat positions (see fixture builder).
-        String engine = String.join("\n", client().execute(
+        String engine = String.join("\n", client().read(
                 "stellurgytest wear get 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ));
         assertTrue("motor must host wear cap: " + engine, Reply.of(engine).bool("registered"));
 
-        String tank = String.join("\n", client().execute(
+        String tank = String.join("\n", client().read(
                 "stellurgytest wear get 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ));
         assertTrue("fuel tank must host wear cap: " + tank, Reply.of(tank).bool("registered"));
 
-        String seat = String.join("\n", client().execute(
+        String seat = String.join("\n", client().read(
                 "stellurgytest wear get 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ));
         assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered"));
     }
@@ -98,7 +99,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
         final int bx = bSite.x, by = bSite.y, bz = bSite.z;
         int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
-        client().execute("stellurgytest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
+        client().arrange("stellurgytest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
         int worn = assembleAndGetId(builder);
         assertTrue("a fully-worn motor must raise the breaking probability",
                 breakingProbOf(worn) > 0);
@@ -110,11 +111,11 @@ public class WearSystemTest extends AbstractSharedServerTest {
         final int bx = bSite.x, by = bSite.y, bz = bSite.z;
         int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
-        client().execute("stellurgytest wear set 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ + " 8");  // a fuel tank
-        client().execute("stellurgytest wear set 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ + " 10"); // the seat
+        client().arrange("stellurgytest wear set 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ + " 8");  // a fuel tank
+        client().arrange("stellurgytest wear set 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ + " 10"); // the seat
         int rocketId = assembleAndGetId(builder);
 
-        String status = String.join("\n", client().execute("stellurgytest wear rocket-status " + rocketId + " 0.7"));
+        String status = String.join("\n", client().read("stellurgytest wear rocket-status " + rocketId + " 0.7"));
         assertTrue("rocket-status must find the rocket: " + status, Reply.of(status).bool("found"));
 
         Reply tanksReply = Reply.of(status);
@@ -140,8 +141,8 @@ public class WearSystemTest extends AbstractSharedServerTest {
         final int bx = bSite.x, by = bSite.y, bz = bSite.z;
         int[] wornBuilder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
-        client().execute("stellurgytest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
-        client().execute("stellurgytest wear set 0 " + (rocketX + 1) + " " + rocketY + " " + rocketZ + " 10");
+        client().arrange("stellurgytest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
+        client().arrange("stellurgytest wear set 0 " + (rocketX + 1) + " " + rocketY + " " + rocketZ + " 10");
         int wornThrust = thrustOf(assembleAndGetId(wornBuilder));
 
         assertTrue("worn rocket must still have some thrust: " + wornThrust, wornThrust > 0);

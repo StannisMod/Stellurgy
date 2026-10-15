@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.sensor;
 
-import net.minecraft.entity.Entity;
 import dev.stannismod.stellurgy.api.sensor.ITargetSignature;
+import net.minecraft.entity.Entity;
 
 /**
  * How well a thing can be heard, and how well it can be held — the two halves of a signature, kept

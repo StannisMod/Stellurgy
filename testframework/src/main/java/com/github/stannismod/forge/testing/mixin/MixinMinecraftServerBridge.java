@@ -1,13 +1,11 @@
 package com.github.stannismod.forge.testing.mixin;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import com.github.stannismod.forge.testing.server.bridge.ServerBridgeOwner;
 import net.minecraft.server.MinecraftServer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-import com.github.stannismod.forge.testing.server.bridge.ServerBridgeOwner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Gives every SERVER the memory of whether its test bridge was started — an instance field of the

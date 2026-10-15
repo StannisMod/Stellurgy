@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Server-side companion to the client GUI test — covers the
@@ -59,23 +57,22 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      *
      * <p>What this does not see: the gauge being DRAWN — it is the server copy of the tile answering
      * the same {@code getTotalProgress} the client's bar is drawn from.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code TilePlanetSelector#distanceGauge} at {@code return (int) (body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back on
-     * {@code orbitalDist / 16}: "each planet must read floor(orbitAU x 100 / 16) on the distance
-     * gauge: Earth at 1.0 AU → 93498; GaugeTarget at 11.998453186842863 AU → 1121839; : arrays first
-     * differed at element [0]; expected:&lt;6&gt; but was:&lt;93498&gt;" — both planets wrong.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at {@code return (int) (body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back on"
+            + " {@code orbitalDist / 16}: \"each planet must read floor(orbitAU x 100 / 16) on the distance"
+            + " gauge: Earth at 1.0 AU → 93498; GaugeTarget at 11.998453186842863 AU → 1121839; : arrays first"
+            + " differed at element [0]; expected:&lt;6&gt; but was:&lt;93498&gt;\" — both planets wrong.")
     @Test
     public void theDistanceGaugeReadsAnOrbitAtItsScalePerAu() throws Exception {
         FixtureSite s = site();
         int x = s.x, y = s.y, z = s.z;
         String where = x + " " + y + " " + z;
-        requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().execute(
+        requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().arrange(
                 "stellurgytest place 0 " + where + " stellurgy:planetSelector"))).bool("placed"));
 
-        DimList.Probe probe = command -> String.join("\n", client().execute(command));
+        DimList.Probe probe = command -> String.join("\n", client().read(command));
         DimList before = DimList.from(probe);
-        client().execute("ar planet generate 0 GaugeTarget");
+        client().arrange("ar planet generate 0 GaugeTarget");
         int[] added = DimList.from(probe).addedSince(before);
         requireArranged("planet generate must register exactly one new dimension: "
                 + java.util.Arrays.toString(added), added.length == 1);
@@ -85,16 +82,16 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
         int[] read = new int[planets.length];
         StringBuilder readings = new StringBuilder();
         for (int i = 0; i < planets.length; i++) {
-            Reply planet = Reply.of(probe.exec("stellurgytest planet info " + planets[i]));
+            Reply planet = Reply.of(read("stellurgytest planet info " + planets[i]).raw());
             double orbitAu = planet.longInteger("orbitalDistance")
                     / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
             expected[i] = (int) Math.floor(orbitAu * 100d / 16d);
             requireArranged("the gauge must have something to read — an orbit under 0.16 AU reads 0, "
                     + "which cannot tell the law from a gauge that reads nothing: " + planet, expected[i] >= 1);
 
-            Reply click = Reply.of(probe.exec("stellurgytest selector simulate-click 0 " + where + " " + planets[i]));
+            Reply click = Reply.of(arrange("stellurgytest selector simulate-click 0 " + where + " " + planets[i]).raw());
             requireArranged("simulate-click " + planets[i] + " failed: " + click, click.ok());
-            Reply info = Reply.of(probe.exec("stellurgytest selector info 0 " + where));
+            Reply info = Reply.of(read("stellurgytest selector info 0 " + where).raw());
             requireArranged("the selection must be the planet just clicked: " + info,
                     info.integer("selectedDim") == planets[i]);
             read[i] = info.integer("distanceGauge");
@@ -118,27 +115,26 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * the sine table's step at the farthest radius, one projected planet per planet of Sol (one verdict
      * over the sorted radii). Read raw, Earth stands 14 960 blocks out. The slack was first 0.05 and
      * was tightened to the derived one on 2026-09-30, after the first greens.</p>
-     *
-     * <p>red-witnessed: 2026-09-30 (re-taken the same day when the radius moved into its own method),
-     * with {@code TileHolographicPlanetSelector#projectionRadius} at
-     * {@code return PROJECTION_INNER_RADIUS + body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU}
-     * back on {@code body.orbitalDist / 100d}: "each planet of Sol must be projected 0.1 + its orbit in
-     * AU out, slack 1.4914462988202526E-4 (expected radii [1.1], projected [14959.890000000001]): …
-     * arrays first differed at element [0]; expected:&lt;1.1&gt; but was:&lt;14959.890000000001&gt;".</p>
      */
+    @LegacyWitness(prose = "2026-09-30 (re-taken the same day when the radius moved into its own method),"
+            + " with {@code TileHolographicPlanetSelector#projectionRadius} at"
+            + " {@code return PROJECTION_INNER_RADIUS + body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU}"
+            + " back on {@code body.orbitalDist / 100d}: \"each planet of Sol must be projected 0.1 + its orbit in"
+            + " AU out, slack 1.4914462988202526E-4 (expected radii [1.1], projected [14959.890000000001]): …"
+            + " arrays first differed at element [0]; expected:&lt;1.1&gt; but was:&lt;14959.890000000001&gt;\".")
     @Test
     public void theHologramProjectsAPlanetOneHologramBlockPerAu() throws Exception {
         FixtureSite s = site();
         int x = s.x, y = s.y, z = s.z;
-        DimList.Probe probe = command -> String.join("\n", client().execute(command));
+        DimList.Probe probe = command -> String.join("\n", client().read(command));
 
         // What a PLANET reports as its parent — Earth is one — so a moon, which reports its planet,
         // is told apart; the projector draws the planets of its star, not their moons.
-        int planetParent = Reply.of(probe.exec("stellurgytest planet info 0")).integer("parent");
+        int planetParent = Reply.of(read("stellurgytest planet info 0").raw()).integer("parent");
         java.util.List<Double> expectedRadii = new java.util.ArrayList<>();
         boolean earthCounted = false;
         for (int dim : DimList.from(probe).registered()) {
-            Reply planet = Reply.of(probe.exec("stellurgytest planet info " + dim));
+            Reply planet = Reply.of(read("stellurgytest planet info " + dim).raw());
             int starId = planet.integer("starId");
             int parent = planet.integer("parent");
             if (starId == 0 && parent == planetParent) {
@@ -163,17 +159,17 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
         // That reach is thousands of blocks, so a projector a sibling scenario stood elsewhere on this
         // server is inside it. Its bodies exist before this projector is placed, and are told apart by id.
         java.util.Set<Integer> othersIds = new java.util.HashSet<>();
-        for (String entity : Reply.of(probe.exec(projected)).objectArray("entities")) {
+        for (String entity : Reply.of(read(projected).raw()).objectArray("entities")) {
             // `entity near`: the producer always writes id for every entity it lists.
             othersIds.add(Reply.of(entity).integer("id"));
         }
-        requireArranged("could not place the holographic planet selector", Reply.of(probe.exec(
-                "stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:planetHoloSelector")).bool("placed"));
+        requireArranged("could not place the holographic planet selector", Reply.of(arrange(
+                "stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:planetHoloSelector").raw()).bool("placed"));
 
-        Reply tick = Reply.of(probe.exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
+        Reply tick = Reply.of(act("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 20").raw());
         requireArranged("the projector must tick: " + tick, tick.ok());
 
-        String near = probe.exec(projected);
+        String near = read(projected).raw();
         java.util.List<Double> own = new java.util.ArrayList<>();
         for (String entity : Reply.of(near).objectArray("entities")) {
             Reply e = Reply.of(entity);
@@ -208,21 +204,20 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * <p>What this does not see: the gauge being DRAWN, as for the planet gauge above; and a moon at
      * any distance but the one the server's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code TilePlanetSelector#distanceGauge} at
-     * {@code if (body.isMoon())} made false (a moon read through the planet law), this fails with
-     * "each moon of Earth must read floor(moonViewUnits / 16) on the distance gauge: Luna at 3844
-     * units → 0; : arrays first differed at element [0]; expected:&lt;9&gt; but was:&lt;0&gt;".</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at"
+            + " {@code if (body.isMoon())} made false (a moon read through the planet law), this fails with"
+            + " \"each moon of Earth must read floor(moonViewUnits / 16) on the distance gauge: Luna at 3844"
+            + " units → 0; : arrays first differed at element [0]; expected:&lt;9&gt; but was:&lt;0&gt;\".")
     @Test
     public void theDistanceGaugeReadsAMoonAsItReadLunaAt150() throws Exception {
         FixtureSite s = site();
         int x = s.x, y = s.y, z = s.z;
         String where = x + " " + y + " " + z;
-        requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().execute(
+        requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().arrange(
                 "stellurgytest place 0 " + where + " stellurgy:planetSelector"))).bool("placed"));
 
-        DimList.Probe probe = command -> String.join("\n", client().execute(command));
+        DimList.Probe probe = command -> String.join("\n", client().read(command));
         java.util.List<Integer> moons = moonsOfEarth(probe);
         requireArranged("Earth must have a moon for a moon's gauge to be read", !moons.isEmpty());
 
@@ -231,7 +226,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
         StringBuilder readings = new StringBuilder();
         for (int i = 0; i < moons.size(); i++) {
             int moon = moons.get(i);
-            Reply body = Reply.of(probe.exec("stellurgytest planet info " + moon));
+            Reply body = Reply.of(read("stellurgytest planet info " + moon).raw());
             long orbit = body.longInteger("orbitalDistance");
             // 150 and 16: Luna's view distance and the gauge's divisor, as they stood before Luna's
             // distance was corrected — the contract, not production's constants read back.
@@ -239,9 +234,9 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
             requireArranged("the gauge must have something to read — a moon reading 0 cannot tell the law "
                     + "from the planet law: " + body, expected[i] >= 1);
 
-            Reply click = Reply.of(probe.exec("stellurgytest selector simulate-click 0 " + where + " " + moon));
+            Reply click = Reply.of(arrange("stellurgytest selector simulate-click 0 " + where + " " + moon).raw());
             requireArranged("simulate-click " + moon + " failed: " + click, click.ok());
-            Reply info = Reply.of(probe.exec("stellurgytest selector info 0 " + where));
+            Reply info = Reply.of(read("stellurgytest selector info 0 " + where).raw());
             requireArranged("the selection must be the moon just clicked: " + info,
                     info.integer("selectedDim") == moon);
             read[i] = info.integer("distanceGauge");
@@ -270,38 +265,37 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * radii {@code [0 (Earth), 0.1 + 150 x orbit / 3 844 / 100 for each moon]} — {@code [0, 1.6]}
      * with Luna alone — within the sine table's step at the farthest radius, one verdict. Through the
      * planet law Luna stands at 0.1026.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code TileHolographicPlanetSelector#projectionRadius} at
-     * {@code if (body.isMoon())} made false (a moon projected through the planet law), this fails
-     * with "a planet centred in the hologram must carry its moons 0.1 + moonViewUnits / 100 out,
-     * slack 2.16937643464764E-4 (expected [0.0, 1.6], projected [0.0, 0.10256955525784028]): …
-     * arrays first differed at element [1]; expected:&lt;1.6&gt; but was:&lt;0.10256955525784028&gt;".
-     * Re-taken 2026-10-04 on the shared server (class run, this scenario last): the same text, the
-     * moon projected at 0.10256955291540637.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code TileHolographicPlanetSelector#projectionRadius} at"
+            + " {@code if (body.isMoon())} made false (a moon projected through the planet law), this fails"
+            + " with \"a planet centred in the hologram must carry its moons 0.1 + moonViewUnits / 100 out,"
+            + " slack 2.16937643464764E-4 (expected [0.0, 1.6], projected [0.0, 0.10256955525784028]): …"
+            + " arrays first differed at element [1]; expected:&lt;1.6&gt; but was:&lt;0.10256955525784028&gt;\"."
+            + " Re-taken 2026-10-04 on the shared server (class run, this scenario last): the same text, the"
+            + " moon projected at 0.10256955291540637.")
     @Test
     public void theHologramCentredOnAPlanetProjectsItsMoonAsItProjectedLunaAt150() throws Exception {
-        DimList.Probe probe = command -> String.join("\n", client().execute(command));
-        Reply station = Reply.of(probe.exec("stellurgytest station create 0"));
+        DimList.Probe probe = command -> String.join("\n", client().read(command));
+        Reply station = Reply.of(arrange("stellurgytest station create 0").raw());
         requireArranged("a station about Earth must be created: " + station, station.ok());
-        Reply stationInfo = Reply.of(probe.exec("stellurgytest station info " + station.integer("id")));
+        Reply stationInfo = Reply.of(read("stellurgytest station info " + station.integer("id")).raw());
         int x = stationInfo.integer("spawnX"), y = FixtureSite.OPEN_AIR_Y, z = stationInfo.integer("spawnZ");
         String where = x + " " + y + " " + z;
-        Reply owner = Reply.of(probe.exec("stellurgytest station at " + where));
+        Reply owner = Reply.of(read("stellurgytest station at " + where).raw());
         // `station at` writes stationAtPos as null when no station owns the coordinates:
         // absence is the answer "no station", read as -1, which this arrangement refuses.
         int ownerId = owner.integerOr("stationAtPos", -1);
         requireArranged("the projector's coordinates must resolve to the station: " + owner,
                 ownerId == station.integer("id"));
         requireArranged("could not place the holographic planet selector", Reply.of(
-                probe.exec("stellurgytest place 0 " + where + " stellurgy:planetHoloSelector")).bool("placed"));
+                arrange("stellurgytest place 0 " + where + " stellurgy:planetHoloSelector").raw()).bool("placed"));
 
         java.util.List<Integer> moons = moonsOfEarth(probe);
         requireArranged("Earth must have a moon for the centred view to carry one", !moons.isEmpty());
         java.util.List<Double> expectedRadii = new java.util.ArrayList<>();
         expectedRadii.add(0d);
         for (int moon : moons) {
-            long orbit = Reply.of(probe.exec("stellurgytest planet info " + moon)).longInteger("orbitalDistance");
+            long orbit = Reply.of(read("stellurgytest planet info " + moon).raw()).longInteger("orbitalDistance");
             // 0.1, 150 and 100: the inner radius, Luna's view distance and the view units per
             // hologram block, as they stood before Luna's distance was corrected — the contract.
             expectedRadii.add(0.1d + 150d * orbit / AstronomicalBodyHelper.MOON_REFERENCE_UNITS / 100d);
@@ -314,13 +308,13 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
         String projected = "stellurgytest entity near 0 " + centreX + " " + (y + 1) + " " + centreZ
                 + " " + reach + " EntityUIPlanet";
 
-        Reply tick = Reply.of(probe.exec("stellurgytest tile force-tick 0 " + where + " 20"));
+        Reply tick = Reply.of(act("stellurgytest tile force-tick 0 " + where + " 20").raw());
         requireArranged("the projector must tick: " + tick, tick.ok());
         // Earth is the projected planet standing 0.1 + its orbit in AU out — the star view's own law,
         // pinned above; another planet of Sol (a generated one) stands elsewhere.
-        double earthRadius = 0.1d + Reply.of(probe.exec("stellurgytest planet info 0")).longInteger("orbitalDistance")
+        double earthRadius = 0.1d + Reply.of(read("stellurgytest planet info 0").raw()).longInteger("orbitalDistance")
                 / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
-        String starView = probe.exec(projected);
+        String starView = read(projected).raw();
         java.util.List<Integer> earthEntities = new java.util.ArrayList<>();
         java.util.Set<Integer> starViewIds = new java.util.HashSet<>();
         for (String entity : Reply.of(starView).objectArray("entities")) {
@@ -337,13 +331,13 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
                 earthEntities.size() == 1);
         int planetEntity = earthEntities.get(0);
         for (int click = 0; click < 2; click++) {
-            Reply interact = Reply.of(probe.exec("stellurgytest entity interact 0 " + planetEntity));
+            Reply interact = Reply.of(act("stellurgytest entity interact 0 " + planetEntity).raw());
             requireArranged("right-clicking the projected planet must reach it: " + interact, interact.ok());
         }
-        tick = Reply.of(probe.exec("stellurgytest tile force-tick 0 " + where + " 20"));
+        tick = Reply.of(act("stellurgytest tile force-tick 0 " + where + " 20").raw());
         requireArranged("the projector must tick after centring: " + tick, tick.ok());
 
-        String centred = probe.exec(projected);
+        String centred = read(projected).raw();
         java.util.List<Double> radii = new java.util.ArrayList<>();
         for (String entity : Reply.of(centred).objectArray("entities")) {
             Reply e = Reply.of(entity);

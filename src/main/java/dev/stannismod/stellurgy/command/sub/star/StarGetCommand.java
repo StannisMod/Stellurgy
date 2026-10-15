@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.command.sub.star;
 
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;

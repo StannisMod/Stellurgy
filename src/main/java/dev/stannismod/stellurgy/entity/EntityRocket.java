@@ -1,5 +1,51 @@
 package dev.stannismod.stellurgy.entity;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.RocketEvent.RocketLaunchEvent;
+import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.block.BlockRegolith;
+import dev.stannismod.stellurgy.client.SoundRocketEngine;
+import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.inventory.IPlanetDefiner;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.inventory.modules.ModuleBrokenPart;
+import dev.stannismod.stellurgy.inventory.modules.ModulePlanetSelector;
+import dev.stannismod.stellurgy.inventory.modules.ModuleStellarBackground;
+import dev.stannismod.stellurgy.item.ItemAsteroidChip;
+import dev.stannismod.stellurgy.item.ItemPackedStructure;
+import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
+import dev.stannismod.stellurgy.item.ItemStationChip;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.*;
+import dev.stannismod.stellurgy.mission.MissionOreMining;
+import dev.stannismod.stellurgy.network.PacketSatellite;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
+import dev.stannismod.stellurgy.util.*;
+import dev.stannismod.stellurgy.world.util.BasicTeleporter;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockSand;
@@ -24,20 +70,15 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.SoundCategory;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.*;
 import net.minecraft.util.text.TextComponentString;
-import dev.stannismod.stellurgy.inventory.modules.ModuleItemSlotButton;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.ForgeChunkManager.Ticket;
 import net.minecraftforge.common.ForgeChunkManager.Type;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
@@ -46,62 +87,10 @@ import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
-import dev.stannismod.stellurgy.api.FreeFlightInput;
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.api.RocketFlightMode;
-import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
-import dev.stannismod.stellurgy.api.RocketEvent.RocketLaunchEvent;
-import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
-import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.block.BlockRegolith;
-import dev.stannismod.stellurgy.client.SoundRocketEngine;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.event.PlanetEventHandler;
-import dev.stannismod.stellurgy.inventory.IPlanetDefiner;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.inventory.modules.ModuleBrokenPart;
-import dev.stannismod.stellurgy.inventory.modules.ModulePlanetSelector;
-import dev.stannismod.stellurgy.inventory.modules.ModuleStellarBackground;
-import dev.stannismod.stellurgy.item.ItemAsteroidChip;
-import dev.stannismod.stellurgy.item.ItemPackedStructure;
-import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
-import dev.stannismod.stellurgy.item.ItemStationChip;
-import dev.stannismod.stellurgy.mission.MissionOreMining;
-import dev.stannismod.stellurgy.network.PacketSatellite;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
-import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
-import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import dev.stannismod.stellurgy.world.util.BasicTeleporter;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
-import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.util.*;
-
 
 
 /**
@@ -990,7 +979,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         this.dataManager.set(FF_QY, 0f);
         this.dataManager.set(FF_QZ, 0f);
         ffTrace("startFreeFlight mode=" + getFlightMode() + " thrust=" + stats.getThrust()
-                + " weight=" + stats.getWeight() + " accel=" + stats.getAcceleration(1f)
+                + " massKg=" + stats.getMass() + " accel=" + stats.getAcceleration(1f)
                 + " liftoffTargetY=" + ffLiftoffTargetY);
     }
 
@@ -1056,8 +1045,10 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         float gravMult = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension())
                 .getGravitationalMultiplier();
-        // Per-tick gravity decrement scaled to existing space-flight convention.
-        double gravity = 0.04 * gravMult;
+        // Per-tick gravity decrement: vanilla's own, so a rocket in free flight falls at the rate a
+        // player and a tier-2 ship do. It used to be 0.04 — half of vanilla — on no stated grounds
+        // beyond "the existing space-flight convention".
+        double gravity = StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED * gravMult;
 
         // Thrust authority comes from the SAME classic stat the launch path uses:
         // getAcceleration(g) is the net per-tick climb at full thrust and is
@@ -1222,17 +1213,17 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @param thrustAppliedLastTick whether the final physics step actually applied thrust
      */
     private void logFreeFlightLandReason(boolean thrustAppliedLastTick) {
-        int thrust = stats.getThrust();
-        float weight = stats.getWeight();
+        long thrust = stats.getThrust();
+        float massKg = stats.getMass();
         float gravMult = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension())
                 .getGravitationalMultiplier();
-        double gravity = 0.04 * gravMult;
+        double gravity = StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED * gravMult;
 
         // Climb authority is exactly the classic ascent acceleration: > 0 means
         // the rocket can gain altitude at full vertical thrust (i.e. TWR > 1).
         double netAccel = stats.getAcceleration(gravMult);
-        double twr = weight > 0 ? (double) thrust / weight : Double.POSITIVE_INFINITY;
+        double twr = stats.getThrustToWeightRatio(gravMult);
         boolean canClimb = netAccel > 0;
         String verdict = canClimb
                 ? "thrust OK (getAcceleration > 0, TWR > 1) — re-landed without sustained vertical (Z) input, or auto-land fired near the pad"
@@ -1240,11 +1231,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         Stellurgy.logger.info(String.format(
                 "[FF-DEBUG] FreeFlight OFF (landed) after %d ticks: onGround=%b motionY=%.4f thrustAppliedLastTick=%b%n"
-              + "           climb: thrust=%d weight=%.2f TWR=%.3f getAcceleration=%.5f gravity=%.5f canClimb=%b%n"
+              + "           climb: thrustN=%d massKg=%.2f TWR=%.3f getAcceleration=%.5f gravity=%.5f canClimb=%b%n"
               + "           verdict: %s%n"
               + "           lastInput=%s",
                 freeFlightTicksSinceStart, this.onGround, this.motionY, thrustAppliedLastTick,
-                thrust, weight, twr, netAccel, gravity, canClimb,
+                thrust, massKg, twr, netAccel, gravity, canClimb,
                 verdict, String.valueOf(currentFreeFlightInput)));
     }
 
@@ -1957,7 +1948,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             this.dataManager.set(LAUNCH_COUNTER, launchCount);
             //Just before launch, damage the ground. We'll do it again on the tick that we launch
             if (StellurgyConfiguration.getCurrentConfig().launchingDestroysBlocks && launchCount <= 100 && launchCount != 0 && this.getFuelCapacity(getRocketFuelType()) > 0)
-                damageGroundBelowRocket(world, (int) this.posX, (int) this.posY, (int) this.posZ, (int) Math.pow(stats.getThrust(), 0.4));
+                damageGroundBelowRocket(world, (int) this.posX, (int) this.posY, (int) this.posZ, scorchRadius());
         }
 
         if(!world.isRemote){
@@ -2143,7 +2134,13 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     //If out of fuel or descending then accelerate downwards
                     if (isInOrbit() || !burningFuel) {
                         //this.motionY = Math.min(this.motionY - 0.001, 1);
-                        this.motionY = this.motionY - 0.1f * 1 / 20f * 9.81 * (DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).getGravitationalMultiplier());
+                        // Descent under gravity alone. Was `0.1f * 1/20f * 9.81` = 0.04905, which is
+                        // an honest 9.81 scaled by a tenth of a tick for no reason anyone recorded;
+                        // it now uses the one constant every falling body in the mod shares.
+                        this.motionY = this.motionY - StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED
+                                * DimensionManager.getInstance()
+                                        .getDimensionProperties(this.world.provider.getDimension())
+                                        .getGravitationalMultiplier();
                         motionY = Math.max(-2, motionY);
                         this.velocityChanged = true;
                     } else {
@@ -2238,7 +2235,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         //When we're landing, we should also destroy the blocks below the rocket if they are valid to be destroyed - but overall we do it fewer times than on launch (once instead of twice)
         if (this.posY < getTopBlock(getPosition()).getY() + 5 && this.posX > getTopBlock(getPosition()).getY() && StellurgyConfiguration.getCurrentConfig().launchingDestroysBlocks && motionY < -0.1) {
-            damageGroundBelowRocket(world, (int) this.posX, (int) this.posY - 1, (int) this.posZ, (int) Math.pow(stats.getThrust(), 0.4));
+            damageGroundBelowRocket(world, (int) this.posX, (int) this.posY - 1, (int) this.posZ, scorchRadius());
         }
 
         //System.out.println("motiony:"+motionY);
@@ -2730,14 +2727,14 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
 
         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-            this.stats.setWeight(storage.recalculateWeight());
+            this.stats.setMass(storage.recalculateMass());
             for (HashedBlockPosition pos : this.infrastructureCoords) {
                 TileEntity te = world.getTileEntity(pos.getBlockPos());
                 if (te instanceof TileRocketAssemblingMachine) {
-                    //this does not work: getWeight() returns weight + fuel. setWeight() should not include fuel weight because it is calculated on every getweight()
-                    // so if you say setweight(getweight()) and next time I call getweight() it returns weight+fuel+fuel
+                    // this does not work: getMass() returns dry mass + fuel, while setMass() takes the DRY
+                    // mass, so setMass(getMass()) accumulates the fuel again on every call.
                     // we do not need this anyway because the assembler has IDataSync interface and syncs itself
-                    //((TileRocketAssemblingMachine) te).getRocketStats().setWeight(this.stats.getWeight());
+                    //((TileRocketAssemblingMachine) te).getRocketStats().setMass(this.stats.getMass());
                 }
             }
         }
@@ -2946,6 +2943,16 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     /**
      * Damages the ground beneath the rocket, depending on block type
      */
+    /**
+     * Radius, in blocks, of the ground the exhaust scorches. The curve is empirical and was fitted
+     * against the pre-3.0.0 dimensionless thrust rating, so thrust is normalised back into that
+     * rating before the exponent is applied — feeding it raw newtons would scorch hundreds of
+     * blocks for an ordinary rocket.
+     */
+    private int scorchRadius() {
+        return (int) Math.pow(stats.getThrust() / StatsRocket.THRUST_RATING_UNIT_NEWTONS, 0.4);
+    }
+
     private void damageGroundBelowRocket(World world, int x, int y, int z, int radius) {
         //Start on the same level as the bottom of the rocket
         BlockPos center = new BlockPos(x - 1, y, z);

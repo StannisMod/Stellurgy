@@ -1,7 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.util.BlockDirectionFunction;
 import net.minecraft.client.gui.FontRenderer;
@@ -10,6 +8,8 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+
+import java.util.List;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

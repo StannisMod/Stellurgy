@@ -1,20 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A jump carries what is lying on the deck, not only who is sitting on it.</b> The half of JUMP-11
@@ -49,23 +42,34 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
     private static final int ARRIVAL_TICKS = 400;
     private static final int PLACEMENT_TICKS = 300;
 
+    /** Pins JUMP-11 (every body aboard is carried by its ship-relative point). */
+    @Pins("JUMP-11")
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
-        int originDim = setup.originDim;
-        requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        buildMark = events.mark();
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
+        carry(setup);
+    }
 
-        // The ship the setup just assembled, by the name the setup reports. Every scenario in this
-        // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
-        // question with several right answers and the yard lookup takes the first — measured
-        // elsewhere as seatFound:false on a craft that had just been built.
-        String shipId = setup.requireShipId();
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** Server ticks for the setup's craft to become usable in its cell: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    private void carry(TransitSetup setup) throws Exception {
+        int originDim = setup.originDim;
+        // The ship the setup just assembled, by the name the setup reports, linked on its own
+        // announcement that it is usable in the origin cell.
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
+                events, originDim, setup.requireDurableId(), USABLE_TICKS));
 
         // Where the ship actually is in its cell — the deck the body is dropped onto.
-        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), originDim, shipId)
                 .requireFound("the ship must resolve a world position for the body to be dropped at");
         double shipX = seat.shipWorldX;
         double shipY = seat.shipWorldY;
@@ -75,8 +79,8 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
         // fixture sits in a void cell: by the time the cut runs it can be well past the ship, which
         // makes "it was not carried" indistinguishable from "it was not there". The ship's own
         // identity is handed in so the probe can answer production's question rather than a proxy.
-        String dropped = exec("stellurgytest space loose-body " + originDim + " " + shipX + " " + shipY + " "
-                + shipZ + " " + shipId);
+        String dropped = arrange("stellurgytest space loose-body " + originDim + " " + shipX + " " + shipY + " "
+                + shipZ + " " + shipId).raw();
         requireArranged("the body must be dropped: " + dropped, Reply.of(dropped).ok());
 
         // CONTROL, and it is production's OWN aboard test rather than a proximity proxy: the body has
@@ -88,18 +92,24 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("the transit must begin: " + begin, Reply.of(begin).bool("began"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
         String arrivedRecord = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the jump never completed; the transit now reads "
-                        + exec("stellurgytest space transit-status"),
+                        + arrange("stellurgytest space transit-status").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         int targetDim = extractInt(arrivedRecord, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
                 targetDim >= 0);
 
+        // Deliberately NOT pre-loading the arrival's chunks. A jump arrives where nobody is standing -
+        // that is the ordinary case, not an edge one - and placing the bodies there is the arrival's
+        // own job. Warming them from the test would hide exactly the defect this test exists to catch:
+        // vanilla refuses an entity whose chunk is not loaded, silently, and the carry used to count
+        // that refusal as a success and drop the body for good.
+        //
         // NOT a converging state after all, and the comment that stood here said it was. The
         // placement IS announced: `AboardBodies.release` is the one place a stowed body re-enters a
         // world, and `aboard_bodies_released` is written at its return — on every attempt, so the
@@ -116,43 +126,44 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
                 "the carry never put its cargo down in the arrival dimension", PLACEMENT_TICKS);
 
         // The identity and the pose are READ once, after production has said the bodies are down —
-        // the same readings the poll took, now taken at a moment that means something.
-        String counted = exec("stellurgytest vs ship-count " + targetDim);
-        String[] named = Reply.of("stellurgytest vs ship-count", counted).textArray("ships");
-        assertEquals("the arrival dimension must hold exactly this jump's hull: " + counted,
-                1, named.length);
-        String arrivedInfo = exec("stellurgytest vs ship-info " + targetDim + " id " + named[0]);
+        // the arrived hull by the durable name the jump carried.
+        String arrivedId = ShipIdentity.physicsIdOf(c -> read(c).raw(), targetDim, setup.requireDurableId());
+        String arrivedInfo = read("stellurgytest vs ship-info " + targetDim + " id " + arrivedId).raw();
         assertTrue("the substrate announced the cargo down, so the hull it was placed on must be"
                 + " resolvable here: " + arrivedInfo, ShipInfo.isLoaded(arrivedInfo));
         ShipInfo ship = ShipInfo.of(arrivedInfo);
-        String census = exec("stellurgytest space loose-body-count " + targetDim + " " + ship.x + " "
-                + ship.y + " " + ship.z + " " + ABOARD_RADIUS);
+        String census = read("stellurgytest space loose-body-count " + targetDim + " " + ship.x + " "
+                + ship.y + " " + ship.z + " " + ABOARD_RADIUS).raw();
 
+        // The count alone answers zero for three different failures — never carried, carried and
+        // drifted off, and carried onto a ship that is not where this measurement is taken from — so
+        // the nearest body's own position and distance are carried into the message. A red that says
+        // "the nearest one is 137 blocks below" is a different bug report from one that says there is
+        // no body in this world at all, and the two used to be the same sentence.
         assertTrue("a body lying on the deck must arrive WITH the ship — the crew is not the only "
                 + "thing aboard a jump. Ship report at the destination: " + arrivedInfo
                 + " body census: " + census, extractInt(census, "count") >= 1);
 
         // ...and it is not still lying in the cell it left, which is the failure this replaces: a body
         // left behind is also "somewhere", and only asking both ends tells the two apart.
-        int leftBehind = extractInt(exec("stellurgytest space loose-body-count " + originDim + " " + shipX
-                + " " + shipY + " " + shipZ + " " + ABOARD_RADIUS), "count");
+        int leftBehind = extractInt(read("stellurgytest space loose-body-count " + originDim + " " + shipX
+                + " " + shipY + " " + shipZ + " " + ABOARD_RADIUS).raw(), "count");
         assertEquals("nothing may be left standing in the origin cell where the ship used to be",
                 0, leftBehind);
     }
 
+    /** The craft goes wherever its latest naming put it — the origin cell, or the far side of the jump. */
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static int extractInt(String json, String key) {
         // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a

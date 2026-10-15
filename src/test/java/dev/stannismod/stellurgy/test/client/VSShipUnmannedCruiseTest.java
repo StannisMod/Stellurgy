@@ -1,18 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 import static org.junit.Assert.assertTrue;
 
@@ -70,27 +65,26 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who stands up leaves his ship cruising, and one who sits back down gets the cruise
      * back rather than a stopped or reset ship.
-     *
-     * <p>red-witnessed: the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with
-     * {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} discarding
-     * every input: "the held throttle must
-     * ramp this ship's vertical cruise all the way to the computer's own ceiling … no
-     * `cruise_setpoint_changed` with via = pilot and up at SHIP_MAX_SPEED was recorded within 200
-     * ticks"; the setpoint verdict after that link is its read-back and falls with it. The dismount
-     * and re-mount waits are links on the arrangement (he stood up; his client sat back down).
-     * KEEPS CRUISING — with
-     * {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command
-     * ({@code TileAdvancedFlightComputer#update} at
-     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,}) built
-     * from a zero setpoint
-     * instead of {@code velocitySetpoint}: "Climb over the LAST ten ticks of the window=0.0", the
-     * slices after the pilot left reading +10.9, +0.7, 0, 0. SURVIVES REMOUNT — with
-     * {@code EntityDummy#syncFlightTelemetry} zeroing the cruise while a rider sits with no input yet:
-     * the same message at the re-mount verdict, slices 0, 0, 0, 0. BOTH inversions first left the
-     * verdicts GREEN in their earlier form, one climb over the whole forty ticks: a ship braking from
-     * cruise to a hover still covered 11.7 and 7.4 blocks against a bar of 4. Healthy, each slice
-     * reads about +20.</p>
      */
+    @LegacyWitness(prose = "the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with"
+            + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} discarding"
+            + " every input: \"the held throttle must"
+            + " ramp this ship's vertical cruise all the way to the computer's own ceiling … no"
+            + " `cruise_setpoint_changed` with via = pilot and up at SHIP_MAX_SPEED was recorded within 200"
+            + " ticks\"; the setpoint verdict after that link is its read-back and falls with it. The dismount"
+            + " and re-mount waits are links on the arrangement (he stood up; his client sat back down)."
+            + " KEEPS CRUISING — with"
+            + " {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command"
+            + " ({@code TileAdvancedFlightComputer#update} at"
+            + " {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,}) built"
+            + " from a zero setpoint"
+            + " instead of {@code velocitySetpoint}: \"Climb over the LAST ten ticks of the window=0.0\", the"
+            + " slices after the pilot left reading +10.9, +0.7, 0, 0. SURVIVES REMOUNT — with"
+            + " {@code EntityDummy#syncFlightTelemetry} zeroing the cruise while a rider sits with no input yet:"
+            + " the same message at the re-mount verdict, slices 0, 0, 0, 0. BOTH inversions first left the"
+            + " verdicts GREEN in their earlier form, one climb over the whole forty ticks: a ship braking from"
+            + " cruise to a hover still covered 11.7 and 7.4 blocks against a bar of 4. Healthy, each slice"
+            + " reads about +20.")
     @Test
     public void aDismountedPilotsShipKeepsCruisingAndSurvivesRemount() throws Exception {
 
@@ -107,17 +101,18 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         // carries.
         long spawnMark = events.markInstrumented();
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         shipId = awaitShipSpawned(events,
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -134,11 +129,11 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
                 mountInfo.seatFound);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The deflection below is a real key on a client that must already be riding; the setpoint
         // ramp it drives is what the whole scenario measures.
@@ -196,7 +191,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         // pilot's separate, deliberate choice.)
         double yDismount = shipY();
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // The computer must SEE the pilot leave before "it kept cruising" says anything: the
         // riderless dummy clears the computer's pilot input, and until that lands the ship is simply
         // still being flown. This is the link the 40-tick window used to hide — a red then read as
@@ -220,13 +215,13 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
-        SeatMount remount = SeatMount.onShip(this::exec, 0, shipId);
+        SeatMount remount = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId);
         assertTrue("seat-mount must still find the seat: " + remount.raw(),
                 remount.seatFound);
         assertTrue("the re-mount must REUSE the seat's single dummy: " + remount.raw(),
                 remount.reused);
         long remountOnClient = clientEvents().mark();
-        String mounted = exec("stellurgytest player mount-entity " + remount.requireDummyId());
+        String mounted = arrange("stellurgytest player mount-entity " + remount.requireDummyId()).raw();
         assertTrue("bot must re-mount the seat dummy: " + mounted,
                 Reply.of(mounted).bool("mounted"));
         // His CLIENT performs the seating too, and a client that resets the cruise on taking the
@@ -255,9 +250,10 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
      * below stayed green. The LAST slice is where a braking ship has already stopped and a cruising
      * one has not.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < y.length; i++) {",
+            why = "the link would be a record of the hull's pose per tick, and none exists.")
     private double[] altitudeEveryTenTicks() throws Exception {
         double[] y = new double[4];
-        // WINDOW: the link would be a record of the hull's pose per tick, and none exists.
         for (int i = 0; i < y.length; i++) {
             advanceServerAndClient(10);
             y[i] = shipY();
@@ -282,14 +278,14 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the craft is built in and cruises out of is EMPTY, measured by the
         // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
         // replaces — a craft that cruises out of a pit meets its rim, and the red then names the
         // cruise. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
                 "the hull, and the first blocks of the lane it cruises along");
     }
 }

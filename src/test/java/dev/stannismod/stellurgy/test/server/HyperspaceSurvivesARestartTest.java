@@ -1,29 +1,23 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EvictionReports;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.GameTicks;
-
-import org.junit.Test;
-
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A restart is something a jump survives.</b> A ship parked in hyperspace is still parked in
@@ -74,7 +68,8 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * mid-jump, stops it, and boots a second one over the same world root. A mechanics test (the jump is
  * arranged by probes), not a player's path, hence no {@code E2E} in its name.</p>
  */
-public class HyperspaceSurvivesARestartTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -108,7 +103,7 @@ public class HyperspaceSurvivesARestartTest {
      */
     private static final long EMPTY_REGISTRY_BYTES = 200L;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -117,7 +112,7 @@ public class HyperspaceSurvivesARestartTest {
                 "Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        root = Files.createTempDirectory("forge-server-hyperspace-durability-");
+        root = ServerRoot.fresh("forge-server-hyperspace-durability-");
     }
 
     @After
@@ -128,9 +123,9 @@ public class HyperspaceSurvivesARestartTest {
         }
     }
 
-    private String exec(String command) throws Exception {
+    /** The JSON object a probe answered, out of the lines it was sent back as (each caller sends in its role). */
+    private static String envelope(List<String> lines) {
         String envelope = "";
-        List<String> lines = harness.client().execute(command);
         for (String line : lines) {
             int brace = line.indexOf('{');
             if (brace >= 0 && line.endsWith("}")) {
@@ -167,7 +162,7 @@ public class HyperspaceSurvivesARestartTest {
      * addressing a server that has stopped.</p>
      */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> envelope(harness.client().read(c)),
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
@@ -200,40 +195,44 @@ public class HyperspaceSurvivesARestartTest {
     @Test
     public void aShipParkedInHyperspaceIsStillThereAfterTheServerRestarts() throws Exception {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // Marked before the fixture is built: the registry add awaited below happens INSIDE
         // `piloted`, so a mark taken after it would be waiting for a second ship.
         long buildMark = serverEvents().mark();
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> envelope(harness.client().arrange(c)));
         int originDim = setup.originDim;
         requireRegistered(buildMark, setup, originDim);
 
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = envelope(harness.client().act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED));
         assertTrue("the departure crossing must put the ship into hyperspace: " + begin,
                 readBool(begin, "began"));
 
         // READ, not driven. This scenario needs the jump to still be IN FLIGHT when the server
         // goes down, and the server is now advancing it on its own tick -- so a pump here would
         // be pushing this test's own subject towards the exit for the sake of a field read.
-        String tick = exec("stellurgytest space transit-status");
+        String tick = envelope(harness.client().arrange("stellurgytest space transit-status"));
         TransitStatus parked = TransitStatus.of(tick);
         int hyperDimBefore = parked.hyperDim;
         int inTransit = parked.inTransit;
         requireArranged("the jump must still be in flight when the server goes down, or"
                 + " nothing is parked to survive anything: " + tick, inTransit >= 1);
 
-        // THE CONTROL, and it is not optional: if no ship reached hyperspace on this boot, "no ship
-        // after the restart" would be the arrangement's own answer rather than the product's.
-        int parkedBefore = readIntOr(exec("stellurgytest vs ship-count-all " + hyperDimBefore), "count", -1);
-        requireArranged("a ship must actually be registered in hyperspace (dim "
-                + hyperDimBefore + ") before the restart - found " + parkedBefore, parkedBefore >= 1);
+        // THE CONTROL, and it is not optional: if this craft did not reach hyperspace on this boot,
+        // "not there after the restart" would be the arrangement's own answer rather than the
+        // product's. Asked by the craft's durable name, the identity a crossing preserves.
+        String durable = setup.requireDurableId();
+        String parkedBefore = envelope(harness.client().read("stellurgytest vs ship-uuid " + hyperDimBefore
+                + " " + durable));
+        requireArranged("this scenario's craft " + durable + " must actually be registered in hyperspace"
+                + " (dim " + hyperDimBefore + ") before the restart: " + parkedBefore,
+                Reply.of(parkedBefore).bool("found"));
 
         // Hand the jump to PRODUCTION, so what crosses the restart is a claimed jump rather than a
         // hull sitting in a lane. It is the arrangement's job because the probe stack builds its own
         // transit manager: without the claim the boot reconciliation is right to collect the hull, and
         // this test would be measuring an abandoned ship rather than a jump in flight.
-        String claim = exec("stellurgytest space transit-claim");
+        String claim = envelope(harness.client().arrange("stellurgytest space transit-claim"));
         requireArranged("production must take the claim, or nothing on the far side of the"
                 + " restart is restoring a jump: " + claim,
                 readBool(claim, "ok") && readIntOr(claim, "claimed", 0) >= 1);
@@ -251,8 +250,8 @@ public class HyperspaceSurvivesARestartTest {
         String boot1Serialisations = serialisationLines();
 
         // ── boot 2: a brand new server JVM, same world root ──────────────────────────────────────
-        harness = RealDedicatedServerHarness.startWith(root, false);
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
+        SubsystemStatus status = SubsystemStatus.read(c -> envelope(harness.client().read(c)));
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is"
                 + " exercising it: " + status.raw(), status.registered);
 
@@ -269,17 +268,18 @@ public class HyperspaceSurvivesARestartTest {
         // Re-derive hyperspace's id on THIS boot rather than reusing boot 1's: the id is minted per
         // boot by a free-id scan, and the whole point of naming the folder after the world is that
         // the content no longer depends on which id the scan lands on.
-        TransitSetup.piloted(this::exec); // the probe stack must come up on boot 2, or nothing below reads anything
-        int hyperDimAfter = TransitStatus.read(this::exec).hyperDim;
+        TransitSetup.piloted(c -> envelope(harness.client().arrange(c))); // the probe stack must come up on boot 2, or nothing below reads anything
+        int hyperDimAfter = TransitStatus.read(c -> envelope(harness.client().arrange(c))).hyperDim;
 
-        int parkedAfter = readIntOr(exec("stellurgytest vs ship-count-all " + hyperDimAfter), "count", -1);
-        assertEquals("a ship parked in hyperspace must still be parked in hyperspace after a real"
+        String parkedAfter = envelope(harness.client().read("stellurgytest vs ship-uuid " + hyperDimAfter
+                + " " + durable));
+        assertTrue("a ship parked in hyperspace must still be parked in hyperspace after a real"
                 + " restart - that is what makes a jump something a restart is survivable BY."
                 + " Hyperspace was dim " + hyperDimBefore + " on boot 1 and dim " + hyperDimAfter
-                + " on boot 2, holding " + parkedBefore + " ship(s) before and " + parkedAfter
-                + " after.\n  registries on disk after boot 1: " + savedRegistries
+                + " on boot 2; craft " + durable + " before: " + parkedBefore + ", after: " + parkedAfter
+                + "\n  registries on disk after boot 1: " + savedRegistries
                 + "\n  boot 1 serialisations: " + boot1Serialisations,
-                parkedBefore, parkedAfter);
+                Reply.of(parkedAfter).bool("found"));
     }
 
     /**
@@ -288,27 +288,23 @@ public class HyperspaceSurvivesARestartTest {
      * instead of guessed at from its size.
      */
     private String capabilityFilesOnDisk() {
-        Path space = root.resolve("world").resolve("advRocketry");
-        if (!Files.isDirectory(space)) {
+        String space = ServerRoot.LEVEL_NAME + "/advRocketry";
+        if (!root.exists(space)) {
             return "no " + space + " on disk at all";
         }
         StringBuilder out = new StringBuilder();
         int empty = 0;
-        try (java.util.stream.Stream<Path> tree = Files.walk(space)) {
-            java.util.List<Path> dats = tree
-                    .filter(p -> p.getFileName().toString().equals("capabilities.dat"))
-                    .sorted()
-                    .collect(java.util.stream.Collectors.toList());
-            for (Path p : dats) {
+        try {
+            for (java.util.Map.Entry<String, Long> dat : root.sizesUnder(space, "capabilities.dat").entrySet()) {
                 // Every space dim writes one of these and almost all of them are the empty payload;
                 // listing a hundred of those buries the two that carry a ship. The count is kept so
                 // "nothing was written at all" stays distinguishable from "everything was empty".
-                if (Files.size(p) <= EMPTY_REGISTRY_BYTES) {
+                if (dat.getValue() <= EMPTY_REGISTRY_BYTES) {
                     empty++;
                     continue;
                 }
-                out.append("\n    ").append(space.relativize(p)).append(" = ")
-                        .append(Files.size(p)).append(" bytes");
+                out.append("\n    ").append(dat.getKey()).append(" = ")
+                        .append(dat.getValue()).append(" bytes");
             }
         } catch (Exception e) {
             return "could not be read: " + e;

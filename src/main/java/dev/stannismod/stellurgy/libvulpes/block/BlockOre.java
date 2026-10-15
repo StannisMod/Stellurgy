@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyInteger;
@@ -8,7 +9,6 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
-import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
 
 public class BlockOre extends Block implements INamedMetaBlock {
 	

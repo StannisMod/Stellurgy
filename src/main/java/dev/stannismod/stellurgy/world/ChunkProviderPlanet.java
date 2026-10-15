@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.world;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.util.OreGenProperties;
+import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
+import dev.stannismod.stellurgy.world.decoration.*;
+import dev.stannismod.stellurgy.world.ore.CustomizableOreGen;
 import net.minecraft.block.BlockFalling;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EnumCreatureType;
@@ -21,21 +28,12 @@ import net.minecraft.world.gen.feature.WorldGenDungeons;
 import net.minecraft.world.gen.feature.WorldGenLakes;
 import net.minecraft.world.gen.structure.*;
 import net.minecraftforge.event.terraingen.TerrainGen;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.event.PlanetEventHandler;
-import dev.stannismod.stellurgy.util.OreGenProperties;
-import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
-import dev.stannismod.stellurgy.world.ore.CustomizableOreGen;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Random;
 
 import static net.minecraftforge.event.terraingen.InitMapGenEvent.EventType.*;
-import dev.stannismod.stellurgy.world.decoration.*;
 
 public class ChunkProviderPlanet implements IChunkGenerator {
     /**

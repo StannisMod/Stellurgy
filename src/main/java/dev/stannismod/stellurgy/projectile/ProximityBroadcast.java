@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 import java.util.function.Supplier;
 

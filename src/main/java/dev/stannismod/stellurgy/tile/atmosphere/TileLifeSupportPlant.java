@@ -1,26 +1,25 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
+import dev.stannismod.stellurgy.api.capability.IHeatEmitter;
+import dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork;
-import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
-import dev.stannismod.stellurgy.api.capability.IHeatEmitter;
-import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
-import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -39,7 +38,7 @@ import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
  * does one tier down.
  */
 public class TileLifeSupportPlant extends TileInventoriedRFConsumer
-        implements IModularInventory, ISubsystemSource, IHeatEmitter {
+        implements IModularInventory, ISubsystemSource, IHeatEmitter, LifeSupportNetwork.UpkeepSupply {
 
     /** Regeneration work done but not yet worth a whole dust, in µatm·blocks. */
     private int carbonBuffer;
@@ -80,7 +79,7 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
      */
     @Override
     public int getAvailable() {
-        if (world == null || world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world == null || world.isRemote)
             return 0;
         if (!hasRoomForDust())
             return 0;
@@ -116,6 +115,22 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
         emitDust();
         markDirty();
         return taken;
+    }
+
+    /**
+     * A port's running cost, paid from this plant's buffer — the power a port draws reaches it through
+     * the ducts, from here.
+     */
+    @Override
+    public boolean payUpkeep(int fe) {
+        if (fe <= 0)
+            return true;
+        if (energy.getUniversalEnergyStored() < fe)
+            return false;
+        energy.extractEnergy(fe, false);
+        wasteHeat.spend(fe);
+        markDirty();
+        return true;
     }
 
     /** Purely for the readout: production is what it can convert, never what its power buffer holds. */

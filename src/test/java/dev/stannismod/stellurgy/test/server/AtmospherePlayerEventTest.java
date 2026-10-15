@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What the per-entity atmosphere gate answers for a player, and that the answer is the one belonging
@@ -32,7 +31,6 @@ import static org.junit.Assert.assertTrue;
  * ({@link #startFromTheOverworld}): resolved as breathable there, he owes a change of answer on the
  * airless planet, which is what guarantees the resolution it waits for is recorded.</p>
  */
-@SeededWorld(AtmospherePlayerEventTest.Galaxy.class)
 public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
@@ -54,6 +52,11 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     private static final String PLAYER_ATMOS = "atmosphere";
     private static final String PLAYER_BREATHABLE = "breathable";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** A vacuum planet and a breathable one, otherwise identical. */
     public static final class Galaxy implements WorldSeed {
@@ -94,15 +97,15 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /** Stations the fake player in {@code dim} and starts {@code ticks} living updates there. */
     private void enterDim(int dim, int ticks) throws Exception {
-        String fake = exec("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5");
+        String fake = act("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5").raw();
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
-        assertTrue(Reply.of(exec("stellurgytest player tick-living " + ticks)).ok());
+        assertTrue(Reply.of(act("stellurgytest player tick-living " + ticks).raw()).ok());
     }
 
     /**
@@ -110,10 +113,12 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * world a sibling scenario left him in — so the move to an airless planet that follows is a
      * change of answer, which is what the instrument records.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES +"
+            + " TICK_SLACK);",
+            why = "the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts one per server"
+                    + " tick and then stops, so overshoot delivers none extra.")
     private void startFromTheOverworld() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
-        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts
-        // one per server tick and then stops, so overshoot delivers none extra.
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
     }
 
@@ -144,28 +149,29 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
      * The overworld is breathable, and the gate says so for a player standing in it.
-     *
-     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType} at
-     * {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of
-     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
-     * dimension check instead stays GREEN — no other world's handler exists in this scenario to
-     * answer for the overworld.</p>
-     *
-     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType(Entity)} at
-     * {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}
-     * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-Stellurgy;
-     * hasCached=true atmos=vacuum", 2026-09-28 (taken on the other line of this test before the two
-     * were merged).</p>
      */
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType} at"
+            + " {@code HashedBlockPosition pos = new HashedBlockPosition(pos2);} preceded by a return of"
+            + " VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28 — taken on the form"
+            + " before the atmosphere on/off switch was removed (2026-10-06), when the return sat in front of"
+            + " that switch's {@code if}; the method's first line is now the one quoted. Removing the handler's own"
+            + " dimension check instead stays GREEN — no other world's handler exists in this scenario to"
+            + " answer for the overworld.")
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType(Entity)} at"
+            + " {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}"
+            + " answering VACUUM for dimension 0: \"overworld baseline: cache must be empty or non-Stellurgy;"
+            + " hasCached=true atmos=vacuum\", 2026-09-28 (taken on the other line of this test before the two"
+            + " were merged).")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES +"
+            + " TICK_SLACK);",
+            why = "the dose is OVERWORLD_UPDATES living updates in the overworld. The ticker posts one per server"
+                    + " tick and then stops, so this many server ticks (plus the slack) deliver all of them;"
+                    + " overshoot delivers none extra, so the verdict does not depend on the box's speed.")
     public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
-        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld. The ticker
-        // posts one per server tick and then stops, so this many server ticks (plus the slack)
-        // deliver all of them; overshoot delivers none extra, so the verdict does not depend on the
-        // box's speed.
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
-        String resp = exec("stellurgytest atmosphere for-player");
+        String resp = read("stellurgytest atmosphere for-player").raw();
         assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,
                 field(PLAYER_ATMOS, resp).isEmpty());
         assertEquals("the overworld must resolve as breathable for a player standing in it: " + resp,
@@ -174,17 +180,16 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
      * An airless planet resolves as unbreathable for a player standing on it.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: "the gate must answer
-     * SOMETHING for a player on a Stellurgy planet: … \"hasAtmosphere\":false". UNBREATHABLE — the
-     * same line answering {@code AIR} for every dimension: "a planet declared with zero atmosphere
-     * must resolve as unbreathable … \"breathable\":true".</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: \"the gate must answer"
+            + " SOMETHING for a player on a Stellurgy planet: … \\\"hasAtmosphere\\\":false\". UNBREATHABLE — the"
+            + " same line answering {@code AIR} for every dimension: \"a planet declared with zero atmosphere"
+            + " must resolve as unbreathable … \\\"breathable\\\":true\".")
     @Test
     public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String resp = exec("stellurgytest atmosphere for-player");
+        String resp = read("stellurgytest atmosphere for-player").raw();
         assertFalse("the gate must answer SOMETHING for a player on a Stellurgy planet: " + resp,
                 field(PLAYER_ATMOS, resp).isEmpty());
         assertEquals("a planet declared with zero atmosphere must resolve as unbreathable for a "
@@ -194,23 +199,22 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     /**
      * Dim change clears the entry; the new dim repopulates with its own.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}.
-     * SOMETHING BEFORE — answering nothing for an unbreathable dimension: "the airless planet must
-     * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
-     * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".
-     * BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: "the breathable planet must
-     * resolve as breathable after the move: … \"NoO2\"".</p>
-     *
      * <p>Not asserted: which dimension's handler resolved him after the move, because the wait
      * selects its record by that very field, so reading it back could not disagree; and that the
      * airless planet's atmosphere does not survive the move, because it is implied by the two
      * breathability verdicts either side of it.</p>
      */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}."
+            + " SOMETHING BEFORE — answering nothing for an unbreathable dimension: \"the airless planet must"
+            + " resolve to SOMETHING before the move\". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:"
+            + " \"the airless planet must resolve as unbreathable before the move: … \\\"breathable\\\":true\"."
+            + " BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: \"the breathable planet must"
+            + " resolve as breathable after the move: … \\\"NoO2\\\"\".")
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String onVacuum = exec("stellurgytest atmosphere for-player");
+        String onVacuum = read("stellurgytest atmosphere for-player").raw();
         String atmoVac = field(PLAYER_ATMOS, onVacuum);
         assertFalse("the airless planet must resolve to SOMETHING before the move: " + onVacuum,
                 atmoVac.isEmpty());
@@ -223,7 +227,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
         // leaves the same answer standing.
         enterDimAndAwaitResolution(DIM_AIR);
 
-        String onAir = exec("stellurgytest atmosphere for-player");
+        String onAir = read("stellurgytest atmosphere for-player").raw();
         assertEquals("the breathable planet must resolve as breathable after the move: " + onAir,
                 "true", field(PLAYER_BREATHABLE, onAir));
     }

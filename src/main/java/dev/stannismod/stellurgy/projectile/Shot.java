@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.projectile;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.api.damage.ImpactKind;
 import dev.stannismod.stellurgy.api.projectile.ShotEnvironment;
 import dev.stannismod.stellurgy.api.projectile.ShotSpec;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.UUID;
 

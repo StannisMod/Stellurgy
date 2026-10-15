@@ -9,6 +9,9 @@ import dev.stannismod.stellurgy.affs.world.contour.ContourFrameGeometry;
 import dev.stannismod.stellurgy.affs.world.projectile.IEnergyProjectile;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkState;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
@@ -23,9 +26,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Explosion;
 
 import javax.annotation.Nullable;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 public class TileEntityContourInjector extends TileEntity implements ITickable, ISubsystemSink {
 

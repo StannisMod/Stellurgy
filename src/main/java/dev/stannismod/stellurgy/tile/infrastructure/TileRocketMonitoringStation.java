@@ -1,5 +1,33 @@
 package dev.stannismod.stellurgy.tile.infrastructure;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.EntityRocketBase;
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.api.IMission;
+import dev.stannismod.stellurgy.api.RocketEvent;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
+import dev.stannismod.stellurgy.tile.TileUnmannedVehicleAssembler;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -13,44 +41,15 @@ import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.EntityRocketBase;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.api.IMission;
-import dev.stannismod.stellurgy.api.RocketEvent;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
-import dev.stannismod.stellurgy.tile.TileUnmannedVehicleAssembler;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
-import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileRocketMonitoringStation extends TileEntity
     implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure,
@@ -395,7 +394,7 @@ public class TileRocketMonitoringStation extends TileEntity
             final int fAmt = (ft != null) ? rocket.getFuelAmount(ft) : 0;
             final int fCap = (ft != null) ? rocket.getFuelCapacity(ft) : 0;
 
-            int thrust = -1, weight = -1;
+            int thrust = -1, massKg = -1;
             if (rocket instanceof dev.stannismod.stellurgy.entity.EntityRocket) {
                 try {
                     dev.stannismod.stellurgy.entity.EntityRocket er =
@@ -403,7 +402,7 @@ public class TileRocketMonitoringStation extends TileEntity
                     dev.stannismod.stellurgy.api.StatsRocket stats = er.getRocketStats();
                     if (stats != null) {
                         thrust = (int) stats.getThrust();
-                        weight = (int) stats.getWeight();
+                        massKg = (int) stats.getMass();
                     }
                 } catch (Throwable t) { /* keep simple */ }
             }

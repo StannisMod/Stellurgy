@@ -7,6 +7,8 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.tile.TilePump;
 
 import static org.junit.Assert.assertEquals;
@@ -32,11 +34,14 @@ public class EnergyConsumerSimulateTest {
     }
 
     /**
-     * red-witnessed: with {@code TileEntityRFConsumer#extractEnergy} at
-     * {@code return energy.extractEnergy(amt, simulate);} passing {@code false} again (the shape it
-     * shipped with), this fails at "a simulated extraction took the energy anyway
-     * expected:<1000> but was:<600>" (2026-10-06).
+     * The replayable form cannot address this record: the decision is the second
+     * {@code extractEnergy} overload, and the replay resolves a member to its first declaration.
      */
+    @LegacyWitness(prose = "with {@code TileEntityRFConsumer#extractEnergy} at"
+            + " {@code return energy.extractEnergy(amt, simulate);} passing {@code false} again (the shape it"
+            + " shipped with), this fails at \"a simulated extraction took the energy anyway"
+            + " expected:<1000> but was:<600>\" (2026-10-06).")
+    @Pins("INV-LVP-25")
     @Test
     public void aSimulatedExtractionLeavesTheEnergyWhereItWas() {
         TilePump pump = new TilePump();

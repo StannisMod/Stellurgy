@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -38,7 +36,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
     @Test
     public void satelliteCreatePopulatesDimensionProperties() throws Exception {
         // Registry sanity.
-        String types = String.join("\n", client().execute("stellurgytest satellite types"));
+        String types = String.join("\n", client().read("stellurgytest satellite types"));
         int totalQuotes = countOccurrences(types, "\"");
         int actualCount = (totalQuotes - 2) / 2; // -2 for "satelliteTypes" key quotes
         assertTrue("expected ≥5 satellite types, got " + actualCount + ": " + types,
@@ -56,14 +54,14 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
     @Test
     public void satelliteBuilderProducesValidSatelliteFromComponents() throws Exception {
         // optical = SatellitePrimaryFunction meta=0 (see Stellurgy.java:535).
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite-builder build 0 optical"));
         assertTrue("builder build failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("builder response missing id: " + resp, mReply.has(ID_PATTERN));
         long satId = Long.parseLong(mReply.text(ID_PATTERN));
 
-        String info = String.join("\n", client().execute("stellurgytest satellite info 0 " + satId));
+        String info = String.join("\n", client().read("stellurgytest satellite info 0 " + satId));
         assertTrue("builder-created satellite not registered: " + info,
                 !Reply.of(info).has("error"));
         assertTrue("builder-created satellite must report type=optical: " + info,
@@ -84,10 +82,10 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // than as air. In the band there is nothing to be inside of, and the clear below keeps its
         // own job — the place must not silently replace some other block.
         int bx = 1800, by = FixtureSite.OPEN_AIR_Y, bz = 1900;
-        ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
+        ok(client().arrange("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 
-        String place = String.join("\n", client().execute(
+        String place = String.join("\n", client().arrange(
                 "stellurgytest place 0 " + bx + " " + by + " " + bz + " stellurgy:satelliteControlCenter"));
         assertTrue("satellite terminal did not place: " + place,
                 Reply.of(place).bool("placed"));
@@ -96,11 +94,11 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
         // Probe imprints the chip into slot 0 directly — bypasses the GUI
         // path the player would normally use.
-        String imprint = String.join("\n", client().execute(
+        String imprint = String.join("\n", client().arrange(
                 "stellurgytest satellite imprint-terminal 0 " + bx + " " + by + " " + bz + " " + satId));
         assertTrue("terminal imprint failed: " + imprint, Reply.of(imprint).ok());
 
-        String linked = String.join("\n", client().execute(
+        String linked = String.join("\n", client().read(
                 "stellurgytest satellite terminal-info 0 " + bx + " " + by + " " + bz));
         assertTrue("terminal must surface the linked satellite ID: " + linked,
                 String.valueOf(satId).equals(Reply.of(linked).text("linkedSatelliteId")));
@@ -112,7 +110,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
      * Helper: create a satellite via probe and return its generated long ID.
      */
     private long createAndGetId(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String create = String.join("\n", client().execute(
+        String create = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " " + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + create,
                 Reply.of(create).ok());

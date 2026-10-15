@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.items;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
+import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.translation.I18n;
-import dev.stannismod.stellurgy.libvulpes.block.BlockOre;
-import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
 
 import javax.annotation.Nonnull;
 import java.util.Locale;

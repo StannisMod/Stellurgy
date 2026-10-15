@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.tile;
 
-import net.minecraft.entity.player.EntityPlayer;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedForgePowerMachine;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import net.minecraft.entity.player.EntityPlayer;
 
 import java.util.List;
 import dev.stannismod.stellurgy.libvulpes.util.MachineReach;

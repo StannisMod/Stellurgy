@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.inventory;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import yalter.mousetweaks.api.MouseTweaksDisableWheelTweak;
+
+import java.util.List;
 
 @MouseTweaksDisableWheelTweak
 public class GuiModularFullScreen extends GuiModular {

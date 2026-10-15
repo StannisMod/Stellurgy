@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.inventory;
 
+import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.ClickType;
@@ -7,7 +8,6 @@ import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

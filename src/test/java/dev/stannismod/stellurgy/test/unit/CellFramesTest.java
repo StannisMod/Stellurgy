@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.CellFrames;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The frame seam: a cell NAME plus a tick resolves to a position — a cell holding a body rides that
@@ -37,6 +35,8 @@ public class CellFramesTest {
         };
     }
 
+    /** Pins ADDR-7 (a void cell's frame origin is sector times CELL at every tick). */
+    @Pins("ADDR-7")
     @Test
     public void aVoidCellSitsWhereItsNameSaysForever() {
         GalacticCoord name = cell(7L, 0L);
@@ -63,7 +63,10 @@ public class CellFramesTest {
      * whose frame does not carry the observer visibly recedes, so the distance between two moving
      * cells — hence the cost and duration of a flight between them — is live. The static leg is the
      * control.
+     * Pins ADDR-9 (cross-cell distance is evaluated through both frames at a tick and refuses two lattices).
+     * Pins ADDR-13 (the distance between two moving frames changes with time).
      */
+    @Pins({"ADDR-9", "ADDR-13"})
     @Test
     public void aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves() {
         GalacticCoord here = cell(0L, 0L);
@@ -91,6 +94,8 @@ public class CellFramesTest {
         assertEquals(0L, delta.dz());
     }
 
+    /** Pins ADDR-9 (cross-cell distance is evaluated through both frames at a tick and refuses two lattices). */
+    @Pins("ADDR-9")
     @Test
     public void twoCellsInOneMovingSystemKeepTheirDistanceIfBothRide() {
         // Both endpoints on the same frame: the frame's motion cancels, which is why the descent

@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.integration.waila;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextFormatting;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 public class WailaDataContext extends AbstractDataContext {
 

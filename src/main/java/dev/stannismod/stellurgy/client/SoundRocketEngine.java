@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.entity.EntityRocket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
-import dev.stannismod.stellurgy.entity.EntityRocket;
 
 public class SoundRocketEngine extends MovingSound {
 

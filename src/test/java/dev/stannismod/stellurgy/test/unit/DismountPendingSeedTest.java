@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.PendingSeedDecision;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 

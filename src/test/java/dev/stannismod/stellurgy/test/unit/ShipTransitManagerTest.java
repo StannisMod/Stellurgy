@@ -1,28 +1,17 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.HyperspaceTiles;
-import dev.stannismod.stellurgy.space.OfflineProgress;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SlotBinder;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.TransitRecord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the transit state machine's WIRING - the depart/advance/arrive lifecycle, the
@@ -112,6 +101,12 @@ public class ShipTransitManagerTest {
         final List<Integer> disposedLanes = new ArrayList<>();
         boolean disposeSucceeds = true;
         final List<String> order = new ArrayList<>();       // shared call order: pins capture-before-depart
+        final List<String> crewMessages = new ArrayList<>(); // every key said to the crew, in order
+
+        @Override
+        public void messageCrew(List<UUID> crew, String translationKey) {
+            crewMessages.add(translationKey);
+        }
 
         @Override
         public boolean parkedShipPresent(BlockPos hyperAnchor) {
@@ -285,6 +280,92 @@ public class ShipTransitManagerTest {
         assertEquals("arrival crossing invoked once", 1, crosser.arrivals.size());
         assertTrue("target cell now live", space.isLoaded(cell(2)));
         assertFalse("origin cell released (evicted for the target under a pool of 1)", space.isLoaded(cell(1)));
+    }
+
+    /**
+     * An arrival whose target cell finds no slot WAITS in its lane: the jump stays open, the crew is
+     * told once, and the ship lands on the first tick a slot frees. Before this the throw left the
+     * world tick and stopped the server.
+     */
+    @Pins("JUMP-15")
+    @RedWitness(verdict = "waits", member = "ShipTransitManager#tickTransits",
+            at = "} catch (SpaceManager.PoolExhaustedException full) {",
+            replacedBy = "} catch (IllegalArgumentException full) {",
+            fails = "no free slot and no evict-eligible cell", on = "2026-10-06")
+    @RedWitness(verdict = "told once", member = "ShipTransitManager#tickTransits",
+            at = "if (!t.arrivalDelayed) {", replacedBy = "if (true) {",
+            fails = "the crew is told once, not once per tick", on = "2026-10-06")
+    @Test
+    public void anArrivalIntoAFullPoolWaitsInItsLaneAndLandsOnceASlotFrees() {
+        SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
+        HyperspaceTiles tiles = new HyperspaceTiles();
+        FakeCrosser crosser = new FakeCrosser();
+        crosser.crewToCapture.add(UUID.fromString("00000000-0000-0000-0000-0000000000c1"));
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser);
+
+        int originDim = space.materialize(cell(1));
+        mgr.beginTransit("s", cell(1), originDim, new BlockPos(0, 64, 0), cell(2), ARRIVE_IN_ONE_TICK);
+        // The departure released the origin; another claim now takes the pool's only slot.
+        space.materialize(cell(3));
+        assertFalse("premise: the pool can give the target cell no slot", space.canMaterialize(cell(2)));
+
+        mgr.tick();
+        mgr.tick();
+        mgr.tick();
+
+        assertTrue("a full pool keeps the jump open", mgr.isInTransit("s"));
+        assertEquals("its lane stays held while it waits", 1, tiles.inUseCount());
+        assertEquals("no arrival is attempted without a target world", 0, crosser.arrivals.size());
+        assertEquals("the crew is told once, not once per tick", 1,
+                java.util.Collections.frequency(crosser.crewMessages, "msg.shiptransit.arrivaldelayed"));
+
+        space.dematerialize(cell(3)); // the other claim lets go: its cell is idle and evictable
+        mgr.tick();
+
+        assertFalse("it lands the tick a slot frees", mgr.isInTransit("s"));
+        assertTrue("the target cell is live", space.isLoaded(cell(2)));
+        assertEquals("and the crew is told it arrived", 1,
+                java.util.Collections.frequency(crosser.crewMessages, "msg.shiptransit.arrived"));
+    }
+
+    /**
+     * A jump short enough to cross directly, whose target cell can get no slot, is flown through
+     * hyperspace instead: the direct crossing would load the destination while the origin is still
+     * held and could only refuse after the burst was paid; the hyperspace path releases the origin
+     * first, and the arrival then takes that slot.
+     */
+    @Pins("JUMP-15")
+    @RedWitness(member = "ShipTransitManager#jumpsDirect", at = "&& space.canMaterialize(target)", replacedBy = "",
+            fails = "a short jump into a full pool is not handed to the direct crosser", on = "2026-10-06")
+    @Test
+    public void aShortJumpIntoAFullPoolFliesThroughHyperspaceAndLands() {
+        SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
+        HyperspaceTiles tiles = new HyperspaceTiles();
+        FakeCrosser crosser = new FakeCrosser();
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser);
+        List<String> directCrossings = new ArrayList<>();
+        mgr.setDirectCrosser((shipId, origin, originSlotDim, originAnchor, target) -> {
+            directCrossings.add(shipId);
+            return true;
+        });
+
+        int originDim = space.materialize(cell(1)); // the ship's own claim holds the only slot
+        assertTrue("premise: the leg is short enough to cross directly",
+                ShipTransitManager.isDirectCrossing(GalacticCoord.CELL, ARRIVE_IN_ONE_TICK));
+        assertFalse("premise: the target cell can get no slot now", space.canMaterialize(cell(2)));
+
+        boolean began = mgr.beginTransit("s", cell(1), originDim, new BlockPos(0, 64, 0), cell(2),
+                ARRIVE_IN_ONE_TICK);
+
+        assertTrue("the jump still departs", began);
+        assertEquals("a short jump into a full pool is not handed to the direct crosser", 0,
+                directCrossings.size());
+        assertTrue("it flies through hyperspace instead", mgr.isInTransit("s"));
+
+        mgr.tick();
+
+        assertFalse("and lands in the slot its own departure freed", mgr.isInTransit("s"));
+        assertTrue(space.isLoaded(cell(2)));
     }
 
     @Test
@@ -872,6 +953,8 @@ public class ShipTransitManagerTest {
                 before, mgr.remainingDistance("s"), 0.0);
     }
 
+    /** Pins JUMP-6 (an aborted jump puts the crew back where they were). */
+    @Pins("JUMP-6")
     @Test
     public void anAbortedDepartureIsANoOpForTheCrew() {
         // A jump that never leaves must leave nobody worse off. The capture runs FIRST — it has to,
@@ -1059,6 +1142,8 @@ public class ShipTransitManagerTest {
                 crosser.departs.contains(originDim + "@0"));
     }
 
+    /** Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of). */
+    @Pins("JUMP-10")
     @Test
     public void bootDisposesOfEveryParkedShipNoRecordClaims() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
@@ -1087,7 +1172,9 @@ public class ShipTransitManagerTest {
      * The reconciliation must find a hull WHEREVER it is standing, and the lanes it has to reach are
      * precisely the ones no surviving record points at. Anything that derives the reach from what the
      * records reclaimed asks the orphans to announce themselves.
+     * Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of).
      */
+    @Pins("JUMP-10")
     @Test
     public void anOrphanIsFoundInALaneNoSurvivingRecordCameNear() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());

@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
+import dev.stannismod.stellurgy.api.damage.DamageOccurrence;
+import dev.stannismod.stellurgy.api.damage.IDamageAware;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
@@ -8,10 +11,6 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-
-import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
-import dev.stannismod.stellurgy.api.damage.DamageOccurrence;
-import dev.stannismod.stellurgy.api.damage.IDamageAware;
 
 /**
  * Records the {@link DamageOccurrence}s delivered to units, by ATTACHING the capability to every tile

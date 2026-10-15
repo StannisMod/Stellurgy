@@ -1,14 +1,15 @@
 package dev.stannismod.stellurgy.affs.world;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Resolves the {@link FieldFrame} for a shield block from its position (§4.3): the frame is a
  * property of the network, but because a network is entirely on one ship or entirely standalone, any
  * member block resolves the same frame. A block a ship's registry record claims gets that ship's
- * {@link ShipFieldFrame}; everything else is the identity {@link WorldFieldFrame}. No mixed case.
+ * {@link ShipFieldFrame}; a remnant — a shipyard block no record claims — gets the never-ready
+ * {@link RemnantFieldFrame}; everything else is the identity {@link WorldFieldFrame}. No mixed case.
  *
  * <p>Which ship a block belongs to is asked of the record, not of the ship's physics object. A hull
  * nobody is near has no physics object while its chunks stay loaded and its tiles tick; resolving
@@ -27,6 +28,9 @@ public final class FieldFrames {
             return WorldFieldFrame.INSTANCE;
         }
         String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
-        return shipId == null ? WorldFieldFrame.INSTANCE : new ShipFieldFrame(world, shipId);
+        if (shipId != null) {
+            return new ShipFieldFrame(world, shipId);
+        }
+        return VSIntegration.isShipyardRemnant(pos, null) ? new RemnantFieldFrame() : WorldFieldFrame.INSTANCE;
     }
 }

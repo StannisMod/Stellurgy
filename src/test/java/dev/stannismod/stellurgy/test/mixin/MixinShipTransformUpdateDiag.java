@@ -1,9 +1,7 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import javax.annotation.Nonnull;
-
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 import net.minecraft.util.math.AxisAlignedBB;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -11,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.interpolation.DeclaredMotionTransformInterpolator;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 
-import dev.stannismod.stellurgy.test.trace.SideTrace;
+import javax.annotation.Nonnull;
 
 /**
  * Counts the pose packets a client actually receives for a ship.

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertTrue;
 
@@ -32,14 +32,16 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     private static final String AR_DIMS_ARRAY = "stellurgyDimensions";
     private static final String COUNT = "count";
 
+    /** Pins INV-XML-05 (asteroid dimensions contain asteroids after config load). */
+    @Pins("INV-XML-05")
     @Test
     public void asteroidDimGeneratesFillBlocks() throws Exception {
         // Find a registered non-overworld Stellurgy planet to clone as a template.
         int template = firstNonOverworldStellurgyDimOrSkip();
 
         // Create + register the asteroid dim from that template.
-        String create = exec("stellurgytest worldgen create-asteroid-dim "
-                + ASTEROID_DIM + " " + template);
+        String create = arrange("stellurgytest worldgen create-asteroid-dim "
+                + ASTEROID_DIM + " " + template).raw();
         assertTrue("create-asteroid-dim must succeed: " + create,
                 Reply.of(create).ok());
         assertTrue("created dim must report isAsteroid:true: " + create,
@@ -47,13 +49,13 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
 
         // Force the dim loaded so its WorldProviderAsteroid + ChunkProviderAsteroids
         // come online.
-        exec("stellurgytest dim load " + ASTEROID_DIM);
+        arrange("stellurgytest dim load " + ASTEROID_DIM).raw();
 
         // Scan a 5×5 chunk region around origin for the fill block. Asteroids
         // are sparse floating islands, so the contract is "> 0 exist", not a
         // density figure.
-        String stats = exec("stellurgytest worldgen ore-stats "
-                + ASTEROID_DIM + " 0 0 2 minecraft:stone");
+        String stats = read("stellurgytest worldgen ore-stats "
+                + ASTEROID_DIM + " 0 0 2 minecraft:stone").raw();
         Reply oreStats = Reply.of("stellurgytest worldgen ore-stats", stats);
         assertTrue("ore-stats must report a count: " + stats, oreStats.has(COUNT));
         int count = oreStats.integer(COUNT);
@@ -64,7 +66,7 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = exec("stellurgytest dim list");
+        String joined = read("stellurgytest dim list").raw();
         Assume.assumeFalse("No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
-import java.util.function.IntSupplier;
-
-import net.minecraft.util.DamageSource;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import net.minecraft.util.DamageSource;
+
+import java.util.function.IntSupplier;
 
 /**
  * One row: what a hazard does to somebody standing in it, and how often.

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -46,6 +46,8 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
     private static final int CX_GRAV    = 9100;
     private static final int CX_ALT     = 9200;
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void orientationControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -53,6 +55,8 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
                 "TileStationOrientationController");
     }
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void gravityControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -60,6 +64,8 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
                 "TileStationGravityController");
     }
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void altitudeControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -69,26 +75,26 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
 
     private void assertPlacesTicksAndReportsCorrectTileClass(
             int cx, String registryName, String tileSimpleName) throws Exception {
-        String place = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ
-                + " " + registryName);
+        String place = arrange("stellurgytest place 0 " + cx + " " + CY + " " + CZ
+                + " " + registryName).raw();
         assertTrue("block " + registryName + " must place: " + place,
                 Reply.of(place).bool("placed"));
 
-        String info = exec("stellurgytest machine info 0 " + cx + " " + CY + " " + CZ);
+        String info = read("stellurgytest machine info 0 " + cx + " " + CY + " " + CZ).raw();
         assertTrue("block " + registryName + " must produce tile "
                         + tileSimpleName + ": " + info,
                 MachineInfo.of(info).isTile(tileSimpleName));
 
         // 40 force-ticks — enough for any % N == 0 gate to fire at least
         // once. Pure smoke: must not throw, tile must remain queryable.
-        String tick = exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ
-                + " 40");
+        String tick = act("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ
+                + " 40").raw();
         assertTrue("force-tick on " + registryName + " must succeed: " + tick,
                 Reply.of(tick).ok());
 
         // Re-query — proves the tile survived the tick burst (no
         // unregister, no replace).
-        String postInfo = exec("stellurgytest machine info 0 " + cx + " " + CY + " " + CZ);
+        String postInfo = read("stellurgytest machine info 0 " + cx + " " + CY + " " + CZ).raw();
         assertTrue("tile must remain " + tileSimpleName + " after ticking: "
                         + postInfo,
                 MachineInfo.of(postInfo).isTile(tileSimpleName));

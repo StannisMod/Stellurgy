@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.api;
 
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 

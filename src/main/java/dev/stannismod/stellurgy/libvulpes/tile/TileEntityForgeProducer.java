@@ -1,5 +1,13 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
+import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
+import dev.stannismod.stellurgy.libvulpes.energy.IPower;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
+import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -11,14 +19,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
-import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
-import dev.stannismod.stellurgy.libvulpes.cap.ForgePowerCapability;
-import dev.stannismod.stellurgy.libvulpes.cap.TeslaHandler;
-import dev.stannismod.stellurgy.libvulpes.energy.IPower;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
-import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 
 import java.util.LinkedList;
 import java.util.List;

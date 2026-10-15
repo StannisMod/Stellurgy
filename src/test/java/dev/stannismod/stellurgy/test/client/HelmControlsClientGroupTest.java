@@ -1,19 +1,11 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.WarShip;
-import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 
@@ -27,7 +19,7 @@ import static org.junit.Assert.assertEquals;
  *
  * <p>What a scenario here does NOT see: the seating itself — he is mounted by probe, as no interface
  * reaches a ship block for a bot — and whether a round HITS (nothing corrects a ship order's aim for the
- * round's fall). A hull that is moving: the lead is pinned at the muzzle by {@code TurretOnAShipE2ETest}.
+ * round's fall). A hull that is moving: the lead is pinned at the muzzle by {@code TurretOnAShipTest}.
  * The "weapons carry our code" and "no friends" rules, which that server group pins; the crew rule is
  * here because it needs a player.</p>
  */
@@ -69,12 +61,6 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         return "helm-controls";
     }
 
-    /** A craft left behind goes on ticking in the world the next scenario runs in. */
-    @Before
-    public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
-    }
-
     /**
      * A pilot presses T and his ship's battery engages the ship nearest his heading — not the nearest
      * one, and not one behind him; under "a ship whose crew carries our code is a friend", that ship is
@@ -85,30 +71,31 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * forty-five degrees off — and the first T must name the quarry. Moved behind him, the quarry stops
      * being a candidate, and the second T names the decoy. A designation that chose by distance names
      * the decoy first; one that ignored the heading would name the quarry behind him second.</p>
-     *
-     * <p>red-witnessed: with {@code ShipDesignation#designate} at
-     * {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by
-     * DISTANCE instead, this fails at "with a ship dead ahead and a nearer one forty-five degrees off,
-     * another was named" (2026-10-05).</p>
-     *
-     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at
-     * {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,
-     * this fails at "with him aboard carrying the code, his battery never decided about that ship again
-     * — no `turret_fire_decided` carrying … friendly = true" (2026-10-05).</p>
      */
+    @LegacyWitness(prose = "with {@code ShipDesignation#designate} at"
+            + " {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by"
+            + " DISTANCE instead, this fails at \"with a ship dead ahead and a nearer one forty-five degrees off,"
+            + " another was named\" (2026-10-05).")
+    @LegacyWitness(prose = "with {@code HullAllegianceRule#isFriend} at"
+            + " {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,"
+            + " this fails at \"with him aboard carrying the code, his battery never decided about that ship again"
+            + " — no `turret_fire_decided` carrying … friendly = true\" (2026-10-05).")
     @Test
     public void aPilotsTNamesTheShipAheadAndTheCrewRuleSparesItOnceHeBoardsIt() throws Exception {
         Events server = serverEvents();
         Events client = clientEvents();
 
         // ---- three hulls: his, and two that will be placed from his view
-        WarShip shooter = WarShip.build(server, this::exec, FixtureSite.openAir(0, SHOOTER_SRC_X, SRC_Z), null,
+        WarShip shooter = WarShip.build(server, commands(), FixtureSite.openAir(0, SHOOTER_SRC_X, SRC_Z), null,
                 "his own ship");
+        disposeOfShipAtEnd(shooter.vsShip);
         shooter.parkAt(PARK_X, PARK_Y, PARK_Z, ON_THE_HULL);
-        WarShip quarry = WarShip.build(server, this::exec, FixtureSite.openAir(0, QUARRY_SRC_X, SRC_Z), null,
+        WarShip quarry = WarShip.build(server, commands(), FixtureSite.openAir(0, QUARRY_SRC_X, SRC_Z), null,
                 "the ship he will name");
-        WarShip decoy = WarShip.build(server, this::exec, FixtureSite.openAir(0, DECOY_SRC_X, SRC_Z), null,
+        disposeOfShipAtEnd(quarry.vsShip);
+        WarShip decoy = WarShip.build(server, commands(), FixtureSite.openAir(0, DECOY_SRC_X, SRC_Z), null,
                 "the nearer ship off his heading");
+        disposeOfShipAtEnd(decoy.vsShip);
 
         // ---- his battery: a gun beside his seat, a console touching it, on "no ship is a friend"
         int[] seat = shooter.seat();
@@ -116,39 +103,39 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         long built = server.markInstrumented();
         buildGun(gx, gy, gz);
         Weapons.awaitAssembled(server, built, gx, gy, gz, PARTS, "his ship's gun never assembled");
-        requireOk("charge the gun", exec("stellurgytest turret charge 0 " + gx + " " + gy + " " + gz));
+        requireOk("charge the gun", arrange("stellurgytest turret charge 0 " + gx + " " + gy + " " + gz).raw());
         int cx = gx + 1;
         long placed = server.mark();
-        requireOk("the console", exec("stellurgytest place 0 " + cx + " " + gy + " " + gz + " stellurgy:weaponConsole"));
+        requireOk("the console", arrange("stellurgytest place 0 " + cx + " " + gy + " " + gz + " stellurgy:weaponConsole").raw());
         server.awaitRecordWithFields(placed, "subsystem_network_rebuilt",
                 "the weapons network never rebuilt after the console was placed", Weapons.ARRANGEMENT_TICKS,
                 "domain", "Weapon", "dim", "0");
         String console = "0 " + cx + " " + gy + " " + gz;
-        Reply network = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        Reply network = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         ArrangementFailure.requireArranged("the console touching the gun is not commanding it: " + network,
                 network.bool("network") && network.integer("guns") == 1);
-        requireOk("no ship is a friend", exec("stellurgytest weaponconsole allegiance " + console + " NONE"));
+        requireOk("no ship is a friend", arrange("stellurgytest weaponconsole allegiance " + console + " NONE").raw());
 
         // ---- him: the code device in his hand (it matters only in the last leg), then his seat
-        exec("clear " + PLAYER);
+        arrange("clear " + PLAYER).raw();
         long given = client.mark();
-        exec("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"ALPHA\"}");
+        arrange("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         client.awaitMatching(given, "client_slot_set",
                 seen -> Events.anyRecordFieldContains(seen, "item", "affs:code_device"),
                 "holding affs:code_device", "the code device must reach his inventory", ROUND_TRIP_TICKS);
         bot().selectHotbar(0);
-        PilotSeat helm = PilotSeat.byId(this::exec, 0, shooter.vsShip).requireFound("his ship's pilot seat");
+        PilotSeat helm = PilotSeat.byId(c -> read(c).raw(), 0, shooter.vsShip).requireFound("his ship's pilot seat");
         // Beside his ship first: a seat's mount far from him is an entity his client was never sent,
         // and the server seating him on it is a mount his client cannot follow.
         long walked = client.mark();
-        exec("tp " + PLAYER + " " + helm.shipWorldX + " " + (helm.shipWorldY + 3.0D) + " " + helm.shipWorldZ);
+        arrange("tp " + PLAYER + " " + helm.shipWorldX + " " + (helm.shipWorldY + 3.0D) + " " + helm.shipWorldZ);
         ClientEvents.awaitPlacedNear(client, walked, helm.shipWorldX, helm.shipWorldZ,
                 "he must be put beside his ship before he takes its seat", ROUND_TRIP_TICKS);
         long boarding = client.mark();
-        Reply mount = Reply.of(exec("stellurgytest vs seat-mount-at 0 " + helm.seatX + " " + helm.seatY + " "
-                + helm.seatZ)).requireOk("the seat's mount");
+        Reply mount = Reply.of(arrange("stellurgytest vs seat-mount-at 0 " + helm.seatX + " " + helm.seatY + " "
+                + helm.seatZ).raw()).requireOk("the seat's mount");
         ArrangementFailure.requireArranged("he could not take the mount: " + mount,
-                Reply.of(exec("stellurgytest player mount-entity " + mount.integer("dummyId"))).bool("mounted"));
+                Reply.of(arrange("stellurgytest player mount-entity " + mount.integer("dummyId")).raw()).bool("mounted"));
         ClientEvents.awaitMounted(client, boarding, "his client must seat him at the helm", ROUND_TRIP_TICKS);
         client.awaitField(boarding, "ship_pilot_gate_decided", "open", true,
                 "his client must take him for his ship's pilot, or T is not the helm's key", ROUND_TRIP_TICKS);
@@ -185,9 +172,9 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
 
         // ---- a ship whose crew carries our code is a friend — and he becomes its crew
         quarry.parkAt(round(ahead[0]), round(ahead[1]), round(ahead[2]), ON_THE_HULL);
-        requireOk("our code", exec("stellurgytest weaponconsole code " + console + " ALPHA"));
-        requireOk("crew vouches", exec("stellurgytest weaponconsole allegiance " + console + " CODE_ON_CREW"));
-        requireOk("a fresh charge", exec("stellurgytest turret charge 0 " + gx + " " + gy + " " + gz));
+        requireOk("our code", arrange("stellurgytest weaponconsole code " + console + " ALPHA").raw());
+        requireOk("crew vouches", arrange("stellurgytest weaponconsole allegiance " + console + " CODE_ON_CREW").raw());
+        requireOk("a fresh charge", arrange("stellurgytest turret charge 0 " + gx + " " + gy + " " + gz).raw());
         long crewless = server.markInstrumented();
         pressT();
         String renamedBack = server.awaitRecordWithFields(crewless, "ship_designated",
@@ -201,10 +188,10 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
                         + " fire on it", ROUND_TRIP_TICKS,
                 "pos", Weapons.at(gx, gy, gz), "friendly", "false", "permitted", "true");
 
-        exec("stellurgytest player dismount");
-        PilotSeat theirs = PilotSeat.byId(this::exec, 0, quarry.vsShip).requireFound("the ship ahead's seat");
+        arrange("stellurgytest player dismount");
+        PilotSeat theirs = PilotSeat.byId(c -> read(c).raw(), 0, quarry.vsShip).requireFound("the ship ahead's seat");
         long boarded = server.mark();
-        exec("tp " + PLAYER + " " + theirs.shipWorldX + " " + (theirs.shipWorldY + 3.0D) + " " + theirs.shipWorldZ);
+        arrange("tp " + PLAYER + " " + theirs.shipWorldX + " " + (theirs.shipWorldY + 3.0D) + " " + theirs.shipWorldZ);
         String spared = server.awaitRecordWithFields(boarded, "turret_fire_decided",
                 "with him aboard carrying the code, his battery never decided about that ship again",
                 ROUND_TRIP_TICKS, "pos", Weapons.at(gx, gy, gz), "friendly", "true");
@@ -230,28 +217,26 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * and the seated window is {@value #WINDOW_FACTOR} times the slowest of those links, measured on
      * this run in client ticks (an upper bound: read before the press and after the record arrived).
      * Measured 2026-10-05: the slowest act landed within 6 client ticks, so the window was 60.</p>
-     *
-     * <p>red-witnessed: with {@code KeyBindings#scopeSteeringKeysToCockpit} at
-     * {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its
-     * two siblings for use and pick removed, this fails at "from the helm the cursor acted on the world
-     * (held 60 ticks)" (2026-10-05).</p>
-     *
-     * <p>red-witnessed: with {@code KeyBindings#onHelmBlockHighlight} at
-     * {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at
-     * "from the helm a block was outlined as the one about to be hit (over 60 ticks)" (2026-10-05).</p>
      */
+    @LegacyWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
+            + " {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its"
+            + " two siblings for use and pick removed, this fails at \"from the helm the cursor acted on the world"
+            + " (held 60 ticks)\" (2026-10-05).")
+    @LegacyWitness(prose = "with {@code KeyBindings#onHelmBlockHighlight} at"
+            + " {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at"
+            + " \"from the helm a block was outlined as the one about to be hit (over 60 ticks)\" (2026-10-05).")
     @Test
     public void fromTheHelmTheCursorActsOnNothing() throws Exception {
         Events server = serverEvents();
         Events client = clientEvents();
-        exec("gamemode creative " + PLAYER);
+        arrange("gamemode creative " + PLAYER);
 
         // ---- on foot: a floor under him, looking down at it, the three buttons
         FixtureSite foot = FixtureSite.openAir(0, FOOT_X, FOOT_Z);
-        requireOk("a floor", exec("stellurgytest fill 0 " + (foot.x - 2) + " " + foot.y + " " + (foot.z - 2) + " "
-                + (foot.x + 4) + " " + foot.y + " " + (foot.z + 2) + " minecraft:stone"));
+        requireOk("a floor", arrange("stellurgytest fill 0 " + (foot.x - 2) + " " + foot.y + " " + (foot.z - 2) + " "
+                + (foot.x + 4) + " " + foot.y + " " + (foot.z + 2) + " minecraft:stone").raw());
         long walked = client.mark();
-        exec("tp " + PLAYER + " " + (foot.x + 0.5D) + " " + (foot.y + 1) + " " + (foot.z + 0.5D) + " -90 50");
+        arrange("tp " + PLAYER + " " + (foot.x + 0.5D) + " " + (foot.y + 1) + " " + (foot.z + 0.5D) + " -90 50");
         ClientEvents.awaitPlacedNear(client, walked, foot.x + 0.5D, foot.z + 0.5D,
                 "he must stand on the control's floor", ROUND_TRIP_TICKS);
         long footMark = client.mark();
@@ -270,15 +255,16 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         System.out.println("[measure] on foot: slowest act within " + longest + " client ticks; outline " + outlined);
 
         // ---- at the helm: a parked ship, him in its seat, a block before its nose
-        WarShip ship = WarShip.build(server, this::exec, FixtureSite.openAir(0, CURSOR_SRC_X, SRC_Z), null,
+        WarShip ship = WarShip.build(server, commands(), FixtureSite.openAir(0, CURSOR_SRC_X, SRC_Z), null,
                 "the ship he sits in");
+        disposeOfShipAtEnd(ship.vsShip);
         ship.parkAt(PARK_X, PARK_Y, PARK_Z, ON_THE_HULL);
         seatAtTheHelm(client, ship);
         double[] eye = new double[3];
         double[] heading = steadyView(eye);
         double[] ahead = along(eye, heading, 3.0D);
-        Reply nose = Reply.of(exec("stellurgytest place 0 " + (int) Math.floor(ahead[0]) + " "
-                + (int) Math.floor(ahead[1]) + " " + (int) Math.floor(ahead[2]) + " minecraft:stone"))
+        Reply nose = Reply.of(arrange("stellurgytest place 0 " + (int) Math.floor(ahead[0]) + " "
+                + (int) Math.floor(ahead[1]) + " " + (int) Math.floor(ahead[2]) + " minecraft:stone").raw())
                 .requireOk("a block before the nose");
         ArrangementFailure.requireArranged("the block before the nose was not placed: " + nose, nose.bool("placed"));
 
@@ -313,16 +299,16 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
 
     /** Seat him at {@code ship}'s helm: beside it first, then its seat, then his client's pilot gate. */
     private void seatAtTheHelm(Events client, WarShip ship) throws Exception {
-        PilotSeat helm = PilotSeat.byId(this::exec, 0, ship.vsShip).requireFound("the ship's pilot seat");
+        PilotSeat helm = PilotSeat.byId(c -> read(c).raw(), 0, ship.vsShip).requireFound("the ship's pilot seat");
         long walked = client.mark();
-        exec("tp " + PLAYER + " " + helm.shipWorldX + " " + (helm.shipWorldY + 3.0D) + " " + helm.shipWorldZ);
+        arrange("tp " + PLAYER + " " + helm.shipWorldX + " " + (helm.shipWorldY + 3.0D) + " " + helm.shipWorldZ);
         ClientEvents.awaitPlacedNear(client, walked, helm.shipWorldX, helm.shipWorldZ,
                 "he must be put beside the ship before he takes its seat", ROUND_TRIP_TICKS);
         long boarding = client.mark();
-        Reply mount = Reply.of(exec("stellurgytest vs seat-mount-at 0 " + helm.seatX + " " + helm.seatY + " "
-                + helm.seatZ)).requireOk("the seat's mount");
+        Reply mount = Reply.of(arrange("stellurgytest vs seat-mount-at 0 " + helm.seatX + " " + helm.seatY + " "
+                + helm.seatZ).raw()).requireOk("the seat's mount");
         ArrangementFailure.requireArranged("he could not take the mount: " + mount,
-                Reply.of(exec("stellurgytest player mount-entity " + mount.integer("dummyId"))).bool("mounted"));
+                Reply.of(arrange("stellurgytest player mount-entity " + mount.integer("dummyId")).raw()).bool("mounted"));
         ClientEvents.awaitMounted(client, boarding, "his client must seat him at the helm", ROUND_TRIP_TICKS);
         client.awaitField(boarding, "ship_pilot_gate_decided", "open", true,
                 "his client must take him for the ship's pilot", ROUND_TRIP_TICKS);
@@ -380,17 +366,17 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
     }
 
     private String consoleTarget(String console) throws Exception {
-        return Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console")
+        return Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console")
                 .text("targetShip");
     }
 
     private void buildGun(int gx, int gy, int gz) throws Exception {
-        requireOk("the gun", exec("stellurgytest place 0 " + gx + " " + gy + " " + gz + " stellurgy:turret"));
+        requireOk("the gun", arrange("stellurgytest place 0 " + gx + " " + gy + " " + gz + " stellurgy:turret").raw());
         for (int i = 1; i <= 4; i++) {
-            requireOk("a barrel", exec("stellurgytest place 0 " + gx + " " + (gy + i) + " " + gz + " stellurgy:gunBarrel"));
+            requireOk("a barrel", arrange("stellurgytest place 0 " + gx + " " + (gy + i) + " " + gz + " stellurgy:gunBarrel").raw());
         }
-        requireOk("a jacket", exec("stellurgytest place 0 " + gx + " " + gy + " " + (gz + 1) + " stellurgy:gunCooling"));
-        requireOk("a jacket", exec("stellurgytest place 0 " + gx + " " + gy + " " + (gz - 1) + " stellurgy:gunCooling"));
+        requireOk("a jacket", arrange("stellurgytest place 0 " + gx + " " + gy + " " + (gz + 1) + " stellurgy:gunCooling").raw());
+        requireOk("a jacket", arrange("stellurgytest place 0 " + gx + " " + gy + " " + (gz - 1) + " stellurgy:gunCooling").raw());
     }
 
     private static void requireOk(String what, String reply) {

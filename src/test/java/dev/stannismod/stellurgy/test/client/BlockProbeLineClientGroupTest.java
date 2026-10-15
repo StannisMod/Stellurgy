@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+
+import dev.stannismod.stellurgy.test.contract.Pins;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +38,7 @@ import static org.junit.Assert.assertTrue;
  * impact path (a probe declares the impact, the engine spends it); no player weapon fires here.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
+public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {
@@ -76,6 +80,25 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
      * verdict first. What keeps the record through a non-player replacement is the damage map's
      * (structural-damage MECH-DMG-03/15), not this line's.</p>
      */
+    @RedWitness(verdict = "no line when untouched",
+            member = "DamageProbeProvider#addProbeInfo",
+            at = "if (recorded == null && stage <= 0)",
+            replacedBy = "if (false)",
+            fails = "an undamaged block must be told about with NO damage line",
+            on = "2026-10-07")
+    @RedWitness(verdict = "the stage",
+            member = "DamageProbeProvider#addProbeInfo",
+            at = "stage + \"/\" + DamageState.getMaxStage(world, pos)",
+            replacedBy = "DamageState.getMaxStage(world, pos) + \"/\" + DamageState.getMaxStage(world, pos)",
+            fails = "a staged block must be told exactly its stage out of its maximum",
+            on = "2026-10-07")
+    @RedWitness(verdict = "nothing else",
+            member = "DamageProbeProvider#addProbeInfo",
+            at = "if (RepairCost.perStage(world, pos) == null)",
+            replacedBy = "if (RepairCost.perStage(world, pos) != null)",
+            fails = "a staged block must be told exactly its stage out of its maximum",
+            on = "2026-10-07")
+    @Pins({"INV-IPW-07", "INV-IPW-08"})
     @Test
     public void aStruckBlockIsToldItsStageAndKeepsItWhenTheBlockIsPutBack() throws Exception {
         int[] block = standBeforeOneBlock("minecraft:iron_block");
@@ -118,6 +141,12 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
      * {*msg.top.stellurgy.damage.noRecipe*}] but was [... 1/4]"; and with the stage line given the
      * maximum ({@code stage + "/" + DamageState.getMaxStage(world, pos)}): "but was [... 4/4, ...]".</p>
      */
+    @RedWitness(member = "DamageProbeProvider#addProbeInfo",
+            at = "if (RepairCost.perStage(world, pos) == null)",
+            replacedBy = "if (RepairCost.perStage(world, pos) != null)",
+            fails = "a staged block the welder refuses for want of a recipe must be told so",
+            on = "2026-10-07")
+    @Pins("INV-IPW-08")
     @Test
     public void aStruckBlockNothingCraftsIsToldItCannotBeWelded() throws Exception {
         int[] block = standBeforeOneBlock("minecraft:cobblestone");
@@ -125,7 +154,7 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
         // An empty tool and nothing to pay with, held by the probe's own survival-mode welder: the
         // welder asks for a recipe before it asks for charge or materials, so a NO_RECIPE that comes
         // back is about the block, and no refusal changes the stage.
-        Reply weld = Reply.of(exec("stellurgytest damage weld " + at(block) + " 0 none"));
+        Reply weld = act("stellurgytest damage weld " + at(block) + " 0 none");
         scenario().requireArranged("the welder itself must refuse this block for want of a recipe, or"
                 + " the line below has nothing to be true about: " + weld,
                 "NO_RECIPE".equals(weld.text("outcome")));
@@ -150,14 +179,20 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code if (RepairCost.perStage(world, pos) == null)} inverted: "but was [... destroyed ...,
      * {*msg.top.stellurgy.damage.noRecipe*}]".</p>
      */
+    @RedWitness(member = "DamageProbeProvider#addProbeInfo",
+            at = "if (recorded != null)",
+            replacedBy = "if (false)",
+            fails = "a block standing on a recorded destruction must be told the position was",
+            on = "2026-10-07")
+    @Pins("INV-IPW-08")
     @Test
     public void aBlockStandingOnARecordedDestructionIsToldSo() throws Exception {
         int[] block = standBeforeOneBlock("minecraft:iron_block");
         scenario().arranging("destroy the block with one impact, then stand a block of the same kind there");
         // The largest budget the verb takes: more than any stage ladder costs, and what is left over
         // leaves upward into empty sky.
-        Reply impact = Reply.of(exec("stellurgytest damage impact " + fromBelow(block) + " "
-                + Integer.MAX_VALUE + " " + IMPACT_KIND));
+        Reply impact = act("stellurgytest damage impact " + fromBelow(block) + " "
+                + Integer.MAX_VALUE + " " + IMPACT_KIND);
         Reply hole = stageAt(block);
         scenario().requireArranged("the impact must DESTROY the block and the world must record what"
                         + " stood there: impact=" + impact + " position=" + hole,
@@ -193,9 +228,9 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
         FixtureSite site = site();
         // HEIGHT 4: the block's own course (site.y+2) and the bot's head (site.y+2.62) are the top of
         // what this scenario uses; halo 0, the platform and the block sit inside the pad footprint.
-        site.requireClear(this::exec, 0, 4, "the platform, the bot standing on it and the block he looks at");
-        Reply floor = Reply.of(exec("stellurgytest fill " + site.dim + " " + (site.x - 1) + " " + site.y + " "
-                + (site.z - 1) + " " + (site.x + 1) + " " + site.y + " " + (site.z + 1) + " minecraft:stone"));
+        site.requireClear(c -> arrange(c).raw(), 0, 4, "the platform, the bot standing on it and the block he looks at");
+        Reply floor = arrange("stellurgytest fill " + site.dim + " " + (site.x - 1) + " " + site.y + " "
+                + (site.z - 1) + " " + (site.x + 1) + " " + site.y + " " + (site.z + 1) + " minecraft:stone");
         scenario().requireArranged("the platform must be laid: " + floor, floor.ok());
         int[] block = {site.x, site.y + 2, site.z + 3};
         place(block, blockId);
@@ -215,8 +250,8 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
     private int[] strikeOneStage(int[] block, String what) throws Exception {
         scenario().arranging("strike " + what + " for one stage's price");
         Reply before = stageAt(block);
-        Reply impact = Reply.of(exec("stellurgytest damage impact " + fromBelow(block) + " "
-                + before.integer("stageCost") + " " + IMPACT_KIND));
+        Reply impact = act("stellurgytest damage impact " + fromBelow(block) + " "
+                + before.integer("stageCost") + " " + IMPACT_KIND);
         Reply after = stageAt(block);
         int stage = after.integer("stage");
         int max = after.integer("maxStage");
@@ -272,12 +307,12 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientE2ETest {
     }
 
     private void place(int[] block, String blockId) throws Exception {
-        Reply placed = Reply.of(exec("stellurgytest place " + at(block) + " " + blockId));
+        Reply placed = arrange("stellurgytest place " + at(block) + " " + blockId);
         scenario().requireArranged("placing " + blockId + " must be accepted: " + placed, placed.ok());
     }
 
     private Reply stageAt(int[] block) throws Exception {
-        return Reply.of(exec("stellurgytest damage stage " + at(block)));
+        return read("stellurgytest damage stage " + at(block));
     }
 
     /** {@code <dim> <x> <y> <z>} of a block in this scenario's world. */

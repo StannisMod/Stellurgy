@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A shield emitter's field coming up or going down, and a player it holds at its membrane, as events.
