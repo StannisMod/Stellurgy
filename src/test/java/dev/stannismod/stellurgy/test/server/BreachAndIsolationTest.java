@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
@@ -38,7 +39,13 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
     }
 
     /**
-     * D127-9: the air leaves through the hole, over seconds, and it is really gone.
+     * D127-9: the air leaves through the hole, over seconds, and it is really exchanged — the room's air
+     * becomes the outdoors' air, gas by gas, rather than being deleted with the room's cells.
+     *
+     * <p>Arranged on the overworld, whose outdoors holds air, with a room mix unlike it in every gas:
+     * less nitrogen, more oxygen, a great deal of CO2. So the outdoors cannot be told from vacuum unless
+     * gas also comes IN, and a drain toward nothing — which this test pinned until 2026-10-12 — fails on
+     * the nitrogen that must arrive.</p>
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: "a breached room is no
      * longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;". IN NO ZONE —
@@ -46,23 +53,30 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * position: "the position is in no zone any more — that is what the breach did: …
      * \"airSource\":\"zone\"". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air
      * for a zone with no cells: "but the air must still be reachable from the VENT … \"ventHasAir\":false".
-     * LEAVES — {@code SealedZone#ventBreachedAir} at {@code air.drawNitrogen(ratePerSecond);} venting nothing: "the air must actually leave (before=100
-     * after=100)". UNTIL VACUUM — {@code SealedZone#ventBreachedAir} at {@code if (air == null || air.getTotalPressure() <= 0L)} stopping at half an atmosphere: "and keep
-     * leaving until the room is vacuum: … expected:&lt;0&gt; but was:&lt;49&gt;". (LEAVES and UNTIL
-     * VACUUM were taken in the oxygen vent's own ventBreachedAir; the method moved unchanged into the
-     * zone every port shares on 2026-10-05.) The two premises at its head are arrangements and are not
-     * witnessed.</p>
+     * BECOMES THE OUTDOORS — {@code SealedZone#ventBreachedAir} at {@code long difference =
+     * outdoors.partialPressure(gas) - air.partialPressure(gas);} aimed at zero instead (the drain this test
+     * pinned before 2026-10-12): "and the outdoors' air must come in — its nitrogen up to the outdoors',
+     * not down to nothing … \"ventAirN2\":0,\"ventAirO2\":0,\"ventAirCO2\":0", 2026-10-12. Its CO2 half
+     * stays green under that inversion, as it must: the overworld's outdoors holds no CO2, so leaving and
+     * draining agree there; the nitrogen half is the one that tells them apart.</p>
      */
     @Test
-    public void aBreachedRoomLosesItsAirToSpaceInsteadOfLosingItToBookkeeping() throws Exception {
+    public void aBreachedRoomExchangesItsAirWithTheOutdoorsInsteadOfLosingItToBookkeeping() throws Exception {
         int cx = stand("a sealed room about to be breached");
         buildSealedRoom(cx);
+        PlanetAir outdoors = PlanetAir.snapshot(this::exec, 0);
+        requireArranged("the outdoors must hold nitrogen, or air arriving from it could not be told from "
+                + "a room drained to vacuum", outdoors.partialPressure("nitrogen") > ppm(500_000));
+        arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz + " " + ppm(500_000) + " "
+                + ppm(300_000) + " " + ppm(200_000));
 
         Reply sealed = ventInfo(cx);
         assertEquals("premise: the room must start as a live zone: " + sealed,
                 "zone", sealed.text("airSource"));
-        long pressureBefore = sealed.longInteger("ventAirPressure");
-        assertTrue("premise: it must start pressurised: " + sealed, pressureBefore > 0);
+        requireArranged("premise: the room's air must differ from the outdoors' in every gas read: " + sealed,
+                sealed.longInteger("ventAirN2") < outdoors.partialPressure("nitrogen")
+                        && sealed.longInteger("ventAirO2") > outdoors.partialPressure("oxygen")
+                        && sealed.longInteger("ventAirCO2") > outdoors.partialPressure("carbondioxide"));
 
         // Open the hull. The flood-fill drops the room's cells; the gases are not the cells.
         breach(cx);
@@ -76,14 +90,23 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
         assertTrue("but the air must still be reachable from the VENT, because it is escaping "
                 + "rather than being deleted: " + venting, venting.bool("ventHasAir"));
 
-        // 20 ticks per drain step; well past what emptying takes at the default rate.
+        long rate = arrange("stellurgytest config get lifeSupportBreachVentRate").longInteger("value");
+        long widest = Math.max(outdoors.partialPressure("nitrogen") - sealed.longInteger("ventAirN2"),
+                sealed.longInteger("ventAirCO2") - outdoors.partialPressure("carbondioxide"));
+        requireArranged("thirty seconds of exchange at " + rate + " a second must cover the widest "
+                + "difference arranged, " + widest, 30L * rate >= widest);
+        // EXPERIMENT: thirty seconds of the open room; the exchange moves each gas by at most the rate
+        // read above, each second, so the dose covers the widest difference (checked just above).
         forceTick(cx, 600);
 
-        Reply emptied = ventInfo(cx);
-        long pressureAfter = emptied.longInteger("ventAirPressure");
-        assertTrue("the air must actually leave (before=" + pressureBefore + " after="
-                + pressureAfter + "): " + emptied, pressureAfter < pressureBefore);
-        assertEquals("and keep leaving until the room is vacuum: " + emptied, 0L, pressureAfter);
+        Reply exchanged = ventInfo(cx);
+        assertTrue("the room's own air must leave — its CO2 down to the outdoors' (" + sealed + " -> "
+                        + exchanged + ")",
+                exchanged.longInteger("ventAirCO2") == outdoors.partialPressure("carbondioxide"));
+        assertTrue("and the outdoors' air must come in — its nitrogen up to the outdoors', not down to "
+                        + "nothing (" + sealed + " -> " + exchanged + ")",
+                exchanged.longInteger("ventAirN2") == outdoors.partialPressure("nitrogen")
+                        && exchanged.longInteger("ventAirO2") == outdoors.partialPressure("oxygen"));
     }
 
     /**

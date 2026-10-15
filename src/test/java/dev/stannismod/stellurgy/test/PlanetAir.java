@@ -42,6 +42,16 @@ public final class PlanetAir {
     }
 
     /**
+     * The snapshot's partial pressure of one gas, by the name {@code planet info} reports it under, in the
+     * composition's own unit; zero for a gas the air does not hold, which is what the composition means
+     * by leaving it out.
+     */
+    public long partialPressure(String gasName) {
+        JsonElement held = gases.get(gasName);
+        return held == null ? 0L : held.getAsLong();
+    }
+
+    /**
      * Put the snapshot back: empty the air, then add each recorded gas, refusing on the first step the
      * planet declines — a restore that silently failed would hand the next test a vacuum.
      */
