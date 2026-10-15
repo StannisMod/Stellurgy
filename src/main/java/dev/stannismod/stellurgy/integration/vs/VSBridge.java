@@ -1661,25 +1661,46 @@ final class VSBridge {
      *  to convert: the deck code did, the weapons and the shield did not, and a moving hull's motion
      *  counted twenty times over in every round it fired. */
     static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        return velocityAtPointFor(world, shipId, x, y, z, true, "shipVelocityAtPointFor");
+    }
+
+    /** The velocity the craft DECLARED at a world point, in blocks per tick, world frame — on the client
+     *  without the rate its shown pose adds while it retires a prediction error. What a body's motion
+     *  RELATIVE to the craft is measured against: the shown rate of a still craft retiring a
+     *  misprediction is no motion of the craft's, and a body measured against it is handed the client's
+     *  error as a velocity of its own (C23 DECKSYNC-6). On the server it is the same number as
+     *  {@link #shipVelocityAtPointFor}. */
+    static double[] declaredShipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        return velocityAtPointFor(world, shipId, x, y, z, false, "declaredShipVelocityAtPointFor");
+    }
+
+    private static double[] velocityAtPointFor(World world, String shipId, double x, double y, double z,
+                                               boolean shown, String asked) {
         try {
             PhysicsObject physo = physoById(world, shipId);
             if (physo == null) {
                 return null;
             }
-            // The motion of the pose THIS side is standing on. On the server that is the physics
+            // SHOWN: the motion of the pose THIS side is standing on. On the server that is the physics
             // state the craft declares; on the client it is the pose the interpolator shows, which
             // follows the declared motion and additionally retires whatever a mispredicted tick left
-            // behind. Taking the declared numbers on the client instead was measured to slide a body
-            // across its own deck: carried at 0.07 blocks/tick while the pose under it stepped 0.5,
-            // and the capture guard read the difference as a teleport.
+            // behind. A CARRY must be this one: carrying by the declared numbers on the client was
+            // measured to slide a body across its own deck — carried at 0.07 blocks/tick while the
+            // pose under it stepped 0.5, and the capture guard read the difference as a teleport.
+            // DECLARED: the craft's own motion, which is what a body's velocity relative to it is
+            // measured against (see declaredShipVelocityAtPointFor).
             Vector3dc vLin;
             Vector3dc w;
             if (world.isRemote && physo.getTransformInterpolator() != null) {
-                org.joml.Vector3d shownLinear = new org.joml.Vector3d();
-                org.joml.Vector3d shownAngular = new org.joml.Vector3d();
-                physo.getTransformInterpolator().getShownVelocity(shownLinear, shownAngular);
-                vLin = shownLinear;
-                w = shownAngular;
+                org.joml.Vector3d linear = new org.joml.Vector3d();
+                org.joml.Vector3d angular = new org.joml.Vector3d();
+                if (shown) {
+                    physo.getTransformInterpolator().getShownVelocity(linear, angular);
+                } else {
+                    physo.getTransformInterpolator().getDeclaredVelocity(linear, angular);
+                }
+                vLin = linear;
+                w = angular;
             } else {
                 vLin = physo.getPhysicsData().getLinearVelocity();
                 w = physo.getPhysicsData().getAngularVelocity();
@@ -1701,7 +1722,7 @@ final class VSBridge {
             // fell to its bare epsilon while the deck stepped half a block. What that looked like
             // from outside was "the smoothing policy churns the capture", and three different
             // policies were written and measured against a fault that was never in any of them.
-            reportSuppressed(world, "shipVelocityAtPointFor", t);
+            reportSuppressed(world, asked, t);
             return null;
         }
     }

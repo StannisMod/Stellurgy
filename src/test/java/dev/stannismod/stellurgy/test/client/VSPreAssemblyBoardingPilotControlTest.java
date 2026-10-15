@@ -291,11 +291,13 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // and a right-click sent too early would be dropped without a trace. That confirmation is a
         // RECORD — the pos-look packet the teleport arrives as — so it is awaited rather than
         // counted out in ticks, and the mark is taken before the command that must produce it.
+        // Onto ground his CLIENT holds: measured 2026-10-15, a bare teleport here was applied two ticks
+        // before the pad's chunk reached his client, and he fell into the pad and on through it — the
+        // fall ledgered as the seat click out of reach.
         long standMark = clientEvents().mark();
-        arrange("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
-        clientEvents().await(standMark, "client_pos_look_applied",
-                "the stand-beside-the-craft teleport must be APPLIED on the client before anything"
-                        + " is asked of it or clicked through it", CLIENT_TERRAIN_BUDGET_TICKS);
+        standOnFloorTheClientHolds(standX, standY, standZ, 0f, 0f,
+                "the stand-beside-the-craft teleport must be APPLIED on the client, onto the pad his client"
+                        + " holds, before anything is asked of it or clicked through it");
 
         // MEASURE the seat before touching it - the fixture's geometry is verified, never assumed.
         // An unloaded chunk reports an EMPTY block name, which is otherwise indistinguishable from
@@ -756,7 +758,21 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
                         + "floor=" + floor + " state=" + state
                         + " pad=" + bot().blockState((int) Math.floor(standX), (int) standY - 1,
                                 (int) Math.floor(standZ))
-                        + " placementsSinceTheStand=" + clientEvents().since(standMark, "client_pos_look_applied"),
+                        + " placementsSinceTheStand=" + clientEvents().since(standMark, "client_pos_look_applied")
+                        // Measured 2026-10-15: the stand put him at y=151 over the pad at 150, his client
+                        // held the pad, and ten ticks later he was at 148 and falling - THROUGH it. A body
+                        // a deck holds collides with its craft's blocks only (C30 ENT-2), so whether a deck
+                        // held him is the next question.
+                        + " deckEntered=" + clientEvents().since(standMark, "deck_entered")
+                        + " deckReleased=" + clientEvents().since(standMark, "deck_released")
+                        + " seeds=" + clientEvents().since(standMark, "ship_frame_seed")
+                        // ...and none did (no entry, no seed, measured the same day). The other way a
+                        // client falls through a block it holds is to have held the chunk WITHOUT it when
+                        // he arrived: the pad's chunk arriving after the placement says so.
+                        + " padChunkApplied=" + Events.recordsWhereAll(
+                                clientEvents().since(standMark, "chunk_data_applied"),
+                                "cx", String.valueOf((int) Math.floor(standX) >> 4),
+                                "cz", String.valueOf((int) Math.floor(standZ) >> 4)),
                 state.get("onGround").getAsBoolean() && !floorBlock.isEmpty()
                         && !floorBlock.endsWith(":air")
                         && !(floor.has("chunkEmpty") && floor.get("chunkEmpty").getAsBoolean()));

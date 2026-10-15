@@ -565,6 +565,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             if (previousFrameRate > 0) {
                 bot().setFrameRate(previousFrameRate);
             }
+            arrange("save-on");
             arrange("stellurgytest player dismount");
             resetServerMotionTrace();
         } catch (Exception ignored) {
@@ -781,6 +782,13 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
     @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(FLY_TICKS);",
             why = "held climb — the flight each leg's traces describe.")
     private Leg measure(String label, int dim, int[] afc) throws Exception {
+        // The world's autosave stays out of the window. Every 900 ticks vanilla saves every loaded
+        // world on the server thread; measured 2026-10-15 at 210-240 ms, landing in the same leg on
+        // every run because this scenario's timeline counts from the server's start, and the client's
+        // pose then catches up a stalled server by design (C23 DECKSYNC-5's 2-tick prediction cap).
+        // A stall of the server thread is not this test's subject. Asked again at every leg because
+        // `save-off` covers only the worlds loaded when it runs, and the jump loads new ones.
+        arrange("save-off");
         resetServerMotionTrace();
         long glueMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R);

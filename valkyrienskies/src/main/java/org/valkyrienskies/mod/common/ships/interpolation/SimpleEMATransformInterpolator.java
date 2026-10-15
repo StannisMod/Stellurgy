@@ -26,6 +26,9 @@ public class SimpleEMATransformInterpolator implements ITransformInterpolator {
     // its actual value, the lower it is the smoother the movement of the ship.
     private final double filterAlpha;
     private static final double DOUBLE_EQUALS_THRESHOLD = 1e-6;
+    // The motion the newest packet declared; this filter does not move by it, but it is the craft's.
+    private final Vector3d declaredLinear = new Vector3d();
+    private final Vector3d declaredAngular = new Vector3d();
 
     public SimpleEMATransformInterpolator(@Nonnull ShipTransform initial, @Nonnull AxisAlignedBB initialAABB, double filterAlpha) {
         this.curTickTransform = initial;
@@ -47,6 +50,14 @@ public class SimpleEMATransformInterpolator implements ITransformInterpolator {
         // This filter chases the newest pose and has no use for the motion behind it. Kept as the
         // comparison an alternative is judged against, not as a fallback to drift back into.
         onNewTransformPacket(newTransform, newAABB);
+        declaredLinear.set(linearX, linearY, linearZ);
+        declaredAngular.set(angularX, angularY, angularZ);
+    }
+
+    @Override
+    public void getDeclaredVelocity(@Nonnull Vector3d outLinear, @Nonnull Vector3d outAngular) {
+        outLinear.set(declaredLinear);
+        outAngular.set(declaredAngular);
     }
 
     @Override

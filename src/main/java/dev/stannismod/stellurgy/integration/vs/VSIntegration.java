@@ -1238,6 +1238,15 @@ public final class VSIntegration {
                 ? null : VSBridge.shipVelocityAtPointFor(world, shipId, x, y, z);
     }
 
+    /** The velocity {@code shipId} DECLARED at a world point, in BLOCKS PER TICK, or null when that ship
+     *  is not loaded on this side: {@link #shipVelocityAtPointFor} without the rate a client's shown
+     *  pose adds while retiring its own prediction error. The craft's motion that a body's own velocity
+     *  is measured against. */
+    public static double[] declaredShipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        return (world == null)
+                ? null : VSBridge.declaredShipVelocityAtPointFor(world, shipId, x, y, z);
+    }
+
     /** Declare where the player this client plays stands on {@code shipId}'s deck, in its frame, for the
      *  movement packet he sends this tick: the server then maps the point through its own pose rather
      *  than re-deriving it from a world position computed through this client's. */

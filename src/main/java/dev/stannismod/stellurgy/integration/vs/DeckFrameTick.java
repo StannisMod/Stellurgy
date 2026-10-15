@@ -511,9 +511,14 @@ public final class DeckFrameTick {
             episode = open(entity, shipId);
             // A body arriving from the world moves with its real world velocity, of which the
             // craft's own motion at that point is the part the deck already accounts for: it enters
-            // with no velocity of its own on the deck, and everything beyond the carry counts as
-            // what the world gave it.
-            double[] v = VSIntegration.shipVelocityAtPointFor(world, shipId,
+            // with no velocity of its own on the deck, and everything beyond that counts as what the
+            // world gave it. The craft's DECLARED motion, not the rate a client's shown pose moves at:
+            // while the client retires a misprediction the shown pose of a still craft moves, and a
+            // body measured against that is handed the client's own error as its velocity on the deck
+            // (C23 DECKSYNC-6). Measured 2026-10-15: a player teleported over a still craft was taken
+            // during a retirement of 0.37 / -0.32 / 0.13 blocks a tick, rose 0.46 and slid 2.4 blocks
+            // in the deck's own frame, and left its edge.
+            double[] v = VSIntegration.declaredShipVelocityAtPointFor(world, shipId,
                     entity.posX, entity.posY, entity.posZ);
             if (v != null) {
                 episode.writtenX = v[0];

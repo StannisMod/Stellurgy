@@ -63,6 +63,17 @@ public interface ITransformInterpolator {
     void getShownVelocity(@Nonnull org.joml.Vector3d outLinear, @Nonnull org.joml.Vector3d outAngular);
 
     /**
+     * The motion the craft DECLARED in the newest pose packet this interpolator took — world frame,
+     * blocks and radians per second — written into {@code outLinear} and {@code outAngular}.
+     *
+     * <p>The other question from {@link #getShownVelocity}: what the craft is doing, without whatever
+     * this client adds while it retires its own prediction error. A body's velocity RELATIVE to the
+     * craft is measured against this; measured against the shown rate, a still craft retiring a
+     * misprediction hands a body standing still in the world the error as a velocity of its own.</p>
+     */
+    void getDeclaredVelocity(@Nonnull org.joml.Vector3d outLinear, @Nonnull org.joml.Vector3d outAngular);
+
+    /**
      * Returns the current smoothed AxisAlignedBB.
      */
     @Nonnull

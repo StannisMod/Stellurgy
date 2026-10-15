@@ -493,6 +493,12 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
         }
     }
 
+    @Override
+    public void getDeclaredVelocity(@Nonnull Vector3d outLinear, @Nonnull Vector3d outAngular) {
+        outLinear.set(linearVelocity);
+        outAngular.set(angularVelocity);
+    }
+
     /** The declared pose carrying whatever is left of the last mispredicted tick. */
     @Nonnull
     private ShipTransform composeShown() {

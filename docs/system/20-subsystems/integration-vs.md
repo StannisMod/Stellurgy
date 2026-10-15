@@ -106,8 +106,11 @@ directions exist keyed by entity and keyed by ship id (`VSBridge.java:1345-1390`
 block (`:247`), by id (`:1513`) and by containment (`:1805`); the facade interpolates previous→current tick
 by slerp for a camera (`VSIntegration.java:1025-1039`). `shipVelocityAtPointFor` answers `v + ω×r` in
 **blocks per TICK** (the engine is per second; converted once at `VSBridge.java:1641-1645`, `SECONDS_PER_TICK`
-`:1586`); on the client it reads the interpolator's shown velocity, not the declared one (`:1629-1634`)
-`[T]` `test/server/TurretOnAShipTest.java:178`. An exception there is not swallowed silently: it logs
+`:1586`); on the client it reads the interpolator's shown velocity, not the declared one
+`[T]` `test/server/TurretOnAShipTest.java:178`. `declaredShipVelocityAtPointFor` answers the same
+`v + ω×r` from the craft's DECLARED motion (`ITransformInterpolator#getDeclaredVelocity` on the client;
+the physics state on the server, where the two are one number) — what a body's own velocity relative to
+the craft is measured against (C23 DECKSYNC-6). `[V]` An exception there is not swallowed silently: it logs
 once per cause per world and answers `null` (`VSBridge.java:1646-1658`, `:1678-1690`). `[V]`
 
 **MECH-VSI-06 — Writes: park, unpark, rigid teleport, altitude band.** `parkShip`/`unparkShip` flip the
@@ -210,7 +213,9 @@ along the deck normal `#aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFl
 wrote its position since — `Entity.setPosition` reports every such write through `DeckFrameTick#noteWrite`,
 `:597`, and a written position is mapped in), given its deck-frame velocity plus whatever the world added
 since (the difference from the world motion the deck itself last wrote, rotated in — an impulse survives
-whole), and its UNMODIFIED update runs there: gravity is deck-down, drag lands on the deck's axes, `move`
+whole; on the tick it is ADMITTED, "what the deck wrote" is the craft's DECLARED velocity at its point,
+`declaredShipVelocityAtPointFor`, so a client retiring a misprediction hands the body nothing — C23
+DECKSYNC-6), and its UNMODIFIED update runs there: gravity is deck-down, drag lands on the deck's axes, `move`
 collides against the deck's real blocks. `mapOut` (`:614-660`) maps position and velocity back to the world,
 re-adds the craft's carry at the point (`shipVelocityAtPointFor`), declares the movement claim of the player
 this client plays, and suppresses the substrate's own drag anchor. The update of an item or mob is

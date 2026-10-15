@@ -1335,12 +1335,20 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // not the bound. Measured 2026-10-04: a dismounted body pinned to its dismount point by a
         // re-applied seed never moved under W, sent nothing for 12 ticks, and the 6-block step was
         // accepted on a 12-tick licence.
+        // Not "exactly one tick": whether his walking packet lands in a given server tick is the phase
+        // of two unsynchronised 20 Hz clocks, and two ticks happen (measured 2026-10-15, alone, on an
+        // empty ring). What the step needs is a licence SMALLER than itself at the interval the bound
+        // actually measured — its region, for this parked craft (no carry), is the bound's own formula.
         String intervals = serverEvents.since(boundMark, "deck_movement_bound_interval");
         java.util.List<String> intervalRecords = Events.records(intervals);
-        scenario().requireArranged("the bound must have judged the walking body the tick before the"
-                        + " step, or the step is licensed by a silence: " + intervals,
-                !intervalRecords.isEmpty()
-                        && Events.number(intervalRecords.get(0), "ticksSinceLastJudged") <= 1.0);
+        double judgedTicks = intervalRecords.isEmpty() ? Double.NaN
+                : Events.number(intervalRecords.get(0), "ticksSinceLastJudged");
+        double licence = dev.stannismod.stellurgy.integration.vs.DeckMovementBound.PLAYER_MAX_OWN_BLOCKS_PER_TICK
+                * judgedTicks + dev.stannismod.stellurgy.integration.vs.DeckMovementBound.REGION_FLOOR_BLOCKS;
+        scenario().requireArranged("the bound must have judged the walking body recently enough that its"
+                        + " region (" + licence + " blocks after " + judgedTicks + " ticks) is smaller than the"
+                        + " " + WILD_STEP_BLOCKS + "-block step, or the step is licensed by a silence: " + intervals,
+                !intervalRecords.isEmpty() && licence < WILD_STEP_BLOCKS);
 
         // WHAT THIS PINS: the BOUND's own verdict on the packet that declared the step, read off its
         // own record — not a position read after the window. A position cannot see the bound: the

@@ -164,7 +164,10 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   (empty buses stack); delayed-harvest keeps the TE alive for the drop. `BlockDataBusBig.java:46,79,92`
 - **MECH-BLK-21 Seat mount.** Activation mounts/creates an `EntityDummy` rider; explosion kills the dummy,
   and a riderless dummy whose seat block is gone by any path removes itself (SHIPCTL-20);
-  `TileWearable` accrues slow wear that can block a crewed launch. `BlockSeat.java:100,79,43`
+  `TileWearable` accrues slow wear that can block a crewed launch. A seat has NO collision box: a body
+  walks through it and stands on what is under it (`BlockSeat#getCollisionBoundingBox` → `NULL_AABB`).
+  Until 2026-10-15 that method took a `World` and overrode nothing, so every seat was a 1/8-block slab of
+  its selection box (since 2016); a step off it was an airborne tick on a deck. `BlockSeat.java:100,79,43`
 - **MECH-BLK-22 Crystal color.** 6-meta crystal, `CrystalColorizer` supplies per-meta tint to block+item.
   `BlockCrystal.java:92` `CrystalColorizer.java:14`
 - **MECH-BLK-23 Charcoal log.** Non-flammable, drops COAL with damage 1. `BlockCharcoalLog.java:33,85,90`

@@ -146,11 +146,18 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   client derived. Differencing a sequence of observations is not a substitute for being told: the
   first member of such a sequence is whatever the client last happened to look at, and the interval
   between them is whatever the code happened to ask.
-  **Satisfied** `[V]`: there is no client derivation — `VSBridge.shipVelocityAtPointFor` does not
-  branch on side: both evaluate `v + omega x r` against the same declared numbers (in blocks per tick:
-  the port converts the substrate's per-second numbers, so no deck reader converts). Measured on a
-  driven climb, at the fastest sample: server declares `1.5333` blocks/tick of carry, the client
-  applies `1.4700` — one number in two places.
+  **Satisfied** `[V]`: both sides evaluate `v + omega x r` (in blocks per tick: the port converts the
+  substrate's per-second numbers, so no deck reader converts), and the client asks two different
+  questions of its interpolator. The CARRY that keeps a held body on the pose it stands on is the rate
+  that shown pose moves at (`VSBridge.shipVelocityAtPointFor`, the interpolator's own record of its
+  step, not an inference). A body's velocity RELATIVE to the craft — what admission subtracts from a body
+  arriving from the world — is measured against the craft's DECLARED motion
+  (`VSBridge.declaredShipVelocityAtPointFor`), because the shown rate includes the client retiring its
+  own misprediction. Measured 2026-10-15 before that split: a player teleported over a STILL craft was
+  admitted while his client retired 0.37 / −0.32 / 0.13 blocks a tick of error, was handed its negative
+  as his velocity on the deck, rose 0.46, slid 2.4 blocks in the deck's own frame and was released off its
+  edge. Measured on a driven climb, at the fastest sample: server declares `1.5333` blocks/tick of carry,
+  the client applies `1.4700` — one number in two places.
   *Why a derivation cannot be rescued:*
   - *The divisor* `[V]`: a derivation that counted CALLS rather than ticks reported a 0.279 rad/s roll
     as 55.5 rad/s — inflated by exactly the 200-tick gap since the previous query. The divisor is
@@ -160,7 +167,7 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   - *The bound is measured, not chosen* `[V]`: 2275 derivations on a real client running the
     crew-capture suite split into two populations with nothing between them — 2266 at one or two
     ticks (the steady state) and 9 at 26–237 ticks (a body meeting a deck again after an interval
-    nobody queried through). Pinned by `VSCrewCaptureContractTest#aHullTopEncounterNeverEntersTheShipFrame`, `VSCrewCaptureContractTest#aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt`. FOR: DECKSYNC-5.
+    nobody queried through). Pinned by `VSCrewCaptureContractTest#aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt`. FOR: DECKSYNC-5.
 
 - **DECKSYNC-7** `[T][BEH]` *(the server bounds what it accepts)* `[A]` The server does not simply ratify a
   client-declared position. Knowing the player's own movement vector — slightly lagging, which is
