@@ -92,7 +92,7 @@ public class BlockProbeLineClientGroupTest extends AbstractSharedClientTest {
             on = "2026-10-07")
     @Pins({"INV-IPW-07", "INV-IPW-08"})
     @Test
-    public void aStruckBlockIsToldItsStageAndKeepsItWhenTheBlockIsPutBack() throws Exception {
+    public void anUntouchedBlockHasNoDamageLineAndAStruckOneIsToldItsStage() throws Exception {
         int[] block = standBeforeOneBlock("minecraft:iron_block");
 
         scenario().asserting("an untouched block carries no damage line");

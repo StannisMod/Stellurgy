@@ -130,13 +130,13 @@ Waila tag, so there is no persistence-key conflict.
   `DataBlockProvider.java:108-114`.
 - **INV-IPW-07 [T][BEH]** A position with no damage record gets no damage line at all, in any probe
   mode. `DamageProbeProvider#addProbeInfo`. Pinned by
-  `BlockProbeLineClientGroupTest#aStruckBlockIsToldItsStageAndKeepsItWhenTheBlockIsPutBack`.
+  `BlockProbeLineClientGroupTest#anUntouchedBlockHasNoDamageLineAndAStruckOneIsToldItsStage`.
 - **INV-IPW-08 [T][BEH]** A position with a damage record gets exactly one damage line, decided on the
   server from that record: its stage out of the block's maximum, or — where the record is a
   DESTRUCTION — "destroyed here" and the recorded block's name instead of a stage; plus "cannot be
   welded" exactly when the welder cannot price the block standing there, and nothing else.
   `DamageProbeProvider#addProbeInfo`. Pinned by
-  `BlockProbeLineClientGroupTest#aStruckBlockIsToldItsStageAndKeepsItWhenTheBlockIsPutBack`,
+  `BlockProbeLineClientGroupTest#anUntouchedBlockHasNoDamageLineAndAStruckOneIsToldItsStage`,
   `BlockProbeLineClientGroupTest#aStruckBlockNothingCraftsIsToldItCannotBeWelded`,
   `BlockProbeLineClientGroupTest#aBlockStandingOnARecordedDestructionIsToldSo`.
 - **INV-IPW-06 [A]** `getWailaHead` assumes `currenttip` has an element 0 to `remove` when
