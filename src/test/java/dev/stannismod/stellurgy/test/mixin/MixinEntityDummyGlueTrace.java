@@ -55,7 +55,16 @@ public abstract class MixinEntityDummyGlueTrace {
         BlockPos seatPos = ((EntityDummy) (Object) this).getSeatPos();
         double[] seat = seatPos == null ? null : VSIntegration.getSeatWorldPosition(self.world, seatPos);
         Entity rider = self.getPassengers().isEmpty() ? null : self.getPassengers().get(0);
-        TestTrace.record(self, "dummy_glue", "\"e\":" + self.getEntityId()
+        // The rider's association with the craft in the physics mod, as his PREVIOUS tick left it: the
+        // mod's end-of-tick drag moves a body by the craft's motion while that association is fresh, and
+        // decays what it last added once it lapses, so it is a second writer of where the rider stands.
+        java.util.Map<String, Object> drag = rider == null ? null : VSIntegration.getEntityShipMovementData(rider);
+        String riderDrag = drag == null ? "null"
+                : "{\"touched\":" + (drag.get("lastTouchedShip") != null)
+                + ",\"ticksSince\":" + drag.get("ticksSinceTouchedShip")
+                + ",\"addedVelY\":" + drag.get("addedVelY")
+                + ",\"riderY\":" + rider.posY + "}";
+        TestTrace.record(self, "dummy_glue", "\"riderDrag\":" + riderDrag + ",\"e\":" + self.getEntityId()
                 + ",\"dummyTick\":" + self.ticksExisted
                 + ",\"riderTick\":" + (rider == null ? -1 : rider.ticksExisted)
                 + ",\"seatPos\":" + (seatPos != null)

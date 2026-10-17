@@ -124,6 +124,8 @@
     "MixinDeckFrameTickShove",
     "MixinDeckFrameReseatPass",
     "MixinEntityDummyGlueTrace",
+    "MixinRiderMoveTrace",
+    "MixinRiderGravityTrace",
     "MixinDeclaredMotionPoseTrace",
     "MixinClientDeckPoseTrace",
     "MixinClientDeckPoseTickTrace",

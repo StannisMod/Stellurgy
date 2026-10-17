@@ -87,7 +87,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinPacketThreadUtilRespawnWindow", "MixinTestClientMuteEvents", "MixinMinecraftSideTrace",
             "MixinDeckBoardingEvents", "MixinDeckFramePlayerUpdate", "MixinDeckFrameReseatPass",
             "MixinDeckFrameTickEvents", "MixinDeckPlayerClaim", "MixinDeclaredMotionPoseTrace",
-            "MixinEntityDummyDismountWindow", "MixinEntityDummyGlueTrace", "MixinGuiGameOverReady",
+            "MixinEntityDummyDismountWindow", "MixinEntityDummyGlueTrace", "MixinRiderMoveTrace", "MixinRiderGravityTrace","MixinGuiGameOverReady",
             "MixinPacketDeckCaptureEvents")));
 
     /**

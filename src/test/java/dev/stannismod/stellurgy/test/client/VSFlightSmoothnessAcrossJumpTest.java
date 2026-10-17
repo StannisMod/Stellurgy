@@ -842,7 +842,9 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // How far the SHIP itself went over the window, from the physics channel's own net move —
         // the one displacement in the set that no interpolation filter has touched.
         leg.travel = netMoveLength(phys);
-        leg.glue = seatGlueLines(clientEvents().since(glueMark, "dummy_glue"));
+        leg.glue = seatGlueLines(clientEvents().since(glueMark, "dummy_glue"))
+                + "\n  rider moves:" + seatGlueLines(clientEvents().since(glueMark, "rider_move"))
+                + "\n  rider gravity:" + seatGlueLines(clientEvents().since(glueMark, "rider_gravity"));
         leg.pose = seatGlueLines(clientEvents().since(glueMark, "pose_tick"))
                 + "\n  arrivals:" + seatGlueLines(clientEvents().since(glueMark, "pose_arrival"));
         return leg;
