@@ -237,7 +237,12 @@ public class TileFuelingStation extends TileInventoriedRFConsumerTank implements
 
         final Fluid currentFluid = currentFluidStack.getFluid();
 
-        // Lock rocket to specific fluids if unset
+        // Lock rocket to specific fluids if unset — never to one its engines cannot burn
+        if (!linkedRocket.acceptsPropellant(currentFluid)) {
+            setRedstoneState(false);
+            fuelingActive = false;
+            return;
+        }
         if ("null".equals(linkedRocket.stats.getFuelFluid())) {
             if ((FuelRegistry.instance.isFuel(FuelType.LIQUID_MONOPROPELLANT, currentFluid) && linkedRocket.getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0)
              || (FuelRegistry.instance.isFuel(FuelType.LIQUID_BIPROPELLANT, currentFluid) && linkedRocket.getFuelCapacity(FuelType.LIQUID_BIPROPELLANT) > 0)) {
@@ -315,14 +320,6 @@ public class TileFuelingStation extends TileInventoriedRFConsumerTank implements
 
             if (delta > 0) {
                 tank.drain(delta, true);
-
-                int baseRate = linkedRocket.stats.getBaseFuelRate(typeToFill);
-                if (baseRate > 0) {
-                    int multRate = (int)(FuelRegistry.instance.getMultiplier(typeToFill, currentFluid) * baseRate);
-                    if (multRate > 0) {
-                        linkedRocket.setFuelConsumptionRate(typeToFill, multRate);
-                    }
-                }
             }
         }
 
@@ -384,6 +381,8 @@ public class TileFuelingStation extends TileInventoriedRFConsumerTank implements
      */
     private boolean canRocketFitFluid(Fluid f) {
         if (f == null || linkedRocket == null) return false;
+        // A propellant the rocket's engines cannot burn is not offered at all (C10 STAT-32).
+        if (!linkedRocket.acceptsPropellant(f)) return false;
 
         boolean fits = false;
 

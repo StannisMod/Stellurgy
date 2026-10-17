@@ -103,6 +103,7 @@ DimensionProperties above): `id`, `posX`, `posY`, `posZ`, `altitude`, `spawnX`/`
 
 **rocket-entity** — `EntityRocket` (entity compound): `data`, `pos`, `loc`, `infrastructure`,
 `satallite`, `orbit`, `flight`, `selection`, `destinationDimId`, `lastDimensionFrom`,
+`drainOwedFuel`/`drainOwedOxidizer` (the fraction of a millibucket the drain still owes, C10 STAT-33),
 `inSpaceFlight`, `motionX`/`Y`/`Z`, `up`/`down`/`left`/`right`, `flightMode`, `DataType`,
 `stellurgyRocketTransferGrace`, and Free-Flight v2 set (`flightAssistOn`, `ffHasLeftGround`,
 `ffLiftoffTargetY`, `ffQuatW`/`X`/`Y`/`Z`, `ffFwd`/`ffStrafe`/`ffVert`/`ffPitch`/`ffYaw`/
@@ -184,8 +185,9 @@ mass for may not be undone by a chunk reload).
 **api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons, a LONG — one nuclear core rates
 4.9e7 N, so an int saturated at a few dozen cores), `mass` (kg), `drillingPower`,
 `passengerSeats`, `dynStats`, `engineLoc`, `workingFluid`, `fuelFluid`, `oxidizerFluid`,
-`playerXPos`/`YPos`/`ZPos`, and the full `fuel*`/`fuelBaseRate*`/`fuelRate*`/`fuelCapacity*`
-family per propellant type. `SatelliteProperties`/`SatelliteRegistry`: `satId`, `dataType`,
+`playerXPos`/`YPos`/`ZPos`, the `fuel*`/`fuelCapacity*` family per propellant type, and the engines:
+`engineFeed`, `exhaustVelocityFactor`, `coreThermalPower`, `coreTemperature`, `nuclearJetEfficiency`.
+`TileNuclearCore`: `fuel` (an item-handler compound). `ItemNuclearFuelElement` (stack): `burnupJoules`. `SatelliteProperties`/`SatelliteRegistry`: `satId`, `dataType`,
 `maxData`, `weight`, `powerGeneration`, `powerStorage`, `satelliteId`, `satelliteName`.
 `DataStorage`: `Data`, `maxData`, `DataType`, `locked`. `SatelliteBase`: `dataType`, `item`,
 `properties`, `dimId`. `StellarBody`: `id`, `name`, `posX`/`Y`/`Z`, `size`, `temperature`,

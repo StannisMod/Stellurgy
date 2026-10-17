@@ -114,7 +114,7 @@ public class StellurgyConfiguration {
     @ConfigProperty(needsSync = true)
     public double rocketThrustMultiplier;
     @ConfigProperty(needsSync = true)
-    public double nuclearCoreThrustRatio;
+    public double nuclearCorePowerRatio;
     @ConfigProperty(needsSync = true)
     public double fuelCapacityMultiplier;
     @ConfigProperty
@@ -537,8 +537,6 @@ public class StellurgyConfiguration {
      */
     @ConfigProperty(needsSync = true)
     public double contentMassScale = 1.0;
-    @ConfigProperty(needsSync = true)
-    public double fuelMassScale = 1.0;
     @ConfigProperty(needsSync = true)
     public double minLaunchTWR = 1.05;
     @ConfigProperty(needsSync = true)
@@ -986,13 +984,13 @@ public class StellurgyConfiguration {
         stellurgyConfig.canBeFueledByHand = config.get(ROCKET, "canBeFueledByHand", true, "Allow rockets to be fueled by hand.").getBoolean();
         stellurgyConfig.nuclearRocketsRespectArtifactGating = config.get(ROCKET, "nuclearRocketsRespectArtifactGating", true, "Nuclear rocket should respect artifact gating for planets").getBoolean();
         stellurgyConfig.nuclearRocketsRequireArtifactForGatedStations = config.get(ROCKET, "nuclearRocketsRequireArtifactForGatedStations", false, "If true, nuclear rockets that respect artifact gating also require the artifact when targeting a space station inside a gated planetary system. " + "If false, station destinations are exempt to avoid soft-locking players who left the artifact in the station or warp controller." + "This is meant as a Multiplayer / Server strictness-option").getBoolean();
-        liquidMonopropellant = config.get(ROCKET, "rocketFuels", new String[]{"rocketfuel;10"}, "List of fluid names for valid monopropellants").getStringList();
-        liquidBipropellantFuel = config.get(ROCKET, "rocketBipropellants", new String[]{"hydrogen;10"}, "List of fluid names for valid bipropellant fuels").getStringList();
-        liquidBipropellantOxidizer = config.get(ROCKET, "rocketOxidizers", new String[]{"oxygen;10"}, "List of fluid names for valid bipropellant oxidizers").getStringList();
-        liquidNuclearWorkingFluid = config.get(ROCKET, "rocketNuclearWorkingFluids", new String[]{"hydrogen;10"}, "List of fluid names for valid nuclear working fluids").getStringList();
-        stellurgyConfig.rocketThrustMultiplier = config.get(ROCKET, "thrustMultiplier", 1f, "Multiplier for engine thrust.").getDouble();
+        liquidMonopropellant = config.get(ROCKET, "rocketFuels", new String[]{"hydrazine"}, "Fluid names a monopropellant tank accepts. A fluid burns alone only if its row in weights.json states a monopropellantExhaustVelocity").getStringList();
+        liquidBipropellantFuel = config.get(ROCKET, "rocketBipropellants", new String[]{"hydrogen"}, "Fluid names a bipropellant fuel tank accepts. Every fuel here and every oxidizer below must form a pair with a row in weights.json's propellantPairs, or a bipropellant rocket is refused at assembly").getStringList();
+        liquidBipropellantOxidizer = config.get(ROCKET, "rocketOxidizers", new String[]{"oxygen"}, "Fluid names an oxidizer tank accepts").getStringList();
+        liquidNuclearWorkingFluid = config.get(ROCKET, "rocketNuclearWorkingFluids", new String[]{"hydrogen"}, "Fluid names a nuclear working-fluid tank accepts. Its exhaust velocity follows the core temperature and the fluid's molarMass row in weights.json").getStringList();
+        stellurgyConfig.rocketThrustMultiplier = config.get(ROCKET, "thrustMultiplier", 1f, "Multiplier on every engine's maximum thrust AND its maximum mass flow together: engines get bigger, the exhaust velocity and therefore the delta-v of a tank do not change").getDouble();
         stellurgyConfig.fuelCapacityMultiplier = config.get(ROCKET, "fuelCapacityMultiplier", 1f, "Multiplier for fuel tank capacity.").getDouble();
-        stellurgyConfig.nuclearCoreThrustRatio = config.get(ROCKET, "nuclearCoreThrustRatio", 1.0, "Multiplier for nuclear core thrust.").getDouble();
+        stellurgyConfig.nuclearCorePowerRatio = config.get(ROCKET, "nuclearCorePowerRatio", 1.0, "Multiplier on a nuclear core's rated thermal power (1.1 GW, a NERVA-class reactor)").getDouble();
         stellurgyConfig.automaticRetroRockets = config.get(ROCKET, "autoRetroRockets", true, "Setting to false will disable the retrorockets that fire automatically on reentry on both player and automated rockets").getBoolean();
         stellurgyConfig.stationClearanceHeight = config.getInt("stationClearance", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to clear a space station. A planet's orbit line is not set here: it is derived from the planet's radius, or stated per planet as <orbitHeight> in the planet file. Burn length here is used by itself when launching from a station to either another station or the same station, or to the planet it is orbiting. It is used in conjunction with the TBI burn when launching to a moon or asteroid");
         stellurgyConfig.transBodyInjection = config.getInt("transBodyInjection", ROCKET, 0, 0, Integer.MAX_VALUE, "How long the burn for trans-body injection is - this is performed soley after entering orbit and is in blocks - WARNING: This property is not taken into account by any machines when determining whether the rocket is fit to fly or not - Rockets that can reach LEO and so are flightworthy may not make TBI and will fall back to the parent planet. When enabled, the burn sequence is [Burn to LEO], [TBI Burn] when launching from a planet to moons or asteroids; and the sequence is [Station clearance burn], [TBI Burn] when launching from a station to a moon or asteroid. This distance varies by object distance");
@@ -1012,7 +1010,6 @@ public class StellurgyConfiguration {
             contentMassScale = 1.0;
         }
         stellurgyConfig.contentMassScale = contentMassScale;
-        stellurgyConfig.fuelMassScale = config.get(ROCKET, "fuelMassScale", 1.0, "Global multiplier applied to the mass of fuel/oxidizer carried by a rocket. Raise to make full tanks weigh more relative to thrust").getDouble();
         stellurgyConfig.minLaunchTWR = config.get(ROCKET, "minLaunchTWR", 1.05, "Minimum thrust-to-weight ratio (thrust / wet weight) a rocket needs before it is allowed to launch. 1.0 means it can barely lift itself; values above 1.0 add a safety margin").getDouble();
         stellurgyConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses. 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty entirely (condition then only affects the failure roll). Independent of partsWearSystem, which gates only whether wear ACCRUES").getDouble();
         stellurgyConfig.wearWarnProbability = config.get(ROCKET, "wearWarnProbability", 0.05, "Failure probability (0..1) at or above which the pilot is warned before launch that the rocket is worn. Also the threshold that blocks launch when wearCriticalBlocksLaunch is true").getDouble();
@@ -1093,70 +1090,42 @@ public class StellurgyConfiguration {
         }
     }
 
+    /**
+     * Registers each named fluid in {@code role}. An entry may still carry the old {@code name;N}
+     * multiplier form; the multiplier no longer exists — a fluid's worth is its density and exhaust
+     * velocity in weights.json — so it is dropped, and said so.
+     */
+    private static void registerFuels(String[] entries, FuelType role, String what) {
+        for (String entry : entries) {
+            String name = entry;
+            int semicolon = entry.indexOf(';');
+            if (semicolon >= 0) {
+                name = entry.substring(0, semicolon);
+                logger.warn("Fuel entry \"" + entry + "\": the ';' multiplier no longer exists and is ignored;"
+                        + " a fluid's worth comes from its row in weights.json");
+            }
+            Fluid fluid = FluidRegistry.getFluid(name);
+            if (fluid != null) {
+                logger.info("Registering fluid " + name + " as " + what);
+                FuelRegistry.instance.registerFuel(role, fluid);
+            } else {
+                logger.warn("Fluid name " + name + " is not a registered fluid!");
+            }
+        }
+    }
+
     public static void loadPostInit() {
         StellurgyConfiguration stellurgyConfig = ownConfig;
 
         //Register fuels
         logger.info("Start registering liquid rocket fuels");
-        for (String str : liquidMonopropellant) {
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            float multiplier = 1.0f;
-            if (splitStr.length > 1) {
-                multiplier = Float.parseFloat(splitStr[1]);
-            }
-
-            if (fluid != null) {
-                logger.info("Registering fluid " + str + " as rocket monopropellant");
-                FuelRegistry.instance.registerFuel(FuelType.LIQUID_MONOPROPELLANT, fluid, multiplier);
-            } else
-                logger.warn("Fluid name" + str + " is not a registered fluid!");
-        }
+        registerFuels(liquidMonopropellant, FuelType.LIQUID_MONOPROPELLANT, "rocket monopropellant");
         liquidMonopropellant = null; //clean up
-        for (String str : liquidBipropellantFuel) {
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            float multiplier = 1.0f;
-            if (splitStr.length > 1) {
-                multiplier = Float.parseFloat(splitStr[1]);
-            }
-
-            if (fluid != null) {
-                logger.info("Registering fluid " + str + " as rocket bipropellant");
-                FuelRegistry.instance.registerFuel(FuelType.LIQUID_BIPROPELLANT, fluid, multiplier);
-            } else
-                logger.warn("Fluid name" + str + " is not a registered fluid!");
-        }
+        registerFuels(liquidBipropellantFuel, FuelType.LIQUID_BIPROPELLANT, "rocket bipropellant");
         liquidBipropellantFuel = null; //clean up
-        for (String str : liquidBipropellantOxidizer) {
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            float multiplier = 1.0f;
-            if (splitStr.length > 1) {
-                multiplier = Float.parseFloat(splitStr[1]);
-            }
-
-            if (fluid != null) {
-                logger.info("Registering fluid " + str + " as rocket oxidizer");
-                FuelRegistry.instance.registerFuel(FuelType.LIQUID_OXIDIZER, fluid, multiplier);
-            } else
-                logger.warn("Fluid name" + str + " is not a registered fluid!");
-        }
+        registerFuels(liquidBipropellantOxidizer, FuelType.LIQUID_OXIDIZER, "rocket oxidizer");
         liquidBipropellantOxidizer = null; //clean up
-        for (String str : liquidNuclearWorkingFluid) {
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            float multiplier = 1.0f;
-            if (splitStr.length > 1) {
-                multiplier = Float.parseFloat(splitStr[1]);
-            }
-
-            if (fluid != null) {
-                logger.info("Registering fluid " + str + " as rocket nuclear working fluid");
-                FuelRegistry.instance.registerFuel(FuelType.NUCLEAR_WORKING_FLUID, fluid, multiplier);
-            } else
-                logger.warn("Fluid name" + str + " is not a registered fluid!");
-        }
+        registerFuels(liquidNuclearWorkingFluid, FuelType.NUCLEAR_WORKING_FLUID, "rocket nuclear working fluid");
         liquidNuclearWorkingFluid = null; //clean up
         logger.info("Finished registering liquid rocket fuels");
 

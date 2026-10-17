@@ -3830,9 +3830,8 @@ public class TestProbeCommand extends CommandBase {
     private final java.util.Map<String, Double> probeWeightOverrides = new java.util.LinkedHashMap<>();
     private final java.util.Map<String, Double> probeWeightRegex = new java.util.LinkedHashMap<>();
     private dev.stannismod.stellurgy.util.WeightEngine probeWeights;
-    /** The config's two weight scales before `weight` first changed them; `weight reset` puts them back. */
+    /** The config's content scale before `weight` first changed it; `weight reset` puts it back. */
     private Double parkedContentScale;
-    private Double parkedFuelScale;
 
     /**
      * The chunk tickets `chunk hold` is holding. Probe-local fixture state, written and read only by
@@ -9882,10 +9881,15 @@ public class TestProbeCommand extends CommandBase {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("amount", rocket.stats.getFuelAmount(type));
                 entry.put("capacity", rocket.stats.getFuelCapacity(type));
-                entry.put("rate", rocket.stats.getFuelRate(type));
                 fuel.put(type.name(), entry);
             }
             info.put("fuel", fuel);
+            info.put("fuelFluid", rocket.stats.getFuelFluid());
+            info.put("oxidizerFluid", rocket.stats.getOxidizerFluid());
+            info.put("workingFluid", rocket.stats.getWorkingFluid());
+            info.put("exhaustVelocity", rocket.stats.getExhaustVelocity().orElse(-1));
+            info.put("mass_kg", rocket.stats.getMass());
+            info.put("corePowerW", rocket.stats.getCoreThermalPower());
             info.put("thrust", rocket.stats.getThrust());
             info.put("dry_mass_kg", rocket.stats.getDryMass());
             info.put("breakingProb", rocket.storage.getBreakingProbability());
@@ -10494,6 +10498,7 @@ public class TestProbeCommand extends CommandBase {
                 int cap = rocket.stats.getFuelCapacity(type);
                 if (cap > 0) rocket.setFuelAmount(type, cap);
             }
+            rocket.stats.nameUnnamedTanks();
             send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"fuelFilled\":true}");
             return;
         }
@@ -10520,6 +10525,7 @@ public class TestProbeCommand extends CommandBase {
                     int cap = rocket.stats.getFuelCapacity(type);
                     if (cap > 0) rocket.setFuelAmount(type, cap);
                 }
+                rocket.stats.nameUnnamedTanks();
             }
             rocket.startFreeFlight();
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
@@ -10956,6 +10962,12 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"scan status not SUCCESS\",\"status\":\"" + statusName + "\"}");
                 return;
             }
+            // The scan's ascent forecast, as it stood when the scan judged the craft: null when the scan
+            // made none (a ship, fuel not required, no line).
+            dev.stannismod.stellurgy.api.propulsion.ClassicAscent.Forecast scanForecast = builder.getAscentForecast();
+            String forecastJson = scanForecast == null ? "null"
+                    : "{\"reaches\":" + scanForecast.reaches + ",\"apexY\":" + scanForecast.apexY
+                            + ",\"lineY\":" + scanForecast.lineY + "}";
             // 4. Mint this craft's DURABLE ship id while its flight computer is still on the pad, and
             //    hand it back below. THE CALLER THAT BUILT THE SHIP IS THE ONE CALLER THAT NEVER HAS
             //    TO GUESS: without this a scenario has to go looking for its own craft afterwards —
@@ -11023,6 +11035,7 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"afcPos\":" + (padComputer == null ? "null" : "[" + padComputer.getX() + ","
                             + padComputer.getY() + "," + padComputer.getZ() + "]")
                     + ",\"scanReadout\":" + tier2
+                    + ",\"ascentForecast\":" + forecastJson
                     + "}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
@@ -11068,6 +11081,7 @@ public class TestProbeCommand extends CommandBase {
                     rocket.setFuelAmount(type, cap);
                 }
             }
+            rocket.stats.nameUnnamedTanks();
         }
         try {
             switch (mode) {
@@ -17954,6 +17968,42 @@ public class TestProbeCommand extends CommandBase {
      * Returns the absolute world coordinates of the builder for use with
      * {@code /stellurgytest rocket assemble}.
      */
+    /**
+     * The nuclear cores in the row {@code x-1..x+1} at {@code (y, z)} as the fixture left them: each one's
+     * tile, the item in its slot and the thermal power, W, it reports now.
+     */
+    private static String corePower(World world, int x, int y, int z) {
+        StringBuilder out = new StringBuilder("[");
+        for (int dx = -1; dx <= 1; dx++) {
+            BlockPos p = new BlockPos(x + dx, y, z);
+            net.minecraft.block.Block b = world.getBlockState(p).getBlock();
+            if (b instanceof dev.stannismod.stellurgy.api.IRocketNuclearCore) {
+                TileEntity te = world.getTileEntity(p);
+                String fuel = te instanceof dev.stannismod.stellurgy.tile.TileNuclearCore
+                        ? String.valueOf(((dev.stannismod.stellurgy.tile.TileNuclearCore) te).fuel().getStackInSlot(0)
+                                .getItem().getRegistryName())
+                        : "null";
+                if (out.length() > 1) {
+                    out.append(',');
+                }
+                out.append("{\"dx\":").append(dx).append(",\"tile\":\"")
+                        .append(te == null ? "null" : te.getClass().getSimpleName()).append("\",\"fuel\":\"").append(fuel)
+                        .append("\",\"powerW\":")
+                        .append(((dev.stannismod.stellurgy.api.IRocketNuclearCore) b).getThermalPower(world, p)).append('}');
+            }
+        }
+        return out.append(']').toString();
+    }
+
+    /** Loads one fresh fuel element into the nuclear core at {@code pos} through the core's own slot. */
+    private static void loadFuelElement(World world, BlockPos pos) {
+        TileEntity te = world.getTileEntity(pos);
+        if (te instanceof dev.stannismod.stellurgy.tile.TileNuclearCore) {
+            ((dev.stannismod.stellurgy.tile.TileNuclearCore) te).fuel().insertItem(0,
+                    new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.api.StellurgyItems.itemNuclearFuelElement), false);
+        }
+    }
+
     private void handleFixture(MinecraftServer server, ICommandSender sender, String[] args) {
         // pre-load a 3×3 chunk area around the fixture origin
         // so per-variant setBlockState below hits loaded chunks. ROCKET
@@ -18071,7 +18121,11 @@ public class TestProbeCommand extends CommandBase {
             //                           where below = air -> does NOT contribute,
             //                           thrustNuclearReactorLimit = 0,
             //                           min(nozzle, 0) = 0, stats.thrust = 0.
-            boolean includeNuclearStack = "with-nuclear-stack".equals(variant);
+            //   with-nuclear-stack-unfuelled — the stack with its cores left EMPTY of fuel; the other
+            //                           two variants load one fresh fuel element into every core
+            //                           they place, the way a player does, through the core's own slot.
+            boolean nuclearUnfuelled = "with-nuclear-stack-unfuelled".equals(variant);
+            boolean includeNuclearStack = "with-nuclear-stack".equals(variant) || nuclearUnfuelled;
             boolean includeNuclearMisplaced = "with-nuclear-misplaced".equals(variant);
             // additive variant
             // dropping a single BlockMiningDrill at (rocketX+1, rocketY+3, z)
@@ -18293,6 +18347,10 @@ public class TestProbeCommand extends CommandBase {
                         nuclearCore.getDefaultState());
                 world.setBlockState(new BlockPos(rocketX + 1, rocketY + 1, rocketZ),
                         nuclearCore.getDefaultState());
+                if (!nuclearUnfuelled) {
+                    loadFuelElement(world, new BlockPos(rocketX - 1, rocketY + 1, rocketZ));
+                    loadFuelElement(world, new BlockPos(rocketX + 1, rocketY + 1, rocketZ));
+                }
             }
             if (includeNuclearMisplaced) {
                 // Place a single nuclear core at the CENTER column (rocketX, …)
@@ -18301,6 +18359,7 @@ public class TestProbeCommand extends CommandBase {
                 // fails -> reactorLimit stays 0 -> final thrust = 0.
                 world.setBlockState(new BlockPos(rocketX, rocketY + 1, rocketZ),
                         nuclearCore.getDefaultState());
+                loadFuelElement(world, new BlockPos(rocketX, rocketY + 1, rocketZ));
             }
             if (includeMiningDrill) {
                 // Drop a single BlockMiningDrill at (rocketX+1, rocketY+3, z).
@@ -18526,7 +18585,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"pilotSeatFromFlightComputer\":" + seatFromComputer
                     + ",\"jumpBayFromFlightComputer\":" + jumpBayFromComputer
                     + ",\"wheelPos\":" + (wheel == null ? "null"
-                            : "[" + wheel.getX() + "," + wheel.getY() + "," + wheel.getZ() + "]") + "}");
+                            : "[" + wheel.getX() + "," + wheel.getY() + "," + wheel.getZ() + "]")
+                    + ",\"cores\":" + corePower(world, rocketX, rocketY + 1, rocketZ) + "}");
             return;
         }
         if (args.length >= 5 && "machine".equalsIgnoreCase(args[0])
@@ -21028,7 +21088,6 @@ public class TestProbeCommand extends CommandBase {
      *   fluid <fluid-name> <amount>   — resolved mass (kg) of a FluidStack-equivalent
      *   set <registry-id> <mass>      — register an individual override
      *   set-regex <pattern> <mass>    — register a regex rule
-     *   fuel-scale <value>            — set StellurgyConfiguration.fuelMassScale
      *   content-scale <value>         — set StellurgyConfiguration.contentMassScale
      *   te <dim> <x> <y> <z>          — the block's whole weight and the CONTENT part of it
      *
@@ -21039,7 +21098,7 @@ public class TestProbeCommand extends CommandBase {
      */
     private void handleWeight(ICommandSender sender, String[] args) {
         if (args.length == 0) {
-            send(sender, "{\"error\":\"unknown weight subcommand — try reset|item|fluid|set|set-regex|fuel-scale|content-scale|te\"}");
+            send(sender, "{\"error\":\"unknown weight subcommand — try reset|item|fluid|set|set-regex|content-scale|te\"}");
             return;
         }
         dev.stannismod.stellurgy.api.StellurgyConfiguration config =
@@ -21061,10 +21120,6 @@ public class TestProbeCommand extends CommandBase {
                 if (parkedContentScale != null) {
                     config.contentMassScale = parkedContentScale;
                     parkedContentScale = null;
-                }
-                if (parkedFuelScale != null) {
-                    config.fuelMassScale = parkedFuelScale;
-                    parkedFuelScale = null;
                 }
                 info.put("reset", true);
                 info.put("materialCount", we.materialCount());
@@ -21105,13 +21160,6 @@ public class TestProbeCommand extends CommandBase {
                 probeWeights = null;
                 info.put("regex", args[1]);
                 info.put("value", Double.parseDouble(args[2]));
-                break;
-            case "fuel-scale":
-                if (parkedFuelScale == null) {
-                    parkedFuelScale = config.fuelMassScale;
-                }
-                config.fuelMassScale = Double.parseDouble(args[1]);
-                info.put("fuelScale", Double.parseDouble(args[1]));
                 break;
             case "content-scale":
                 if (parkedContentScale == null) {

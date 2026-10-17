@@ -8,20 +8,32 @@ Files: `api/StatsRocket.java` (808), `api/EntityRocketBase.java` (156), `api/Roc
 
 | type | role |
 |------|------|
-| `StatsRocket` | per-fuel-type amount/rate/capacity/base-rate ints, thrust (newtons), dry mass (kg), seats, engine locs, dyn tags |
+| `StatsRocket` | per-fuel-type amount/capacity ints, rated thrust (newtons), dry mass (kg), the engines' feed role, cycle fraction and core power, seats, engine locs, dyn tags |
 | `EntityRocketBase` | abstract MC entity: `StatsRocket stats`, infrastructure link list, abstract fuel API |
 | `RocketEvent` | Forge `EntityEvent` family: launch/land/orbit/dismantle lifecycle |
-| `IRocketEngine` / `IRocketNuclearCore` | block tile contract: thrust + fuel-rate / max-thrust, all in newtons |
+| `IRocketEngine` / `IRocketNuclearCore` | block contracts: an engine's `EngineDesign`; a core's thermal power (W), temperature (K) and fuel spending |
+| `api/propulsion/*` | the engine law (`EngineDesign`, `EngineRegime`, `NuclearThermal`), the drain (`PropellantDrain`) and the tier-1 climb and forecast (`ClassicAscent`) — C10 STAT-30..34 |
 | `IFuelTank` / `IIntake` / `IMiningDrill` | block tile contracts: fill volume / intake amt / mining speed+power |
 
 ## Mechanics
 
 ### MECH-API-06 — per-fuel-type slot dispatch
-`StatsRocket` stores seven parallel int quadruples (amount / rate / capacity / base-rate) keyed by
-`FuelRegistry.FuelType`; every accessor is a `switch(type)` over the enum
-(`StatsRocket:304-501`). `addFuelAmount` clamps to remaining capacity and returns the delta
-(`:539-578`). `getFuelRate`/`getBaseFuelRate` short-circuit to 0 when `rocketRequireFuel=false`
-(`:359,:388`) — the config flag gates *consumption* at the single read point.
+`StatsRocket` stores seven parallel int pairs (amount / capacity) keyed by `FuelRegistry.FuelType`;
+every accessor is a `switch(type)` over the enum. `addFuelAmount` clamps to remaining capacity and
+returns the delta. There is no stored rate: what a burn takes is the drain law (C10 STAT-33), gated by
+`rocketRequireFuel` where it is spent (`EntityRocket#burnPropellant`).
+
+### MECH-API-13 — the engines and their propellant
+A scan writes the engines' feed role (`engineFeed`), their rated thrust, the cluster's cycle fraction
+(`exhaustVelocityFactor`, thrust-weighted harmonic) and, for nuclear nozzles, the counted cores'
+thermal power, mean temperature and the nozzles' jet efficiency (`RocketEngineTally#applyTo`).
+`getExhaustVelocity` derives `v_e` from the loaded fluid(s) through the weight table (C10 STAT-32) —
+empty when nothing burnable is loaded; for a nuclear craft with no working fluid yet, the accepted
+fluid with the fastest exhaust (least thrust). `getThrust` applies `thrustMultiplier` and, for nuclear,
+the power cap `2ηP/v_e` (STAT-30). `getUsablePropellantMass` is the mass that burns (a pair stops when
+either half runs out at its mixture ratio); `forecastAscent` runs `ClassicAscent` on these (STAT-34);
+`nameUnnamedTanks` gives an unnamed tank the heaviest accepted fluid, the choice `withTanksFull` makes.
+`StatsRocket#getExhaustVelocity`, `#getThrust`, `#forecastAscent` `[V]`.
 
 ### MECH-API-07 — weight with fluid weight, and the one gravity expression
 **On this line the units migration has NOT landed** (it lives on `feature/ship-construction-and-stats`,
@@ -81,8 +93,7 @@ declarations are owned here (`RocketEvent.java`).
 
 - **INV-API-06 [V][SYS]** `INVALID_SEAT = Integer.MIN_VALUE`; `hasSeat()` ⇔ `pilotSeatPos.x != INVALID_SEAT`
   (`StatsRocket:23,:583-585`). Seat NBT stores the pilot seat as `playerXPos/Y/Z` (`:694-696`). FOR: save format: rocket stats NBT.
-- **INV-API-07 [V][BEH]** Fuel rate/base-rate are forced to 0 when `rocketRequireFuel=false` — the only
-  gate (`StatsRocket:359,:388`); amount/capacity are unaffected.
+- **INV-API-07** — retired.
 - **INV-API-08 [V][BEH]`[T]`** `canLaunch(g)` returns true whenever `advancedWeightSystem` is disabled
   (`StatsRocket.java:249-251`; `RocketLaunchDepthTest#turningTheWeightSystemOffLiftsTheWeightGate`),
   and judges the weight at the gravity it is handed
@@ -104,8 +115,8 @@ declarations are owned here (`RocketEvent.java`).
 
 `StatsRocket` NBT keys: see `C1-nbt-persistence`. Notes: the whole block sits in the `rocketStats` wrapper compound; `thrust` is an int
 in newtons and `mass` a float in kg (no migration); `fuelFluid`/`oxidizerFluid`/`workingFluid` default to the string `"null"`;
-`fuelBaseRate{Type}` is written float and read float or int (cross-readable); `dynStats` is optional; `engineLoc` is encoded twice
-over as `int[]` triples.
+`engineFeed` is the role's id (`-1` for none), `coreThermalPower`/`coreTemperature` doubles; `dynStats` is optional; `engineLoc` is
+encoded twice over as `int[]` triples.
 
 ## Integration seams
 

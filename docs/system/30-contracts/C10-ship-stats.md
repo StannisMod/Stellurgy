@@ -66,9 +66,10 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
 
   | what | where | value |
   |---|---|---|
-  | block mass table | `util/WeightEngine.java` `defaultMaterials()` | kilograms per block; ordinary block **500**, wood 750, stone 2000, iron 5000, anvil 7500; `fallback` 500, `fluidFallback` 5 kg per mB |
-  | Stellurgy component masses | same file | tank 1000, motor 10 000, guidance 9000, pressure tank / satellite hatch 25 000 |
-  | engine thrust | `block/BlockRocketMotor` and siblings | **newtons**: basic and bipropellant 490 500, nuclear nozzle 1 716 750, advanced 2 452 500, nuclear core limit 49 050 000 |
+  | block mass table | `util/WeightEngine.java` `defaultMaterials()` | kilograms per block; ordinary block **500**, wood 750, stone 2000, iron 5000, anvil 7500; `fallback` 500 |
+  | fluid mass | same file, `defaultFluids()` | a mB is a litre of the condensed form: density / 1000 kg (`weight-mass` INV-WGT-09) |
+  | Stellurgy component masses | same file | an empty propellant tank is 10 % of what it holds full (1 m³ of its role's fluid): hydrazine 102.1, hydrogen (bipropellant fuel, nuclear working fluid) 7.08, oxidizer 114.1; motor 10 000, guidance 9000, pressure tank / satellite hatch 25 000 |
+  | engine thrust | `block/BlockRocketMotor` and siblings (`getEngineDesign`) | **newtons**, rated `F_max`: basic and bipropellant 490 500, nuclear nozzle 1 716 750, advanced 2 452 500; a nuclear core is rated in WATTS, 1.1·10⁹ (STAT-35) |
   | the field | `api/StatsRocket` | `mass`; `getMass()`, `getDryMass()`; NBT key `mass` (C1) |
   | local weight | `api/StatsRocket.weightNewtons` | `mass · STANDARD_GRAVITY (9.81) · gravityMultiplier`, one expression every gravity-dependent quantity reads |
 
@@ -347,8 +348,9 @@ is per engine block; there is no feed network. Propellant `v_e` is the propellan
 for both tiers.
 
 *Stress-test.* Falsifiable as properties: at fixed power, thrust falls as `v_e` rises for a
-power-limited family and does not depend on power for chemistry. Code: violated — `IRocketEngine`
-carries an integer thrust and a per-tick fuel rate that imply 24.5–86 km/s (measured).
+power-limited family and does not depend on power for chemistry. Code: the law, the built-in bell and
+the families are written (STAT-30..32, `api/propulsion/`); the regime switch, boost columns, pressure
+bands and overdrive are not.
 Consistent with STAT-16 (`u ≤ 1` against `F_max`; an overdrive is an explicit command above it, still
 under STAT-7a). Edge: a regime switch is a construction-revision event (STAT-19), at most one rebuild per
 `REBUILD_MIN_TICKS`.
@@ -411,9 +413,9 @@ A ratio EQUAL to the threshold launches; the next number above refuses. `[V]` `S
 ### STAT-28 `[V]``[T]` — `advancedWeightSystem` off ⇒ no weight gate anywhere
 The gate answers yes; the assemblers therefore build anything with thrust. Out of this clause, by
 design: a craft with NO thrust is still refused by the assembler as `NOENGINES` (it has no engines,
-which is not a weight question), and `hasMissionFuelFor`'s "cannot lift itself here"
-(`TWR ≤ 1` at local gravity, `entity/EntityRocket.java:1404`) belongs to the fuel mechanic and is
-disabled with `rocketRequireFuel`. `[V]` `StatsRocket.java:320-322`.
+which is not a weight question), and the ascent forecast's "cannot climb here" (a craft whose first
+burning tick does not rise is forecast short, `api/propulsion/ClassicAscent#run`) belongs to the fuel
+mechanic, warns rather than refuses (STAT-34) and is disabled with `rocketRequireFuel`. `[V]` `StatsRocket.java:320-322`.
 `[T]` `RocketLaunchDepthTest#turningTheWeightSystemOffLiftsTheWeightGate`.
 
 ### STAT-29 `[V]``[T]` — ONE decision: every surface that judges launchability asks the gate
@@ -428,8 +430,7 @@ assembler builds can launch full from where it was built. A tank with no fluid c
 weighed full of the HEAVIEST fluid the fuel registry accepts for it
 (`StatsRocket.withTanksFull`, `:332`; `api/fuel/FuelRegistry.java`): ruling 1 says "full" and leaves the
 fluid open, and only the heaviest makes "built ⇒ launchable full" hold for every fuel the craft can
-take. In the shipped config every fuel weighs the weight engine's `fluidFallback`, so the choice is
-invisible until a pack gives fuels their own weights. The heaviest-fluid choice and the absence of a
+take; every shipped fuel has its own density row (INV-WGT-09). The heaviest-fluid choice and the absence of a
 one-gee no-arg `canLaunch()` / `getThrustToWeightRatio()` in the public API were ratified by the
 maintainer 2026-10-03 (*"всё утверждаю"*).
 `[T]` `RocketLaunchDepthTest#theAssemblerAndTheWeightGateGiveOneVerdictOnOneCraft` (refusal verdict
@@ -443,9 +444,84 @@ only one. Neither is ruled; a change to either must name it.
 
 Cost, in one line each: one gravity argument, and the assemblers ask the gate instead of keeping a
 copy; the assembler's verdict and the launch's are the same function on the same state; every tier-1
-launch and every assembler scan is affected, and a pack whose fuels weigh more than `fluidFallback`
-sees fewer crafts build; a moon is easier to leave than Earth, and a rocket that cannot launch full is
+launch and every assembler scan is affected, and a pack whose fuels are denser sees fewer crafts
+build; a moon is easier to leave than Earth, and a rocket that cannot launch full is
 refused at the assembler instead of on the pad.
+
+## The engine law and the propellant bill — STAT-30..37 (both tiers)
+
+STAT-23's law made concrete. **Terms.** **design** = what an engine block is built as, independent of
+what feeds it: family, `F_max`, the fraction of the propellant's exhaust velocity its cycle reaches,
+its built-in bell, and `η` for a power-limited family (`api/propulsion/EngineDesign`). **regime** = the
+design fed one propellant: `v_e`, `ṁ_max = F_max / v_e`, `F_max`, `η`, `A_exit`
+(`api/propulsion/EngineRegime`). **the tick** = the duration one tier-1 flight tick integrates over,
+`τ = sqrt(0.08 / 9.81) ≈ 0.0903 s` (STAT-6's vanilla gravity reference).
+
+Maintainer rulings these rest on, verbatim: *"1a, 2a, 3 - а кто такой гидролокс?"* and *"3a, гидразин"*
+(2026-10-16: a millibucket is a litre of the fluid's condensed form; one player-editable table; the
+inherited monopropellant is hydrazine); *"ок"* to the four family shapes, the touching core stack, the
+pair rows and the rename, and *"да-да"* to the advanced motor as a higher chamber pressure with a
+built-in bell (2026-10-17); *"По рекомендациям"* to the drain law, the warning fuel check, the built-in
+bell and the retired knobs (2026-10-17).
+
+- **STAT-30** `[T][SYS]` **The thrust law.** A regime fed power `P` gives
+  `F = min(ṁ_max·v_e, 2ηP/v_e, F_max)` and takes `F / v_e` of mass flow; a CHEMICAL regime's power
+  term is infinite, so its thrust does not depend on `P`; at a fixed `P` a power-limited regime's
+  thrust FALLS as its `v_e` rises wherever the power term binds; `P = 0` gives no thrust to a
+  power-limited family. The four family shapes are one type: chemical, nuclear thermal (the power of
+  its core stack, STAT-35), electric (a fixed `v_e` set by the build) and the divertor (two regimes at
+  the ends of its `v_e` range). REGIONS: `chemical`, `nuclear thermal`, `electric`, `divertor`,
+  `power binds`, `structure binds`, `no power`. FOR: STAT-23; maintainer ruling 2026-10-17 ("ок"). Pinned by `PropulsionLawsTest#theThrustLawHoldsForEveryFamilyShape`, `PropulsionLawsTest#atFixedPowerAPowerLimitedEngineLosesThrustAsItsExhaustQuickens`.
+- **STAT-31** `[T][SYS]` **The outside pressure.** Mass flow per throttle does not depend on the
+  ambient pressure; the force is `F − p_amb·A_exit`, never below zero (a separated nozzle pushes
+  nothing; separation's cost in damage is not built). A built-in bell's exit area is measured as
+  `A_exit = F_max·(1 − f_sl)/p₀`, `f_sl` the sea-level-to-vacuum thrust ratio of a measured engine of
+  its class and `p₀` one standard atmosphere, so a motor gives `F_max` in vacuum and `f_sl·F_max` at
+  one atmosphere. REGIONS: `vacuum`, `one atmosphere`, `past separation`. FOR: STAT-23 (1);
+  maintainer ruling 2026-10-17 ("По рекомендациям"). Pinned by `PropulsionLawsTest#theOutsidePressureMovesTheForceAndNeverTheFlow`.
+- **STAT-32** `[T][SYS]` **`v_e` is the propellant's.** A monopropellant's ceiling is its fluid row's
+  `monopropellantExhaustVelocity`; a pair's is its `propellantPairs` row, with the row's O/F by mass;
+  a nuclear-thermal regime's is `v_e = 8 500 m/s · sqrt((T / 2 700 K)·(2.016 / M))` from the core
+  temperature `T` and the working fluid's molar mass `M` (g/mol); the regime's `v_e` is that ceiling
+  times the design's cycle fraction. A propellant the table has no row for has NO `v_e` — absent,
+  never a guess: a pair with no row is refused at fill and a bipropellant craft whose configured fuel
+  and oxidizer lists contain a pair with no row is refused at assembly, naming the pair. REGIONS:
+  `monopropellant`, `pair`, `nuclear thermal`, `no row`. FOR: maintainer ruling 2026-10-17 ("ок"). Pinned by `PropulsionLawsTest#aPropellantsExhaustVelocityIsItsRowsAndNothingElse`, `PropulsionLawsTest#aNuclearExhaustGoesAsTheRootOfTemperatureOverMolarMass`.
+- **STAT-33** `[T][SYS]` **The drain law.** A burning tier-1 engine ejects `F·τ / v_e` kilograms per
+  tick at the force `F` it applied — `F_max` (after `thrustMultiplier`) in the classic ascent, the
+  force the free-flight step applied in free flight; the kilograms become millibuckets by the fluid's
+  density (INV-WGT-09), a pair split by its O/F by mass; the fraction of a millibucket left over is
+  CARRIED to the next tick and never rounded up, so over any burn the millibuckets drained times the
+  mass per millibucket equal the mass ejected to within one millibucket per tank. A tick that applies
+  no force drains nothing. `rocketsRequireFuel` off drains nothing. REGIONS: `monopropellant`, `pair`,
+  `less than a millibucket a tick`, `no force`. FOR: STAT-24; maintainer ruling 2026-10-17
+  ("По рекомендациям"). Pinned by `PropulsionLawsTest#theDrainTakesWhatTheBurnEjectedToWithinAMillibucket` (the law; the flight's wiring of it has no test).
+- **STAT-34** `[T][BEH]` **The fuel check is the rocket equation run through the flight's own law, and
+  it warns.** Before a tier-1 launch, and at the assembler, the craft's ascent is run tick by tick
+  through the same per-tick climb, drain and coast as the flight, from where it stands to the
+  transfer line; a craft that would not reach the line is TOLD so — how high it would get against the
+  line — and still launches or builds. So the propellant a rocket needs to reach a height grows with
+  its loaded mass as the rocket equation says. The TWR gate (STAT-26..29) is unaffected and still
+  refuses. REGIONS: `reaches the line`, `runs dry short of it`. FOR: STAT-25; maintainer ruling
+  2026-10-17 ("По рекомендациям"). Pinned on the law, which is pure (`api/propulsion/ClassicAscent`), by `PropulsionLawsTest#thePropellantAClimbNeedsGrowsWithTheLoadAsTheRocketEquationSays`, `PropulsionLawsTest#aClimbReachesTheLineExactlyWhenItsPropellantCanBuyIt`; the launch's wiring by `RocketFlightFailureModesTest#launchWithZeroFuelStillTransitionsToInFlight`, the assembler's (a rocket's only) by `RocketRequireFuelDisableAssemblesTest#aShipIsNotHeldToTheClimbToOrbitThatARocketIs`.
+- **STAT-35** `[A][SYS]` **A nuclear core is rated in thermal power and temperature, and its fuel is
+  consumed.** A core delivers its rated power (× `nuclearCorePowerRatio`) at its rated temperature
+  while it holds a fuel element with burn-up left, and NO power otherwise. Energy produced advances
+  the element's burn-up; an element holds `mass × enrichment × 8.2·10¹³ J/kg` (complete fission of
+  U-235); a burned-out element becomes spent fuel of the same mass, which stays in the core until the
+  player takes it out. REGIONS: `fuelled`, `burns out this tick`, `spent`, `empty`. FOR: maintainer
+  ruling 2026-10-17 ("ок").
+- **STAT-36** `[A][SYS]` **A nuclear nozzle draws from the core stack it touches.** On both tiers the
+  power a nuclear nozzle may use is that of the contiguous column of cores behind it — the side
+  opposite its exhaust — and no other; tier-1 sums the stacks of the nozzles it counts. A nozzle with
+  no fuelled core behind it gives no thrust. FOR: maintainer ruling 2026-10-17 ("ок").
+- **STAT-37** `[T][SYS]` **A tier-2 reaction actuator declares what it takes.** Each motor actuator
+  carries, per regime it can run (one per propellant the fuel registry accepts for its role that has
+  a row), its mass flow and its power at full throttle, both linear in throttle; its force is the
+  law's (STAT-30, STAT-31) at the world's pressure. Where a nuclear nozzle's force depends on which
+  working fluid feeds it and nothing aboard decides that yet, its force is the LEAST over its regimes
+  — authority never promised on a fluid the craft may not carry. Nothing is drained on tier-2 yet
+  (STAT-22's binary first stage). FOR: STAT-22. Pinned by `PropulsionLawsTest#theOutsidePressureMovesTheForceAndNeverTheFlow`, `PropulsionLawsTest#aNozzleWhoseFluidIsUndecidedOffersTheLeastOfItsRegimes`.
 
 ## Status of the tier-2 clauses (read with `ship-flight-model`)
 
@@ -473,7 +549,9 @@ refused at the assembler instead of on the pad.
 | STAT-19 cached recipes, revisions | `[V]` recipes cached per model; the model's revision is the one counter | MECH-SFM-07 |
 | STAT-20 mass seam | `[V][T]` | MECH-SFM-02 |
 | STAT-21 client channels | `[V]` one packet of primitives to the pilot and console viewers only (`PacketShipReadout`) | C2 |
-| STAT-22..25 propulsion physics | `[A]` | — |
+| STAT-22..25 propulsion physics | `[A]` | made concrete by STAT-30..37 |
+| STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight and ascent drain wiring has no test | — |
+| STAT-35, STAT-36 core fuel and stack | `[A]` — built (`TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`); the tier-1 scan's `fuelled` / `empty` / column cases are exercised by `NuclearEngineRocketAssemblyTest`, burn-out, spent fuel and the tier-2 nozzle's stack are not | — |
 
 **Known not built**: gimbals (STAT-16), budgeted resources (STAT-22). The hyperdrive reads the real
 mass (MECH-HYP-09).

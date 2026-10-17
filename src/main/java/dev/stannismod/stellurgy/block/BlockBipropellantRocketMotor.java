@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.block;
 
 import dev.stannismod.stellurgy.api.IRocketEngine;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.propulsion.EngineDesign;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
@@ -33,7 +35,8 @@ public class BlockBipropellantRocketMotor extends BlockFullyRotatable
     @Override
     public void addActuators(World world, BlockPos pos, IBlockState state,
                              List<dev.stannismod.stellurgy.ship.control.Actuator> out) {
-        ChemicalMotorActuators.add(world, pos, state, getThrust(world, pos), out);
+        ChemicalMotorActuators.add(world, pos, state, getEngineDesign(world, pos),
+                FuelRegistry.FuelType.LIQUID_BIPROPELLANT, out);
     }
 
     @Override
@@ -51,10 +54,17 @@ public class BlockBipropellantRocketMotor extends BlockFullyRotatable
         return false;
     }
 
-    /** Rated thrust, newtons. */
+    /**
+     * Effectively final, process lifetime: built once at class initialisation; an {@link EngineDesign} is immutable. 490 500 N rated. A gas-generator cycle: it
+     * reaches the J-2's share of a staged-combustion engine's exhaust velocity on the same hydrolox
+     * (421 s against the RS-25's 452.3 s), with a gas-generator sea-level bell (Merlin 1D, 845 of
+     * 914 kN at one atmosphere).
+     */
+    private static final EngineDesign DESIGN = EngineDesign.chemical(490_500, 421.0 / 452.3, 845.0 / 914.0);
+
     @Override
-    public int getThrust(World world, BlockPos pos) {
-        return 490_500;
+    public EngineDesign getEngineDesign(World world, BlockPos pos) {
+        return DESIGN;
     }
 
     @Override
@@ -74,10 +84,6 @@ public class BlockBipropellantRocketMotor extends BlockFullyRotatable
         return super.getActualState(state, world, pos);
     }
 
-    @Override
-    public int getFuelConsumptionRate(World world, int x, int y, int z) {
-        return 1;
-    }
 
     @Override
     public EnumBlockRenderType getRenderType(final IBlockState state) {

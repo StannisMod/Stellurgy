@@ -10,12 +10,12 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.ShipBirth;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -96,30 +96,34 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
     }
 
     /**
-     * With fuel required, a ROCKET whose tanks cannot carry it to its world's orbit line is refused,
-     * and a SHIP built round a flight computer is not held to that climb.
+     * With fuel required, a ROCKET is told whether its tanks carry it to its world's orbit line — a
+     * forecast it builds with, never a refusal — and a SHIP built round a flight computer is not held
+     * to that climb at all.
      *
      * <p>This fails if production breaks the contract that <b>{@code TileRocketAssemblingMachine}
-     * asks "can its tanks reach orbit" of a rocket only</b>: a rocket's one flight is that climb, while
-     * a ship is flown and is a legitimate craft for flights that never leave the planet. The rocket leg
-     * is the control — it shows the reach check is live in this world (the overworld's line is its
-     * body's, 100 000 blocks), so the ship's success is the exemption and not an empty check.</p>
+     * forecasts the climb to orbit for a rocket only</b>: a rocket's one flight is that climb, while a
+     * ship is flown and is a legitimate craft for flights that never leave the planet. The rocket leg is
+     * the control — it shows the forecast is made in this world (the overworld's line is its body's,
+     * 100 000 blocks, out of reach of four tanks), so the ship's empty forecast is the exemption and not
+     * an empty check.</p>
      *
-     * Pins INV-RASM-13 (The burn-distance NOFUEL ("can its tanks carry it to orbit", hasEnoughFuel) is asked of a ROCKET only).
+     * Pins INV-RASM-13 (the fuel checks at assembly are a ROCKET's only; the reach check is a forecast).
      */
     @Pins("INV-RASM-13")
-    @LegacyWitness(prose = "2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}"
-            + " dropped from the NOFUEL branch (the reach check asked of every build), this fails with \"a ship must assemble with"
-            + " fuel required even though its tanks cannot reach orbit\".")
+    @RedWitness(member = "TileRocketAssemblingMachine#scanRocket", at = "ascentForecast = scannedFlightComputerPos == null && status == ErrorCodes.SUCCESS",
+            replacedBy = "ascentForecast = status == ErrorCodes.SUCCESS", fails = "INV-RASM-13 a ship", on = "2026-10-17")
     @Test
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
         try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
             // The fixtures' own extent: two blocks round the pad, ten above it.
             String rocket = press(FixtureSite.openAir(0, 3520, 3400), "with-fluid-cargo",
                     "the rocket is built in this volume");
-            assertEquals("control: a rocket with cargo in place of tanks must be refused for want of "
-                    + "the climb to orbit, or the ship below proves nothing: " + rocket,
-                    "NOFUEL", status(rocket));
+            assertTrue("INV-RASM-13 a rocket short of the climb still builds: " + rocket, Reply.of(rocket).ok());
+            String rocketForecast = Reply.of(rocket).object("ascentForecast");
+            assertTrue("control: the rocket's scan must forecast its climb, or the ship below proves nothing: "
+                    + rocket, rocketForecast != null);
+            assertFalse("control: four tanks do not reach a 100 000-block line, and the forecast must say so: "
+                    + rocket, Reply.of(rocketForecast).bool("reaches"));
 
             FixtureSite shipSite = FixtureSite.openAir(0, 3580, 3400);
             int[] shipBuilder = RocketFixture.placeAt(shipSite, c -> String.join("\n", client().arrange(c)),
@@ -129,6 +133,8 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
                     shipBuilder);
             assertTrue("a ship must assemble with fuel required even though its tanks cannot reach "
                     + "orbit: " + ship, Reply.of(ship).ok());
+            assertTrue("INV-RASM-13 a ship is not held to the climb, so its scan forecasts none: " + ship,
+                    Reply.of(ship).object("ascentForecast") == null);
             ShipBirth birth = ShipBirth.ofPress(events, mark, 0, shipBuilder, ship,
                     AssembledCraft.LINK_BUDGET_TICKS, "the ship assembled with fuel required");
             ships.add(birth.physicsId);

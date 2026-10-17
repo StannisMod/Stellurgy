@@ -77,7 +77,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The test's own bar on the ARRANGEMENT: a craft with no capacity or a station with an empty
         // tank would make the transfer legs vacuous. A thousand millibuckets is a fraction of either.
         final int ampleFuelMb = 1000;
-        final String stationFuel = "rocketfuel";
+        final String stationFuel = "hydrazine";
 
         FixtureSite rocketSite = site();
         // Eight blocks off the pad, within link reach; one above the pad's own Y.
@@ -101,13 +101,8 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String link = arrange("stellurgytest infra link" + at + " " + rocketId).raw();
         assertTrue("infra link failed: " + link, Reply.of(link).ok());
 
-        // rocketFuel is the canonical LIQUID_MONOPROPELLANT in StellurgyConfiguration.registerFuel.
-        // Forge's FluidRegistry stores names as registered; retry lower-cased before declaring the
-        // inject broken.
-        String inject = arrange("stellurgytest fluid inject" + at + " rocketFuel 8000").raw();
-        if (Reply.of("stellurgytest fluid inject", inject).refusedWith("fluid not registered")) {
-            inject = arrange("stellurgytest fluid inject" + at + " rocketfuel 8000").raw();
-        }
+        // hydrazine is the canonical LIQUID_MONOPROPELLANT in StellurgyConfiguration's default rocketFuels.
+        String inject = arrange("stellurgytest fluid inject" + at + " " + stationFuel + " 8000").raw();
         assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
         String energy = arrange("stellurgytest energy inject" + at + " 100000").raw();
         assertTrue("energy inject failed: " + energy, Reply.of(energy).ok());

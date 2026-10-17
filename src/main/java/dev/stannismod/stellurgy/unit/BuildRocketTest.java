@@ -190,6 +190,7 @@ public class BuildRocketTest extends BaseTest {
 
     public void FuelRocket(EntityRocket rocket) {
         rocket.setFuelAmount(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT, rocket.getFuelCapacity(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT));
+        rocket.stats.nameUnnamedTanks();
     }
 
     public EntityRocket findRocketOnPad(World world) {

@@ -83,22 +83,17 @@ public abstract class EntityRocketBase extends Entity {
     public abstract void setFuelAmount(@Nonnull FuelRegistry.FuelType fuelType, int amt);
 
     /**
-     * @param fuelType sets the type of fuel to set a rate for
-     * @param rate     sets the rate of fuel in the rocket
-     */
-    public abstract void setFuelConsumptionRate(@Nonnull FuelRegistry.FuelType fuelType, int rate);
-
-    /**
      * @param fuelType is the fuel type to get
      * @return gets the fuel capacity of the rocket
      */
     public abstract int getFuelCapacity(@Nullable FuelRegistry.FuelType fuelType);
 
     /**
-     * @param fuelType is the fuel type to get
-     * @return the rate of fuel consumption for the rocket
+     * Whether {@code fluid} can go into this rocket as propellant its engines can burn — of the role
+     * they feed from, with a row giving it an exhaust velocity, and forming a known pair with any other
+     * half already aboard (C10 STAT-32).
      */
-    public abstract int getFuelConsumptionRate(@Nullable FuelRegistry.FuelType fuelType);
+    public abstract boolean acceptsPropellant(net.minecraftforge.fluids.Fluid fluid);
 
     /**
      * @return the fuel type that this rocket uses, null if the rocket does not use any

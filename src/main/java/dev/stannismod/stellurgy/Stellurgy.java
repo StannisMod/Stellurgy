@@ -664,6 +664,7 @@ public class Stellurgy {
 
         //TileEntity Registration ---------------------------------------------------------------------------------------------
         GameRegistry.registerTileEntity(TileBrokenPart.class, "ARbrokenPart");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileNuclearCore.class, "ARnuclearCore");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileWearable.class, "ARwearablePart");
         GameRegistry.registerTileEntity(TileRocketServiceStation.class, "ARserviceStation");
         GameRegistry.registerTileEntity(TileRocketAssemblingMachine.class, "ARrocketBuilder");
@@ -852,6 +853,8 @@ public class Stellurgy {
         StellurgyItems.itemQuartzCrucible = new ItemBlock(StellurgyBlocks.blockQuartzCrucible).setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellite = new ItemSatellite().setUnlocalizedName("satellite").setCreativeTab(tabAdvRocketry).setMaxStackSize(1);
         StellurgyItems.itemSatelliteIdChip = new ItemSatelliteIdentificationChip().setUnlocalizedName("satelliteIdChip").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemNuclearFuelElement = new dev.stannismod.stellurgy.item.ItemNuclearFuelElement(false).setUnlocalizedName("nuclearFuelElement").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemSpentNuclearFuel = new dev.stannismod.stellurgy.item.ItemNuclearFuelElement(true).setUnlocalizedName("spentNuclearFuel").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemPlanetIdChip = new ItemPlanetIdentificationChip().setUnlocalizedName("planetIdChip").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemBiomeChanger = new ItemBiomeChanger().setUnlocalizedName("biomeChanger").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemWeatherController = new ItemWeatherController().setUnlocalizedName("weatherController").setCreativeTab(tabAdvRocketry);
@@ -899,6 +902,8 @@ public class Stellurgy {
         LibVulpesBlocks.registerItem(StellurgyItems.itemIC.setRegistryName("ic"));
         //Chips
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatelliteIdChip.setRegistryName("satelliteIdChip"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemNuclearFuelElement.setRegistryName("nuclearFuelElement"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemSpentNuclearFuel.setRegistryName("spentNuclearFuel"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemPlanetIdChip.setRegistryName("planetIdChip"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemAsteroidChip.setRegistryName("asteroidChip"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceElevatorChip.setRegistryName("elevatorChip"));
@@ -1188,7 +1193,10 @@ public class Stellurgy {
         // the same way oxygen already does -- whichever mod registers first wins and the other falls
         // back to it below. snake_case here is GT's convention, not AR's; it is load-bearing.
         StellurgyFluids.fluidCarbonDioxide = new Fluid("carbon_dioxide", notFlowing, flowing).setUnlocalizedName("carbon_dioxide").setGaseous(true).setDensity(-1000).setViscosity(1000).setColor(0xFFA8A8A8);
-        StellurgyFluids.fluidRocketFuel = new Fluid("rocketFuel", notFlowing, flowing).setUnlocalizedName("rocketFuel").setGaseous(false).setLuminosity(2).setDensity(800).setViscosity(1500).setColor(0xFFE5D884);
+        // Hydrazine, N2H4: the storable monopropellant. Its mass and exhaust velocity come from the
+        // weight table's row (WeightEngine); Forge's density is set to the same 1021 kg/m3 only so that
+        // Forge-side behaviour that reads it agrees.
+        StellurgyFluids.fluidHydrazine = new Fluid("hydrazine", notFlowing, flowing).setUnlocalizedName("hydrazine").setGaseous(false).setLuminosity(2).setDensity(1021).setViscosity(1500).setColor(0xFFE5D884);
         StellurgyFluids.fluidEnrichedLava = new Fluid("enrichedLava", new ResourceLocation("stellurgy:blocks/fluid/lava_still"), new ResourceLocation("stellurgy:blocks/fluid/lava_flow")).setUnlocalizedName("enrichedLava").setLuminosity(15).setDensity(3000).setViscosity(6000).setTemperature(1300).setColor(0xFFFFFFFF);
 
         //Fluid Registration
@@ -1200,8 +1208,8 @@ public class Stellurgy {
             StellurgyFluids.fluidNitrogen = FluidRegistry.getFluid("nitrogen");
         if (!FluidRegistry.registerFluid(StellurgyFluids.fluidCarbonDioxide))
             StellurgyFluids.fluidCarbonDioxide = FluidRegistry.getFluid("carbon_dioxide");
-        if (!FluidRegistry.registerFluid(StellurgyFluids.fluidRocketFuel))
-            StellurgyFluids.fluidRocketFuel = FluidRegistry.getFluid("rocketFuel");
+        if (!FluidRegistry.registerFluid(StellurgyFluids.fluidHydrazine))
+            StellurgyFluids.fluidHydrazine = FluidRegistry.getFluid("hydrazine");
         if (!FluidRegistry.registerFluid(StellurgyFluids.fluidEnrichedLava))
             StellurgyFluids.fluidEnrichedLava = FluidRegistry.getFluid("enrichedLava");
 
@@ -1214,7 +1222,7 @@ public class Stellurgy {
         StellurgyBlocks.blockHydrogenFluid = new BlockFluid(StellurgyFluids.fluidHydrogen, Material.WATER).setUnlocalizedName("hydrogenFluidBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockNitrogenFluid = new BlockFluid(StellurgyFluids.fluidNitrogen, Material.WATER).setUnlocalizedName("nitrogenFluidBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockCarbonDioxideFluid = new BlockFluid(StellurgyFluids.fluidCarbonDioxide, Material.WATER).setUnlocalizedName("carbonDioxideFluidBlock").setCreativeTab(CreativeTabs.MISC);
-        StellurgyBlocks.blockFuelFluid = new BlockFluid(StellurgyFluids.fluidRocketFuel, new MaterialLiquid(MapColor.YELLOW)).setUnlocalizedName("rocketFuelBlock").setCreativeTab(CreativeTabs.MISC);
+        StellurgyBlocks.blockFuelFluid = new BlockFluid(StellurgyFluids.fluidHydrazine, new MaterialLiquid(MapColor.YELLOW)).setUnlocalizedName("hydrazineBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockEnrichedLavaFluid = new BlockEnrichedLava(StellurgyFluids.fluidEnrichedLava, Material.LAVA).setUnlocalizedName("enrichedLavaBlock").setCreativeTab(CreativeTabs.MISC).setLightLevel(15);
 
         //Fluids
@@ -1222,7 +1230,7 @@ public class Stellurgy {
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidNitrogen);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidOxygen);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidCarbonDioxide);
-        FluidRegistry.addBucketForFluid(StellurgyFluids.fluidRocketFuel);
+        FluidRegistry.addBucketForFluid(StellurgyFluids.fluidHydrazine);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidEnrichedLava);
 
         //Machines
@@ -1396,7 +1404,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHydrogenFluid.setRegistryName("hydrogenFluid"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNitrogenFluid.setRegistryName("nitrogenFluid"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockCarbonDioxideFluid.setRegistryName("carbonDioxideFluid"), null, false);
-        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockFuelFluid.setRegistryName("rocketFuel"), null, false);
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockFuelFluid.setRegistryName("hydrazine"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockEnrichedLavaFluid.setRegistryName("enrichedLavaFluid"), null, false);
 
 

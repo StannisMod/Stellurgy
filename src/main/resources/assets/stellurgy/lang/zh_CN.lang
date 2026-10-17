@@ -77,7 +77,7 @@ tile.chemreactor.name=化学反应器
 tile.scrubber.name=二氧化碳净化器
 tile.oxygenVent.name=氧气排放口
 tile.liquidHatch.name=流体仓
-tile.rocketFuelBlock.name=火箭燃料
+tile.hydrazineBlock.name=肼
 tile.hydrogenFluidBlock.name=氢气
 tile.oxygenFluidBlock.name=氧气
 tile.nitrogenFluidBlock.name=氮气
@@ -230,7 +230,7 @@ data.label.data=数据
 fluid.oxygen=氧气
 fluid.hydrogen=氢气
 fluid.nitrogen=氮气
-fluid.rocketFuel=火箭燃料
+fluid.hydrazine=肼
 fluid.enrichedLava=浓缩熔岩
 
 mission.asteroidmining.name=小行星采矿

@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.block;
 
 import dev.stannismod.stellurgy.api.IRocketEngine;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.propulsion.EngineDesign;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
@@ -33,7 +35,12 @@ public class BlockRocketMotor extends BlockFullyRotatable
     @Override
     public void addActuators(World world, BlockPos pos, IBlockState state,
                              List<dev.stannismod.stellurgy.ship.control.Actuator> out) {
-        ChemicalMotorActuators.add(world, pos, state, getThrust(world, pos), out);
+        ChemicalMotorActuators.add(world, pos, state, getEngineDesign(world, pos), propellantRole(), out);
+    }
+
+    /** The tank role this motor feeds from. */
+    protected FuelRegistry.FuelType propellantRole() {
+        return FuelRegistry.FuelType.LIQUID_MONOPROPELLANT;
     }
 
     @Override
@@ -68,15 +75,17 @@ public class BlockRocketMotor extends BlockFullyRotatable
         return super.getActualState(state, world, pos);
     }
 
-    /** Rated thrust, newtons. */
-    @Override
-    public int getThrust(World world, BlockPos pos) {
-        return 490_500;
-    }
+    /**
+     * Effectively final, process lifetime: built once at class initialisation; an {@link EngineDesign} is immutable. 490 500 N rated (a hundred ordinary blocks at
+     * one gee, C10 STAT-6). A catalytic monopropellant's exhaust velocity is set by the decomposition
+     * chemistry, not by chamber pressure, so it reaches its row's figure whole. Its bell is a
+     * sea-level booster's: Merlin 1D, 845 kN at sea level against 914 kN in vacuum.
+     */
+    private static final EngineDesign DESIGN = EngineDesign.chemical(490_500, 1.0, 845.0 / 914.0);
 
     @Override
-    public int getFuelConsumptionRate(World world, int x, int y, int z) {
-        return 1;
+    public EngineDesign getEngineDesign(World world, BlockPos pos) {
+        return DESIGN;
     }
 
     @Override

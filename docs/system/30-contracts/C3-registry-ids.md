@@ -31,8 +31,8 @@ failed). It is also registered in the ore dictionary as `dustCarbon` (`:950`) �
 registry joined ON PURPOSE so tech-mod carbon and ours unify.
 
 **Fluid ids.** The fluid-block registry names (`oxygenFluid`, `hydrogenFluid`, `nitrogenFluid`,
-`carbonDioxideFluid`, `rocketFuel`, `enrichedLavaFluid`) are separate from the underlying `Fluid` ids
-(`oxygen`, `hydrogen`, `nitrogen`, `carbon_dioxide`, `rocketFuel`, `enrichedLava`). All suppress their
+`carbonDioxideFluid`, `hydrazine`, `enrichedLavaFluid`) are separate from the underlying `Fluid` ids
+(`oxygen`, `hydrogen`, `nitrogen`, `carbon_dioxide`, `hydrazine`, `enrichedLava`). All suppress their
 auto-ItemBlock. `carbon_dioxide` is snake_case on purpose: it is GregTechCEu's own material-fluid
 registry name (`gregtechId("carbon_dioxide")`, `.gas()`; `prefixedRegistryName` returns the bare name for
 a material's primary key), so the two mods unify into ONE `Fluid` by name, the way `oxygen` does.
@@ -66,8 +66,8 @@ registration site is uniformly `misc-oddities`.
   `:1295`) and `orbitalRegistry` (`enableOrbitalRegistry`, `:1349`) are registered only when their flag
   is on. With the flag off the id is never registered and any world with that block / item placed loses
   it (no remapper — R6). Reversible only by re-enabling the flag. **Not safely disableable.**
-- **R2 — `rocketFuel` string reused across two registries [V].** Registered as a `Fluid`
-  (`Stellurgy.java:1196`) *and* as the fluid-block registry id (`:1403`). Different Forge registries and
+- **R2 — `hydrazine` string reused across two registries [V].** Registered as a `Fluid` and as the
+  fluid-block registry id (`Stellurgy#registerBlocks`). Different Forge registries and
   the block suppresses its ItemBlock, so no hard collision — but the shared literal is a rename hazard.
   LOW.
 - **R3 — item id ≠ block id for the same object (intentional) [V].** `lens` (item) vs `blockLens`

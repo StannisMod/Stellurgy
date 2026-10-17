@@ -11,7 +11,7 @@ public class StellurgyFluids {
     /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidHydrogen;
     /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
-    public static Fluid fluidRocketFuel;
+    public static Fluid fluidHydrazine;
     /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidNitrogen;
     /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */

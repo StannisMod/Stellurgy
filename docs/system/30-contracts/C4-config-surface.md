@@ -47,9 +47,10 @@ deliberately absent from this matrix: find a flag's readers with a grep for its 
 | canBeFueledByHand | boolean | canBeFueledByHand | hand-fuelling of rockets | `false` = no manual fuel | |
 | nuclearRocketsRespectArtifactGating | boolean† | nuclearRocketsRespectArtifactGating | nuclear-rocket artifact gating (mission) | `false` = ignore gating | |
 | nuclearRocketsRequireArtifactForGatedStations | boolean† | nuclearRocketsRequireArtifactForGatedStations | station-destination artifact rule | `false` = stations exempt | |
-| rocketThrustMultiplier | double† | thrustMultiplier | engine thrust scale (StatsRocket) | identity `1.0`; tunable — no off | |
+| rocketThrustMultiplier | double† | thrustMultiplier | tier-1 engines' `F_max` AND mass flow together, `v_e` unchanged (StatsRocket, C10 STAT-30) | identity `1.0`; tunable — no off | |
+| (fuel lists) | String[] | rocketFuels / rocketBipropellants / rocketOxidizers / rocketNuclearWorkingFluids | which fluids each tank role accepts (`hydrazine` / `hydrogen` / `oxygen` / `hydrogen`); a legacy `name;N` entry parses with a warning, the multiplier is gone — a fluid's worth is its `weights.json` row (C10 STAT-32) | not a switch | |
 | fuelCapacityMultiplier | double† | fuelCapacityMultiplier | tank capacity scale | identity `1.0`; tunable — no off | |
-| nuclearCoreThrustRatio | double† | nuclearCoreThrustRatio | nuclear core thrust scale | identity `1.0`; tunable | |
+| nuclearCorePowerRatio | double† | nuclearCorePowerRatio | nuclear core thermal power scale (C10 STAT-35) | identity `1.0`; tunable | |
 | automaticRetroRockets | boolean | autoRetroRockets | auto retro-burn on reentry | `false` = disabled | |
 | ~~orbit~~ | — | ~~orbitHeight~~ | **No such flag**: the orbit line is per WORLD — the planet file's `<orbitHeight>`, else derived from the body's radius (`metric-boundary` MECH-MET-02); ships, tier-1 rockets, the elevator and the HUD all read it | — | |
 | stationClearanceHeight | int† | stationClearance | station clearance burn | author-warned: **not synced with `orbit`**, wrong on monitors if unequal | |
@@ -62,7 +63,6 @@ deliberately absent from this matrix: find a flag's readers with a grep for its 
 | buildSpeedMultiplier | float† | buildSpeedMultiplier | assembler speed (rocket-assembly) | identity `1.0`; tunable | |
 | advancedWeightSystem | boolean | advancedWeightSystem | weight calc + TWR gate; gated in StatsRocket, EntityRocket, assembler, UVA, StorageChunk | `false` = classic (both calc and launch decision gated) | |
 | contentMassScale | double | contentMassScale | multiplier on held content (inventories, tanks); blocks and people unscaled | default `1.0`; `0` = weightless cargo; negative/NaN refused (logged, 1.0 used); synced | |
-| fuelMassScale | double† | fuelMassScale | fuel-mass multiplier | identity `1.0`; tunable | |
 | minLaunchTWR | double† | minLaunchTWR | min thrust/weight to launch | tunable; `advancedWeightSystem=false` bypasses TWR gate | |
 | wearThrustPenaltyMax | double† | wearThrustPenaltyMax | motor thrust loss with CONDITION (wear or battle damage alike) | `0` = no penalty. **Not gated by `partsWearSystem`** — one stage axis, so gating the consequence would exempt battle damage | |
 | wearWarnProbability | double† | wearWarnProbability | pre-launch condition warn / block threshold (EntityRocket) | tunable; **not disabled by `partsWearSystem`** | |

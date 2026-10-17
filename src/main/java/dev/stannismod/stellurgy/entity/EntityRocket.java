@@ -80,6 +80,8 @@ import net.minecraftforge.common.ForgeChunkManager.Ticket;
 import net.minecraftforge.common.ForgeChunkManager.Type;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.ITeleporter;
+import dev.stannismod.stellurgy.api.propulsion.PropellantDrain;
+import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
@@ -163,6 +165,9 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     private boolean turningLeft, turningRight, turningUp, turningDownforWhat;
     private String errorStr;
     private long lastErrorTime = Long.MIN_VALUE;
+    /** The fraction of a millibucket each burning tank still owes the drain, in [0, 1) (C10 STAT-33). */
+    private double drainOwedFuel;
+    private double drainOwedOxidizer;
     private ModuleText landingPadDisplayText;
     private SatelliteBase satellite;
     private int autoDescendTimer; // Is this value even used?
@@ -771,6 +776,9 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @param amt      sets the amount of monopropellant fuel in the rocket
      */
     public void setFuelAmount(@Nonnull FuelType fuelType, int amt) {
+        // The stats weigh the craft, so they hold what the tanks hold now, not what they held when
+        // last read.
+        stats.setFuelAmount(fuelType, amt);
         if (fuelType == FuelType.LIQUID_MONOPROPELLANT) {
             dataManager.set(fuelLevelMonopropellant, amt);
             dataManager.setDirty(fuelLevelMonopropellant);
@@ -787,27 +795,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     /**
-     * @param fuelType sets the type of fuel to set a rate for
-     * @param rate     sets the rate of fuel in the rocket
-     */
-    public void setFuelConsumptionRate(@Nonnull FuelType fuelType, int rate) {
-        stats.setFuelRate(fuelType, rate);
-    }
-
-    /**
      * @param fuelType is the fuel type to get
      * @return gets the fuel capacity of the rocket
      */
     public int getFuelCapacity(@Nullable FuelType fuelType) {
         return stats.getFuelCapacity(fuelType);
-    }
-
-    /**
-     * @param fuelType is the fuel type to get
-     * @return the rate of fuel consumption for the rocket
-     */
-    public int getFuelConsumptionRate(@Nullable FuelType fuelType) {
-        return stats.getFuelRate(fuelType);
     }
 
     /**
@@ -985,11 +977,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      */
     private boolean hasFreeFlightThrustFuel() {
         if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) return true;
-        FuelType ft = getRocketFuelType();
-        if (ft == null) return false;
-        if (ft == FuelType.LIQUID_BIPROPELLANT)
-            return getFuelAmount(ft) > 0 && getFuelAmount(FuelType.LIQUID_OXIDIZER) > 0;
-        return getFuelAmount(ft) > 0;
+        return hasBurnablePropellant();
     }
 
     /**
@@ -1112,6 +1100,17 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         // cell, a slot world or hyperspace would read as one-atmosphere air and quietly brake every
         // craft flying through vacuum. A dimension that is not a registered body has no air here,
         // which is also the physically right answer.
+        // The force the engines applied this tick, N: the change of motion the law made, less gravity's,
+        // read BEFORE the air takes its share — drag is not thrust (C10 STAT-33). A change of motion in
+        // blocks per tick is an acceleration times the tick squared.
+        double ax = result.motionX - this.motionX;
+        double ay = result.motionY - (this.motionY - gravity);
+        double az = result.motionZ - this.motionZ;
+        double appliedForce = result.thrustApplied
+                ? stats.getMass() * Math.sqrt(ax * ax + ay * ay + az * az)
+                        / (StatsRocket.TICK_SECONDS * StatsRocket.TICK_SECONDS)
+                : 0;
+
         double atmDensity = dev.stannismod.stellurgy.api.AtmosphereDensity
                 .inAtmospheres(this.world);
         if (atmDensity > 0.0) {
@@ -1135,24 +1134,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         float enginePow = (float) Math.min(1.0,
                 Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz) / FreeFlightPhysics.MAX_THRUST_ACCEL);
 
-        // Fuel burn — classic semantics: while thrust is applied AND fuel is
-        // required, drain getFuelConsumptionRate per tick (oxidizer too for
-        // bipropellant), and null out the fluid when a tank empties — exactly
-        // like the classic ascent burn in onUpdate(). A gameplay side-effect, not
-        // part of the transform, so it stays here regardless of backend.
-        if (requireFuel && result.thrustApplied && ft != null) {
-            setFuelAmount(ft, getFuelAmount(ft) - getFuelConsumptionRate(ft));
-            if (ft == FuelType.LIQUID_BIPROPELLANT)
-                setFuelAmount(FuelType.LIQUID_OXIDIZER,
-                        getFuelAmount(FuelType.LIQUID_OXIDIZER) - getFuelConsumptionRate(FuelType.LIQUID_OXIDIZER));
-
-            if (getFuelAmount(ft) == 0) {
-                stats.setFuelFluid("null");
-                stats.setWorkingFluid("null");
-            }
-            if (ft == FuelType.LIQUID_BIPROPELLANT && getFuelAmount(FuelType.LIQUID_OXIDIZER) == 0) {
-                stats.setOxidizerFluid("null");
-            }
+        // Fuel burn: the force the engines applied, never the rated flow — a hover or a nudge costs
+        // what it pushes (C10 STAT-33). A gameplay side-effect, not part of the transform, so it stays
+        // here regardless of backend.
+        if (requireFuel && ft != null) {
+            burnPropellant(appliedForce, 1);
         }
 
         // Realize the desired flight state through the pluggable backend: commit
@@ -1352,7 +1338,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     if (getRocketFuelType() == FuelType.LIQUID_BIPROPELLANT && FuelRegistry.instance.isFuel(FuelType.LIQUID_OXIDIZER, fluidStack.getFluid()))
                         type = FuelType.LIQUID_OXIDIZER;
 
-                    stats.setFuelRate(type, (int) (stats.getBaseFuelRate(type) * FuelRegistry.instance.getMultiplier(type, fluidStack.getFluid())));
                     FluidTank rocketFakeTank = new FluidTank(getFuelCapacity(type) - getFuelAmount(type));
                     FluidUtil.interactWithFluidHandler(player, EnumHand.MAIN_HAND, rocketFakeTank);
                     this.addFuelAmount(type, rocketFakeTank.getFluidAmount());
@@ -1377,42 +1362,83 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
 
-    // Check if we have enough fuel to reach orbit from our current position
-    private boolean hasMissionFuelFor(int destDimId) {
-        if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) return true;
-
-        final FuelRegistry.FuelType main = getRocketFuelType();
-        if (main == null) return false; // no usable tanks
-
-        if (isInOrbit()) return true;   // already at orbit
-
-        final DimensionProperties src = DimensionManager.getInstance()
-                .getDimensionProperties(this.world.provider.getDimension());
-        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier());
-
-        // Cannot even lift itself here, so no amount of fuel gets it to orbit.
-        if (stats.getThrustToWeightRatio(gSrc) <= 1f) return false;
-        final double a = Math.max(0.0001d, stats.getAcceleration(gSrc));    
-        final double h = Math.max(0.0, flightOrbitHeight() - this.posY);
-
-        long nTicks = (long)Math.ceil(Math.sqrt(2.0 * h / a));
-        nTicks += 2L; // small safety buffer
-        if (nTicks <= 0) nTicks = 1;
-
-        int mainRate = Math.max(1, getFuelConsumptionRate(main));
-        long mainNeeded = nTicks * (long)mainRate;
-        long mainHave   = getFuelAmount(main);
-        if (mainHave < mainNeeded) return false;
-
-        if (main == FuelRegistry.FuelType.LIQUID_BIPROPELLANT) {
-            int oxRate = Math.max(1, getFuelConsumptionRate(FuelRegistry.FuelType.LIQUID_OXIDIZER));
-            long oxNeeded = nTicks * (long)oxRate;
-            long oxHave   = getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER);
-            if (oxHave < oxNeeded) return false;
+    /**
+     * The climb from where the rocket stands to this flight's orbit height, run through the flight's
+     * own per-tick law with the propellant aboard (C10 STAT-34); {@code null} when there is nothing to
+     * forecast — fuel is not required, or the rocket is already in orbit.
+     */
+    @Nullable
+    dev.stannismod.stellurgy.api.propulsion.ClassicAscent.Forecast forecastMissionAscent() {
+        if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel || isInOrbit()) {
+            return null;
         }
+        float gravity = DimensionManager.getInstance()
+                .getDimensionProperties(this.world.provider.getDimension()).getGravitationalMultiplier();
+        return stats.forecastAscent(this.posY, flightOrbitHeight(), gravity);
+    }
 
-        // Descent currently does not burn fuel in your code path.
-        return true;
+    /**
+     * Enough fuel for the mission? A warning, never a refusal: a craft short of propellant climbs, runs
+     * dry and falls, which is the pilot being wrong rather than the craft being impossible (C10
+     * STAT-34). The weight gate stays a refusal.
+     */
+    private void warnIfShortOfOrbit() {
+        dev.stannismod.stellurgy.api.propulsion.ClassicAscent.Forecast forecast = forecastMissionAscent();
+        if (forecast != null && !forecast.reaches) {
+            setError("error.rocket.shortOfOrbit", Math.round(forecast.apexY), Math.round(forecast.lineY));
+        }
+    }
+
+    /**
+     * Spends the propellant a burn at {@code forceNewtons} throws out over {@code ticks} ticks (C10
+     * STAT-33): {@code F·τ / v_e} kilograms, into millibuckets by density, a pair split by its mixture
+     * ratio, the fraction of a millibucket owed carried to the next burn. Nuclear nozzles also spend
+     * their cores' fuel by the energy the jet took (STAT-35). A tank that empties forgets its fluid.
+     */
+    void burnPropellant(double forceNewtons, long ticks) {
+        FuelType main = getRocketFuelType();
+        if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel || main == null || !(forceNewtons > 0)) {
+            return;
+        }
+        java.util.OptionalDouble ve = stats.getExhaustVelocity();
+        if (!ve.isPresent()) {
+            return;
+        }
+        double kg = StatsRocket.ejectedMassPerTick(forceNewtons, ve.getAsDouble()) * Math.max(1, ticks);
+        dev.stannismod.stellurgy.util.WeightEngine table = Stellurgy.weights();
+        if (main == FuelType.LIQUID_BIPROPELLANT) {
+            Fluid fuel = FluidRegistry.getFluid(stats.getFuelFluid());
+            Fluid ox = FluidRegistry.getFluid(stats.getOxidizerFluid());
+            PropellantDrain.Draw draw = PropellantDrain.draw(kg,
+                    PropellantDrain.pairShares(stats.getMixtureRatio().orElse(0)),
+                    new double[]{table.getWeight(fuel, 1), table.getWeight(ox, 1)},
+                    new double[]{drainOwedFuel, drainOwedOxidizer});
+            drainOwedFuel = draw.owed(0);
+            drainOwedOxidizer = draw.owed(1);
+            setFuelAmount(main, Math.max(0, getFuelAmount(main) - draw.millibuckets(0)));
+            setFuelAmount(FuelType.LIQUID_OXIDIZER,
+                    Math.max(0, getFuelAmount(FuelType.LIQUID_OXIDIZER) - draw.millibuckets(1)));
+        } else {
+            String name = main == FuelType.NUCLEAR_WORKING_FLUID ? stats.getWorkingFluid() : stats.getFuelFluid();
+            PropellantDrain.Draw draw = PropellantDrain.draw(kg, new double[]{1},
+                    new double[]{table.getWeight(FluidRegistry.getFluid(name), 1)}, new double[]{drainOwedFuel});
+            drainOwedFuel = draw.owed(0);
+            setFuelAmount(main, Math.max(0, getFuelAmount(main) - draw.millibuckets(0)));
+        }
+        if (main == FuelType.NUCLEAR_WORKING_FLUID && storage != null && stats.getNuclearJetEfficiency() > 0) {
+            double joules = forceNewtons * ve.getAsDouble() / (2 * stats.getNuclearJetEfficiency())
+                    * StatsRocket.TICK_SECONDS * Math.max(1, ticks);
+            stats.setCoreThermalPower(storage.depleteCores(joules));
+        }
+        if (getFuelAmount(main) == 0) {
+            stats.setFuelFluid("null");
+            stats.setWorkingFluid("null");
+            drainOwedFuel = 0;
+        }
+        if (main == FuelType.LIQUID_BIPROPELLANT && getFuelAmount(FuelType.LIQUID_OXIDIZER) == 0) {
+            stats.setOxidizerFluid("null");
+            drainOwedOxidizer = 0;
+        }
     }
 
 
@@ -1421,28 +1447,62 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @return boolean on whether said fluid stack can fit into the rocket's internal fuel point storage
      */
     public boolean canRocketFitFluid(FluidStack fluidStack) {
-        if (FuelRegistry.instance.isFuel(FuelType.LIQUID_MONOPROPELLANT, fluidStack.getFluid())) {
-            boolean isCorrectFluid = stats.getFuelFluid().equals("null") || fluidStack.getFluid() == FluidRegistry.getFluid(stats.getFuelFluid());
-            if (stats.getFuelFluid().equals("null") && isCorrectFluid)
-                stats.setFuelFluid(fluidStack.getFluid().getName());
-            return isCorrectFluid;
-        } else if (FuelRegistry.instance.isFuel(FuelType.LIQUID_BIPROPELLANT, fluidStack.getFluid())) {
-            boolean isCorrectFluid = stats.getFuelFluid().equals("null") || fluidStack.getFluid() == FluidRegistry.getFluid(stats.getFuelFluid());
-            if (stats.getFuelFluid().equals("null") && isCorrectFluid)
-                stats.setFuelFluid(fluidStack.getFluid().getName());
-            return isCorrectFluid;
-        } else if (FuelRegistry.instance.isFuel(FuelType.LIQUID_OXIDIZER, fluidStack.getFluid())) {
-            boolean isCorrectFluid = stats.getOxidizerFluid().equals("null") || fluidStack.getFluid() == FluidRegistry.getFluid(stats.getOxidizerFluid());
-            if (stats.getOxidizerFluid().equals("null") && isCorrectFluid)
-                stats.setOxidizerFluid(fluidStack.getFluid().getName());
-            return isCorrectFluid;
-        } else if (FuelRegistry.instance.isFuel(FuelType.NUCLEAR_WORKING_FLUID, fluidStack.getFluid())) {
-            boolean isCorrectFluid = stats.getWorkingFluid().equals("null") || fluidStack.getFluid() == FluidRegistry.getFluid(stats.getWorkingFluid());
+        Fluid fluid = fluidStack.getFluid();
+        FuelType main = getRocketFuelType();
+        if (main == null || !acceptsPropellant(fluid)) {
+            return false;
+        }
+        // The tank is chosen by what the rocket's engines burn, not by the first role the fluid has:
+        // hydrogen is a pair's fuel AND a working fluid, and in a nuclear rocket it is the second.
+        if (main == FuelType.NUCLEAR_WORKING_FLUID) {
+            boolean isCorrectFluid = stats.getWorkingFluid().equals("null") || fluid == FluidRegistry.getFluid(stats.getWorkingFluid());
             if (stats.getWorkingFluid().equals("null") && isCorrectFluid)
-                stats.setWorkingFluid(fluidStack.getFluid().getName());
+                stats.setWorkingFluid(fluid.getName());
             return isCorrectFluid;
         }
-        return false;
+        if (main == FuelType.LIQUID_BIPROPELLANT && FuelRegistry.instance.isFuel(FuelType.LIQUID_OXIDIZER, fluid)) {
+            boolean isCorrectFluid = stats.getOxidizerFluid().equals("null") || fluid == FluidRegistry.getFluid(stats.getOxidizerFluid());
+            if (stats.getOxidizerFluid().equals("null") && isCorrectFluid)
+                stats.setOxidizerFluid(fluid.getName());
+            return isCorrectFluid;
+        }
+        boolean isCorrectFluid = stats.getFuelFluid().equals("null") || fluid == FluidRegistry.getFluid(stats.getFuelFluid());
+        if (stats.getFuelFluid().equals("null") && isCorrectFluid)
+            stats.setFuelFluid(fluid.getName());
+        return isCorrectFluid;
+    }
+
+    /**
+     * Whether {@code fluid} can go into this rocket as propellant its engines can BURN: a fluid of the
+     * role they feed from that has a row giving it an exhaust velocity, and for a pair, one that forms
+     * a known pair with the other half already loaded (C10 STAT-32). A pair with no row is refused here,
+     * so it is never flown on a guessed exhaust velocity.
+     */
+    public boolean acceptsPropellant(Fluid fluid) {
+        FuelType main = getRocketFuelType();
+        if (main == null || fluid == null) {
+            return false;
+        }
+        dev.stannismod.stellurgy.util.WeightEngine table = Stellurgy.weights();
+        switch (main) {
+            case LIQUID_MONOPROPELLANT:
+                return FuelRegistry.instance.isFuel(main, fluid) && table.monopropellantExhaustVelocityOf(fluid).isPresent();
+            case NUCLEAR_WORKING_FLUID:
+                return FuelRegistry.instance.isFuel(main, fluid) && table.molarMassOf(fluid).isPresent();
+            case LIQUID_BIPROPELLANT: {
+                if (FuelRegistry.instance.isFuel(FuelType.LIQUID_OXIDIZER, fluid)) {
+                    Fluid fuel = FluidRegistry.getFluid(stats.getFuelFluid());
+                    return fuel == null || table.pairOf(fuel, fluid).isPresent();
+                }
+                if (FuelRegistry.instance.isFuel(FuelType.LIQUID_BIPROPELLANT, fluid)) {
+                    Fluid ox = FluidRegistry.getFluid(stats.getOxidizerFluid());
+                    return ox == null || table.pairOf(fluid, ox).isPresent();
+                }
+                return false;
+            }
+            default:
+                return false;
+        }
     }
 
     public void openGui(EntityPlayer player) {
@@ -1470,7 +1530,23 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      */
     public boolean isBurningFuel() {
         FuelType fuelType = getRocketFuelType();
-        return (((fuelType == FuelType.LIQUID_BIPROPELLANT) ? getFuelAmount(fuelType) > 0 && getFuelAmount(FuelType.LIQUID_OXIDIZER) > 0 : getFuelAmount(fuelType) > 0) || !StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) && ((!this.getPassengers().isEmpty() && getPassengerMovingForward() > 0) || !isInOrbit());
+        return (hasBurnablePropellant() || !StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) && ((!this.getPassengers().isEmpty() && getPassengerMovingForward() > 0) || !isInOrbit());
+    }
+
+    /**
+     * Whether the tanks hold propellant the engines can burn: something in each tank the burn draws
+     * on, and an exhaust velocity for it — a propellant the table has no row for burns nothing
+     * (C10 STAT-32).
+     */
+    boolean hasBurnablePropellant() {
+        FuelType fuelType = getRocketFuelType();
+        if (fuelType == null) {
+            return false;
+        }
+        boolean held = fuelType == FuelType.LIQUID_BIPROPELLANT
+                ? getFuelAmount(fuelType) > 0 && getFuelAmount(FuelType.LIQUID_OXIDIZER) > 0
+                : getFuelAmount(fuelType) > 0;
+        return held && stats.getExhaustVelocity().isPresent();
     }
 
     public float getPassengerMovingForward() {
@@ -2104,17 +2180,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 // TODO SHOULD WE BURN IN DECENT PHASE TOO???
                 // TODO THIS COULD MAKE IT SO THAT OUT OF FUEL -> You crash -> rocket takes a lot of damage
                 if (!world.isRemote && !descentPhase) {
-                    setFuelAmount(getRocketFuelType(), getFuelAmount(getRocketFuelType()) - getFuelConsumptionRate(getRocketFuelType()));
-                    if (getRocketFuelType() == FuelType.LIQUID_BIPROPELLANT)
-                        setFuelAmount(FuelType.LIQUID_OXIDIZER, getFuelAmount(FuelType.LIQUID_OXIDIZER) - getFuelConsumptionRate(FuelType.LIQUID_OXIDIZER));
-
-                    if (getFuelAmount(getRocketFuelType()) == 0) {
-                        stats.setFuelFluid("null");
-                        stats.setWorkingFluid("null");
-                    }
-                    if (getRocketFuelType() == FuelType.LIQUID_BIPROPELLANT && getFuelAmount(FuelType.LIQUID_OXIDIZER) == 0) {
-                        stats.setOxidizerFluid("null");
-                    }
+                    // The classic ascent burns at the rated thrust, the force it climbs on.
+                    burnPropellant(stats.getThrust(), deltaTime);
                 }
 
                 runEngines();
@@ -2884,11 +2951,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         //This is bad but it works and is mostly intelligible so it's here for now
         stats.orbitHeight = (storage.getGuidanceComputer() == null) ? getEntryHeight(this.world.provider.getDimension()) : storage.getGuidanceComputer().getLaunchSequence(this.world.provider.getDimension(), this.getPosition());
         
-        // Enough fuel for the mission?
-        if (!hasMissionFuelFor(destinationDimId)) {
-            setError("error.rocket.notEnoughMissionFuel");
-            return;
-        }
+        warnIfShortOfOrbit();
         
         //TODO: Clean this logic a bit?
         if (allowLaunch || !stats.hasSeat() || ((DimensionManager.getInstance().isDimensionCreated(destinationDimId)) || destinationDimId == StellurgyConfiguration.getCurrentConfig().spaceDimId || destinationDimId == 0)) {
@@ -3089,6 +3152,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         rcs_mode = nbt.getBoolean("rcs_mode") || getInSpaceFlight();
         setRCS(rcs_mode);
         stats.readFromNBT(nbt);
+        drainOwedFuel = nbt.getDouble("drainOwedFuel");
+        drainOwedOxidizer = nbt.getDouble("drainOwedOxidizer");
 
         FuelType fuelType = getRocketFuelType();
         if (fuelType != null) {
@@ -3240,6 +3305,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         //TODO handle non tile Infrastructure
         nbt.setInteger("lastDimensionFrom", lastDimensionFrom);
+        nbt.setDouble("drainOwedFuel", drainOwedFuel);
+        nbt.setDouble("drainOwedOxidizer", drainOwedOxidizer);
     }
 
     @Override

@@ -58,7 +58,10 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 - **MECH-SFM-04 — actuators.** A chemical motor is one force at its block centre pushing AWAY from its
   nozzle (`ship/control/ChemicalMotor.java`) `[T]`; the nozzle is the ACTUAL-state facing (follows the
   feeding tank) and it works unless worn to its last stage — the two things the world tells it
-  (`block/ChemicalMotorActuators.java`) `[V]`. A reaction wheel is three pure torques (`TORQUE`,
+  (`block/ChemicalMotorActuators.java`) `[V]`. Its force is the engine law at the world's pressure, the
+  least over the regimes the registry and the weight table give it, and it declares each regime's
+  full-throttle mass flow and power (`ChemicalMotor#fromRegimes`, `PropellantDemand`; C10 STAT-30, 31,
+  37); a nuclear nozzle is fed the power of the core column behind it (STAT-36) `[V]`. A reaction wheel is three pure torques (`TORQUE`,
   `MOMENTUM_CAPACITY`, `tunable`) (`ship/control/ReactionWheel.java`) `[T]`; its block only places it
   (`block/BlockReactionWheel.java`). The device definitions live in the physics system,
   so the kernel is tested with production's own devices and no world.

@@ -948,7 +948,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             LaunchDecision dry = launch(log, measuredCraft, luna, false);
 
             // Fuel the craft the way a player does — a fuelling station linked to it, holding the
-            // shipped monopropellant (`rocketfuel`, StellurgyConfiguration's default rocketFuels) —
+            // shipped monopropellant (`hydrazine`, StellurgyConfiguration's default rocketFuels) —
             // so its tanks hold a real fluid, which is what makes fuel weigh anything: the launch
             // verb's own fill sets an amount but no fluid. Twenty clocked ticks are four of the
             // station's throttled operations (OP_THROTTLE_TICKS = 5); how much they move does not
@@ -961,7 +961,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             requireArranged("the station must take power: ", Reply.of("stellurgytest energy inject",
                     arrange("stellurgytest energy inject" + at + " 100000").raw()).ok());
             requireArranged("the station must take the fuel: ", Reply.of("stellurgytest fluid inject",
-                    arrange("stellurgytest fluid inject" + at + " rocketfuel 8000").raw()).ok());
+                    arrange("stellurgytest fluid inject" + at + " hydrazine 8000").raw()).ok());
             Reply link = Reply.of("stellurgytest infra link",
                     arrange("stellurgytest infra link" + at + " " + measuredCraft).raw());
             requireArranged("the station must link to the craft: " + link, link.bool("linked"));

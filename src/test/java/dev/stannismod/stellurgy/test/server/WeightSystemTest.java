@@ -20,12 +20,14 @@ import static org.junit.Assert.assertTrue;
  * <ul>
  *   <li>denser materials resolve to a larger mass than lighter ones;</li>
  *   <li>stack count multiplies the per-item mass;</li>
- *   <li>resolution precedence: individual override &gt; regex &gt; material;</li>
- *   <li>fluid mass uses the fallback per-mB rate and {@code fuelMassScale}.</li>
+ *   <li>resolution precedence: individual override &gt; regex &gt; material.</li>
  * </ul>
  *
+ * <p>Fluid mass is a pure law of the table and is pinned in the fast tier
+ * ({@code WeightEngineUnitTest}).</p>
+ *
  * <p>Every method calls {@code /stellurgytest weight reset} first so the shared
- * WeightEngine singleton + the fuel mass scale start from defaults
+ * WeightEngine singleton + the content mass scale start from defaults
  * (see {@link AbstractSharedServerTest} state-leak contract).</p>
  */
 public class WeightSystemTest extends AbstractSharedServerTest {
@@ -46,14 +48,6 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered"));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
-        return Double.parseDouble(mReply.text(WEIGHT));
-    }
-
-    private double fluidWeight(String name, int amount) throws Exception {
-        String r = String.join("\n", client().read("stellurgytest weight fluid " + name + " " + amount));
-        assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered"));
-        Reply mReply = Reply.of(r);
-        assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
         return Double.parseDouble(mReply.text(WEIGHT));
     }
 
@@ -104,21 +98,6 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         assertTrue("weight set failed: " + set, Reply.of(set).ok());
         assertEquals("individual override must win over a matching regex rule",
                 50.0, itemWeight("minecraft:glass", 1), 1e-4);
-    }
-
-    /** Pins INV-WGT-03 (fluid weight is positive and scales with fuelMassScale). */
-    @Pins("INV-WGT-03")
-    @Test
-    public void fluidWeightUsesFallbackAndFuelScale() throws Exception {
-        reset();
-        double base = fluidWeight("water", 1000);
-        assertTrue("fluid weight must be positive: " + base, base > 0);
-
-        String sc = String.join("\n", client().arrange("stellurgytest weight fuel-scale 2.0"));
-        assertTrue("fuel-scale failed: " + sc, Reply.of(sc).ok());
-
-        assertEquals("fluid weight must scale by fuelMassScale",
-                2 * base, fluidWeight("water", 1000), 1e-4);
     }
 
     /**

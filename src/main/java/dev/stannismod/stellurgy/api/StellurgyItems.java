@@ -41,6 +41,10 @@ public class StellurgyItems {
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemSatelliteIdChip;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
+    public static Item itemNuclearFuelElement;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
+    public static Item itemSpentNuclearFuel;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemPlanetIdChip;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemMisc;

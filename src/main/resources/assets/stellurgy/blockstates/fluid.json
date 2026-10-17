@@ -11,9 +11,9 @@
 			}
                     }
 		],
-		"rocketfuel": [{
+		"hydrazine": [{
 			"custom": {
-				"fluid": "rocketfuel"
+				"fluid": "hydrazine"
 			}
                     }
 		],

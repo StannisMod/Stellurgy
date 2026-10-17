@@ -70,7 +70,7 @@ tile.chemreactor.name=Kemiallinen reaktori
 tile.scrubber.name=CO2 Imuri
 tile.oxygenVent.name=Happiaukko
 tile.liquidHatch.name=Nesteluukku
-tile.rocketFuelBlock.name=Rakettipolttoaine
+tile.hydrazineBlock.name=Hydratsiini
 tile.hydrogenFluidBlock.name=Vety
 tile.oxygenFluidBlock.name=Happi
 tile.nitrogenFluidBlock.name=Typpi
@@ -211,7 +211,7 @@ data.mass.name=Massa
 fluid.oxygen=Happi
 fluid.hydrogen=Vety
 fluid.nitrogen=Typpi
-fluid.rocketFuel=Rakettipolttoaine
+fluid.hydrazine=Hydratsiini
 fluid.enrichedLava=Rikastettu Laava
 
 mission.asteroidmining.name=Asteroidin Louhinta

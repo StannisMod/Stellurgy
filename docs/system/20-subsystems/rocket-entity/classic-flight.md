@@ -25,15 +25,17 @@ target is unreachable `:2723`.
 
 The TWR refusal (`error.rocket.tooHeavy`) calls `stats.canLaunch(g)` with the CURRENT
 dimension's `gravitationalMultiplier` (`EntityRocket.java:2845-2849`, C10 STAT-26/29). A no-arg `canLaunch()` would divide by the weight
-alone and give the same verdict on every world. `hasMissionFuelFor`'s own pre-check went the same
-way: `getThrustToWeightRatio(gSrc) <= 1` (`:1400`) instead of `thrust <= weight` — that check is
-the fuel mechanic's "cannot lift itself here", not the `minLaunchTWR` gate.
+alone and give the same verdict on every world. After it, the launch runs the ascent forecast
+(`EntityRocket#forecastMissionAscent` → `StatsRocket#forecastAscent`, C10 STAT-34) from where the rocket
+stands to this flight's orbit height; a craft that would not reach it is told
+`error.rocket.shortOfOrbit` (how high it gets, against the line) and LAUNCHES anyway.
 
 ### MECH-RKT-02 — Ascent burn & fuel consumption
 While `isInFlight()` and not in the space branch, each server tick: if
-`isBurningFuel()` drains `getFuelConsumptionRate` from the active fuel type (plus
-oxidizer for bipropellant), nulling the fluid name when a tank empties
-`EntityRocket.java:2096`–`2108`; accelerates `motionY` by
+`isBurningFuel()` burns the rated thrust for `deltaTime` ticks through `EntityRocket#burnPropellant`
+(C10 STAT-33: `F·τ/v_e` kg, into mB by density, a pair split by its mixture ratio, the fraction carried;
+nuclear nozzles also spend their cores' fuel, STAT-35), nulling the fluid name when a tank empties;
+`isBurningFuel()` needs propellant with an exhaust velocity (STAT-32); accelerates `motionY` by
 `stats.getAcceleration(gravMult) * deltaTime` `:2126`. Out of fuel or in orbit,
 `motionY` instead decays under gravity (`-0.1·9.81/20·gravMult`, floored at −2)
 `:2121`. `deltaTime` = world-time delta since last tick `:1745` (catches up after

@@ -93,20 +93,20 @@ public class StatsRocket {
     private int fuelCapacityIon;
     private int fuelCapacityWarp;
     private int fuelCapacityImpulse;
-    private int fuelRateMonopropellant;
-    private int fuelRateBipropellant;
-    private int fuelRateOxidizer;
-    private int fuelRateNuclearWorkingFluid;
-    private int fuelRateIon;
-    private int fuelRateWarp;
-    private int fuelRateImpulse;
-    private int fuelBaseRateMonopropellant;
-    private int fuelBaseRateBipropellant;
-    private int fuelBaseRateOxidizer;
-    private int fuelBaseRateNuclearWorkingFluid;
-    private int fuelBaseRateIon;
-    private int fuelBaseRateWarp;
-    private int fuelBaseRateImpulse;
+    /** The tank role the engines feed from, or {@code null} for a craft with no engines. */
+    @Nullable
+    private FuelType engineFeed;
+    /**
+     * The fraction of its propellant's exhaust velocity the engine cluster reaches: the thrust-weighted
+     * harmonic mean of the motors' cycle fractions, so the cluster's mass flow is the sum of theirs.
+     */
+    private float exhaustVelocityFactor = 1;
+    /** Thermal power the counted nuclear core stacks deliver now, watts (C10 STAT-35, STAT-36). */
+    private double coreThermalPower;
+    /** Their temperature, kelvin; their mean when they differ. */
+    private double coreTemperature;
+    /** The nuclear nozzles' jet efficiency, thrust-weighted. */
+    private float nuclearJetEfficiency;
     private List<Vector3F<Float>> engineLoc;
     private HashMap<String, Object> statTags;
 
@@ -119,9 +119,6 @@ public class StatsRocket {
         fuelMonopropellant = 0;
         fuelBipropellant = 0;
         fuelOxidizer = 0;
-        fuelRateMonopropellant = 0;
-        fuelRateBipropellant = 0;
-        fuelRateOxidizer = 0;
         drillingPower = 0f;
         orbitHeight = ORBIT_HEIGHT_UNSET;
         injectionBurnLenghtMult = 1;
@@ -170,14 +167,154 @@ public class StatsRocket {
         return passengerSeats.size();
     }
 
-    /** Engine thrust in newtons, after the config multiplier. */
+    /**
+     * Engine thrust in newtons: the motors' rated thrust after the config multiplier, which for nuclear
+     * nozzles is further held to what their cores' power gives at the working fluid's exhaust velocity
+     * (C10 STAT-30, STAT-36). A nuclear craft whose exhaust velocity cannot be found gives nothing.
+     */
     public long getThrust() {
-        return (long) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier);
+        double rated = thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier;
+        if (engineFeed != FuelType.NUCLEAR_WORKING_FLUID) {
+            return (long) rated;
+        }
+        java.util.OptionalDouble ve = getExhaustVelocity();
+        if (!ve.isPresent() || !(nuclearJetEfficiency > 0)) {
+            return 0;
+        }
+        return (long) Math.min(rated, 2 * nuclearJetEfficiency * coreThermalPower / ve.getAsDouble());
     }
 
-    /** @param thrust engine thrust, newtons */
+    /** @param thrust the motors' rated thrust summed, newtons */
     public void setThrust(long thrust) {
         this.thrust = thrust;
+    }
+
+    /**
+     * Effectively final, process lifetime: built once at class initialisation. How long one tier-1
+     * flight tick lasts in the flight's own physics, seconds: the tick vanilla's
+     * gravity of 0.08 blocks/tick² takes to be 9.81 m/s² ({@link #GRAVITY_BLOCKS_PER_TICK_SQUARED}). The
+     * drain spends propellant over this same tick, so the impulse a tick gives the craft is the
+     * impulse its propellant carries away (C10 STAT-33, STAT-24).
+     */
+    public static final double TICK_SECONDS = Math.sqrt(GRAVITY_BLOCKS_PER_TICK_SQUARED / STANDARD_GRAVITY);
+
+    @Nullable
+    public FuelType getEngineFeed() {
+        return engineFeed;
+    }
+
+    public void setEngineFeed(@Nullable FuelType engineFeed) {
+        this.engineFeed = engineFeed;
+    }
+
+    public float getExhaustVelocityFactor() {
+        return exhaustVelocityFactor;
+    }
+
+    public void setExhaustVelocityFactor(float exhaustVelocityFactor) {
+        this.exhaustVelocityFactor = exhaustVelocityFactor;
+    }
+
+    /** W. */
+    public double getCoreThermalPower() {
+        return coreThermalPower;
+    }
+
+    /** K. */
+    public double getCoreTemperature() {
+        return coreTemperature;
+    }
+
+    public float getNuclearJetEfficiency() {
+        return nuclearJetEfficiency;
+    }
+
+    /** The nuclear part: the counted cores' power (W) and temperature (K), and the nozzles' jet efficiency. */
+    public void setNuclear(double coreThermalPower, double coreTemperature, float nuclearJetEfficiency) {
+        this.coreThermalPower = coreThermalPower;
+        this.coreTemperature = coreTemperature;
+        this.nuclearJetEfficiency = nuclearJetEfficiency;
+    }
+
+    /** @param coreThermalPower what the counted cores deliver now, W */
+    public void setCoreThermalPower(double coreThermalPower) {
+        this.coreThermalPower = coreThermalPower;
+    }
+
+    /**
+     * The exhaust velocity the engines give the propellant they are fed, m/s (C10 STAT-32): the
+     * monopropellant's row, the pair's row, or for nuclear nozzles the core temperature and the
+     * working fluid's molar mass — times the cluster's cycle fraction. Empty when the propellant is not
+     * loaded or the table has no row for it. A nuclear craft whose working fluid is not loaded yet is
+     * judged on the accepted fluid that gives it the least thrust — the fastest exhaust — so its
+     * thrust is never promised on a fluid it may not carry.
+     */
+    public java.util.OptionalDouble getExhaustVelocity() {
+        if (engineFeed == null) {
+            return java.util.OptionalDouble.empty();
+        }
+        dev.stannismod.stellurgy.util.WeightEngine table = dev.stannismod.stellurgy.Stellurgy.weights();
+        java.util.OptionalDouble ceiling;
+        switch (engineFeed) {
+            case LIQUID_MONOPROPELLANT:
+                ceiling = isLoadedFluid(fuelFluid)
+                        ? table.monopropellantExhaustVelocityOf(FluidRegistry.getFluid(fuelFluid))
+                        : java.util.OptionalDouble.empty();
+                break;
+            case LIQUID_BIPROPELLANT:
+                ceiling = isLoadedFluid(fuelFluid) && isLoadedFluid(oxidizerFluid)
+                        ? table.pairOf(FluidRegistry.getFluid(fuelFluid), FluidRegistry.getFluid(oxidizerFluid))
+                                .map(p -> java.util.OptionalDouble.of(p.exhaustVelocity))
+                                .orElse(java.util.OptionalDouble.empty())
+                        : java.util.OptionalDouble.empty();
+                break;
+            case NUCLEAR_WORKING_FLUID:
+                ceiling = nuclearExhaustVelocity(table);
+                break;
+            default:
+                ceiling = java.util.OptionalDouble.empty();
+        }
+        return ceiling.isPresent()
+                ? java.util.OptionalDouble.of(ceiling.getAsDouble() * exhaustVelocityFactor)
+                : java.util.OptionalDouble.empty();
+    }
+
+    private java.util.OptionalDouble nuclearExhaustVelocity(dev.stannismod.stellurgy.util.WeightEngine table) {
+        if (!(coreTemperature > 0)) {
+            return java.util.OptionalDouble.empty();
+        }
+        if (isLoadedFluid(workingFluid)) {
+            java.util.OptionalDouble m = table.molarMassOf(FluidRegistry.getFluid(workingFluid));
+            return m.isPresent()
+                    ? java.util.OptionalDouble.of(dev.stannismod.stellurgy.api.propulsion.NuclearThermal
+                            .exhaustVelocity(coreTemperature, m.getAsDouble()))
+                    : java.util.OptionalDouble.empty();
+        }
+        double fastest = -1;
+        for (Fluid fluid : FuelRegistry.instance.getFluids(FuelType.NUCLEAR_WORKING_FLUID)) {
+            java.util.OptionalDouble m = table.molarMassOf(fluid);
+            if (m.isPresent()) {
+                fastest = Math.max(fastest, dev.stannismod.stellurgy.api.propulsion.NuclearThermal
+                        .exhaustVelocity(coreTemperature, m.getAsDouble()));
+            }
+        }
+        return fastest > 0 ? java.util.OptionalDouble.of(fastest) : java.util.OptionalDouble.empty();
+    }
+
+    /** The loaded pair's oxidizer-to-fuel ratio by mass; empty unless both halves of a known pair are loaded. */
+    public java.util.OptionalDouble getMixtureRatio() {
+        if (engineFeed != FuelType.LIQUID_BIPROPELLANT || !isLoadedFluid(fuelFluid) || !isLoadedFluid(oxidizerFluid)) {
+            return java.util.OptionalDouble.empty();
+        }
+        return dev.stannismod.stellurgy.Stellurgy.weights()
+                .pairOf(FluidRegistry.getFluid(fuelFluid), FluidRegistry.getFluid(oxidizerFluid))
+                .map(p -> java.util.OptionalDouble.of(p.mixtureRatio))
+                .orElse(java.util.OptionalDouble.empty());
+    }
+
+    /** The mass a burn at {@code forceNewtons} throws out in one tick, kg: {@code F·τ / v_e}; 0 with no {@code v_e}. */
+    public static double ejectedMassPerTick(double forceNewtons, double exhaustVelocity) {
+        return exhaustVelocity > 0 ? Math.max(0, forceNewtons) * TICK_SECONDS / exhaustVelocity : 0;
     }
 
     /** Dry mass in kilograms — the rocket with empty tanks. */
@@ -277,11 +414,8 @@ public class StatsRocket {
      * falls at exactly the rate a player does.
      */
     private float netClimbPerTick(float massKg, float gravitationalMultiplier) {
-        if (massKg <= 0) {
-            return 0;
-        }
-        float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);
-        return (float) (netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED);
+        return (float) dev.stannismod.stellurgy.api.propulsion.ClassicAscent.climbPerTick(getThrust(), massKg,
+                effectiveGravityMultiplier(gravitationalMultiplier));
     }
 
     public float getAcceleration(float gravitationalMultiplier) {
@@ -333,18 +467,27 @@ public class StatsRocket {
         for (FuelType type : FuelType.values()) {
             full.setFuelAmount(type, getFuelCapacity(type));
         }
-        if (NO_FLUID.equals(full.fuelFluid)) {
+        full.nameUnnamedTanks();
+        return full;
+    }
+
+    /**
+     * Gives every tank that has no fluid chosen yet the heaviest fluid the fuel registry accepts for it
+     * — the same choice {@link #withTanksFull} judges a craft by — so contents put in without naming a
+     * fluid weigh and burn as that fluid.
+     */
+    public void nameUnnamedTanks() {
+        if (NO_FLUID.equals(fuelFluid)) {
             FuelType fuelType = getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0
                     ? FuelType.LIQUID_MONOPROPELLANT : FuelType.LIQUID_BIPROPELLANT;
-            full.fuelFluid = heaviestFluidName(fuelType, full.fuelFluid);
+            fuelFluid = heaviestFluidName(fuelType, fuelFluid);
         }
-        if (NO_FLUID.equals(full.oxidizerFluid)) {
-            full.oxidizerFluid = heaviestFluidName(FuelType.LIQUID_OXIDIZER, full.oxidizerFluid);
+        if (NO_FLUID.equals(oxidizerFluid)) {
+            oxidizerFluid = heaviestFluidName(FuelType.LIQUID_OXIDIZER, oxidizerFluid);
         }
-        if (NO_FLUID.equals(full.workingFluid)) {
-            full.workingFluid = heaviestFluidName(FuelType.NUCLEAR_WORKING_FLUID, full.workingFluid);
+        if (NO_FLUID.equals(workingFluid)) {
+            workingFluid = heaviestFluidName(FuelType.NUCLEAR_WORKING_FLUID, workingFluid);
         }
-        return full;
     }
 
     /** The name of the densest fluid the registry accepts as {@code type}, or {@code none} when it
@@ -367,7 +510,49 @@ public class StatsRocket {
     }
 
     public boolean isNuclear() {
-        return fuelBaseRateNuclearWorkingFluid > 0;
+        return engineFeed == FuelType.NUCLEAR_WORKING_FLUID;
+    }
+
+    /**
+     * The usable propellant aboard, kg: the monopropellant or the working fluid as loaded, and for a
+     * pair the mass that burns before EITHER half runs out at the pair's mixture ratio. Zero when the
+     * propellant has no exhaust velocity — it cannot burn at all.
+     */
+    public double getUsablePropellantMass() {
+        if (engineFeed == null || !getExhaustVelocity().isPresent()) {
+            return 0;
+        }
+        dev.stannismod.stellurgy.util.WeightEngine table = dev.stannismod.stellurgy.Stellurgy.weights();
+        switch (engineFeed) {
+            case LIQUID_MONOPROPELLANT:
+                return table.getWeight(FluidRegistry.getFluid(fuelFluid), getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+            case NUCLEAR_WORKING_FLUID:
+                return isLoadedFluid(workingFluid)
+                        ? table.getWeight(FluidRegistry.getFluid(workingFluid), getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID))
+                        : 0;
+            case LIQUID_BIPROPELLANT: {
+                double of = getMixtureRatio().orElse(0);
+                double fuel = table.getWeight(FluidRegistry.getFluid(fuelFluid), getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
+                double ox = table.getWeight(FluidRegistry.getFluid(oxidizerFluid), getFuelAmount(FuelType.LIQUID_OXIDIZER));
+                return of > 0 ? Math.min(fuel * (1 + of), ox * (1 + of) / of) : 0;
+            }
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * The classic ascent from world Y {@code fromY} to {@code lineY} with the propellant aboard, run by
+     * the flight's own law ({@link dev.stannismod.stellurgy.api.propulsion.ClassicAscent}): its rated
+     * thrust, its exhaust velocity, its wet mass, and the gravity the flight reads (C10 STAT-34).
+     *
+     * @param gravity the world's gravitational multiplier, as the flight reads it
+     */
+    public dev.stannismod.stellurgy.api.propulsion.ClassicAscent.Forecast forecastAscent(double fromY, double lineY,
+                                                                                         float gravity) {
+        return dev.stannismod.stellurgy.api.propulsion.ClassicAscent.run(fromY, lineY, getThrust(),
+                getExhaustVelocity().orElse(0), getMass(), getUsablePropellantMass(),
+                effectiveGravityMultiplier(gravity), gravity);
     }
 
     public void setSeatLocation(int x, int y, int z) {
@@ -415,12 +600,15 @@ public class StatsRocket {
         stat.oxidizerFluid = this.oxidizerFluid;
         stat.workingFluid = this.workingFluid;
         stat.drillingPower = this.drillingPower;
+        stat.engineFeed = this.engineFeed;
+        stat.exhaustVelocityFactor = this.exhaustVelocityFactor;
+        stat.coreThermalPower = this.coreThermalPower;
+        stat.coreTemperature = this.coreTemperature;
+        stat.nuclearJetEfficiency = this.nuclearJetEfficiency;
 
         for (FuelType type : FuelType.values()) {
             stat.setFuelAmount(type, this.getFuelAmount(type));
-            stat.setFuelRate(type, this.getFuelRate(type));
             stat.setFuelCapacity(type, this.getFuelCapacity(type));
-            stat.setBaseFuelRate(type, this.getBaseFuelRate(type));
         }
 
         stat.pilotSeatPos = new HashedBlockPosition(this.pilotSeatPos.x, this.pilotSeatPos.y, this.pilotSeatPos.z);
@@ -485,62 +673,6 @@ public class StatsRocket {
     }
 
     /**
-     * @param type
-     * @return the consumption rate of the fuel per tick
-     */
-    public int getFuelRate(@Nullable FuelRegistry.FuelType type) {
-        if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel || type == null)
-            return 0;
-
-        switch (type) {
-            case WARP:
-                return fuelRateWarp;
-            case IMPULSE:
-                return fuelRateImpulse;
-            case ION:
-                return fuelRateIon;
-            case LIQUID_MONOPROPELLANT:
-                return fuelRateMonopropellant;
-            case LIQUID_BIPROPELLANT:
-                return fuelRateBipropellant;
-            case LIQUID_OXIDIZER:
-                return fuelRateOxidizer;
-            case NUCLEAR_WORKING_FLUID:
-                return fuelRateNuclearWorkingFluid;
-        }
-
-        return 0;
-    }
-
-    /**
-     * @param type
-     * @return the base engine consumption rate of the fuel per tick
-     */
-    public int getBaseFuelRate(@Nullable FuelRegistry.FuelType type) {
-
-        if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel || type == null)
-            return 0;
-
-        switch (type) {
-            case WARP:
-                return fuelBaseRateWarp;
-            case IMPULSE:
-                return fuelBaseRateImpulse;
-            case ION:
-                return fuelBaseRateIon;
-            case LIQUID_MONOPROPELLANT:
-                return fuelBaseRateMonopropellant;
-            case LIQUID_BIPROPELLANT:
-                return fuelBaseRateBipropellant;
-            case LIQUID_OXIDIZER:
-                return fuelBaseRateOxidizer;
-            case NUCLEAR_WORKING_FLUID:
-                return fuelBaseRateNuclearWorkingFluid;
-        }
-        return 0;
-    }
-
-    /**
      * Sets the amount of a given fuel type in the stat
      *
      * @param type
@@ -568,68 +700,6 @@ public class StatsRocket {
                 break;
             case NUCLEAR_WORKING_FLUID:
                 fuelNuclearWorkingFluid = amt;
-        }
-    }
-
-    /**
-     * Sets the fuel consumption rate per tick of the stat
-     *
-     * @param type
-     * @param rate
-     */
-    public void setFuelRate(@Nonnull FuelRegistry.FuelType type, int rate) {
-        switch (type) {
-            case WARP:
-                fuelRateWarp = rate;
-                break;
-            case IMPULSE:
-                fuelRateImpulse = rate;
-                break;
-            case ION:
-                fuelRateIon = rate;
-                break;
-            case LIQUID_MONOPROPELLANT:
-                fuelRateMonopropellant = rate;
-                break;
-            case LIQUID_BIPROPELLANT:
-                fuelRateBipropellant = rate;
-                break;
-            case LIQUID_OXIDIZER:
-                fuelRateOxidizer = rate;
-                break;
-            case NUCLEAR_WORKING_FLUID:
-                fuelRateNuclearWorkingFluid = rate;
-        }
-    }
-
-    /**
-     * Sets the engine consumption rate per tick of the stat
-     *
-     * @param type
-     * @param rate
-     */
-    public void setBaseFuelRate(@Nonnull FuelRegistry.FuelType type, int rate) {
-        switch (type) {
-            case WARP:
-                fuelBaseRateWarp = rate;
-                break;
-            case IMPULSE:
-                fuelBaseRateImpulse = rate;
-                break;
-            case ION:
-                fuelBaseRateIon = rate;
-                break;
-            case LIQUID_MONOPROPELLANT:
-                fuelBaseRateMonopropellant = rate;
-                break;
-            case LIQUID_BIPROPELLANT:
-                fuelBaseRateBipropellant = rate;
-                break;
-            case LIQUID_OXIDIZER:
-                fuelBaseRateOxidizer = rate;
-                break;
-            case NUCLEAR_WORKING_FLUID:
-                fuelBaseRateNuclearWorkingFluid = rate;
         }
     }
 
@@ -727,10 +797,10 @@ public class StatsRocket {
         oxidizerFluid = "null";
         workingFluid = "null";
         drillingPower = 0f;
+        clearEngines();
 
         for (FuelType type : FuelType.values()) {
             setFuelAmount(type, 0);
-            setFuelRate(type, 0);
             setFuelCapacity(type, 0);
         }
 
@@ -746,11 +816,20 @@ public class StatsRocket {
         thrust = 0;
         mass = 0;
         drillingPower = 0f;
+        clearEngines();
 
         pilotSeatPos.x = INVALID_SEAT;
         clearEngineLocations();
         passengerSeats.clear();
         statTags.clear();
+    }
+
+    private void clearEngines() {
+        engineFeed = null;
+        exhaustVelocityFactor = 1;
+        coreThermalPower = 0;
+        coreTemperature = 0;
+        nuclearJetEfficiency = 0;
     }
 
     public void setStatTag(String str, float value) {
@@ -796,21 +875,11 @@ public class StatsRocket {
         stats.setInteger("fuelCapacityNuclearWorkingFluid", this.fuelCapacityNuclearWorkingFluid);
         stats.setInteger("fuelCapacityWarp", this.fuelCapacityWarp);
 
-        stats.setInteger("fuelRateMonopropellant", this.fuelRateMonopropellant);
-        stats.setInteger("fuelRateBipropellant", this.fuelRateBipropellant);
-        stats.setInteger("fuelRateOxidizer", this.fuelRateOxidizer);
-        stats.setInteger("fuelRateImpulse", this.fuelRateImpulse);
-        stats.setInteger("fuelRateIon", this.fuelRateIon);
-        stats.setInteger("fuelRateNuclearWorkingFluid", this.fuelRateNuclearWorkingFluid);
-        stats.setInteger("fuelRateWarp", this.fuelRateWarp);
-
-        stats.setFloat("fuelBaseRateMonopropellant", this.fuelBaseRateMonopropellant);
-        stats.setFloat("fuelBaseRateBipropellant", this.fuelBaseRateBipropellant);
-        stats.setFloat("fuelBaseRateOxidizer", this.fuelBaseRateOxidizer);
-        stats.setFloat("fuelBaseRateImpulse", this.fuelBaseRateImpulse);
-        stats.setFloat("fuelBaseRateIon", this.fuelBaseRateIon);
-        stats.setFloat("fuelBaseRateNuclearWorkingFluid", this.fuelBaseRateNuclearWorkingFluid);
-        stats.setFloat("fuelBaseRateWarp", this.fuelBaseRateWarp);
+        stats.setInteger("engineFeed", engineFeed == null ? -1 : engineFeed.id);
+        stats.setFloat("exhaustVelocityFactor", this.exhaustVelocityFactor);
+        stats.setDouble("coreThermalPower", this.coreThermalPower);
+        stats.setDouble("coreTemperature", this.coreTemperature);
+        stats.setFloat("nuclearJetEfficiency", this.nuclearJetEfficiency);
 
         NBTTagCompound dynStats = new NBTTagCompound();
         for (String key : statTags.keySet()) {
@@ -884,22 +953,12 @@ this.reset();
             this.fuelCapacityNuclearWorkingFluid = stats.getInteger("fuelCapacityNuclearWorkingFluid");
             this.fuelCapacityWarp = stats.getInteger("fuelCapacityWarp");
 
-            this.fuelRateMonopropellant = stats.getInteger("fuelRateMonopropellant");
-            this.fuelRateBipropellant = stats.getInteger("fuelRateBipropellant");
-            this.fuelRateOxidizer = stats.getInteger("fuelRateOxidizer");
-            this.fuelRateImpulse = stats.getInteger("fuelRateImpulse");
-            this.fuelRateIon = stats.getInteger("fuelRateIon");
-            this.fuelRateNuclearWorkingFluid = stats.getInteger("fuelRateNuclearWorkingFluid");
-            this.fuelRateWarp = stats.getInteger("fuelRateWarp");
-
-            this.fuelBaseRateMonopropellant = (int)stats.getFloat("fuelBaseRateMonopropellant");
-            this.fuelBaseRateBipropellant = (int)stats.getFloat("fuelBaseRateBipropellant");
-            this.fuelBaseRateOxidizer = (int)stats.getFloat("fuelBaseRateOxidizer");
-            this.fuelBaseRateImpulse = stats.getInteger("fuelBaseRateImpulse");
-            this.fuelBaseRateIon = stats.getInteger("fuelBaseRateIon");
-            this.fuelBaseRateNuclearWorkingFluid = (int)stats.getFloat("fuelBaseRateNuclearWorkingFluid");
-            this.fuelBaseRateWarp = stats.getInteger("fuelBaseRateWarp");
-
+            int feed = stats.getInteger("engineFeed");
+            this.engineFeed = feed >= 0 && feed < FuelType.values().length ? FuelType.getById(feed) : null;
+            this.exhaustVelocityFactor = stats.getFloat("exhaustVelocityFactor");
+            this.coreThermalPower = stats.getDouble("coreThermalPower");
+            this.coreTemperature = stats.getDouble("coreTemperature");
+            this.nuclearJetEfficiency = stats.getFloat("nuclearJetEfficiency");
 
             if (stats.hasKey("dynStats")) {
                 NBTTagCompound dynStats = stats.getCompoundTag("dynStats");

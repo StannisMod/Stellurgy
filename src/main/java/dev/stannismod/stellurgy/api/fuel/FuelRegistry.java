@@ -7,6 +7,12 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.HashSet;
 
+/**
+ * Which fluids (and items) a tank ROLE accepts. A role says what a tank feeds — a monopropellant, a
+ * pair's fuel or oxidizer, a nuclear working fluid — and nothing about how good the fluid is: how
+ * much a millibucket weighs and how fast it leaves the nozzle are the weight table's
+ * ({@code WeightEngine}), one source for both tiers.
+ */
 public class FuelRegistry {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
@@ -27,28 +33,23 @@ public class FuelRegistry {
     }
 
     /**
-     * @param type       {@link FuelType} to register with
-     * @param fluid      fluid to register
-     * @param multiplier amount of fuel points 1mb is worth
+     * @param type  {@link FuelType} to register with
+     * @param fluid fluid to register
      * @return true if successfully added to the registry, false if it already exists
      */
-    public boolean registerFuel(@Nonnull FuelType type, Fluid fluid, float multiplier) {
-        FuelEntry entry = new FuelEntry(fluid, multiplier);
-
-        return type.addFuel(entry);
+    public boolean registerFuel(@Nonnull FuelType type, Fluid fluid) {
+        return type.addFuel(new FuelEntry(fluid));
     }
 
     /**
      * Registers an ItemStack to be used as fuel for engines that use the given type of fuel
      *
-     * @param type       {@link FuelType} to register with
-     * @param item       item to register
-     * @param multiplier amount of fuel points one item is worth
+     * @param type {@link FuelType} to register with
+     * @param item item to register
      * @return true if successfully added to the registry, false if it already exists
      */
-    public boolean registerFuel(@Nonnull FuelType type, @Nonnull ItemStack item, float multiplier) {
-        FuelEntry entry = new FuelEntry(item, multiplier);
-        return type.addFuel(entry);
+    public boolean registerFuel(@Nonnull FuelType type, @Nonnull ItemStack item) {
+        return type.addFuel(new FuelEntry(item));
     }
 
     /**
@@ -74,36 +75,6 @@ public class FuelRegistry {
             return false;
 
         return type.isFuel(obj);
-    }
-
-    /**
-     * @param type  {@link FuelType} registry to check in
-     * @param stack itemStack to check against
-     * @return the amount of fuel points one item of this stack is worth
-     */
-    public float getMultiplier(@Nullable FuelType type, @Nonnull ItemStack stack) {
-        return getMultiplier(type, (Object) stack);
-    }
-
-    /**
-     * @param type  {@link FuelType} registry to check in
-     * @param fluid itemStack to check against
-     * @return the amount of fuel points one millibucket of this fluid is worth
-     */
-    public float getMultiplier(@Nullable FuelType type, Fluid fluid) {
-        return getMultiplier(type, (Object) fluid);
-    }
-
-    private float getMultiplier(@Nullable FuelType type, Object obj) {
-        if (type == null)
-            return 0;
-
-        FuelEntry fuel = type.getFuel(obj);
-
-        if (fuel == null)
-            return 0;
-
-        return fuel.multiplier;
     }
 
     public enum FuelType {
@@ -157,12 +128,6 @@ public class FuelRegistry {
             return isFuel((Object) stack);
         }
 
-        /**
-         * Called by helper functions and to avoid confusion
-         *
-         * @param obj
-         * @return true if the passed Itemstack or fluidstack is a fuel
-         */
         private boolean isFuel(@Nullable Object obj) {
             if (obj == null)
                 return false;
@@ -174,32 +139,6 @@ public class FuelRegistry {
 
             return false;
         }
-
-        //Returns the fuel if it exists otherwise null (Helper)
-
-        public FuelEntry getFuel(@Nonnull ItemStack stack) {
-            return getFuel((Object) stack);
-        }
-
-        //Returns the fuel if it exists otherwise null (Helper)
-        public FuelEntry getFuel(Fluid fluid) {
-            return getFuel((Object) fluid);
-        }
-
-        /**
-         * @param obj
-         * @return Fuel entry for the itemStack if it exists, null otherwise
-         */
-        private FuelEntry getFuel(Object obj) {
-
-            for (FuelEntry fuel : fuels) {
-                FuelEntry entry;
-
-                if ((entry = fuel).fuelMatches(obj))
-                    return entry;
-            }
-            return null;
-        }
     }
 
     private static class FuelEntry {
@@ -209,19 +148,12 @@ public class FuelRegistry {
         //Type: as defined above
         private FuelType type;
 
-        //Multiplier: basically how good is the fuel relative to the base value set in the config
-        private float multiplier;
-
         /**
-         * @param fuel       ItemStack or Fluid to register as fuel
-         * @param multiplier how many fuel points one unit of this object is worth
+         * @param fuel ItemStack or Fluid to register as fuel
          */
-        public FuelEntry(@Nonnull Object fuel, float multiplier) {
+        public FuelEntry(@Nonnull Object fuel) {
             this.fuel = fuel;
-            this.multiplier = multiplier;
         }
-
-        //Returns
 
         /**
          * @param obj object to check against
@@ -256,6 +188,7 @@ public class FuelRegistry {
             }
             return false;
         }
+
         @Override
         public int hashCode() {
             int result = (type != null ? type.hashCode() : 0);

@@ -205,16 +205,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     }
 
     public void recalculateStats(StatsRocket stats) {
-        // Thrust is in newtons and accumulates per engine, so these sum in long: a stack of
-        // reactor cores alone runs into tens of millions.
-        long thrustMonopropellant = 0;
-        long thrustBipropellant = 0;
-        long thrustNuclearNozzleLimit = 0;
-        long thrustNuclearReactorLimit = 0;
-        long thrustNuclearTotalLimit;
-        int monopropellantfuelUse = 0;
-        int bipropellantfuelUse = 0;
-        int nuclearWorkingFluidUseMax = 0;
+        RocketEngineTally engines = new RocketEngineTally();
         int fuelCapacityMonopropellant = 0;
         int fuelCapacityBipropellant = 0;
         int fuelCapacityOxidizer = 0;
@@ -264,17 +255,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                                 // Worn motors produce less thrust (partsWearSystem): a
                                 // motor at max wear keeps (1 - wearThrustPenaltyMax) of
                                 // its rated thrust. Feeds TWR -> may fail the launch gate.
-                                float wear = wearThrustFactor(currBlockPos);
-                                if (block instanceof BlockNuclearRocketMotor) {
-                                    nuclearWorkingFluidUseMax += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                    thrustNuclearNozzleLimit  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
-                                } else if (block instanceof BlockBipropellantRocketMotor) {
-                                    bipropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                    thrustBipropellant  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
-                                } else if (block instanceof BlockRocketMotor) {
-                                    monopropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                    thrustMonopropellant  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
-                                }
+                                engines.addEngine(block, world, currBlockPos, wearThrustFactor(currBlockPos));
                                 stats.addEngineLocation(xCurr - (float)this.sizeX/2 + 0.5f, yCurr+0.5f, zCurr - (float)this.sizeZ/2 + 0.5f);
                             }
                         }
@@ -292,16 +273,9 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                         }
 
                         if (block instanceof IRocketNuclearCore) {
-                            boolean counts;
-                            if (isSD) {
-                                // SD rockets: no vertical stack requirement
-                                counts = true;
-                            } else {
-                                Block below = world.getBlockState(belowPos).getBlock();
-                                counts = (below instanceof IRocketNuclearCore) || (below instanceof IRocketEngine);
-                            }
-                            if (counts) {
-                                thrustNuclearReactorLimit += ((IRocketNuclearCore) block).getMaxThrust(world, currBlockPos);
+                            // SD rockets: no vertical stack requirement
+                            if (isSD || RocketEngineTally.coreFeedsNozzle(this, currBlockPos)) {
+                                engines.addCore((IRocketNuclearCore) block, this, currBlockPos);
                             }
                         }
 
@@ -324,17 +298,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
             }
         }
 
-        NuclearEngineLimit nuclear = NuclearEngineLimit.derive(
-                thrustNuclearNozzleLimit, thrustNuclearReactorLimit, nuclearWorkingFluidUseMax);
-        int nuclearWorkingFluidUse = nuclear.workingFluidUse;
-        thrustNuclearTotalLimit = nuclear.thrust;
-
-        //Set fuel stats
-        //Thrust depending on rocket type
-        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT, monopropellantfuelUse);
-        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_BIPROPELLANT, bipropellantfuelUse);
-        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_OXIDIZER, bipropellantfuelUse);
-        stats.setBaseFuelRate(FuelRegistry.FuelType.NUCLEAR_WORKING_FLUID, nuclearWorkingFluidUse);
         //Fuel storage depending on rocket type
         stats.setFuelCapacity(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT, fuelCapacityMonopropellant);
         stats.setFuelCapacity(FuelRegistry.FuelType.LIQUID_BIPROPELLANT, fuelCapacityBipropellant);
@@ -373,10 +336,39 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         //Non-fuel stats (keep these after the capacity/tag work)
         stats.setMass(mass);
-        stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
+        engines.applyTo(stats);
         stats.setDrillingPower(drillPower);
         stats.setStatTag("intakePower", intakePower);
         // (liquidCapacity already set above)
+    }
+
+    /**
+     * Spends {@code joules} from the cores whose stacks feed this craft's nozzles, in proportion to
+     * what each delivers now, and answers their power afterwards, W — lower once a core's fuel has
+     * burnt out (C10 STAT-35). The same cores the stats count (STAT-36).
+     */
+    public double depleteCores(double joules) {
+        final boolean isSD = (this.entity instanceof dev.stannismod.stellurgy.entity.EntityStationDeployedRocket);
+        java.util.List<BlockPos> fed = new java.util.ArrayList<>();
+        double total = 0;
+        for (TileEntity te : getTileEntityList()) {
+            BlockPos p = te.getPos();
+            Block block = getBlockState(p).getBlock();
+            if (block instanceof IRocketNuclearCore && (isSD || RocketEngineTally.coreFeedsNozzle(this, p))) {
+                double power = ((IRocketNuclearCore) block).getThermalPower(this, p);
+                if (power > 0) {
+                    fed.add(p);
+                    total += power;
+                }
+            }
+        }
+        double after = 0;
+        for (BlockPos p : fed) {
+            IRocketNuclearCore core = (IRocketNuclearCore) getBlockState(p).getBlock();
+            core.produce(this, p, joules * core.getThermalPower(this, p) / total);
+            after += core.getThermalPower(this, p);
+        }
+        return after;
     }
 
     public void addTileEntity(TileEntity te) {

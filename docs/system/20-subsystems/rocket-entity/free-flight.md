@@ -85,9 +85,9 @@ target to `NaN`, permanently ending the assist for that flight `EntityRocket.jav
 throttle net thrust equals the classic ascent acceleration — the FF climb gate is
 *exactly* the classic TWR>1 gate; no invented scale `EntityRocket.java:1045`.
 `FreeFlightPhysics` clamps thrust into `[0, MAX_THRUST_ACCEL]`. Fuel is NOT accounted
-in the pure layer: when `Step.thrustApplied` and `rocketRequireFuel`, the driver
-drains `getFuelConsumptionRate` (plus oxidizer for bipropellant), mirroring the
-classic burn `:1138`. `FF_ENGINE_POWER` = |thrust Δv minus gravity| / `MAX_THRUST_ACCEL`,
+in the pure layer: the driver measures the force the step applied — the change of motion less
+gravity's, read before drag — and burns that through `EntityRocket#burnPropellant` (C10 STAT-33), so a
+hover or a nudge costs what it pushes, never the rated flow. `FF_ENGINE_POWER` = |thrust Δv minus gravity| / `MAX_THRUST_ACCEL`,
 replicated so the engine sound tracks thrust in **any** direction (incl. a hover)
 `:1123`.
 

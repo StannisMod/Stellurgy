@@ -56,6 +56,7 @@ Base classes: `ItemIdWithName` (stores `"name"` string) is the parent of the chi
 | `ItemBasicLaserGun` | Item | channelled ray-trace laser; mines/attacks | transient per-user target (a per-world `WorldRuntime` part, not NBT) | ItemBasicLaserGun.java:49,125 |
 | `ItemJackHammer` | ItemTool | fast rock/iron/geode digger; titanium-repairable | — | ItemJackHammer.java:29,43 |
 | `ItemThermite` | Item | fuel item, 6000-tick burn time | — | ItemThermite.java:19 |
+| `ItemNuclearFuelElement` | Item | one kilogram of 93 % U-235 reactor fuel; registered twice — `nuclearFuelElement` (fresh, NBT `burnupJoules`, capacity 7.63·10¹³ J) and `spentNuclearFuel`; both weigh 1 kg (C10 STAT-35) | — | ItemNuclearFuelElement.java |
 | `ItemBlockFluidTank` | ItemBlock | portable fluid tank; cap=64000×`blockTankCapacity`; dumps to TE on place | Forge FluidTank NBT | ItemBlockFluidTank.java:40,93 |
 | `ItemBlockCrystal` | ItemBlockMeta | metadata name delegate for crystal block | — | ItemBlockCrystal.java:17 |
 

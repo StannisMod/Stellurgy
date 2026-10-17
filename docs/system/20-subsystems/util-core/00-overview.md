@@ -48,7 +48,7 @@ permanent within each cluster.
 |---------|-----|-----------|-----------|
 | Mass / weight | [weight-mass.md](./weight-mass.md) | MECH-WGT-01..06 | `WeightEngine`, `IWeighted` |
 
-**Lives here, owned elsewhere**: `util/NuclearEngineLimit` sits in this package
+**Lives here, owned elsewhere**: `util/RocketEngineTally` sits in this package
 but is a rocket-assembly mechanic — see [rocket-assembly.md](../rocket-assembly.md) MECH-RASM-10.
 It is in `util/` only because all three of its callers are, and none of them owns the other two.
 

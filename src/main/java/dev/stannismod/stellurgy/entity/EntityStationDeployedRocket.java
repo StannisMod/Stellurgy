@@ -584,53 +584,11 @@ public class EntityStationDeployedRocket extends EntityRocket {
         if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel)
             return true;
 
-        final FuelRegistry.FuelType rt = getRocketFuelType();
-        if (rt == null)
+        if (!hasBurnablePropellant())
             return false;
-
-        // current amounts
-        int main = getFuelAmount(rt);
-        final int mainRate = Math.max(1, getFuelConsumptionRate(rt)); // defensive
-
-        if (rt == FuelRegistry.FuelType.LIQUID_BIPROPELLANT) {
-            int ox = getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER);
-            final int oxRate = Math.max(1, getFuelConsumptionRate(FuelRegistry.FuelType.LIQUID_OXIDIZER));
-
-            // both-or-nothing
-            if (main >= mainRate && ox >= oxRate) {
-                setFuelAmount(rt, main - mainRate);
-                setFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER, ox - oxRate);
-            } else {
-                return false; // not enough of one stream
-            }
-
-            // normalize + clear fluid names when empty
-            setFuelAmount(rt, Math.max(0, getFuelAmount(rt)));
-            setFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER, Math.max(0, getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER)));
-
-            if (getFuelAmount(rt) == 0) {
-                stats.setFuelFluid("null");
-                stats.setWorkingFluid("null");
-            }
-            if (getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER) == 0) {
-                stats.setOxidizerFluid("null");
-            }
-            return true;
-        } else {
-            if (main >= mainRate) {
-                setFuelAmount(rt, main - mainRate);
-            } else {
-                return false;
-            }
-
-            // normalize + clear when empty
-            setFuelAmount(rt, Math.max(0, getFuelAmount(rt)));
-            if (getFuelAmount(rt) == 0) {
-                stats.setFuelFluid("null");
-                stats.setWorkingFluid("null");
-            }
-            return true;
-        }
+        // At the rated thrust, by the same drain law as the parent's ascent (C10 STAT-33).
+        burnPropellant(stats.getThrust(), 1);
+        return true;
     }
 
 

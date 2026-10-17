@@ -1,21 +1,16 @@
 package dev.stannismod.stellurgy.api;
 
+import dev.stannismod.stellurgy.api.propulsion.EngineDesign;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 /**
- * Must be implemented by any block that is to be treated like a rocket engine
+ * Must be implemented by any block that is to be treated like a rocket engine.
  */
 public interface IRocketEngine {
     /**
-     * amount of thrust per engine
-     *
-     * @return meters per tick per block
+     * What the engine at {@code pos} is built as: its family, rated thrust, cycle and bell. What it
+     * gives in flight is that design fed its propellant ({@link EngineDesign#regimeFor}).
      */
-    int getThrust(World world, BlockPos pos);
-
-    /**
-     * @return base fuel consumption in mb/tick
-     */
-    int getFuelConsumptionRate(World world, int x, int y, int z);
+    EngineDesign getEngineDesign(World world, BlockPos pos);
 }

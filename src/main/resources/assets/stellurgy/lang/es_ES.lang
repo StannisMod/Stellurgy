@@ -45,7 +45,7 @@ tile.chemreactor.name=Reactor químico
 tile.scrubber.name=Depurador de CO2
 tile.oxygenVent.name=Respiradero de oxígeno
 tile.liquidHatch.name=Fluid Hatch
-tile.rocketFuelBlock.name=Combustible de cohete
+tile.hydrazineBlock.name=Hidracina
 tile.hydrogenFluidBlock.name=Hidrógeno
 tile.oxygenFluidBlock.name=Oxígeno
 tile.oxygenCharger.name=Plataforma de recarga de oxígeno
@@ -131,7 +131,7 @@ data.mass.name=Mass
 
 fluid.oxygen=Oxígeno
 fluid.hydrogen=Hidrógeno
-fluid.rocketFuel=Combustible de cohete
+fluid.hydrazine=Hidracina
 
 mission.asteroidmining.name=Minería de asteroides
 

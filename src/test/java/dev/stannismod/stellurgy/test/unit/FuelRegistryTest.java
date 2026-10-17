@@ -6,7 +6,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.Fluid;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 /**
@@ -31,6 +30,5 @@ public class FuelRegistryTest {
     public void nullFuelTypeIsNeverFuel() {
         Fluid anyFluid = newFluid("ar.test.any." + System.nanoTime());
         assertFalse(FuelRegistry.instance.isFuel((FuelType) null, anyFluid));
-        assertEquals(0f, FuelRegistry.instance.getMultiplier((FuelType) null, anyFluid), 0f);
     }
 }

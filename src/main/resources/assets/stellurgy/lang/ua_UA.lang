@@ -47,7 +47,7 @@ tile.chemreactor.name=Хімічний реактор
 tile.scrubber.name=Поглинач вуглекислого газу
 tile.oxygenVent.name=Кисневий клапан
 tile.liquidHatch.name=Рідинний клапан
-tile.rocketFuelBlock.name=Ракетне паливо
+tile.hydrazineBlock.name=Гідразин
 tile.hydrogenFluidBlock.name=Водень
 tile.oxygenFluidBlock.name=Кисень
 tile.oxygenCharger.name=Кисневий наповнювач
@@ -153,7 +153,7 @@ data.mass.name=Маса
 
 fluid.oxygen=Кисень
 fluid.hydrogen=Водень
-fluid.rocketFuel=Ракетне паливо
+fluid.hydrazine=Гідразин
 
 mission.asteroidmining.name=Вивчення астероїдів
 

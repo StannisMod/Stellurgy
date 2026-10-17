@@ -37,24 +37,28 @@ than renaming neither. C10 STAT-6 carries the full number table.
   on every call; there is no cache of unit weights by registry name — a cache that a table mutation
   had to remember to clear would be a second copy of the answer. `getWeight(stack)` multiplies the unit weight by `stack.getCount()`.
   `WeightEngine.java:92-111`.
-- **MECH-WGT-03 — fluid weight.** `perMb` from `fluids` map (default `fluidFallback`)
-  × amount × `fuelMassScale`. `WeightEngine.java:171-178`.
+- **MECH-WGT-03 — fluid mass and the propellant table.** A fluid's row in `fluids` carries its
+  density (kg/m³ of the condensed form), and where it is a propellant its `molarMass` (g/mol) and its
+  `monopropellantExhaustVelocity` (m/s); `propellantPairs` lists `(fuel, oxidizer) → exhaustVelocity,
+  mixtureRatio` (O/F by mass). Mass per mB is density / 1000 (INV-WGT-09). Every seeded row is a
+  measured value with its source beside it in `WeightEngine#defaultFluids` / `#defaultPairs`. The
+  table is the ONE source of a fluid's mass and propellant data; C10 STAT-32 reads it.
 - **MECH-WGT-04 — tile-entity weight.** Sums `getWeight` over every item-handler slot and every
   fluid-tank content of the TE's capabilities, times `contentMassScale`, added to the TE's own block
   weight. Unconditional; the scale is the only knob and it reaches content alone
   (`WeightEngine#getTEWeight`).
 - **MECH-WGT-05 — JSON load/seed/save.** `load()` reads the five tables
-  (`individual`, `byRegex` [LinkedHashMap, order preserved], `fluids`, `materials`,
-  scalars `fallback`/`fluidFallback`); missing file → `seedDefaults()` + `save()`; parse
-  failure → defaults + warn. `materials` empty ⇒ built-in 26-entry default table.
+  (`individual`, `byRegex` [LinkedHashMap, order preserved], `fluids` rows, `propellantPairs`, `materials`,
+  scalars `fallback`/`fluidFallbackDensity`); missing file → `seedDefaults()` + `save()`; parse
+  failure → defaults + warn. `materials`, `fluids` or `propellantPairs` empty ⇒ the built-in defaults.
   `WeightEngine.java:350-405, 468-495`. The toughness and ablation columns load and save the
   same way, from the same file, and an older file missing its keys simply seeds the defaults.
 
-- **MECH-WGT-06 — schema version.** `save()` writes `formatVersion: 2` (`FORMAT_VERSION`, `WeightEngine.java:61,538`); `load()`
+- **MECH-WGT-06 — schema version.** `save()` writes `formatVersion: 3` (`WeightEngine#FORMAT_VERSION`, `#save`); `load()`
   refuses any file whose version differs, renames it to `weights.json.v<n-1>.bak` and reseeds
-  defaults. A v1 file holds the pre-kilogram numbers and reading those as kilograms makes every
-  hull ~5000x too light; they cannot be converted automatically, because an entry may be a
-  material default or a deliberate absolute and only its author can tell which. If the rename
+  defaults. A file of another schema states its numbers in other units (an older `fluids` entry was
+  kilograms per mB; a v3 row is kg/m³ with propellant data); they cannot be converted automatically,
+  because an entry may be a default or a deliberate absolute and only its author can tell which. If the rename
   fails, defaults are used in memory and the file is left untouched.
   **The retire happens AFTER the reader closes**, not inside `load()`'s try-with-resources:
   Windows refuses to rename an open file, so the version check sets a flag and the rename runs
@@ -98,14 +102,23 @@ between two patterns that both match.
   `WeightEngine.java:86-88`.
 - **INV-WGT-02 [T][SYS]** `individual` override survives a JSON save→load round-trip.
   `test/unit/WeightEngineUnitTest.java:83-102`. Pinned by `WeightEngineUnitTest#individualOverrideSurvivesSaveLoadRoundTrip`. FOR: save format: weight config file.
-- **INV-WGT-03 [T][BEH]** Fluid weight is strictly positive and linear in amount, and scales
-  with `fuelMassScale`. `test/unit/WeightEngineUnitTest.java:43,61`. (Every test builds its own engine
-  from `WeightEngine.fromJson` / a temp file, so none reaches the mod's table.) Pinned by `WeightSystemTest#fluidWeightUsesFallbackAndFuelScale`.
+- **INV-WGT-03** — retired.
+- **INV-WGT-09 [T][SYS]** **A millibucket of any fluid is a litre of its condensed form, and its mass
+  is the fluid's density / 1000 kg wherever a fluid is weighed** — a rocket's own tanks and what any
+  block holds alike, through one function. The density is the fluid's row in the table's `fluids`
+  section (kg/m³), else Forge's `getDensity()` when it is POSITIVE (Forge calls it "completely
+  arbitrary" and makes gases negative, so a non-positive one is no density), else the table's
+  `fluidFallbackDensity` — and that last answer is ANNOUNCED once per fluid in the log, naming the fluid
+  and that its mass is not known. Nothing scales it. REGIONS: `row`, `positive Forge density`,
+  `non-positive Forge density`, `fallback`. FOR: maintainer ruling 2026-10-16 ("1a, 2a"). Pinned by
+  `WeightEngineUnitTest#aMillibucketWeighsItsDensityOverAThousand`.
 - **INV-WGT-04 [T][BEH]** `seedDefaults` populates a non-empty material table.
   `test/unit/WeightEngineUnitTest.java:77`; server-side weight system pinned by
   `test/server/WeightSystemTest.java`. Pinned by `WeightEngineUnitTest#seedDefaultsPopulatesMaterialTable`.
 - **INV-WGT-05 [V]** Component masses (tank/motor/pressure/guidance/hatch) are `tunable`
-  constants. Values (1000 / 10 000 / 25 000 / 9000 / 25 000 kg) are balance numbers and are not
+  constants. An empty propellant tank is 10 % of its full contents (1 m³ of its role's fluid:
+  hydrazine 102.1, hydrogen 7.08, oxidizer 114.1 kg — a ruled RELATION, real stages run 4-10 %);
+  the rest (motor 10 000 / pressure tank 25 000 / guidance 9000 / hatch 25 000 kg) are balance numbers and are not
   pinned here — but the motor mass and `BlockRocketMotor`'s thrust rating are **jointly**
   calibrated (C10 STAT-6) — and no test pins that pairing.
 - **INV-WGT-06 [V]** Regex rules that fail `Pattern.compile` are silently skipped and do
@@ -134,7 +147,6 @@ Registry names hard-coded as component discriminators: `stellurgy:guidancecomput
 
 | flag | mechanic | full-disable path |
 |------|----------|-------------------|
-| `fuelMassScale` (double) | MECH-WGT-03 | fluid contribution → 0 at scale 0 |
 | `contentMassScale` (double, default 1.0, ≥ 0) | MECH-WGT-04 | multiplies held content only; 0 ⇒ inventory contents weigh nothing |
 
 ## Test coverage

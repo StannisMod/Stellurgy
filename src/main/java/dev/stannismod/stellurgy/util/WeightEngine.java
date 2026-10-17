@@ -30,17 +30,24 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.Reader;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
  * Resolves the MASS, in kilograms, of any block, item or fluid. One block is one cubic metre,
- * so a table entry is also that material's density in kg/m³; fluid entries are kilograms per
- * millibucket. Nothing here is a weight: gravity is applied where the force is needed, never
+ * so a table entry is also that material's density in kg/m³. A millibucket of a fluid is a litre of
+ * its CONDENSED form, so a fluid row is that form's density in kg/m³ too, and the same row carries the
+ * propellant data the engines read (molar mass, a monopropellant's exhaust velocity); the propellant
+ * pairs live beside it. Nothing here is a weight: gravity is applied where the force is needed, never
  * baked into the table.
  *
  * Resolution chain for a stack (first hit wins, per single item, before multiplying by count):
@@ -53,15 +60,29 @@ import java.util.regex.PatternSyntaxException;
 public final class WeightEngine {
 
     /**
-     * Schema version of weights.json. Bumped to 2 when the tables moved from a dimensionless
-     * rating to kilograms; a file without a matching version is set aside and reseeded, because
-     * reading pre-kilogram numbers as kilograms makes every hull ~5000x too light. Tables handed to
-     * {@link #fromJson} carry it too, or they are refused the same way.
+     * Schema version of weights.json. 2 moved the tables from a dimensionless rating to kilograms; 3
+     * moved {@code fluids} from kilograms per millibucket to rows in kg/m³ with the propellant data.
+     * A file without a matching version is set aside and reseeded, because its numbers mean something
+     * else here. Tables handed to {@link #fromJson} carry it too, or they are refused the same way.
      */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
+
+    /** A millibucket is a litre, a thousandth of a cubic metre. */
+    private static final double CUBIC_METRES_PER_MB = 1.0 / 1000.0;
+
+    /**
+     * What a fluid weighs when neither the table nor Forge gives it a density: liquid water, 998 kg/m³
+     * at 20 °C. Every use of it is announced (see {@link #densityOf}).
+     */
+    private static final double DEFAULT_FLUID_FALLBACK_DENSITY = 998.0;
 
     // Stellurgy component defaults (kg) — heavy, purpose-built parts that should not fall back to material.
-    private static final double TANK_MASS = 1000;
+    // An empty propellant tank is 10 % of the mass it holds full (maintainer ruling 2026-10-17; real
+    // stages run 4-10 %, Falcon 9's second stage ~4 t dry on ~111 t of propellant). Each holds 1 m³ of
+    // its role's fluid, so: 0.1 x 1021 (hydrazine), 0.1 x 70.8 (liquid hydrogen), 0.1 x 1141 (LOX).
+    private static final double MONOPROPELLANT_TANK_MASS = 102.1;
+    private static final double HYDROGEN_TANK_MASS = 7.08;
+    private static final double OXIDIZER_TANK_MASS = 114.1;
     private static final double MOTOR_MASS = 10000;
     private static final double GUIDANCE_COMPUTER_MASS = 9000;
     private static final double PRESSURE_TANK_MASS = 25000;
@@ -73,10 +94,70 @@ public final class WeightEngine {
     // Persisted, player-editable tables.
     private Map<String, Double> individual = new HashMap<>();
     private Map<String, Double> byRegex = new LinkedHashMap<>();
-    private Map<String, Double> fluids = new HashMap<>();
+    private Map<String, FluidRow> fluids = new HashMap<>();
+    private List<PairRow> propellantPairs = new ArrayList<>();
     private Map<String, Double> materials = new HashMap<>();
     private double fallback = 500;
-    private double fluidFallback = 5;
+    private double fluidFallbackDensity = DEFAULT_FLUID_FALLBACK_DENSITY;
+
+    /** The fluids whose fallback density has been announced, so each is said once per engine. */
+    private final Set<String> announcedFallbacks = Collections.synchronizedSet(new HashSet<>());
+
+    /**
+     * One fluid's row as the file writes it. Every field may be absent: a fluid that is no propellant
+     * has only a density, and a row with no density leaves the density to the next tier of
+     * {@link #densityOf}.
+     */
+    private static final class FluidRow {
+        /** kg/m³ of the condensed form. */
+        Double density;
+        /** g/mol. */
+        Double molarMass;
+        /** m/s in vacuum, for a fluid that burns alone. */
+        Double monopropellantExhaustVelocity;
+
+        FluidRow() {
+        }
+
+        FluidRow(Double density, Double molarMass, Double monopropellantExhaustVelocity) {
+            this.density = density;
+            this.molarMass = molarMass;
+            this.monopropellantExhaustVelocity = monopropellantExhaustVelocity;
+        }
+    }
+
+    /** One propellant pair as the file writes it. */
+    private static final class PairRow {
+        String fuel;
+        String oxidizer;
+        /** m/s in vacuum. */
+        Double exhaustVelocity;
+        /** Oxidizer over fuel, by mass. */
+        Double mixtureRatio;
+
+        PairRow() {
+        }
+
+        PairRow(String fuel, String oxidizer, double exhaustVelocity, double mixtureRatio) {
+            this.fuel = fuel;
+            this.oxidizer = oxidizer;
+            this.exhaustVelocity = exhaustVelocity;
+            this.mixtureRatio = mixtureRatio;
+        }
+    }
+
+    /** What the table says a fuel and an oxidizer burn as together. */
+    public static final class PropellantPair {
+        /** The pair's vacuum exhaust velocity ceiling, m/s. */
+        public final double exhaustVelocity;
+        /** Oxidizer over fuel, by mass. */
+        public final double mixtureRatio;
+
+        PropellantPair(double exhaustVelocity, double mixtureRatio) {
+            this.exhaustVelocity = exhaustVelocity;
+            this.mixtureRatio = mixtureRatio;
+        }
+    }
 
     // Toughness — a second column over the same keys, resolved by the same chain (individual ->
     // byRegex -> material -> fallback) and living in the same file. It answers "how much does it cost
@@ -141,11 +222,22 @@ public final class WeightEngine {
     }
 
     private float componentOrMaterialWeight(String key, ItemStack stack) {
+        if (stack.getItem() instanceof dev.stannismod.stellurgy.item.ItemNuclearFuelElement) {
+            // Fresh or spent, one element is the same kilogram: fission moves it, it does not remove it.
+            return (float) dev.stannismod.stellurgy.item.ItemNuclearFuelElement.MASS_KG;
+        }
         if (stack.getItem() instanceof ItemBlock) {
             Block block = ((ItemBlock) stack.getItem()).getBlock();
 
+            if (block instanceof dev.stannismod.stellurgy.block.BlockOxidizerFuelTank) {
+                return (float) OXIDIZER_TANK_MASS;
+            }
+            if (block instanceof dev.stannismod.stellurgy.block.BlockBipropellantFuelTank
+                    || block instanceof dev.stannismod.stellurgy.block.BlockNuclearFuelTank) {
+                return (float) HYDROGEN_TANK_MASS;
+            }
             if (block instanceof BlockFuelTank) {
-                return (float) TANK_MASS;
+                return (float) MONOPROPELLANT_TANK_MASS;
             }
             if (block instanceof BlockRocketMotor || block instanceof BlockBipropellantRocketMotor) {
                 return (float) MOTOR_MASS;
@@ -311,14 +403,63 @@ public final class WeightEngine {
         return getWeight(stack.getFluid(), stack.amount);
     }
 
-    /** The mass of a rocket's own FUEL, kilograms: the table's mass times {@code fuelMassScale}. */
+    /** The mass of {@code amount} millibuckets of {@code fluid}, kilograms. */
     public float getWeight(Fluid fluid, float amount) {
-        return (float) (fluidMass(fluid, amount) * StellurgyConfiguration.getCurrentConfig().fuelMassScale);
+        return (float) fluidMass(fluid, amount);
     }
 
-    /** A fluid's mass by the table alone, kilograms. Each knob scales its own set: fuel, or content. */
+    /** The one place a fluid is weighed: a millibucket is a litre of the condensed form. */
     private double fluidMass(Fluid fluid, float amount) {
-        return fluids.getOrDefault(fluid.getName(), fluidFallback) * amount;
+        return densityOf(fluid) * CUBIC_METRES_PER_MB * amount;
+    }
+
+    /**
+     * The density of {@code fluid}'s condensed form, kg/m³: its row, else Forge's density when it is
+     * positive, else {@code fluidFallbackDensity} — and that last answer is announced, once per fluid,
+     * because the mass it gives is not the fluid's. Forge's own javadoc calls its number "completely
+     * arbitrary" and makes every gas negative, which is why it is only the second tier and only when
+     * positive.
+     */
+    public double densityOf(Fluid fluid) {
+        FluidRow row = fluids.get(fluid.getName());
+        if (row != null && row.density != null && row.density > 0) {
+            return row.density;
+        }
+        if (fluid.getDensity() > 0) {
+            return fluid.getDensity();
+        }
+        if (announcedFallbacks.add(fluid.getName())) {
+            org.apache.logging.log4j.LogManager.getLogger(dev.stannismod.stellurgy.api.Constants.modId).warn("weights.json has no density for fluid '{}' and Forge"
+                    + " gives it {} (not a density); it is weighed as {} kg/m3, which is NOT its mass. Add a"
+                    + " row to the 'fluids' section.", fluid.getName(), fluid.getDensity(), fluidFallbackDensity);
+        }
+        return fluidFallbackDensity;
+    }
+
+    /** {@code fluid}'s molar mass, g/mol; empty when its row states none. */
+    public java.util.OptionalDouble molarMassOf(Fluid fluid) {
+        FluidRow row = fluids.get(fluid.getName());
+        return row != null && row.molarMass != null && row.molarMass > 0
+                ? java.util.OptionalDouble.of(row.molarMass) : java.util.OptionalDouble.empty();
+    }
+
+    /** The vacuum exhaust velocity {@code fluid} gives burning alone, m/s; empty when it is no monopropellant. */
+    public java.util.OptionalDouble monopropellantExhaustVelocityOf(Fluid fluid) {
+        FluidRow row = fluids.get(fluid.getName());
+        return row != null && row.monopropellantExhaustVelocity != null && row.monopropellantExhaustVelocity > 0
+                ? java.util.OptionalDouble.of(row.monopropellantExhaustVelocity) : java.util.OptionalDouble.empty();
+    }
+
+    /** What {@code fuel} and {@code oxidizer} burn as together; empty when the table has no such pair. */
+    public java.util.Optional<PropellantPair> pairOf(Fluid fuel, Fluid oxidizer) {
+        for (PairRow row : propellantPairs) {
+            if (row != null && fuel.getName().equals(row.fuel) && oxidizer.getName().equals(row.oxidizer)
+                    && row.exhaustVelocity != null && row.exhaustVelocity > 0
+                    && row.mixtureRatio != null && row.mixtureRatio > 0) {
+                return java.util.Optional.of(new PropellantPair(row.exhaustVelocity, row.mixtureRatio));
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     /**
@@ -347,8 +488,6 @@ public final class WeightEngine {
         if (fluidHandler != null) {
             for (IFluidTankProperties info : fluidHandler.getTankProperties()) {
                 if (info != null && info.getContents() != null) {
-                    // CONTENT, so contentMassScale alone (in getTEWeight): fuelMassScale is the rocket's
-                    // own fuel, and applying both made a tank's fluid answer to two knobs at once.
                     weight += (float) fluidMass(info.getContents().getFluid(), info.getContents().amount);
                 }
             }
@@ -419,7 +558,18 @@ public final class WeightEngine {
 
             individual = readMap(gson, root, "individual", mapType);
             byRegex = readMap(gson, root, "byRegex", linkedType);
-            fluids = readMap(gson, root, "fluids", mapType);
+            Type fluidType = new TypeToken<HashMap<String, FluidRow>>() {}.getType();
+            fluids = root.has("fluids") && root.get("fluids").isJsonObject()
+                    ? gson.fromJson(root.getAsJsonObject("fluids"), fluidType) : null;
+            if (fluids == null || fluids.isEmpty()) {
+                fluids = defaultFluids();
+            }
+            Type pairType = new TypeToken<ArrayList<PairRow>>() {}.getType();
+            propellantPairs = root.has("propellantPairs") && root.get("propellantPairs").isJsonArray()
+                    ? gson.fromJson(root.getAsJsonArray("propellantPairs"), pairType) : null;
+            if (propellantPairs == null || propellantPairs.isEmpty()) {
+                propellantPairs = defaultPairs();
+            }
             materials = readMap(gson, root, "materials", mapType);
             if (materials.isEmpty()) {
                 materials = defaultMaterials();
@@ -427,9 +577,8 @@ public final class WeightEngine {
             if (root.has("fallback")) {
                 fallback = root.get("fallback").getAsDouble();
             }
-            if (root.has("fluidFallback")) {
-                fluidFallback = root.get("fluidFallback").getAsDouble();
-            }
+            fluidFallbackDensity = root.has("fluidFallbackDensity")
+                    ? root.get("fluidFallbackDensity").getAsDouble() : DEFAULT_FLUID_FALLBACK_DENSITY;
 
             toughnessIndividual = readMap(gson, root, "toughnessIndividual", mapType);
             ablationIndividual = readMap(gson, root, "ablationIndividual", mapType);
@@ -469,10 +618,11 @@ public final class WeightEngine {
     private void seedDefaults() {
         individual = new HashMap<>();
         byRegex = new LinkedHashMap<>();
-        fluids = new HashMap<>();
+        fluids = defaultFluids();
+        propellantPairs = defaultPairs();
         materials = defaultMaterials();
         fallback = 500;
-        fluidFallback = 5;
+        fluidFallbackDensity = DEFAULT_FLUID_FALLBACK_DENSITY;
         toughnessIndividual = new HashMap<>();
         toughnessByRegex = defaultToughnessByRegex();
         toughnessMaterials = defaultToughnessMaterials();
@@ -505,7 +655,8 @@ public final class WeightEngine {
             seedDefaults();
             return;
         }
-        System.out.println("weights.json predates the move to kilograms; kept as " + retired.getName() + " and reseeded with defaults");
+        System.out.println("weights.json was written for another schema (its numbers mean something else now); kept as "
+                + retired.getName() + " and reseeded with defaults");
         seedDefaults();
         save();
     }
@@ -546,9 +697,10 @@ public final class WeightEngine {
             json.add("individual", gson.toJsonTree(individual));
             json.add("byRegex", gson.toJsonTree(byRegex));
             json.add("fluids", gson.toJsonTree(fluids));
+            json.add("propellantPairs", gson.toJsonTree(propellantPairs));
             json.add("materials", gson.toJsonTree(materials));
             json.addProperty("fallback", fallback);
-            json.addProperty("fluidFallback", fluidFallback);
+            json.addProperty("fluidFallbackDensity", fluidFallbackDensity);
             json.add("toughnessIndividual", gson.toJsonTree(toughnessIndividual));
             json.add("toughnessByRegex", gson.toJsonTree(toughnessByRegex));
             // Every key load() reads is written back. Omitting one does not mean "keep the file's
@@ -562,6 +714,42 @@ public final class WeightEngine {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // ---- Fluid and propellant tables ------------------------------------------
+
+    /**
+     * A row for every fluid the mod registers, and for the two vanilla ones a tank can hold. Each
+     * density is the CONDENSED form's, because a millibucket is a litre of it: a tank of oxygen is a
+     * tank of liquid oxygen. Keys are Forge fluid names, which Forge lowercases.
+     */
+    private static Map<String, FluidRow> defaultFluids() {
+        Map<String, FluidRow> m = new LinkedHashMap<>();
+        // N2H4 at 20 °C; catalytic monopropellant thrusters reach I_sp ≈ 225 s in vacuum (Aerojet MR-80B
+        // class), 225 × 9.80665 = 2 206 m/s.
+        m.put("hydrazine", new FluidRow(1021.0, 32.045, 2206.0));
+        // Liquid H2 at its 20.3 K boiling point.
+        m.put("hydrogen", new FluidRow(70.8, 2.016, null));
+        // Liquid O2 at its 90.2 K boiling point.
+        m.put("oxygen", new FluidRow(1141.0, 31.998, null));
+        // Liquid N2 at its 77.4 K boiling point.
+        m.put("nitrogen", new FluidRow(808.0, 28.014, null));
+        // Liquid CO2 at its triple point, 216.6 K and 5.18 bar.
+        m.put("carbon_dioxide", new FluidRow(1178.0, 44.009, null));
+        // Liquid water at 20 °C.
+        m.put("water", new FluidRow(998.0, 18.015, null));
+        // Molten basalt, 2 600-2 800 kg/m³; the enriched lava is taken to be the same melt.
+        m.put("lava", new FluidRow(2700.0, null, null));
+        m.put("enrichedlava", new FluidRow(2700.0, null, null));
+        return m;
+    }
+
+    /** Measured fuel-oxidizer pairs: a pair burns only if it has a row here. */
+    private static List<PairRow> defaultPairs() {
+        List<PairRow> pairs = new ArrayList<>();
+        // RS-25: I_sp 452.3 s in vacuum (4 436 m/s) at a mixture ratio of 6.03 O/F by mass.
+        pairs.add(new PairRow("hydrogen", "oxygen", 4436.0, 6.03));
+        return pairs;
     }
 
     // ---- Material table -----------------------------------------------------

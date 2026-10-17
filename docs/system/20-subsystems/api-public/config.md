@@ -77,11 +77,11 @@ Copy constructor iterates `@ConfigProperty` fields sorted by name and shallow-co
 
 **Rockets** (`ROCKET`, `:515-550`): `rocketRequireFuel`, `canBeFueledByHand`,
 `nuclearRocketsRespectArtifactGating†`, `nuclearRocketsRequireArtifactForGatedStations†`,
-`rocketThrustMultiplier†`, `fuelCapacityMultiplier†`, `nuclearCoreThrustRatio†`,
+`rocketThrustMultiplier†`, `fuelCapacityMultiplier†`, `nuclearCorePowerRatio†`,
 `automaticRetroRockets`, `orbit†` (contract: orbit height), `stationClearanceHeight†`,
 `transBodyInjection†`, `asteroidTBIBurnMult†`, `warpTBIBurnMult†`, `experimentalSpaceFlight†`,
 `gravityAffectsFuel`, `launchingDestroysBlocks†`, `buildSpeedMultiplier†`, `advancedWeightSystem`,
-`contentMassScale†`, `fuelMassScale†`, `minLaunchTWR†`,
+`contentMassScale†`, `minLaunchTWR†`,
 `wearThrustPenaltyMax†`, `wearWarnProbability†`, `wearCriticalBlocksLaunch†`,
 `serviceStationStandaloneRepairMultiplier†`, `wearTankLeakChanceMax†`, `wearTankLeakFuelLoss†`,
 `wearSeatBlockStageFraction†`, `partsWearSystem`, `increaseWearIntensityProb`, `blackListRocketBlocks`.

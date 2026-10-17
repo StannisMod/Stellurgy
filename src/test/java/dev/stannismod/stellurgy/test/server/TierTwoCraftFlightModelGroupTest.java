@@ -2224,6 +2224,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // Exact: the multiplier is stored as a float, and 0.25 is exact in one.
         requireArranged("the authored body does not carry the gravity it was given (" + gravity + ")",
                 gravity == LOW_GRAVITY);
+        // A motor's force falls with the outside pressure (C10 STAT-31), and the generator rolls this
+        // body's air at random; a thick roll leaves the craft too weak to be built or held, which says
+        // nothing about its fall. So the body is given EARTH's air, read off Earth itself, and the two
+        // craft differ in gravity alone.
+        double earthAir = Reply.of(read("stellurgytest planet info 0").raw()).number("atmosphereDensity");
+        arrange("ar planet set " + dim + " atmosphereDensity " + (int) earthAir).raw();
+        double bodyAir = Reply.of(read("stellurgytest planet info " + dim).raw()).number("atmosphereDensity");
+        requireArranged("the authored body must carry Earth's air (" + earthAir + "), not " + bodyAir,
+                bodyAir == earthAir);
         return dim;
     }
 

@@ -5,7 +5,10 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Test;
 
-import static org.junit.Assert.assertFalse;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -92,12 +95,19 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
                 Reply.of(explodeResp).bool("isDead"));
     }
 
+    /**
+     * C10 STAT-34's wiring at the launch: the fuel check is a forecast that WARNS, never a refusal. A
+     * rocket with empty tanks is told it will not reach orbit — {@code error.rocket.shortOfOrbit} — and
+     * still enters flight (it then falls, which is the pilot's mistake, not the craft's impossibility).
+     * The forecast's law is pinned in {@code PropulsionLawsTest}; this is the launch reading it.
+     *
+     * <p>Does not see: the numbers in the warning, or the climb that follows.</p>
+     */
+    @Pins("STAT-34")
+    @RedWitness(member = "EntityRocket#warnIfShortOfOrbit",
+            at = "if (forecast != null && !forecast.reaches) {", replacedBy = "if (false) {", fails = "STAT-34 the launch must warn", on = "2026-10-17")
     @Test
     public void launchWithZeroFuelStillTransitionsToInFlight() throws Exception {
-        // The upstream merge added a fuel gate to launch(): a rocket with empty
-        // tanks is now refused at launch time (error.rocket.notEnoughMissionFuel)
-        // and never enters flight. Pin that gate: zero fuel + valid destination
-        // must NOT transition to in-flight.
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
         ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
@@ -109,8 +119,9 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
             ok(client().act("stellurgytest rocket launch " + id + " false instant"));
 
             RocketInfo info = RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
-            assertFalse("zero-fuel launch must be refused by the fuel gate "
-                            + "(isInFlight stays false): " + info.raw(),
+            assertEquals("STAT-34 the launch must warn that empty tanks do not reach orbit: " + info.raw(),
+                    "error.rocket.shortOfOrbit", info.errorMessage);
+            assertTrue("STAT-34 a warning is not a refusal: the empty rocket enters flight: " + info.raw(),
                     info.inFlight);
         }
     }

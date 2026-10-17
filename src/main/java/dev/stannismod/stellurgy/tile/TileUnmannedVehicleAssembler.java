@@ -11,7 +11,6 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
-import dev.stannismod.stellurgy.util.NuclearEngineLimit;
 import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -199,14 +198,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
             this.status = ErrorCodes.ALREADY_ASSEMBLED;
             return null;
         }  
-        long thrustMonopropellant = 0;
-        long thrustBipropellant = 0;
-        long thrustNuclearNozzleLimit = 0;
-        long thrustNuclearReactorLimit = 0;
-        long thrustNuclearTotalLimit;
-        int monopropellantfuelUse = 0;
-        int bipropellantfuelUse = 0;
-        int nuclearWorkingFluidUseMax = 0;
+        dev.stannismod.stellurgy.util.RocketEngineTally engines = new dev.stannismod.stellurgy.util.RocketEngineTally();
         int fuelCapacityMonopropellant = 0;
         int fuelCapacityBipropellant = 0;
         int fuelCapacityOxidizer = 0;
@@ -276,16 +268,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
                         // Engines + thrust/fuel use
                         if (block instanceof IRocketEngine) {
-                            if (block instanceof BlockNuclearRocketMotor) {
-                                nuclearWorkingFluidUseMax += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                thrustNuclearNozzleLimit += ((IRocketEngine) block).getThrust(world, currPos);
-                            } else if (block instanceof BlockBipropellantRocketMotor) {
-                                bipropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                thrustBipropellant += ((IRocketEngine) block).getThrust(world, currPos);
-                            } else if (block instanceof BlockRocketMotor) {
-                                monopropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
-                                thrustMonopropellant += ((IRocketEngine) block).getThrust(world, currPos);
-                            }
+                            engines.addEngine(block, world, currPos, 1f);
 
                             // center engine location for UI/particles
                             final float halfX = (actualMaxX - actualMinX + 1) / 2f;
@@ -311,9 +294,9 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                             }
                         }
 
-                        // Nuclear core limits
+                        // A station-deployed craft has no vertical stack requirement: every core counts.
                         if (block instanceof IRocketNuclearCore) {
-                            thrustNuclearReactorLimit += ((IRocketNuclearCore) block).getMaxThrust(world, currPos);
+                            engines.addCore((IRocketNuclearCore) block, world, currPos);
                         }
 
                         // Intakes
@@ -338,45 +321,28 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                 }
             }
 
-            // --- Nuclear working fluid scaling (guarded) ---
-            NuclearEngineLimit nuclear = NuclearEngineLimit.derive(
-                    thrustNuclearNozzleLimit, thrustNuclearReactorLimit, nuclearWorkingFluidUseMax);
-            int nuclearWorkingFluidUse = nuclear.workingFluidUse;
-            thrustNuclearTotalLimit = nuclear.thrust;
-
-            // Write stats
-            stats.setBaseFuelRate(FuelType.LIQUID_MONOPROPELLANT, monopropellantfuelUse);
-            stats.setBaseFuelRate(FuelType.LIQUID_BIPROPELLANT,   bipropellantfuelUse);
-            stats.setBaseFuelRate(FuelType.LIQUID_OXIDIZER,       bipropellantfuelUse);
-            stats.setBaseFuelRate(FuelType.NUCLEAR_WORKING_FLUID, nuclearWorkingFluidUse);
-
-            stats.setFuelRate(FuelType.LIQUID_MONOPROPELLANT, monopropellantfuelUse);
-            stats.setFuelRate(FuelType.LIQUID_BIPROPELLANT,   bipropellantfuelUse);
-            stats.setFuelRate(FuelType.LIQUID_OXIDIZER,       bipropellantfuelUse);
-            stats.setFuelRate(FuelType.NUCLEAR_WORKING_FLUID, nuclearWorkingFluidUse);
+            long thrustMonopropellant = engines.thrust(FuelType.LIQUID_MONOPROPELLANT);
+            long thrustBipropellant = engines.thrust(FuelType.LIQUID_BIPROPELLANT);
+            long thrustNuclear = engines.thrust(FuelType.NUCLEAR_WORKING_FLUID);
 
             stats.setFuelCapacity(FuelType.LIQUID_MONOPROPELLANT, fuelCapacityMonopropellant);
             stats.setFuelCapacity(FuelType.LIQUID_BIPROPELLANT,   fuelCapacityBipropellant);
             stats.setFuelCapacity(FuelType.LIQUID_OXIDIZER,       fuelCapacityOxidizer);
             stats.setFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID, fuelCapacityNuclearWorkingFluid);
 
-            stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
+            engines.applyTo(stats);
             stats.setMass(mass);
             stats.setStatTag("liquidCapacity", fluidCapacity);
 
             // Cross-family checks
             int totalFuel    = fuelCapacityBipropellant + fuelCapacityNuclearWorkingFluid + fuelCapacityMonopropellant;
-            int totalFuelUse = bipropellantfuelUse + nuclearWorkingFluidUse + monopropellantfuelUse;
 
             if (invalidBlock) {
                 status = ErrorCodes.INVALIDBLOCK;
             } else if (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
                     || (fuelCapacityMonopropellant > 0 && totalFuel > fuelCapacityMonopropellant)
                     || (fuelCapacityNuclearWorkingFluid > 0 && totalFuel > fuelCapacityNuclearWorkingFluid))
-                    ||
-                    ((thrustBipropellant > 0 && totalFuelUse > bipropellantfuelUse)
-                    || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
-                    || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
+                    || engines.rolesWithThrust() > 1) {
                 status = ErrorCodes.COMBINEDTHRUST;
             } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
@@ -386,9 +352,12 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                 status = ErrorCodes.NOTANK;
             } else if (thrustBipropellant > 0 && (fuelCapacityBipropellant <= 0 || fuelCapacityOxidizer <= 0)) {
                 status = ErrorCodes.NOFUEL; // missing one of the required tanks
-            } else if (((thrustBipropellant > 0)      && !hasEnoughFuelUnmanned(FuelType.LIQUID_BIPROPELLANT))
-                    || ((thrustMonopropellant > 0)    && !hasEnoughFuelUnmanned(FuelType.LIQUID_MONOPROPELLANT))
-                    || ((thrustNuclearTotalLimit > 0) && !hasEnoughFuelUnmanned(FuelType.NUCLEAR_WORKING_FLUID))) {
+            } else if (thrustBipropellant > 0 && StellurgyConfiguration.getCurrentConfig().rocketRequireFuel
+                    && TileRocketAssemblingMachine.unknownConfiguredPair() != null) {
+                dev.stannismod.stellurgy.Stellurgy.logger.warn("[UnmannedVehicleAssembler] refused a bipropellant craft: weights.json has"
+                        + " no propellantPairs row for " + TileRocketAssemblingMachine.unknownConfiguredPair());
+                status = ErrorCodes.UNKNOWNPROPELLANTPAIR;
+            } else if (thrustMonopropellant + thrustBipropellant + thrustNuclear > 0 && !hasEnoughFuelUnmanned()) {
                 status = ErrorCodes.NOFUEL;
             } else {
                 status = ErrorCodes.SUCCESS;
@@ -406,9 +375,8 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
     }
 
 
-    private boolean hasEnoughFuelUnmanned(@Nonnull FuelType family) {
-        // Fuel not required means no fuel adequacy to judge: the base rate is 0 by design then, and
-        // the burn-time arithmetic below would read that as "cannot reach" and refuse every build.
+    private boolean hasEnoughFuelUnmanned() {
+        // Fuel not required means no fuel adequacy to judge.
         if (!dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) {
             return true;
         }
@@ -416,45 +384,16 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
         final float a_station = 0.005f;
         final float targetS   = 128f;  // SD rocket switches to orbit after ~128 blocks
 
-        float t; // seconds (ticks) we can sustain full burn
-
-        switch (family) {
-            case LIQUID_MONOPROPELLANT: {
-                final int cap  = stats.getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT);
-                final int rate = stats.getBaseFuelRate(FuelType.LIQUID_MONOPROPELLANT);
-                if (cap <= 0 || rate <= 0) return false;
-                t = cap / (float) rate;
-                break;
-            }
-
-            case LIQUID_BIPROPELLANT: {
-                // Both streams must exist; consume in lockstep at their own rates.
-                final int capFuel = stats.getFuelCapacity(FuelType.LIQUID_BIPROPELLANT);
-                final int capOx   = stats.getFuelCapacity(FuelType.LIQUID_OXIDIZER);
-                final int rateFuel= stats.getBaseFuelRate(FuelType.LIQUID_BIPROPELLANT);
-                final int rateOx  = stats.getBaseFuelRate(FuelType.LIQUID_OXIDIZER);
-                if (capFuel <= 0 || capOx <= 0 || rateFuel <= 0 || rateOx <= 0) return false;
-
-                final float tFuel = capFuel / (float) rateFuel;
-                final float tOx   = capOx   / (float) rateOx;
-                t = Math.min(tFuel, tOx);  // limiting stream dictates burn time
-                break;
-            }
-
-            case NUCLEAR_WORKING_FLUID: {
-                final int cap  = stats.getFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID);
-                final int rate = stats.getBaseFuelRate(FuelType.NUCLEAR_WORKING_FLUID);
-                if (cap <= 0 || rate <= 0) return false;
-                t = cap / (float) rate;
-                break;
-            }
-
-            default:
-                return false;
+        // The ticks the full tanks sustain the rated thrust, by the drain law (C10 STAT-33).
+        StatsRocket full = stats.withTanksFull();
+        double perTick = StatsRocket.ejectedMassPerTick(full.getThrust(), full.getExhaustVelocity().orElse(0));
+        if (!(perTick > 0)) {
+            return false;
         }
+        double t = full.getUsablePropellantMass() / perTick;
 
         // distance under constant accel: s = 0.5 * a * t^2
-        final float sCan = 0.5f * a_station * t * t;
+        final double sCan = 0.5 * a_station * t * t;
         return sCan >= targetS;
     }
 

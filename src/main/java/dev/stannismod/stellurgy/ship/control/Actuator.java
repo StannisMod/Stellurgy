@@ -24,15 +24,34 @@ public final class Actuator {
     private final Vector3dc maxTorque;
     private final double minThrottle;
     private final double momentumCapacity;
+    private final java.util.List<PropellantDemand> demands;
 
     private Actuator(ActuatorId id, Vector3dc position, Vector3dc maxForce, Vector3dc maxTorque,
-                     double minThrottle, double momentumCapacity) {
+                     double minThrottle, double momentumCapacity, java.util.List<PropellantDemand> demands) {
         this.id = id;
         this.position = position;
         this.maxForce = maxForce;
         this.maxTorque = maxTorque;
         this.minThrottle = minThrottle;
         this.momentumCapacity = momentumCapacity;
+        this.demands = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(demands));
+    }
+
+    /**
+     * A reaction force at a point that takes propellant: {@link #pointForce} that also declares, per
+     * regime it can run, what it takes at full throttle (C10 STAT-37).
+     */
+    public static Actuator reactionForce(ActuatorId id, Vector3dc position, Vector3dc maxForce,
+                                         java.util.List<PropellantDemand> demands) {
+        requireFinite(position, "position");
+        requireFinite(maxForce, "maxForce");
+        return new Actuator(id, new Vector3d(position), new Vector3d(maxForce), new Vector3d(), 0.0D,
+                Double.POSITIVE_INFINITY, demands);
+    }
+
+    /** What it takes at full throttle, one entry per regime it can run; empty for a device that throws no mass. */
+    public java.util.List<PropellantDemand> demands() {
+        return demands;
     }
 
     /**
@@ -46,7 +65,7 @@ public final class Actuator {
         requireFinite(position, "position");
         requireFinite(maxForce, "maxForce");
         return new Actuator(id, new Vector3d(position), new Vector3d(maxForce), new Vector3d(), 0.0D,
-                Double.POSITIVE_INFINITY);
+                Double.POSITIVE_INFINITY, java.util.Collections.<PropellantDemand>emptyList());
     }
 
     /**
@@ -61,7 +80,7 @@ public final class Actuator {
                     + "capacity, got " + momentumCapacity);
         }
         return new Actuator(id, new Vector3d(), new Vector3d(), new Vector3d(maxTorque), -1.0D,
-                momentumCapacity);
+                momentumCapacity, java.util.Collections.<PropellantDemand>emptyList());
     }
 
     public ActuatorId id() {

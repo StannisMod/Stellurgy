@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
@@ -90,7 +92,7 @@ public class WeightEngineUnitTest {
         // and only a reseed can show as a populated one.
         Files.write(table.toPath(), ("{\"individual\":{\"ar:legacy_probe\":0.1},\"byRegex\":{},"
                 + "\"fluids\":{},\"materials\":{\"ROCK\":0.4},"
-                + "\"fallback\":0.1,\"fluidFallback\":0.001}").getBytes(StandardCharsets.UTF_8));
+                + "\"fallback\":0.1,\"fluidFallbackDensity\":0.001}").getBytes(StandardCharsets.UTF_8));
 
         WeightEngine we = new WeightEngine(table.getPath());
 
@@ -116,6 +118,37 @@ public class WeightEngineUnitTest {
                 + " retired again: save() did not stamp the version it checks", retired.exists());
     }
 
+    /**
+     * INV-WGT-09: a millibucket is a litre of the condensed form, so {@code amount} millibuckets weigh
+     * {@code density/1000 · amount} kg — the row's density first, Forge's only when positive (it makes
+     * gases negative), else the table's fallback.
+     *
+     * <p>Does not see: the once-per-fluid announcement of the fallback (a log line), and the rocket's and
+     * the hull's call sites, which reach this through {@code getWeight(Fluid, …)} and the tile reader.</p>
+     */
+    @Pins("INV-WGT-09")
+    @Regions(of = "INV-WGT-09", value = {"row", "positive Forge density", "non-positive Forge density", "fallback"})
+    @RedWitness(member = "WeightEngine#densityOf", at = "if (fluid.getDensity() > 0) {", replacedBy = "if (fluid.getDensity() != 0) {",
+            fails = "INV-WGT-09 non-positive Forge density", on = "2026-10-17")
+    @Test
+    public void aMillibucketWeighsItsDensityOverAThousand() {
+        WeightEngine we = WeightEngine.fromJson(CURRENT + ",\"fluids\":{\"w_row\":{\"density\":70.8}},"
+                + "\"fluidFallbackDensity\":640.0}");
+        net.minecraft.util.ResourceLocation still = new net.minecraft.util.ResourceLocation("stellurgy", "w_still");
+        net.minecraftforge.fluids.Fluid row = new net.minecraftforge.fluids.Fluid("w_row", still, still).setDensity(5000);
+        net.minecraftforge.fluids.Fluid forge = new net.minecraftforge.fluids.Fluid("w_forge", still, still).setDensity(1021);
+        net.minecraftforge.fluids.Fluid gas = new net.minecraftforge.fluids.Fluid("w_gas", still, still).setDensity(-1000);
+        net.minecraftforge.fluids.Fluid zero = new net.minecraftforge.fluids.Fluid("w_zero", still, still).setDensity(0);
+        int amount = 1234;
+
+        assertEquals("INV-WGT-09 row: the row's density, not Forge's 5000", 70.8 / 1000 * amount,
+                we.getWeight(row, amount), 1e-3);
+        assertEquals("INV-WGT-09 positive Forge density", 1021.0 / 1000 * amount, we.getWeight(forge, amount), 1e-3);
+        assertEquals("INV-WGT-09 non-positive Forge density falls to the table's fallback, never a negative mass",
+                640.0 / 1000 * amount, we.getWeight(gas, amount), 1e-3);
+        assertEquals("INV-WGT-09 fallback for a zero Forge density", 640.0 / 1000 * amount, we.getWeight(zero, amount), 1e-3);
+    }
+
     // ---- The whole file, not one column of it -------------------------------
 
     /**
@@ -136,10 +169,13 @@ public class WeightEngineUnitTest {
                     + "  \"formatVersion\": " + WeightEngine.FORMAT_VERSION + ",\n"
                     + "  \"individual\": {\"ar:probe\": 1.5},\n"
                     + "  \"byRegex\": {\"ar:probe.*\": 2.5},\n"
-                    + "  \"fluids\": {\"ar_probe_fluid\": 0.5},\n"
+                    + "  \"fluids\": {\"ar_probe_fluid\": {\"density\": 0.5, \"molarMass\": 12.5,"
+                    + " \"monopropellantExhaustVelocity\": 13.5}},\n"
+                    + "  \"propellantPairs\": [{\"fuel\": \"ar_f\", \"oxidizer\": \"ar_o\", \"exhaustVelocity\": 14.5,"
+                    + " \"mixtureRatio\": 15.5}],\n"
                     + "  \"materials\": {\"IRON\": 3.5},\n"
                     + "  \"fallback\": 4.5,\n"
-                    + "  \"fluidFallback\": 5.5,\n"
+                    + "  \"fluidFallbackDensity\": 5.5,\n"
                     + "  \"toughnessIndividual\": {\"ar:probe\": 6.5},\n"
                     + "  \"toughnessByRegex\": {\"ar:probe.*\": 7.5},\n"
                     + "  \"toughnessMaterials\": {\"IRON\": 8.5},\n"
@@ -154,10 +190,17 @@ public class WeightEngineUnitTest {
         List<String> lost = new ArrayList<String>();
         assertRow(saved, "individual", "ar:probe", 1.5, lost);
         assertRow(saved, "byRegex", "ar:probe.*", 2.5, lost);
-        assertRow(saved, "fluids", "ar_probe_fluid", 0.5, lost);
+        JsonObject fluids = saved.has("fluids") ? saved.getAsJsonObject("fluids") : new JsonObject();
+        assertRow(fluids, "ar_probe_fluid", "density", 0.5, lost);
+        assertRow(fluids, "ar_probe_fluid", "molarMass", 12.5, lost);
+        assertRow(fluids, "ar_probe_fluid", "monopropellantExhaustVelocity", 13.5, lost);
+        JsonObject pair = saved.has("propellantPairs") && saved.getAsJsonArray("propellantPairs").size() == 1
+                ? saved.getAsJsonArray("propellantPairs").get(0).getAsJsonObject() : new JsonObject();
+        assertScalar(pair, "exhaustVelocity", 14.5, lost);
+        assertScalar(pair, "mixtureRatio", 15.5, lost);
         assertRow(saved, "materials", "IRON", 3.5, lost);
         assertScalar(saved, "fallback", 4.5, lost);
-        assertScalar(saved, "fluidFallback", 5.5, lost);
+        assertScalar(saved, "fluidFallbackDensity", 5.5, lost);
         assertRow(saved, "toughnessIndividual", "ar:probe", 6.5, lost);
         assertRow(saved, "toughnessByRegex", "ar:probe.*", 7.5, lost);
         assertRow(saved, "toughnessMaterials", "IRON", 8.5, lost);

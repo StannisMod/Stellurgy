@@ -1,6 +1,6 @@
 ---
 id: rocket-assembly
-owns: [tile/TileRocketAssemblingMachine.java, tile/TileUnmannedVehicleAssembler.java, util/StorageChunk.java]
+owns: [tile/TileRocketAssemblingMachine.java, tile/TileUnmannedVehicleAssembler.java, util/StorageChunk.java, util/RocketEngineTally.java]
 entrypoints: [TileRocketAssemblingMachine#performFunction, TileRocketAssemblingMachine#scanRocket, TileRocketAssemblingMachine#assembleRocket, StorageChunk#cutWorldBB, StorageChunk#readFromNetwork]
 depends-on: [rocket-entity, dimension-planets, api-public, network-wire, infrastructure-tiles, util-core]
 depended-by: [rocket-entity, client-render, multiblock-machines]
@@ -51,17 +51,21 @@ Trigger: GUI scan/build press, load, land. `TileRocketAssemblingMachine.java:702
 
 **MECH-RASM-02 — Block scan → StatsRocket.** `scanRocket` first tightens the pad AABB to
 non-air, calls `verifyScan` (every column floor is a viable pad block), then per non-air
-block accumulates thrust / fuel-use / fuel-capacity per fuel family, engine & seat
-locations, drilling power, mass in kg (via `WeightEngine` or `+1` when `advancedWeightSystem`
-off), and detects guidance/satellite tiles. Thrust accumulates in `long` and the nuclear derating
-runs in `NuclearEngineLimit` (see MECH-RASM-10). Blacklisted non-replaceable blocks set
+block accumulates engines and cores into one `RocketEngineTally` (MECH-RASM-10), fuel capacity per
+fuel family, engine & seat locations, drilling power, mass in kg (via `WeightEngine` or `+1` when
+`advancedWeightSystem` off), and detects guidance/satellite tiles. Blacklisted non-replaceable blocks set
 `invalidBlock` and fire `PacketInvalidLocationNotify`. `TileRocketAssemblingMachine.java:336`.
 
 **MECH-RASM-03 — Error-code gating.** After accumulation, a single if/else ladder picks the
-verdict: `INVALIDBLOCK` → `COMBINEDTHRUST` (mixed fuel families) → `NOGUIDANCE` →
+verdict: `INVALIDBLOCK` → `COMBINEDTHRUST` (engines of more than one tank role) → `NOGUIDANCE` →
 `NOENGINES` (no thrust at all, or the launch gate says no — below) → `NOFUEL` (biprop needs both
-tanks / insufficient burn distance, the latter for a rocket only — INV-RASM-13) → `SUCCESS`. UV variant replaces the guidance check with
-`NOINTAKE` and `NOTANK` gates. `TileRocketAssemblingMachine.java:551`, `TileUnmannedVehicleAssembler.java:379`.
+tanks; a rocket whose engines have no tank of their role at all — INV-RASM-13) → `UNKNOWNPROPELLANTPAIR`
+(a bipropellant craft while the configured fuels and oxidizers contain a pair with no row, C10 STAT-32;
+the pair is named in the server log) → `SUCCESS`, a rocket's carrying the ascent forecast (C10 STAT-34)
+that the screen shows as "short of orbit: climbs to Y … of …" when it would not reach the line. UV
+variant replaces the guidance check with `NOINTAKE` and `NOTANK` gates and keeps its own fixed-climb
+`NOFUEL` (128 blocks at 0.005 blocks/tick², the SD flight's), counted by the drain law.
+`TileRocketAssemblingMachine#scanRocket`, `TileUnmannedVehicleAssembler#scanRocket` `[V]`.
 **`NOENGINES` asks the launch gate (C10 STAT-29)**: `getThrust() <= 0 ||
 !canLaunchFullFromHere()` (`TileRocketAssemblingMachine.java:652`, `TileUnmannedVehicleAssembler.java:388`),
 where `canLaunchFullFromHere()` (`:276-278`) is `StatsRocket#canLaunch` on the scanned craft with its
@@ -100,15 +104,13 @@ thrust/fuel/weight/seat/drill/intake stats as the tile scan, but from inside the
 wear thrust penalty, and flags `hasServiceMonitor`. Used by the flying entity, not the tile.
 `StorageChunk.java:169`.
 
-**MECH-RASM-10 — Nuclear cluster derating (shared).** Nuclear nozzles cannot be throttled
-individually, so a cluster runs only as many as its reactor cores can feed and its working-fluid
-draw drops in proportion: `fed = min(nozzleThrust, reactorThrust)`,
-`use = floor(useMax · fed / nozzleThrust)`, then thrust is re-derived from the fluid actually spent
-as `use · nozzleThrust / useMax` — truncating `use` is what limits a cluster to the nozzles it can
-keep FULLY powered. All three scan paths call `NuclearEngineLimit.derive`, which computes in `long`
-(thrust is newtons, so a stack of cores runs into tens of millions and `use · nozzleThrust`
-overflows `int` inside buildable sizes) and answers all-zero when there are no nozzles or no fluid
-draw. It is the one shared copy of what were three divergent ones. `util/NuclearEngineLimit.java`.
+**MECH-RASM-10 — One engine tally (shared).** All three scan paths feed `util/RocketEngineTally`:
+per tank role it sums the motors' rated thrust (in `long`, after the blob's wear factor) and their
+thrust over cycle fraction, so the role with the most thrust becomes the craft's engine feed with the
+cluster's harmonic cycle fraction; it sums the thermal power of the nuclear cores whose column ends,
+below, on a nuclear nozzle (C10 STAT-36; the SD rocket counts every core) and their mean temperature.
+`StatsRocket` holds the rated thrust and the cores' power; the power cap `2ηP/v_e` is applied live by
+`StatsRocket#getThrust`, because `v_e` follows the working fluid loaded (C10 STAT-30, STAT-32) `[V]`.
 
 **MECH-RASM-09 — Wear / breakage (parts-wear system).** `damageParts` advances every part's
 `IPartWear` stage (gated off entirely by `partsWearSystem`); `getBreakingProbability`,
@@ -173,9 +175,9 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
   the pad assembler's `MAX_SIZE_Y=128`, so the two tiles remain distinct machines.
   `TileUnmannedVehicleAssembler.java:33`; `TileRocketAssemblingMachine.java:70`. Unpinned on
   purpose: a relation between two constants executes no decision.
-- **INV-RASM-06 [T][BEH]** With `rocketRequireFuel=false`, `hasEnoughFuel` returns `true`
-  unconditionally so a valid structure still assembles (never collapses to `NOFUEL`).
-  `TileRocketAssemblingMachine.java:237`; `RocketRequireFuelDisableAssemblesTest.java:77`. Pinned by `RocketRequireFuelDisableAssemblesTest#validRocketAssemblesWhenFuelNotRequired`.
+- **INV-RASM-06 [T][BEH]** With `rocketRequireFuel=false` no fuel check runs at assembly (no tank
+  check, no pair check, no forecast) so a valid structure still assembles (never collapses to `NOFUEL`).
+  `TileRocketAssemblingMachine#scanRocket`, `#forecastFullFromHere`; `RocketRequireFuelDisableAssemblesTest.java:77`. Pinned by `RocketRequireFuelDisableAssemblesTest#validRocketAssemblesWhenFuelNotRequired`.
 - **INV-RASM-07 [T][BEH]** Wear accrual is single-gated by `partsWearSystem`: system on ⇒
   `damageParts` raises breaking probability > 0; system off ⇒ probability stays 0.
   `StorageChunk.java:796`; `WearAccrualDisableTest.java:76,81`. Pinned by `WearAccrualDisableTest#wearAccruesOnlyWhenSystemEnabled`.
@@ -193,8 +195,9 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
 - **INV-RASM-12 [V]** The stat ladder assumes the three scan implementations (pad tile, UV
   tile, `StorageChunk.recalculateStats`) stay numerically consistent; nothing enforces it
  . `StorageChunk.java:207`, `TileRocketAssemblingMachine.java:578`, `TileUnmannedVehicleAssembler.java:298`.
-- **INV-RASM-13 [T][BEH]** The burn-distance `NOFUEL` ("can its tanks carry it to orbit",
-  `hasEnoughFuel`) is asked of a ROCKET only — a build with no Advanced Flight Computer. A ship is
+- **INV-RASM-13 [T][BEH]** The fuel checks at assembly are a ROCKET's only — a build with no Advanced
+  Flight Computer: a rocket whose engines have no tank of their role is refused `NOFUEL`, and whether
+  its tanks carry it to the line is a FORECAST it is told, never a refusal (C10 STAT-34). A ship is
   flown, and is a legitimate craft for flights that never leave the planet (maintainer 2026-10-05;
   the climb is the body's own line: 100 000 blocks on Earth). The biprop-tanks
   check (INV-RASM-11) still applies to both. `TileRocketAssemblingMachine#scanRocket`;
@@ -225,11 +228,8 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
   `TileUnmannedVehicleAssembler.scanRocket:182`, and `StorageChunk.recalculateStats:169`;
   they already diverge (UV adds intake/fluid gates; blob adds wear penalty & liquidCapacity),
   so a balance change to one silently desyncs the others.
-  **Partly resolved**: the *nuclear derating* leg of the triplication is factored
-  into `util/NuclearEngineLimit.derive` (MECH-RASM-10), because newton-scale thrust makes its
-  intermediate products overflow `int`. It guards division by
-  `workingFluidUseMax` against zero — the shared one
-  guards it once. The rest of the accumulation is still triplicated.
+  **Partly resolved**: the engine and core leg is one `RocketEngineTally` (MECH-RASM-10); tanks,
+  seats, drills and mass are still accumulated three times.
 - `status` is persisted by `ErrorCodes.ordinal()`
   (`TileRocketAssemblingMachine.java:820`/`:858`) with no migration; reordering/inserting an
   enum constant reassigns every saved verdict, and a missing `status` key reads back as
@@ -269,7 +269,7 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
 
 ## Config surface
 
-Config: see `C4-config-surface`. The burn-distance check of `hasEnoughFuel` has no `orbit` key: its distance is the
+Config: see `C4-config-surface`. The ascent forecast has no `orbit` key: its distance is the
 assembler's world's transfer line, `DimensionManager.transferLineOf` (`metric-boundary` MECH-MET-02).
 
 ## Test coverage

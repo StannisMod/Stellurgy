@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.block;
 
 import dev.stannismod.stellurgy.api.IRocketNuclearCore;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.propulsion.EngineDesign;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import net.minecraft.block.material.Material;
@@ -26,10 +28,29 @@ public class BlockNuclearRocketMotor extends BlockRocketMotor {
         super(mat);
     }
 
-    /** Rated thrust, newtons. */
+    /**
+     * Effectively final, process lifetime: built once at class initialisation; an {@link EngineDesign} is immutable. 1 716 750 N rated through the nozzle; what it
+     * really gives is held to its core stack's power (C10 STAT-30, STAT-36). Jet efficiency from
+     * NERVA XE-Prime: 1 140 MW thermal for 246.7 kN at I_sp 710 s, so {@code F·v_e / 2P} = 0.753. No
+     * nuclear engine was ever fired at sea level, so its bell is taken from an engine built to run
+     * from the pad to vacuum, the RS-25 (1 859 of 2 279 kN at one atmosphere).
+     */
+    private static final EngineDesign DESIGN = EngineDesign.nuclearThermal(1_716_750, 0.753, 1859.0 / 2279.0);
+
     @Override
-    public int getThrust(World world, BlockPos pos) {
-        return 1_716_750;
+    public EngineDesign getEngineDesign(World world, BlockPos pos) {
+        return DESIGN;
+    }
+
+    @Override
+    protected FuelRegistry.FuelType propellantRole() {
+        return FuelRegistry.FuelType.NUCLEAR_WORKING_FLUID;
+    }
+
+    @Override
+    public void addActuators(World world, BlockPos pos, IBlockState state,
+                             List<dev.stannismod.stellurgy.ship.control.Actuator> out) {
+        ChemicalMotorActuators.addNuclear(world, pos, state, getEngineDesign(world, pos), out);
     }
     @Override
     public IBlockState getActualState(@Nonnull IBlockState state, IBlockAccess world, BlockPos pos) {
@@ -47,10 +68,6 @@ public class BlockNuclearRocketMotor extends BlockRocketMotor {
         if (world.getBlockState(pos.north()).getBlock() instanceof IRocketNuclearCore)
             return state.withProperty(FACING, EnumFacing.NORTH);
         return state;
-    }
-    @Override
-    public int getFuelConsumptionRate(World world, int x, int y, int z) {
-        return 1;
     }
 
     @Nullable

@@ -52,12 +52,12 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
         ok("stellurgytest place 0 " + PX + " " + PY + " " + PZ
                 + " stellurgy:blockPump");
 
-        // Place a Stellurgy Forge-fluid source (rocketFuel, non-gaseous) directly
+        // Place a Stellurgy Forge-fluid source (hydrazine, non-gaseous) directly
         // below. meta 0 = source block (LEVEL==0 -> canDrain true). Unlike
         // vanilla water, this IS an IFluidBlock so the pump's drain gate
         // passes.
         ok("stellurgytest place 0 " + PX + " " + (PY - 1) + " " + PZ
-                + " stellurgy:rocketFuel");
+                + " stellurgy:hydrazine");
 
         // Inject 1000 RF — pump's max energy (constructor super(1000)).
         // Full energy -> getFrequencyFromPower() returns 1 -> canPerformFunction

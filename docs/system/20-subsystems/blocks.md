@@ -1,6 +1,6 @@
 ---
 id: blocks
-owns: [block/]
+owns: [block/, tile/TileNuclearCore.java]
 entrypoints: [Stellurgy#registerBlocks (owner: misc-oddities), Block#createTileEntity, Block#onBlockActivated, Block#getStateFromMeta]
 depends-on: [atmosphere-oxygen, dimension-planets, space-stations, rocket-assembly, api-public, client-render, world-gen]
 depended-by: [rocket-assembly, multiblock-machines, infrastructure-tiles, satellite, client-render]
@@ -42,12 +42,12 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
 
 | # | class | base | role / distinctive behaviour | anchor |
 |--:|-------|------|------------------------------|--------|
-| 1 | BlockRocketMotor | BlockFullyRotatable · IRocketEngine,IBrokenPartBlock | mono-prop engine; thrust 490 500 N fuel 1 `tunable`; `getActualState` faces toward adjacent `BlockFuelTank`; `TileBrokenPart(10,2×wearProb)`; drops damaged item by wear stage | MECH-BLK-01 |
-| 2 | BlockAdvancedRocketMotor | ↳ BlockRocketMotor | thrust 2 452 500 N fuel 3 `tunable` | MECH-BLK-01 |
-| 3 | BlockNuclearRocketMotor | ↳ BlockRocketMotor | thrust 1 716 750 N; `getActualState` faces `IRocketNuclearCore`; wear ×4 | MECH-BLK-01 |
-| 4 | BlockBipropellantRocketMotor | BlockFullyRotatable · IRocketEngine,IBrokenPartBlock | bi-prop engine; thrust 490 500 N fuel 1; same broken-part flow | MECH-BLK-01 |
-| 5 | BlockAdvancedBipropellantRocketMotor | ↳ BlockBipropellantRocketMotor | thrust 2 452 500 N fuel 3 | MECH-BLK-01 |
-| 6 | BlockNuclearCore | Block · IRocketNuclearCore | `getMaxThrust = 49 050 000 N ×nuclearCoreThrustRatio` `tunable` | MECH-BLK-02 |
+| 1 | BlockRocketMotor | BlockFullyRotatable · IRocketEngine,IBrokenPartBlock | mono-prop engine; `getEngineDesign`: chemical, F_max 490 500 N, cycle 1.0, Merlin-1D sea-level bell (C10 STAT-30..32); `getActualState` faces toward adjacent `BlockFuelTank`; `TileBrokenPart(10,2×wearProb)`; drops damaged item by wear stage | MECH-BLK-01 |
+| 2 | BlockAdvancedRocketMotor | ↳ BlockRocketMotor | chemical, F_max 2 452 500 N, cycle 1.0, Merlin-1D bell | MECH-BLK-01 |
+| 3 | BlockNuclearRocketMotor | ↳ BlockRocketMotor | nuclear thermal, F_max 1 716 750 N, η 0.753, RS-25 bell; thrust held to its core column's power (C10 STAT-36); `getActualState` faces `IRocketNuclearCore`; wear ×4 | MECH-BLK-01 |
+| 4 | BlockBipropellantRocketMotor | BlockFullyRotatable · IRocketEngine,IBrokenPartBlock | bi-prop engine; chemical, F_max 490 500 N, cycle 421/452.3 (gas generator), Merlin-1D bell; same broken-part flow | MECH-BLK-01 |
+| 5 | BlockAdvancedBipropellantRocketMotor | ↳ BlockBipropellantRocketMotor | chemical, F_max 2 452 500 N, cycle 1.0 (staged combustion), RS-25 bell | MECH-BLK-01 |
+| 6 | BlockNuclearCore | Block · IRocketNuclearCore | 1.1·10⁹ W × `nuclearCorePowerRatio` at 2700 K while fuelled; `TileNuclearCore` holds one fuel element | MECH-BLK-02 |
 | 7 | BlockFuelTank | BlockFullyRotatable · IFuelTank | rocket fuel tank; `TANKSTATES{top,bottom,middle}` auto from vertical/horizontal neighbours; `getMaxFill 1000` `tunable`; `TileWearable`; meta = `tankstate + rotation×3` | MECH-BLK-03 |
 | 8 | BlockBipropellantFuelTank | ↳ BlockFuelTank | `getMaxFill 1000` | MECH-BLK-03 |
 | 9 | BlockOxidizerFuelTank | ↳ BlockFuelTank | `getMaxFill 1000` | MECH-BLK-03 |
@@ -107,8 +107,10 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   item damage as wear stage; `getActualState` auto-orients toward adjacent fuel tank / nuclear core; harvest
   drops an item stamped with the tile's wear stage; `getDrops` empty so only the wear-stamped drop survives.
   `BlockRocketMotor.java:41,89,106,137` `BlockNuclearRocketMotor.java:38`
-- **MECH-BLK-02 Nuclear core thrust.** `getMaxThrust = 49 050 000 N × nuclearCoreThrustRatio`, accumulated
-  in `long` by every caller. `BlockNuclearCore.java:28`
+- **MECH-BLK-02 Nuclear core power and fuel.** A core is rated 1.1·10⁹ W × `nuclearCorePowerRatio` at 2700 K and
+  delivers it only while its `TileNuclearCore` holds a fuel element with burn-up left; right-click with an
+  element loads it, an empty hand takes out what it holds (spent fuel included), breaking drops it (C10 STAT-35).
+  `BlockNuclearCore#getThermalPower`, `#onBlockActivated`; `tile/TileNuclearCore#produce` `[V]`.
 - **Thrust is NEWTONS.** Every rating above is 49 050 (= 5000 · 9.81) times its per-gee figure, and the block MASS
   table is 5000 times its per-block figure, so
   `thrust / (mass · g)` — and therefore every rocket's behaviour — is that of the unscaled ratings. One basic motor
@@ -180,9 +182,10 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   and delegate render to vanilla LEAVES. `BlockLightwoodSapling.java:40,67` `BlockLightwoodLeaves.java:67`
 - **MECH-BLK-29 Rocket motors are ship actuators.** `BlockRocketMotor` (and so
   its advanced/nuclear subclasses) and `BlockBipropellantRocketMotor` implement `IShipActuatorBlock`:
-  on a tier-2 hull each is one force of `getThrust` newtons at its block centre, pushing away from the
-  nozzle its ACTUAL state shows; a motor worn to its last stage does not fire. `ChemicalMotorActuators.java`
-  `[V]`. Tier-1 thrust is untouched. See `ship-flight-model` MECH-SFM-04.
+  on a tier-2 hull each is one force at its block centre, pushing away from the nozzle its ACTUAL state
+  shows, of the engine law's size at the world's pressure; a nuclear motor's is held to the core column
+  behind it; a motor worn to its last stage does not fire. `ChemicalMotorActuators.java`
+  `[V]`. See `ship-flight-model` MECH-SFM-04.
 - **MECH-BLK-30 Reaction wheel.** `BlockReactionWheel` (`reactionWheel`, tile
   `TileReactionWheel`): three pure-torque actuators about the ship's axes, `TORQUE` and
   `MOMENTUM_CAPACITY` `tunable`; no recipe. `BlockReactionWheel.java` `[V]`.
