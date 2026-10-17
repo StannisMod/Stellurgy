@@ -13,7 +13,7 @@ import static org.junit.Assert.assertTrue;
  * satellite {@code dataType} ({@code getNewSatellite} returns null and the old
  * code dereferenced it). The fix returns {@code null} for an unresolvable type
  * so callers ({@code DimensionProperties.readFromNBT},
- * {@code PacketSatellite.readClient}, {@code PacketSatellitesUpdate.readClient})
+ * {@code PacketSatellite.executeClient}, {@code PacketSatellitesUpdate.executeClient})
  * drop the satellite instead of crashing. This drives the exact production
  * {@code createFromNBT} path server-side via {@code stellurgytest satellite
  * create-from-nbt-unknown} and confirms it returns null (no NPE).</p>

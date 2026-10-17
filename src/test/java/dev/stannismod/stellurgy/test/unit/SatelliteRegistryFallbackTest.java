@@ -21,7 +21,7 @@ import static org.junit.Assert.assertNull;
  * design — callers such as {@code ItemSatellite} and {@code TileSatelliteHatch}
  * rely on that null), and {@code createFromNBT} also returns {@code null} for an
  * unresolvable type so its callers ({@code DimensionProperties.readFromNBT},
- * {@code PacketSatellite.readClient}, {@code PacketSatellitesUpdate.readClient})
+ * {@code PacketSatellite.executeClient}, {@code PacketSatellitesUpdate.executeClient})
  * drop the satellite. Previously {@code createFromNBT} dereferenced the null →
  * {@code NullPointerException}, which {@code PacketSatellite.readClient} and
  * {@code EntityRocket.readEntityFromNBT} propagated as a client disconnect /

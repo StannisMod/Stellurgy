@@ -240,8 +240,8 @@ ids 0-2 and `PacketItemModifcation` at 6 [V] `network/PacketHandler.java:42-66`,
 throws `IllegalStateException` [V] `PacketHandler.java:99-105`; the `sendTo*` family selects reach through FML outbound attributes
 [V] `:107-148`. The codec decodes on the netty thread — client side through `readClient`, server side through `read` — and **nothing
 else**; per-class handlers then queue `executeClient`/`executeServer` on that side's game thread, resolving the **player when it runs**
-(a respawn queued ahead replaces him) [V] `:150-178`, `network/BasePacket.java:106-120`. `BasePacket.idMap` is an empty map that nothing
-fills, so `getPacketId` always throws — the wire id never comes from it [V] `network/BasePacket.java:19-24,57-62`.
+(a respawn queued ahead replaces him) [V] `:150-178`, `network/BasePacket.java:124-138`. `BasePacket.idMap` is an empty map that nothing
+fills, so `getPacketId` always throws — the wire id never comes from it [V] `network/BasePacket.java:37-42,75-80`.
 
 ### MECH-LVP-12 — the four libVulpes packets
 
@@ -375,7 +375,7 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   second), and every sender is loud before it opens. `network/PacketHandler.java:51-66,99-105`. Reordering renumbers the tail
   ([C2](../30-contracts/C2-network-wire.md) `CON-C2-03`).
 - **INV-LVP-04 [V]** Every packet of the channel executes on the receiving side's game thread, and the player is read when it executes.
-  `network/BasePacket.java:106-120`.
+  `network/BasePacket.java:124-138`.
 - **INV-LVP-05 [V][T]** Every libVulpes decoder reads bytes only; no C→S packet acts on a block, entity or item its sender could not
   reach in his own world, and a refused or undecodable packet is dropped and logged, never thrown. `network/PacketSenderCheck.java:26-110`,
   `network/PacketMachine.java:83-160`, `network/PacketEntity.java:96-160`; `ClientPacketSenderServerGroupTest`,
@@ -490,7 +490,7 @@ replies, a `PowerMultiplier` ≠ 1 (INV-LVP-14). (Searched `src/test/**` for
 - C3 `:225` counts 63 tile ids "all Stellurgy-prefixed" and lists none of the libVulpes tile, block, item or material ids above.
 - [network-wire](./network-wire.md) `:194-196` (Open questions) says the discriminator comes from a counter inside libVulpes and is
   "not verifiable from `src/main`"; it is the list index in `PacketHandler.java:56-58`. Its `INV-NW-01` (`:122`) cites
-  `BasePacket.idMap`, which is empty (`BasePacket.java:19-24`). Both it (`:27`) and C2 (`C2-network-wire.md:14`) still call the
+  `BasePacket.idMap`, which is empty (`BasePacket.java:37-42`). Both it (`:27`) and C2 (`C2-network-wire.md:14`) still call the
   transport "foreign"; it is in-repo since 2026-09-29.
 - C2 `CON-C2-05` (`C2-network-wire.md:85`) calls `PacketBackToRocketGui` the sole C→S packet; libVulpes' `PacketMachine`,
   `PacketEntity`, `PacketItemModifcation` and `PacketChangeKeyState` are also C→S, and since 2026-10-07 they are judged by

@@ -26,6 +26,7 @@ public class PacketStorageTileUpdate extends BasePacket {
 
     EntityRocket entity;
     StorageChunk chunk;
+    int entityId;
     int x, y, z;
     TileEntity tile;
     NBTTagCompound nbt;
@@ -59,37 +60,18 @@ public class PacketStorageTileUpdate extends BasePacket {
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void readClient(ByteBuf in) {
-        //DEBUG:
-        World world;
-        //world = DimensionManager.getWorld(in.readInt());
+        // The sender's dimension; the rocket is looked up in the world the client is in.
         in.readInt();
-        world = Minecraft.getMinecraft().world;
-
-
-        int entityId = in.readInt();
+        entityId = in.readInt();
         x = in.readInt();
         y = in.readInt();
         z = in.readInt();
-        Entity ent = world.getEntityByID(entityId);
-
-        NBTTagCompound nbt = null;
-
         try {
             nbt = new PacketBuffer(in).readCompoundTag();
         } catch (IOException e) {
+            nbt = null;
             e.printStackTrace();
-        }
-
-        this.nbt = nbt;
-
-
-        if (ent instanceof INetworkEntity) {
-            entity = (EntityRocket) ent;
-            this.chunk = entity.storage;
-        } else {
-            //Error
         }
     }
 
@@ -101,10 +83,15 @@ public class PacketStorageTileUpdate extends BasePacket {
     @SideOnly(Side.CLIENT)
     @Override
     public void executeClient(EntityPlayer thePlayer) {
+        World world = thePlayer.world;
+        Entity ent = world.getEntityByID(entityId);
+        if (!(ent instanceof INetworkEntity)) {
+            return;
+        }
+        StorageChunk storage = ((EntityRocket) ent).storage;
         //Make sure the chunk is initialized before using it
-        //sanity check
-        if (this.chunk != null) {
-            TileEntity tile = this.chunk.getTileEntity(new BlockPos(x, y, z));
+        if (storage != null) {
+            TileEntity tile = storage.getTileEntity(new BlockPos(x, y, z));
             tile.onDataPacket(Minecraft.getMinecraft().getConnection().getNetworkManager(), new SPacketUpdateTileEntity(new BlockPos(x, y, z), 0, nbt));
         }
     }

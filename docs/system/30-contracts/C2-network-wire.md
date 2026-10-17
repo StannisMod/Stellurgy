@@ -34,7 +34,7 @@ reordering renumbers the tail.**
 | 2 | `PacketSatellite` | S→C | `SatelliteBase` NBT (compound) → add to its dim | MECH-NW-04 |
 | 3 | `PacketStellarInfo` | S→C | `StellarBody` NBT; null star = remove-star | MECH-NW-04 |
 | 4 | `PacketItemModifcation` | — | *(foreign — libVulpes)* | not a Stellurgy packet; occupies a wire slot |
-| 5 | `PacketOxygenState` | S→C | zero-byte ping | sets `lastSuffocationTime` in readClient (MECH-NW-06) |
+| 5 | `PacketOxygenState` | S→C | zero-byte ping | marks the client's world suffocated, in executeClient (MECH-NW-06) |
 | 6 | `PacketStationUpdate` | S→C | `type.ordinal()` int + type-branched body (`Type` enum) | multiplexer, MECH-NW-05; ordinal = wire value (INV-NW-06) |
 | 7 | `PacketSpaceStationInfo` | S→C | station NBT + class-id + fuel + warp flag + forward dir | `flag` hardcoded false |
 | 8 | `PacketAtmSync` | S→C | NBT: `"pressure"` int (centi-atm; an int because a short wraps above 327.67 atm) + `"breathable"` boolean + `"warning"` string (a lang key) + `"holds"` string list (the statements true of the air, by enum NAME, never by ordinal) | a READOUT, not a model: the client draws it and decides nothing with it. Sent once a second per player, phased on the player's own age so the server does not serve everyone on one tick |
@@ -105,7 +105,7 @@ the server is inert (INV-NW-02).
 - **CON-C2-07 [V] — dead null-guard / SRG-name trap.** `PacketSpaceStationInfo.write` hardcodes
   `boolean flag = false` so a null `spaceObject` NPEs in `writeToNbt` (`PacketSpaceStationInfo.java:40`);
   `PacketStorageTileUpdate.write` reads a vanilla private field by SRG name `"field_148860_e"` — a
-  dev/prod obf trap (`PacketStorageTileUpdate.java:48`).
+  dev/prod obf trap (`PacketStorageTileUpdate.java:49`).
 
 - **CON-C2-08 [A] — dual-source known-planet state.** `PacketSyncKnownPlanets` is sent both by
   Stellurgy's own sync path and per-station in the player-login handler (`Stellurgy.java:1889`) → two

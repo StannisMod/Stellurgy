@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -10,8 +12,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Satellites as a real client meets them when their type cannot be resolved: a sync packet naming a
- * type the client's registry does not hold, and a deploy whose chassis no longer resolves.
+ * Satellites as a real client meets them: a satellite the server adds reaching the client's galaxy, a
+ * sync packet naming a type the client's registry does not hold, and a deploy whose chassis no longer
+ * resolves.
  *
  * <p>NEW-GROUP: the satellite's client-side contracts. No existing client group holds them —
  * {@code ItemRightClickClientGroupTest} is the right-click of a held item, and
@@ -20,8 +23,9 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>What each scenario leaves in the shared world: the deploy scenario spawns a rocket at the player
  * and seats him in it, and dismounts him before it ends; the rocket, named by the probe's reply, is
- * disposed of by that id when the scenario ends. Every observation is scoped by a mark taken before
- * its stimulus.</p>
+ * disposed of by that id when the scenario ends; the satellite the reaching scenario adds is marked dead
+ * when it ends, which the server's dimension tick removes. Every observation is scoped by a mark taken
+ * before its stimulus.</p>
  */
 @org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
 public class SatelliteClientGroupTest extends AbstractSharedClientTest {
@@ -32,13 +36,71 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
     }
 
     /**
+     * A satellite the server adds to the dimension the client stands in is in the client's copy of that
+     * dimension, under its own id, once the client has applied the server's {@code PacketSatellite}
+     * (INV-NW-11).
+     *
+     * <p>Contract: this fails if production stops putting the satellite a {@code PacketSatellite} carries
+     * into the client's galaxy, or puts it under another dimension.</p>
+     *
+     * <p>The server's own {@code DimensionProperties#addSatellite} broadcasts the packet; a probe only
+     * builds the satellite it is handed ({@code satellite create}). The verdict is read where the client
+     * applied the packet ({@code client_satellite_packet_applied}, written as
+     * {@code PacketSatellite#executeClient} returns), not by a later read of the galaxy: a satellite the
+     * client lacks also arrives with the dimension's periodic update, and a later read would answer for
+     * whichever of the two came first.</p>
+     *
+     * <p>What it does not see: the periodic update's own path ({@code PacketSatellitesUpdate}); a satellite
+     * of a dimension the client's galaxy does not hold; and a packet decoded before the client has a galaxy
+     * at all, which no arrangement of this harness can time.</p>
+     *
+     * <p>Leaves nothing: the satellite is marked dead when the scenario ends, and the server's tick of its
+     * dimension removes a dead ticking satellite — an optical one ticks.</p>
+     */
+    @Pins("INV-NW-11")
+    @RedWitness(member = "PacketSatellite#executeClient", at = "prop.addSatellite(satellite);", replacedBy = "",
+            fails = "the dimension the server added it to, and only that one, must hold it in the client's galaxy",
+            on = "2026-10-17")
+    @Test
+    public void aSatelliteTheServerAddsIsInTheClientsCopyOfItsWorld() throws Exception {
+        // A type production registers (Stellurgy's registerSatellite("optical", SatelliteOptical.class)), and
+        // one that ticks (SatelliteBase#canTick), so marking it dead is enough for the server to remove it.
+        final String type = "optical";
+        // The deadline of one server-to-client packet being applied on the client's game thread. Expiry means
+        // the packet was never applied, which the failure says; it is no verdict.
+        final int appliedBudgetTicks = 200;
+        final int dim = plot().dim;
+
+        scenario().arranging("the server adds an optical satellite to the dimension the client stands in");
+        long mark = clientEvents().mark();
+        Reply created = arrange("stellurgytest satellite create " + dim + " " + type);
+        scenario().requireArranged("the server must add the satellite: " + created,
+                created.has("id") && created.integer("dim") == dim);
+        String id = created.text("id");
+        try {
+            scenario().asserting("the client's galaxy holds the satellite, in its dimension, once the packet ran");
+            String applied = clientEvents().awaitRecordWithField(mark, "client_satellite_packet_applied",
+                    "satellite", id, "the client must apply the satellite packet the server broadcast",
+                    appliedBudgetTicks);
+            assertEquals("once the client applied the packet carrying satellite " + id + ", the dimension the"
+                            + " server added it to, and only that one, must hold it in the client's galaxy; the"
+                            + " record of that moment: " + applied,
+                    java.util.Arrays.toString(new int[]{dim}),
+                    java.util.Arrays.toString(Reply.of(applied).intArray("heldIn")));
+        } finally {
+            Reply dead = arrange("stellurgytest satellite set-dead " + dim + " " + id);
+            scenario().requireArranged("the scenario's satellite must be marked dead: " + dead, dead.ok());
+        }
+    }
+
+    /**
      * A satellite sync packet whose type the client cannot resolve is dropped, and the client stays
      * in the world.
      *
-     * <p>{@code PacketSatellite.readClient} calls {@code SatelliteRegistry.createFromNBT}; for a type
+     * <p>{@code PacketSatellite.executeClient} calls {@code SatelliteRegistry.createFromNBT}; for a type
      * the client's registry does not know (a join with a different mod set) {@code getNewSatellite}
      * answers null, and the NPE used to escape the packet handler and disconnect the client. Now
-     * {@code createFromNBT} answers null and {@code readClient} skips it.</p>
+     * {@code createFromNBT} answers null and {@code executeClient} skips it.</p>
      *
      * <p>The absence is only worth as much as the presence beside it: the client's own registry lookup
      * of the bogus type, coming back unresolved, is asserted FIRST — "the client did not disconnect" is
@@ -81,7 +143,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
         // the mixin-recorded lookup above landing in this same log inside this same window.
         String disconnects = clientEvents().since(clientMark, "client_disconnected");
         assertEquals("an unknown satellite type on the wire must NOT disconnect the client:"
-                        + " PacketSatellite.readClient skips the null createFromNBT answers for it. The"
+                        + " PacketSatellite.executeClient skips the null createFromNBT answers for it. The"
                         + " client recorded a disconnection: " + disconnects,
                 0, Events.records(disconnects).size());
 

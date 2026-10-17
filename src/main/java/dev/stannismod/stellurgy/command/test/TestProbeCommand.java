@@ -12866,7 +12866,7 @@ public class TestProbeCommand extends CommandBase {
         if ("announce-unknown".equalsIgnoreCase(args[0]) && args.length >= 2) {
             // /stellurgytest satellite announce-unknown <dim> [bogusType] — broadcast a
             // PacketSatellite whose NBT carries an unregistered dataType,
-            // exercising the REAL client PacketSatellite.readClient ->
+            // exercising the REAL client PacketSatellite.executeClient ->
             // createFromNBT path (repro for C002/C155: the cross-modpack "unknown
             // satellite type on the wire" case that disconnects/crashes the
             // client). The throwaway satellite writes ONLY the bogus dataType, so

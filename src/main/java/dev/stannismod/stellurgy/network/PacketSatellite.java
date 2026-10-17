@@ -1,7 +1,10 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
@@ -41,26 +44,12 @@ public class PacketSatellite extends BasePacket {
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void readClient(ByteBuf in) {
-        PacketBuffer packetBuffer = new PacketBuffer(in);
-        NBTTagCompound nbt;
-
-        //TODO: error handling
         try {
-            nbt = packetBuffer.readCompoundTag();
-            SatelliteBase satellite = SatelliteRegistry.createFromNBT(nbt);
-
-            // Unknown satellite type from a mod set this client doesn't have →
-            // createFromNBT returns null; skip it. The IOException catch below does
-            // NOT cover an NPE, so dereferencing null here would disconnect/crash
-            // the client. See C002/C155.
-            if (satellite == null)
-                return;
-
-            dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getDimensionProperties(satellite.getDimensionId()).addSatellite(satellite);
+            nbt = new PacketBuffer(in).readCompoundTag();
         } catch (IOException e) {
-            e.printStackTrace();
+            nbt = null;
+            Stellurgy.logger.warn("Unreadable satellite packet", e);
         }
     }
 
@@ -70,7 +59,24 @@ public class PacketSatellite extends BasePacket {
 
     }
 
+    @Override
+    @SideOnly(Side.CLIENT)
     public void executeClient(EntityPlayer player) {
+        if (nbt == null) {
+            return;
+        }
+        SatelliteBase satellite = SatelliteRegistry.createFromNBT(nbt);
+        // A satellite type this client's mod set does not have: createFromNBT reports it and answers null.
+        if (satellite == null) {
+            return;
+        }
+        DimensionProperties prop = DimensionManager.getInstance().getDimensionProperties(satellite.getDimensionId());
+        if (prop == null) {
+            Stellurgy.logger.warn("Received satellite {} for unknown dim {}", satellite.getId(),
+                    satellite.getDimensionId());
+            return;
+        }
+        prop.addSatellite(satellite);
     }
 
     public void executeServer(EntityPlayerMP player) {

@@ -10,13 +10,14 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 
 public class PacketSatellitesUpdate extends BasePacket {
 
     private int dimNumber;
     private DimensionProperties dimProperties;
+    /** The satellites' tags as decoded, keyed by satellite id; applied on the game thread. */
+    private NBTTagCompound received;
 
     public PacketSatellitesUpdate() {
     }
@@ -41,14 +42,18 @@ public class PacketSatellitesUpdate extends BasePacket {
 
     @Override
     public void readClient(final ByteBuf byteBuf) {
+        this.dimNumber = byteBuf.readInt();
+        this.received = ByteBufUtils.readTag(byteBuf);
+    }
 
-        if (FMLCommonHandler.instance().getEffectiveSide().isServer()) {
-            return;
-        }
+    @Override
+    public void read(final ByteBuf byteBuf) {
 
-        int dimNumber = byteBuf.readInt();
-        NBTTagCompound compound = ByteBufUtils.readTag(byteBuf);
+    }
 
+    @Override
+    public void executeClient(final EntityPlayer entityPlayer) {
+        NBTTagCompound compound = this.received;
         if (compound == null) {
             return;
         }
@@ -89,16 +94,6 @@ public class PacketSatellitesUpdate extends BasePacket {
                 satellite.readFromNBT(satTag);
             }
         }
-    }
-
-    @Override
-    public void read(final ByteBuf byteBuf) {
-
-    }
-
-    @Override
-    public void executeClient(final EntityPlayer entityPlayer) {
-
     }
 
     @Override

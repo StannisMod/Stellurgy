@@ -134,7 +134,7 @@ public class PacketSerializationTest {
         ByteBuf buffer = newBuffer();
         sent.write(buffer);
 
-        // PacketSatellite.readClient calls SatelliteRegistry.createFromNBT which
+        // PacketSatellite.executeClient calls SatelliteRegistry.createFromNBT which
         // looks up the type string in the satellite registry — that registry is
         // empty in tests. So we verify the wire payload by reading the NBT
         // directly via PacketBuffer (same call the packet would make) without
