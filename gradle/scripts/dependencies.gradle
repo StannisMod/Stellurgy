@@ -89,6 +89,9 @@ dependencies {
     //     transitive = false
     // }
     compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+    // The @Immutable that `errorproneCheck` verifies; javax.annotation.concurrent.Immutable is not read
+    // by Error Prone's ImmutableChecker (witnessed on 2.36.0).
+    compileOnly 'com.google.errorprone:error_prone_annotations:2.36.0'
 
     compileOnly rfg.deobf("mezz.jei:jei_1.12.2:${jeiVersion}:api")
     runtimeOnly rfg.deobf("mezz.jei:jei_1.12.2:${jeiVersion}")
