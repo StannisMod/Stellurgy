@@ -1448,14 +1448,15 @@ final class VSBridge {
      * player stands within the substrate's load distance of it, so the physics object answers "is
      * anybody near this ship" — a question about its motion — and not which ship a block belongs to.
      * The facade's {@code registeredShipIdManagingBlock} is the one entry point to this.</p>
+     *
+     * <p>Nothing is caught. The substrate throws here only on its own broken invariants — a world with
+     * no ship registry ({@code ValkyrienUtils.getWorldDataCapability}) or two records claiming one chunk
+     * ({@code QueryableShipData.getShipFromChunk}) — and answering {@code null} for either would read as
+     * "no ship owns this block", which the weapons code acts on as a block of the world.</p>
      */
     static String registeredShipIdManagingBlock(World world, BlockPos pos) {
-        try {
-            Optional<ShipData> managing = ValkyrienUtils.getShipManagingBlock(world, pos);
-            return managing.isPresent() ? managing.get().getUuid().toString() : null;
-        } catch (Throwable t) {
-            return null;
-        }
+        Optional<ShipData> managing = ValkyrienUtils.getShipManagingBlock(world, pos);
+        return managing.isPresent() ? managing.get().getUuid().toString() : null;
     }
 
     /**

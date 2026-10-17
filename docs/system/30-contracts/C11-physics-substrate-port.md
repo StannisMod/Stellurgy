@@ -179,7 +179,9 @@ may be loaded and ticking (PORT-16).
   in one synchronous pass on the game thread (`WorldServerShipManager.spawnNewShips`), and a load finds
   the record in the world's saved data before any of the ship's chunks arrive — so for every block of
   a real ship the record answers from the first tick that block's tile can run. Its `null` means "no
-  ship owns this block", never "nobody is near". FOR: INV-SHD-25.
+  ship owns this block", never "nobody is near" — and never "the lookup failed": the substrate's own
+  invariant failures (a world with no ship registry, two records on one chunk) are thrown to the caller,
+  not answered as `null`. FOR: INV-SHD-25.
   - **Motion is a separate question, asked of the id.** Whether a ship is SIMULATED (has a physics
     object) is answered by the id-keyed operations — `toWorldFrameFor` and its family (PORT-7),
     `null` while there is no physics object. A caller that needs a pose asks one of those; it never

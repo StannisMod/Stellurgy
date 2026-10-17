@@ -91,9 +91,9 @@ computer's NBT; the engine-side field is the reverse index kept beside it. `[V]`
 **MECH-VSI-04 — Three ways to name a ship, with different liveness.** (a) By **id** — the engine uuid as a
 string; `physoById` walks LOADED ships (`VSBridge.java:1399`); every `…For` frame operation, the velocity
 read and the stay region use it, and answer `null` when that ship is not loaded on this side. (b) By
-**block** — `shipIdManagingBlock` asks the claim of a LOADED physics object (`:1420`, null for a ship nobody
-is near); `registeredShipIdManagingBlock` asks the registry record (`:1445`, `VSIntegration.java:1119`) and
-answers for unloaded ships too — the two are not interchangeable, and the second is the one for IDENTITY.
+**block** — `registeredShipIdManagingBlock`, the one entry point (C11 PORT-16), asks the registry record
+(`VSBridge#registeredShipIdManagingBlock`) and answers for unloaded ships too; it catches nothing, so the
+substrate's own invariant failures reach the caller instead of reading as "no ship".
 (c) By **containment** — `shipIdsAt` returns EVERY loaded ship whose world box grown by `ABOARD_MARGIN`
 (1.0) contains the point (`VSBridge.java:1459`, `:1759`); the entity-keyed conversions (`toShipFrame`…) take the FIRST
 such box (`:1327-1342`) and exist only for first contact. A **nearest-ship** lookup with no distance bound
