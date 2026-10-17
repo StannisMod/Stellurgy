@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -90,10 +90,8 @@ public class SystemBodyTest {
      * A moon shares its parent's cell NAME and rides its parent's frame, while keeping its own live
      * offset inside it — that is what makes a planet-and-its-moons one destination.
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemBody#inCellOffsetAt} at {@code offsetLaw.offsetAt(tick)} (then bound to a local"
-            + " {@code raw}, since returned directly) reading the offset law at"
-            + " tick 0 instead of the tick asked, this fails with \"a moon's offset inside its parent's cell is"
-            + " live. Actual: BlockDelta[120000,0,0]\" — 300 units at 400 blocks each, the fixture printed.")
+    @RedWitness(member = "SystemBody#inCellOffsetAt", at = "offsetLaw.offsetAt(tick)", replacedBy = "offsetLaw.offsetAt(0L)",
+            fails = "a moon's offset inside its parent's cell is live", on = "2026-10-17")
     @Test
     public void aMoonKeepsItsParentsNameAndMovesInsideIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(9, 0, 0, 0, 0, 0);
@@ -231,9 +229,9 @@ public class SystemBodyTest {
      * so it is refused when built rather than flattened onto the cell face — where every point of
      * the orbit beyond the face lands on one spot and the body looks as if it stopped moving.
      */
-    @LegacyWitness(prose = "with {@code SystemBody#requireInsideOwnCell} at"
-            + " {@code if (!offsetLaw.staysWithin(-half, half - 1L))} inverted to never throw, this fails with"
-            + " \"a moon whose orbit is wider than the cell that names it must be refused\" (2026-10-02).")
+    @RedWitness(member = "SystemBody#requireInsideOwnCell", at = "if (!offsetLaw.staysWithin(-half, half - 1L))",
+            replacedBy = "if (false)", fails = "a moon whose orbit is wider than the cell that names it must be refused",
+            on = "2026-10-17")
     @Test
     public void aBodyWhoseOffsetLeavesItsOwnCellIsRefusedWhenBuilt() {
         GalacticCoord giantCell = GalacticCoord.ofSectorLocal(9, 0, -3, 0, 0, 0);

@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.integration.vs.ShipInertiaWriter;
 import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.junit.Test;
@@ -35,11 +35,15 @@ public class ShipInertiaWriterTest {
                 .build();
     }
 
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#applyTo} at {@code if (!isInvertible(tensor))}'s refusal taken"
-            + " for every tensor fails \"a well-formed frame must be accepted\"; {@code ShipInertiaWriter#applyTo} at {@code record.setGameTickMass(frame.getTotalMass());}'s mass write skipped"
-            + " fails \"total mass must be the frame's\" (0.0); {@code ShipInertiaWriter#applyTo} at {@code record.setGameTickCenterOfMass(new Vector3d(frame.getCentreOfMass()));}'s centre write skipped fails \"centre"
-            + " of mass must be the frame's\" (1.346); {@code ShipInertiaWriter#applyTo} at {@code record.setGameMoITensor(tensor);}'s tensor write skipped fails \"the tensor must"
-            + " be the frame's\".")
+    @RedWitness(verdict = "accepted", member = "ShipInertiaWriter#applyTo", at = "if (!isInvertible(tensor))",
+            replacedBy = "if (true)", fails = "a well-formed frame must be accepted", on = "2026-10-17")
+    @RedWitness(verdict = "mass", member = "ShipInertiaWriter#applyTo", at = "record.setGameTickMass(frame.getTotalMass());",
+            replacedBy = "", fails = "total mass must be the frame's", on = "2026-10-17")
+    @RedWitness(verdict = "centre", member = "ShipInertiaWriter#applyTo",
+            at = "record.setGameTickCenterOfMass(new Vector3d(frame.getCentreOfMass()));", replacedBy = "",
+            fails = "centre of mass must be the frame's", on = "2026-10-17")
+    @RedWitness(verdict = "tensor", member = "ShipInertiaWriter#applyTo", at = "record.setGameMoITensor(tensor);",
+            replacedBy = "", fails = "the tensor must be the frame's", on = "2026-10-17")
     @Test
     public void aWriteMovesMassCentreAndTensorTogether() {
         // Any consumer that saw one of the three updated and not the others would be integrating a body
@@ -59,9 +63,13 @@ public class ShipInertiaWriterTest {
                 new Matrix3d(record.getGameMoITensor()));
     }
 
-    @LegacyWitness(prose = "2026-09-30 — {@code ShipInertiaWriter#isInvertible} at {@code return !Double.isNaN(det) && !Double.isInfinite(det) && Math.abs(det) > 1.0e-9;} answering every tensor invertible"
-            + " fails \"must be refused\"; the mass written before the check at {@code ShipInertiaWriter#applyTo} at {@code Matrix3d tensor = new Matrix3d(frame.getInertia());} fails \"must leave the"
-            + " record untouched\".")
+    @RedWitness(verdict = "refused", member = "ShipInertiaWriter#isInvertible",
+            at = "return !Double.isNaN(det) && !Double.isInfinite(det) && Math.abs(det) > 1.0e-9;",
+            replacedBy = "return true;", fails = "must be refused", on = "2026-10-17")
+    @RedWitness(verdict = "untouched", member = "ShipInertiaWriter#applyTo",
+            at = "Matrix3d tensor = new Matrix3d(frame.getInertia());",
+            replacedBy = "record.setGameTickMass(frame.getTotalMass()); Matrix3d tensor = new Matrix3d(frame.getInertia());",
+            fails = "must leave the record untouched", on = "2026-10-17")
     @Test
     public void aSingularTensorIsRefusedBeforeItReachesThePhysicsTick() {
         // The physics loop inverts the tensor every step, so a degenerate one is a NaN torque rather
@@ -87,7 +95,10 @@ public class ShipInertiaWriterTest {
      * answering null, the scenario stops at "must report the record once it is 20% light" — the
      * verdict alone would have stayed green — 2026-10-04.</p>
      */
-    @LegacyWitness(prose = "with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails \"cannot be in drift\" (a drift was returned), 2026-09-30.")
+    @RedWitness(member = "ShipInertiaWriter#compare",
+            at = "if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)",
+            replacedBy = "if (!(Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE))",
+            fails = "cannot be in drift", on = "2026-10-17")
     @Test
     public void aRecordThatAgreesWithTheAuthorityReportsNothing() {
         ShipInertiaData record = new ShipInertiaData();
@@ -104,10 +115,18 @@ public class ShipInertiaWriterTest {
                 ShipInertiaWriter.compare(record, frame, "unit-hull") != null);
     }
 
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement"
-            + " test inverted fails \"must be reported\"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} naming the ship \"?\" fails \"must name the"
-            + " ship\"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} with the sign flipped fails \"-0.20 of the authority\"; the record repaired"
-            + " inside {@code compare} before {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} fails \"must not repair the record\".")
+    @RedWitness(verdict = "reported", member = "ShipInertiaWriter#compare",
+            at = "if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)",
+            replacedBy = "if (!(Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE))",
+            fails = "must be reported", on = "2026-10-17")
+    @RedWitness(verdict = "names the ship", member = "ShipInertiaWriter#compare", at = "return new Drift(shipName,",
+            replacedBy = "return new Drift(\"?\",", fails = "must name the ship", on = "2026-10-17")
+    @RedWitness(verdict = "sign and magnitude", member = "ShipInertiaWriter#compare",
+            at = "(recorded - expected) / massScale, centreError);", replacedBy = "(expected - recorded) / massScale, centreError);",
+            fails = "-0.20 of the authority", on = "2026-10-17")
+    @RedWitness(verdict = "left alone", member = "ShipInertiaWriter#compare", at = "return new Drift(shipName,",
+            replacedBy = "record.setGameTickMass(expected); return new Drift(shipName,",
+            fails = "must not repair the record", on = "2026-10-17")
     @Test
     public void driftIsReportedWithItsSignAndMagnitudeAndTheRecordIsLEFTALONE() {
         // The whole design of this reconciliation: it is an instrument, not a repair. Substituting the
@@ -136,7 +155,10 @@ public class ShipInertiaWriterTest {
      * <p>The control's own witness: with {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);}
      * answering null, the scenario stops at "must report a record five percent heavy" — 2026-10-04.</p>
      */
-    @LegacyWitness(prose = "with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails \"half a percent is accumulation\" (a drift was returned), 2026-09-30.")
+    @RedWitness(member = "ShipInertiaWriter#compare",
+            at = "if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)",
+            replacedBy = "if (!(Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE))",
+            fails = "half a percent is accumulation", on = "2026-10-17")
     @Test
     public void aDisagreementSmallerThanTheToleranceIsNotDrift() {
         // The tolerance is relative on mass so it means the same thing for a shuttle and a capital
@@ -158,9 +180,13 @@ public class ShipInertiaWriterTest {
                 ShipInertiaWriter.compare(record, frame, "unit-hull") != null);
     }
 
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)} comparing mass"
-            + " only fails \"must be reported\"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} doubling the centre offset fails \"how far the centre"
-            + " moved\"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} reporting the centre error as the mass error fails \"must not blame it\".")
+    @RedWitness(verdict = "reported", member = "ShipInertiaWriter#compare", at = "&& centreError <= CENTRE_TOLERANCE)",
+            replacedBy = ")", fails = "must be reported", on = "2026-10-17")
+    @RedWitness(verdict = "how far", member = "ShipInertiaWriter#compare", at = "/ massScale, centreError);",
+            replacedBy = "/ massScale, 2 * centreError);", fails = "how far the centre moved", on = "2026-10-17")
+    @RedWitness(verdict = "not blamed on mass", member = "ShipInertiaWriter#compare",
+            at = "(recorded - expected) / massScale, centreError);", replacedBy = "centreError, centreError);",
+            fails = "must not blame it", on = "2026-10-17")
     @Test
     public void aCentreThatHasWalkedAwayIsDriftEvenWhenTheMassAgrees() {
         // Mass and centre fail independently: a block moved from bow to stern changes the centre and

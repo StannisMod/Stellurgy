@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.mission.GasHarvest;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -24,9 +24,8 @@ public class GasHarvestTest {
         return GasHarvest.missionSeconds(HARVEST_MB, TANK_MB, INTAKE, partialPressure);
     }
 
-    @LegacyWitness(prose = "with {@code GasHarvest#missionSeconds} at"
-            + " {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, both"
-            + " pressures timed 256 s and the twice-as-dense gas was not faster.")
+    @RedWitness(member = "GasHarvest#missionSeconds", at = "* ((double) partialPressure / (double) AirState.ONE_ATM)",
+            replacedBy = "", fails = "s, so at two it is half that", on = "2026-10-17")
     @Test
     public void aGasTwiceAsDenseFillsTheSameTanksInHalfTheTime() {
         long atOne = secondsAt(AirState.ONE_ATM);
@@ -35,9 +34,8 @@ public class GasHarvestTest {
         assertEquals("at one atmosphere " + atOne + " s, so at two it is half that", atOne, 2L * atTwo);
     }
 
-    @LegacyWitness(prose = "with {@code GasHarvest#missionSeconds} at"
-            + " {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, a"
-            + " part-per-million gas timed 256 s, the same as a whole atmosphere of it.")
+    @RedWitness(member = "GasHarvest#missionSeconds", at = "* ((double) partialPressure / (double) AirState.ONE_ATM)",
+            replacedBy = "", fails = "a part per million is a million times slower than a whole atmosphere", on = "2026-10-17")
     @Test
     public void aTraceGasIsHarvestableAtTheRateItsPressureGives() {
         long atOne = secondsAt(AirState.ONE_ATM);
@@ -47,8 +45,8 @@ public class GasHarvestTest {
                 Math.abs(atOnePpm - 1_000_000L * atOne) <= 1L);
     }
 
-    @LegacyWitness(prose = "with {@code GasHarvest#missionSeconds} at {@code if (partialPressure <= 0L)}"
-            + " narrowed to {@code < 0L}, a gas at zero pressure was timed instead of refused.")
+    @RedWitness(member = "GasHarvest#missionSeconds", at = "if (partialPressure <= 0L)", replacedBy = "if (partialPressure < 0L)",
+            fails = "a gas at zero partial pressure was timed at", on = "2026-10-17")
     @Test
     public void aGasAbsentFromTheAirIsRefused() {
         try {

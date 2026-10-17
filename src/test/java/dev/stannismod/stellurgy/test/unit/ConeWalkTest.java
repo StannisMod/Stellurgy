@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
 import org.junit.Test;
 
@@ -73,13 +73,15 @@ public class ConeWalkTest {
      * <p>Fails if {@code ConeWalk#lookAt} stops deciding that a look is placed inside the patch of sky
      * it was aimed at.</p>
      */
-    @LegacyWitness(prose = "with {@code ConeWalk#radiusOfShell} at"
-            + " {@code double radius = s * Math.tan(halfAngleRadians);} doubled, this fails with \"look 2 stands"
-            + " outside the patch: 18.43… degrees off the aim against a half-angle of 10\"; with"
-            + " {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;} reading"
-            + " {@code (shell + 1)}, with \"look 5895 stands past the pointing's reach: 61000.33… > 60000\"; reading"
-            + " {@code -shell}, with \"look 0 stands behind or beside the instrument: -1000.33… cells along the"
-            + " aim\" — one inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "inside the patch", member = "ConeWalk#radiusOfShell",
+            at = "double radius = s * Math.tan(halfAngleRadians);", replacedBy = "double radius = 2 * s * Math.tan(halfAngleRadians);",
+            fails = "look 2 stands outside the patch:", on = "2026-10-17")
+    @RedWitness(verdict = "within reach", member = "ConeWalk#lookAt", at = "double axial = (double) shell * strideCells;",
+            replacedBy = "double axial = (double) (shell + 1) * strideCells;",
+            fails = "stands past the pointing's reach:", on = "2026-10-17")
+    @RedWitness(verdict = "ahead of the instrument", member = "ConeWalk#lookAt",
+            at = "double axial = (double) shell * strideCells;", replacedBy = "double axial = (double) -shell * strideCells;",
+            fails = "look 0 stands behind or beside the instrument:", on = "2026-10-17")
     @Test
     public void everyLookOfAPointingLiesInsideItsCone() {
         double half = Math.toRadians(10d);
@@ -120,10 +122,8 @@ public class ConeWalkTest {
      * radius to a whole stride, so the measured ratio is neither exactly (measured 2026-10-02: 58 940
      * looks at five degrees, 250 404 at ten, ratio 4.25); the claim is that it sits nearer the square.</p>
      */
-    @LegacyWitness(prose = "with {@code ConeWalk#discLooks} at"
-            + " {@code count += 2L * rowHalfWidth(radius, i) + 1L;} reading {@code count += 1L;} (a shell counted"
-            + " as a line across the disc), this fails with \"… nearer the square of the radii (4.06…) than the"
-            + " radii (2.015…): 3518 -> 7084 looks, ratio 2.0136…\", 2026-10-02.")
+    @RedWitness(member = "ConeWalk#discLooks", at = "count += 2L * rowHalfWidth(radius, i) + 1L;", replacedBy = "count += 1L;",
+            fails = "nearer the square of the radii", on = "2026-10-17")
     @Test
     public void aPatchTwiceAsWideIsAboutFourTimesTheSurvey() {
         ConeWalk narrow = aimed(5d, 200L);
@@ -147,10 +147,9 @@ public class ConeWalkTest {
      * <p>Fails if {@code ConeWalk#lookAt} stops deciding the walk's order shell by shell from the
      * instrument outwards.</p>
      */
-    @LegacyWitness(prose = "with {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;}"
-            + " reading {@code (shells() + 1 - shell)} (the walk starting at the far shell), this fails with"
-            + " \"look 0 of the deep pointing must be look 0 of the 1-shell one aimed the same way"
-            + " expected:<[7333_-2333_10333]> but was:<[20333_23667_-15667]>\", 2026-10-02.")
+    @RedWitness(member = "ConeWalk#lookAt", at = "double axial = (double) shell * strideCells;",
+            replacedBy = "double axial = (double) (shells() + 1 - shell) * strideCells;",
+            fails = "look 0 of the deep pointing must be look 0 of the 1-shell one aimed the same way", on = "2026-10-17")
     @Test
     public void anAbortedPointingIsAShorterCone() {
         ConeWalk deep = aimed(10d, 40L);

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -17,11 +17,15 @@ public class UniverseSchemaGeneratorChoiceTest {
         return new UniverseSchemaV0().generator(config, PlanetTypes.stock(), new ReportOnce());
     }
 
-    @LegacyWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
-            + " negated, the first verdict fails with \"a pack that states no <galaxyGen> must get the procedural"
-            + " galaxy, got EmptyGalaxyGenerator\"; with its {@code new ClusteredGalaxyGenerator(reports, config, …)}"
-            + " built from that config at half its density, the second fails with \"and built from the shipped"
-            + " configuration expected:<[54856f457186f8ee]> but was:<[24e7d5054e6fa26d]>\", 2026-10-05.")
+    @RedWitness(verdict = "procedural", member = "UniverseSchemaV0#generator", at = "return config.procedural",
+            replacedBy = "return !config.procedural",
+            fails = "a pack that states no <galaxyGen> must get the procedural galaxy", on = "2026-10-17")
+    @RedWitness(verdict = "the shipped configuration", member = "UniverseSchemaV0#generator",
+            at = "new ClusteredGalaxyGenerator(reports, config,",
+            replacedBy = "new ClusteredGalaxyGenerator(reports, new GalaxyGenConfig(config.minSpacing, config.density / 2,"
+                    + " config.galaxySpacing, config.galaxyDensity, config.starTypes, config.galaxyTypes,"
+                    + " config.reservedGalaxies),",
+            fails = "and built from the shipped configuration", on = "2026-10-17")
     @Test
     public void aPackThatStatesNoGalaxyIsGivenTheShippedProceduralOne() {
         IGalaxyGenerator generator = generatorFor(GalaxyGenConfig.defaults());
@@ -34,9 +38,8 @@ public class UniverseSchemaGeneratorChoiceTest {
                 ((ClusteredGalaxyGenerator) generator).config().fingerprint());
     }
 
-    @LegacyWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
-            + " negated, this fails with \"procedural=\"false\" must leave nothing between the authored anchors, got"
-            + " ClusteredGalaxyGenerator\", 2026-10-05.")
+    @RedWitness(member = "UniverseSchemaV0#generator", at = "return config.procedural", replacedBy = "return !config.procedural",
+            fails = "procedural=\"false\" must leave nothing between the authored anchors", on = "2026-10-17")
     @Test
     public void aPackThatAsksForNoProceduralPopulationIsGivenTheVoid() {
         IGalaxyGenerator generator = generatorFor(GalaxyGenConfig.nonProcedural());

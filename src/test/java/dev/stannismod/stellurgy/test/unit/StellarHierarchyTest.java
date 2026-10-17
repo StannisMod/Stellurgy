@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
@@ -45,15 +45,15 @@ public class StellarHierarchyTest {
      * bare hundredths of an AU until 2026-09-30, which is the unit a stale reader of the field also
      * divided by — fixture and defect agreed, and this class pinned it.
      */
-    @LegacyWitness(prose = "(the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back"
-            + " on {@code / 100d}: \"expected:&lt;20.0&gt; but was:&lt;299195.8&gt;\" and \"expected:&lt;25.0&gt;"
-            + " but was:&lt;373994.75&gt;\", 2026-09-30.")
     private static int au(double au) {
         return (int) Math.round(au * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
     }
 
     // ─── placement ─────────────────────────────────────────────────────────────
 
+    @RedWitness(member = "StellarBody#offsetFromSystemAu",
+            at = "/ (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU", replacedBy = "/ 100d",
+            fails = "expected:<20.0> but was:<299195.8>", on = "2026-10-17")
     @Test
     public void aCompanionStandsWhereItsOrbitSaysAndAPrimaryAtTheOrigin() {
         StellarBody primary = star("A", 1f);
@@ -69,6 +69,9 @@ public class StellarHierarchyTest {
         assertEquals("separation is symmetric", 20d, primary.separationAuFrom(companion), 1e-9);
     }
 
+    @RedWitness(member = "StellarBody#offsetFromSystemAu",
+            at = "/ (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU", replacedBy = "/ 100d",
+            fails = "expected:<25.0> but was:<373994.75>", on = "2026-10-17")
     @Test
     public void aThreeStarHierarchyComposesRatherThanSpecialCases() {
         // B orbits A at 20 AU; C orbits B at 5 AU on the same bearing. C is 25 AU from A, and the

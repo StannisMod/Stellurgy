@@ -4,8 +4,8 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -158,10 +158,9 @@ public class DimensionPropertiesTest {
      * <p>What this does not see: a MOON's placement, which has a law of its own — see
      * {@link #theFreeFlightMapLaysAMoonOutAsItDidWhenLunaStoodAt150}.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code DimensionProperties#getSpacePosition} at {@code : orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the planet"
-            + " radius — back on {@code 100f * orbitalDist}: \"(x, z) at angle 0, then at a quarter turn:"
-            + " [2.99195808E8, 0.0, 1.8320459429275304E-8, 2.99195808E8]: arrays first differed at element [0];"
-            + " expected:&lt;20000.0&gt; but was:&lt;2.99195808E8&gt;\" — both placements wrong, one verdict.")
+    @RedWitness(member = "DimensionProperties#getSpacePosition",
+            at = "orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * AstronomicalBodyHelper.SPACE_MAP_UNITS_PER_AU",
+            replacedBy = "100f * orbitalDist", fails = "(x, z) at angle 0, then at a quarter turn:", on = "2026-10-17")
     @Test
     public void theFreeFlightMapLaysAPlanetOutTenThousandUnitsPerAu() {
         DimensionProperties planet = new DimensionProperties(9002, "TwoAuOut");

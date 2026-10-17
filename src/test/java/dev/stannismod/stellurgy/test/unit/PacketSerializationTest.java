@@ -6,7 +6,7 @@ import dev.stannismod.stellurgy.network.PacketAtmSync;
 import dev.stannismod.stellurgy.network.PacketOxygenState;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
 import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
@@ -59,16 +59,17 @@ public class PacketSerializationTest {
         field.set(target, value);
     }
 
-    @LegacyWitness(prose = "one inversion per verdict on the readout, 2026-09-30. PRESSURE -"
-            + " {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());} writing half the pressure: \"expected:&lt;850&gt; but was:&lt;425&gt;\"."
-            + " BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getInteger(\"pressure\"), nbt.getBoolean(\"breathable\"),} reading the flag negated: \"expected:&lt;false&gt; but"
-            + " was:&lt;true&gt;\". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString(\"warning\"), holding);} reading the warning under another key:"
-            + " \"expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;\". STATEMENTS IN ORDER -"
-            + " {@code PacketAtmSync#readClient} at {@code holding.add(list.getStringTagAt(i));} prepending each statement instead of appending it: \"the statements must"
-            + " survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,"
-            + " NOT_BREATHABLE]&gt;\". The readable-bytes check was not part of this change and is not"
-            + " witnessed here. PRESSURE and BREATHABLE were taken on the pre-change form, when the pressure"
-            + " crossed as a short ({@code setShort} / {@code getShort}); the code named above is its int form.")
+    @RedWitness(verdict = "pressure", member = "PacketAtmSync#write",
+            at = "nbt.setInteger(\"pressure\", summary.pressureCentiAtm());",
+            replacedBy = "nbt.setInteger(\"pressure\", summary.pressureCentiAtm() / 2);",
+            fails = "expected:<850> but was:<425>", on = "2026-10-17")
+    @RedWitness(verdict = "breathable", member = "PacketAtmSync#readClient", at = "nbt.getBoolean(\"breathable\")",
+            replacedBy = "!nbt.getBoolean(\"breathable\")", fails = "expected:<false> but was:<true>", on = "2026-10-17")
+    @RedWitness(verdict = "warning", member = "PacketAtmSync#readClient", at = "nbt.getString(\"warning\")",
+            replacedBy = "nbt.getString(\"warn\")", fails = "expected:<[msg.noOxygen]> but was:<[]>", on = "2026-10-17")
+    @RedWitness(verdict = "statements in order", member = "PacketAtmSync#readClient",
+            at = "holding.add(list.getStringTagAt(i));", replacedBy = "holding.add(0, list.getStringTagAt(i));",
+            fails = "the statements must survive in order", on = "2026-10-17")
     @Test
     public void packetAtmSyncRoundTrip() {
         // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
@@ -102,11 +103,9 @@ public class PacketSerializationTest {
      * {@code Integer.MAX_VALUE}), so 400 atm — 40 000, above a short's 32 767 — must not arrive as a
      * wrapped negative.
      */
-    @LegacyWitness(prose = "with {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());}"
-            + " and {@code PacketAtmSync#readClient} at {@code nbt.getInteger(\"pressure\")} back on their short"
-            + " forms ({@code setShort(\"pressure\", (short) …)} / {@code getShort(\"pressure\")}), this fails with"
-            + " \"a 400 atm room must reach the client as 400 atm expected:&lt;40000&gt; but was:&lt;-25536&gt;\""
-            + " (2026-10-06).")
+    @RedWitness(member = "PacketAtmSync#write", at = "nbt.setInteger(\"pressure\", summary.pressureCentiAtm());",
+            replacedBy = "nbt.setShort(\"pressure\", (short) summary.pressureCentiAtm());",
+            fails = "a 400 atm room must reach the client as 400 atm expected:<40000> but was:<-25536>", on = "2026-10-17")
     @Test
     public void packetAtmSyncCarriesAPressureAboveAShort() {
         int fourHundredAtm = 40_000;

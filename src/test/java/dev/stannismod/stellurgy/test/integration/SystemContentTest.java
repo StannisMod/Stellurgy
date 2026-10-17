@@ -4,9 +4,9 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
-import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -96,9 +96,9 @@ public class SystemContentTest {
      * Pins ADDR-3 (every body's name lies inside its own system's box).
      */
     @Pins("ADDR-3")
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at"
-            + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero in long arithmetic — an orbit with no length), this fails"
-            + " with \"a planet sits in its OWN cell, not in the star's anchor cell\".")
+    @RedWitness(member = "SystemContent#orbitLawOf", at = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)",
+            replacedBy = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS / 1000)",
+            fails = "a planet sits in its OWN cell, not in the star's anchor cell", on = "2026-10-17")
     @Test
     public void authoredPlanetsGetTheirOwnCellsInsideTheSuperCellBox() {
         StellarBody star = new StellarBody();
@@ -154,10 +154,9 @@ public class SystemContentTest {
         }
     }
 
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the AUTHORED law at"
-            + " {@code ORBIT_UNIT_BLOCKS / 1000} while the procedural one is untouched, this fails with \"one"
-            + " orbit unit must be one distance in both families expected:&lt;0.0&gt; but"
-            + " was:&lt;400.00000338384956&gt;\" — 400 blocks per unit, the procedural family's measured scale.")
+    @RedWitness(member = "SystemContent#orbitLawOf", at = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)",
+            replacedBy = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS / 1000)",
+            fails = "one orbit unit must be one distance in both families", on = "2026-10-17")
     @Test
     public void oneOrbitalDistanceMeansOneDistanceInBothFamilies() {
         // The acceptance the scale rework exists for. An authored planet and a procedural one at the
@@ -231,9 +230,9 @@ public class SystemContentTest {
      * cell apart, each against a cell boundary, so their addresses flipped under the slightest motion
      * and two bodies could share one.
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
-            + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with \"...and puts the whole orbital radius"
-            + " along +Z\".")
+    @RedWitness(member = "SystemContent#orbitLawOf", at = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)",
+            replacedBy = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS / 1000)",
+            fails = "...and puts the whole orbital radius along +Z", on = "2026-10-17")
     @Test
     public void aQuarterTurnPutsTheBodyAQuarterTurnRound() {
         StellarBody star = new StellarBody();
@@ -260,8 +259,9 @@ public class SystemContentTest {
      * bodies are made. Advertised as landable, it sent a ship's descent into a dimension with no
      * terrain to find.
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#kindOf} at {@code return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT} answering the walkable kind"
-            + " whatever the surface, this fails with \"a surface-less body is not somewhere a ship can land\".")
+    @RedWitness(member = "SystemContent#kindOf", at = "return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT",
+            replacedBy = "return ifWalkable", fails = "a surface-less body is not somewhere a ship can land",
+            on = "2026-10-17")
     @Test
     public void aBodyWithNoSurfaceIsNotADescendTarget() {
         StellarBody star = new StellarBody();
@@ -306,10 +306,11 @@ public class SystemContentTest {
      * Pins ADDR-1 (a body's cell name is the same at every tick while its place is not).
      */
     @Pins("ADDR-1")
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of"
-            + " the body's LIVE position instead of its name — the defect this test used to assert as the"
-            + " model — this fails with \"half an orbit later the body is still addressed by the same cell"
-            + " expected:&lt;19_0_0&gt; but was:&lt;-19_0_0&gt;\".")
+    @RedWitness(member = "SystemBody#addressAt", at = "BlockDelta offset = inCellOffsetAt(tick);",
+            replacedBy = "AbsolutePos live = absoluteAt(tick); if (true) return GalacticCoord.ofSectorLocal("
+                    + "live.sectorX(), live.sectorY(), live.sectorZ(), live.localX(), live.localY(), live.localZ());"
+                    + " BlockDelta offset = inCellOffsetAt(tick);",
+            fails = "half an orbit later the body is still addressed by the same cell", on = "2026-10-17")
     @Test
     public void aBodysCellIsTheSameCellHalfAnOrbitLater() {
         StellarBody star = new StellarBody();
@@ -348,9 +349,9 @@ public class SystemContentTest {
      * Pins ADDR-2 (a cell name is derived from the layout and a recorded name beats a later derivation).
      */
     @Pins("ADDR-2")
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
-            + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero — every orbit collapses onto the anchor), this fails with"
-            + " \"two bodies authored on opposite sides of one star are not one address\".")
+    @RedWitness(member = "SystemContent#orbitLawOf", at = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)",
+            replacedBy = "planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS / 1000)",
+            fails = "two bodies authored on opposite sides of one star are not one address", on = "2026-10-17")
     @Test
     public void aDifferentAuthoredOrbitIsADifferentCell() {
         StellarBody star = new StellarBody();
@@ -377,9 +378,8 @@ public class SystemContentTest {
      * derivation itself. A name that is merely re-derived consistently is only as stable as its
      * inputs, and those inputs are known to move.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#nameOf} at {@code return names == null ? derived} returning the derivation without"
-            + " consulting the store, this fails with \"the store's name is the body's name, whatever the"
-            + " derivation would have said\".")
+    @RedWitness(member = "SystemContent#nameOf", at = "names == null ? derived", replacedBy = "true ? derived",
+            fails = "the store's name is the body's name, whatever the derivation would have said", on = "2026-10-17")
     @Test
     public void aRecordedNameBeatsAFreshDerivation() {
         StellarBody star = new StellarBody();
@@ -414,9 +414,9 @@ public class SystemContentTest {
      * lands in the neighbouring cube and resolves to NO system: an address the console will happily
      * offer, with nothing at it, that a ship can fly to and never descend from.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#anchorForCell} at {@code GalacticCoord stored = storedAnchorNear(cell)} skipping the"
-            + " neighbourhood lookup ({@code storedAnchorNear}), this fails with \"its own cell must attribute"
-            + " back to its system\".")
+    @RedWitness(member = "UniverseRegistry#anchorForCell", at = "GalacticCoord stored = storedAnchorNear(cell);",
+            replacedBy = "GalacticCoord stored = null;", fails = "its own cell must attribute back to its system",
+            on = "2026-10-17")
     @Test
     public void aBodyBehindItsStarStillBelongsToThatSystem() {
         StellarBody star = new StellarBody();

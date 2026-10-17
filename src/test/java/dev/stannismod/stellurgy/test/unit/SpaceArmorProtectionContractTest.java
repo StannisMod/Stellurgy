@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
@@ -41,8 +41,9 @@ public class SpaceArmorProtectionContractTest {
         return new ItemStack(armor, 1);
     }
 
-    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"suit must"
-            + " protect against HEAT\", 2026-09-30.")
+    @RedWitness(member = "ItemSpaceArmor#protectsFrom", at = "return !hazards.isEmpty();",
+            replacedBy = "return !hazards.isEmpty() && !hazards.contains(dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard.HEAT);",
+            fails = "suit must protect against HEAT", on = "2026-10-17")
     @Test
     public void protectsAgainstEveryKindOfHarmAirCanDo() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
@@ -59,8 +60,8 @@ public class SpaceArmorProtectionContractTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that does"
-            + " nothing is not a threat\", 2026-09-30.")
+    @RedWitness(member = "ItemSpaceArmor#protectsFrom", at = "return !hazards.isEmpty();", replacedBy = "return true;",
+            fails = "air that does nothing is not a threat", on = "2026-10-17")
     @Test
     public void doesNotProtectWhereThereIsNothingToProtectAgainst() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);

@@ -6,7 +6,7 @@ import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardEffect;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -57,49 +57,67 @@ public class AtmosphereHazardTableTest {
 
     // ─── the fourteen cells, as hazard sets ────────────────────────────────────────────────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a row for an air atmosphere added"
-            + " to {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);}, after"
-            + " that line. AIR: \"air is what raises nothing\". PRESSURIZED AIR: \"and so is pressurised air\"."
-            + " (Taken while the table was a static block; its rows are unchanged.)")
+    @RedWitness(verdict = "air", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);"
+                    + " put(table, Atmosphere.AIR, HEAT);",
+            fails = "air is what raises nothing", on = "2026-10-17")
+    @RedWitness(verdict = "pressurised air", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);"
+                    + " put(table, Atmosphere.PRESSURIZEDAIR, HEAT);",
+            fails = "and so is pressurised air", on = "2026-10-17")
     @Test
     public void breathableAirDoesNothingToAnybody() {
         assertTrue("air is what raises nothing", of(Atmosphere.AIR).isEmpty());
         assertTrue("and so is pressurised air", of(Atmosphere.PRESSURIZEDAIR).isEmpty());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
-            + " (taken while the table was a static block; its rows are unchanged). VACUUM —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);}"
-            + " given suffocation instead: \"expected:&lt;[DECOMPRESSION]&gt; but was:&lt;[SUFFOCATION]&gt;\"."
-            + " NOO2 — {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);}"
-            + " with a pressure row added: \"expected:&lt;[SUFFOCATION]&gt; but was:&lt;[SUFFOCATION,"
-            + " PRESSURE]&gt;\". LOWOXYGEN — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} with a pressure row added: the same text."
-            + " HIGHOXYGEN — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);} with a pressure row added:"
-            + " \"expected:&lt;[OXYGEN_TOXICITY]&gt; but was:&lt;[OXYGEN_TOXICITY, PRESSURE]&gt;\". HIGHPRESSURE —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.HIGHPRESSURE, PRESSURE);}"
-            + " given oxygen toxicity instead: \"expected:&lt;[PRESSURE]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;\"."
-            + " SUPERHIGHPRESSURE — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);} with a heat"
-            + " row added: \"expected:&lt;[PRESSURE]&gt; but was:&lt;[PRESSURE, HEAT]&gt;\". VERYHOT —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} given"
-            + " oxygen toxicity instead: \"expected:&lt;[HEAT]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;\"."
-            + " SUPERHEATED — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);} with a pressure row added:"
-            + " \"expected:&lt;[HEAT]&gt; but was:&lt;[PRESSURE, HEAT]&gt;\". HIGHPRESSURENOO2 —"
-            + " {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);} with a heat"
-            + " row added: \"expected:&lt;[SUFFOCATION, PRESSURE]&gt; but was:&lt;[SUFFOCATION, PRESSURE,"
-            + " HEAT]&gt;\". SUPERHIGHPRESSURENOO2 — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,} with a heat row"
-            + " added: the same text. VERYHOTNOO2 — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);} with a pressure row"
-            + " added: \"expected:&lt;[SUFFOCATION, HEAT]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;\"."
-            + " SUPERHEATEDNOO2 — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);} with a"
-            + " pressure row added: the same text.")
+    @RedWitness(verdict = "VACUUM", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VACUUM, DECOMPRESSION);", replacedBy = "put(table, Atmosphere.VACUUM, SUFFOCATION);",
+            fails = "expected:<[DECOMPRESSION]> but was:<[SUFFOCATION]>", on = "2026-10-17")
+    @RedWitness(verdict = "NOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);", replacedBy = "put(table, Atmosphere.NOO2, SUFFOCATION, PRESSURE);",
+            fails = "expected:<[SUFFOCATION]> but was:<[SUFFOCATION, PRESSURE]>", on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR, PRESSURE);",
+            fails = "expected:<[SUFFOCATION]> but was:<[SUFFOCATION, PRESSURE]>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY, PRESSURE);",
+            fails = "expected:<[OXYGEN_TOXICITY]> but was:<[OXYGEN_TOXICITY, PRESSURE]>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURE, OXYGEN_TOXICITY);",
+            fails = "expected:<[PRESSURE]> but was:<[OXYGEN_TOXICITY]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE, HEAT);",
+            fails = "expected:<[PRESSURE]> but was:<[PRESSURE, HEAT]>", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOT", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);", replacedBy = "put(table, Atmosphere.VERYHOT, OXYGEN_TOXICITY);",
+            fails = "expected:<[HEAT]> but was:<[OXYGEN_TOXICITY]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATED", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATED, SEARING_HEAT, PRESSURE);",
+            fails = "expected:<[HEAT]> but was:<[PRESSURE, HEAT]>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE, HEAT);",
+            fails = "expected:<[SUFFOCATION, PRESSURE]> but was:<[SUFFOCATION, PRESSURE, HEAT]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, HEAT,",
+            fails = "expected:<[SUFFOCATION, PRESSURE]> but was:<[SUFFOCATION, PRESSURE, HEAT]>", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOTNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS, PRESSURE);",
+            fails = "expected:<[SUFFOCATION, HEAT]> but was:<[SUFFOCATION, PRESSURE, HEAT]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATEDNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS, PRESSURE);",
+            fails = "expected:<[SUFFOCATION, HEAT]> but was:<[SUFFOCATION, PRESSURE, HEAT]>", on = "2026-10-17")
     @Test
     public void eachNamedAtmosphereRaisesWhatItAlwaysDid() {
         assertEquals(EnumSet.of(AtmosphereHazard.DECOMPRESSION), hazardsOf(Atmosphere.VACUUM));
@@ -124,25 +142,35 @@ public class AtmosphereHazardTableTest {
 
     // ─── what a suit must cover, and what it spends ────────────────────────────────────────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
-            + " (taken while the table was a static block; its rows are unchanged). LOWOXYGEN —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} with"
-            + " a pressure row added: \"thin air is a breathing problem\". NOO2 —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);} with a"
-            + " pressure row added: \"so is airless air\". HIGHOXYGEN — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);} with a pressure row added: \"so is too"
-            + " much oxygen\". VACUUM — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);} given suffocation instead: \"a vacuum is"
-            + " not\". HIGHPRESSURE — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.HIGHPRESSURE, PRESSURE);} given oxygen toxicity instead: \"nor is"
-            + " depth\". VERYHOT — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.VERYHOT, HEAT);} given oxygen toxicity instead: \"nor is heat\"."
-            + " HIGHPRESSURENOO2 — {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);} with its"
-            + " pressure row dropped: \"suffocating AND crushed still needs the whole suit\". SUPERHEATEDNOO2 —"
-            + " {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);} with its"
-            + " heat row dropped: \"suffocating AND cooking too\".")
+    @RedWitness(verdict = "LOWOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR, PRESSURE);",
+            fails = "thin air is a breathing problem", on = "2026-10-17")
+    @RedWitness(verdict = "NOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);", replacedBy = "put(table, Atmosphere.NOO2, SUFFOCATION, PRESSURE);",
+            fails = "so is airless air", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY, PRESSURE);",
+            fails = "so is too much oxygen", on = "2026-10-17")
+    @RedWitness(verdict = "VACUUM", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VACUUM, DECOMPRESSION);", replacedBy = "put(table, Atmosphere.VACUUM, SUFFOCATION);",
+            fails = "a vacuum is not", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURE, OXYGEN_TOXICITY);",
+            fails = "nor is depth", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOT", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);", replacedBy = "put(table, Atmosphere.VERYHOT, OXYGEN_TOXICITY);",
+            fails = "nor is heat", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE);",
+            fails = "suffocating AND crushed still needs the whole suit", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATEDNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION);",
+            fails = "suffocating AND cooking too", on = "2026-10-17")
     @Test
     public void aSealedFaceIsEnoughOnlyWhereTheHarmIsWhatYouBreathe() {
         assertFalse("thin air is a breathing problem", of(Atmosphere.LOWOXYGEN).needsFullSuit());
@@ -161,19 +189,50 @@ public class AtmosphereHazardTableTest {
                 of(Atmosphere.SUPERHEATEDNOO2).needsFullSuit());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. Six assertions carry no message and went"
-            + " red as a bare AssertionError at their own line. VACUUM - the {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"}"
-            + " row no longer supplying oxygen: \"nothing outside to work with\". NOO2 - the"
-            + " {@code AtmosphereHazards#SUFFOCATION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"} row no longer supplying it. HIGHPRESSURENOO2 - the"
-            + " {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, \"msg.noOxygen\"} row no longer supplying it. SUPERHEATEDNOO2 -"
-            + " {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);}"
-            + " suffocating through the thin-air row instead. LOWOXYGEN - the {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, \"msg.noOxygen\"}"
-            + " row supplying oxygen: \"thin air can be concentrated\". HIGHOXYGEN - the"
-            + " {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code HazardEffect.NONE, HazardEffect.NONE, HazardEffect.NONE, false, false, true, false} row supplying it. HIGHPRESSURE - the"
-            + " {@code AtmosphereHazards#PRESSURE} at {@code null, null, 2, 2, HazardEffect.NONE, false, false, false, false, \"msg.tooDense\"} row supplying it. VERYHOT - the {@code AtmosphereHazards#HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, \"msg.tooHot\"}"
-            + " row supplying it. (Rows are named by field: a row is a field initializer, which the symbol form"
-            + " cannot address yet.)")
+    @RedWitness(verdict = "VACUUM", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VACUUM, DECOMPRESSION);",
+            replacedBy = "put(table, Atmosphere.VACUUM, new HazardEffect(AtmosphereHazard.DECOMPRESSION, 10,"
+                    + " AtmosphereHandler.vacuumDamage, () -> StellurgyConfiguration.getCurrentConfig().vacuumDamage,"
+                    + " 4, 4, 1, false, false, true, false, \"msg.noOxygen\"));",
+            fails = "nothing outside to work with", on = "2026-10-17")
+    @RedWitness(verdict = "NOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);",
+            replacedBy = "put(table, Atmosphere.NOO2, new HazardEffect(AtmosphereHazard.SUFFOCATION, 10,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 4, 4, 1, false, false, true, false, \"msg.noOxygen\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURENOO2, new HazardEffect(AtmosphereHazard.SUFFOCATION, 10,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 4, 4, 2, false, false, true, false, \"msg.noOxygen\"),"
+                    + " PRESSURE);",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATEDNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, THIN_AIR, SEARING_HEAT_WHERE_AIRLESS);",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, new HazardEffect(AtmosphereHazard.SUFFOCATION, 20,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 2, 2, HazardEffect.NONE, false, false, true, true,"
+                    + " \"msg.noOxygen\"));",
+            fails = "thin air can be concentrated", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, new HazardEffect(AtmosphereHazard.OXYGEN_TOXICITY, 40,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, HazardEffect.NONE, HazardEffect.NONE,"
+                    + " HazardEffect.NONE, false, false, true, true, \"msg.highOxygen\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURE, new HazardEffect(AtmosphereHazard.PRESSURE, 20, null, null,"
+                    + " 2, 2, HazardEffect.NONE, false, false, false, true, \"msg.tooDense\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOT", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);",
+            replacedBy = "put(table, Atmosphere.VERYHOT, new HazardEffect(AtmosphereHazard.HEAT, 20,"
+                    + " AtmosphereHandler.heatDamage, () -> 1, 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false,"
+                    + " true, \"msg.tooHot\"));",
+            fails = "null", on = "2026-10-17")
     @Test
     public void aSuitSpendsItsTankOnlyWhereThereIsNoOxidiserToConcentrate() {
         assertTrue("nothing outside to work with", of(Atmosphere.VACUUM).needsSuppliedOxygen());
@@ -189,22 +248,48 @@ public class AtmosphereHazardTableTest {
         assertFalse(of(Atmosphere.VERYHOT).needsSuppliedOxygen());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. VACUUM - the"
-            + " {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"} row's key changed: \"expected:&lt;msg.[noOxygen]&gt; but"
-            + " was:&lt;msg.[vacuum]&gt;\". LOWOXYGEN - the {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, \"msg.noOxygen\"} row's key:"
-            + " \"expected:&lt;msg.[noOxyge]n&gt; but was:&lt;msg.[thi]n&gt;\". HIGHOXYGEN - the"
-            + " {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code \"msg.highOxygen\"} row's key: \"expected:&lt;msg.[highOxygen]&gt; but"
-            + " was:&lt;msg.[x]&gt;\". HIGHPRESSURE - the {@code AtmosphereHazards#PRESSURE} at {@code null, null, 2, 2, HazardEffect.NONE, false, false, false, false, \"msg.tooDense\"} row's key:"
-            + " \"expected:&lt;msg.[tooDense]&gt; but was:&lt;msg.[y]&gt;\". SUPERHIGHPRESSURE - the"
-            + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code 3, 3, HazardEffect.NONE, false, false, true, false, \"msg.muchTooDense\"} row's key:"
-            + " \"expected:&lt;msg.[muchTooDense]&gt; but was:&lt;msg.[z]&gt;\". VERYHOT -"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} given"
-            + " oxygen toxicity instead: \"expected:&lt;msg.[tooHot]&gt; but was:&lt;msg.[highOxygen]&gt;\"."
-            + " SUPERHEATEDNOO2 - {@code HazardExposure#messageKey} at {@code if (worst == null || row.hazard().ordinal() < worst.hazard().ordinal())} taking the LEAST severe hazard's message:"
-            + " \"expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[tooHot]&gt;\". HIGHPRESSURENOO2 -"
-            + " the {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, \"msg.noOxygen\"} row's key changed:"
-            + " \"expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[w]&gt;\". (Taken while the table was a static"
-            + " block; its rows are unchanged.)")
+    @RedWitness(verdict = "VACUUM", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VACUUM, DECOMPRESSION);",
+            replacedBy = "put(table, Atmosphere.VACUUM, new HazardEffect(AtmosphereHazard.DECOMPRESSION, 10,"
+                    + " AtmosphereHandler.vacuumDamage, () -> StellurgyConfiguration.getCurrentConfig().vacuumDamage,"
+                    + " 4, 4, 1, false, false, true, true, \"msg.vacuum\"));",
+            fails = "expected:<msg.[noOxygen]> but was:<msg.[vacuum]>", on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, new HazardEffect(AtmosphereHazard.SUFFOCATION, 20,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 2, 2, HazardEffect.NONE, false, false, true, false,"
+                    + " \"msg.thin\"));",
+            fails = "expected:<msg.[noOxyge]n> but was:<msg.[thi]n>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, new HazardEffect(AtmosphereHazard.OXYGEN_TOXICITY, 40,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, HazardEffect.NONE, HazardEffect.NONE,"
+                    + " HazardEffect.NONE, false, false, true, false, \"msg.x\"));",
+            fails = "expected:<msg.[highOxygen]> but was:<msg.[x]>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURE, new HazardEffect(AtmosphereHazard.PRESSURE, 20, null, null,"
+                    + " 2, 2, HazardEffect.NONE, false, false, false, false, \"msg.y\"));",
+            fails = "expected:<msg.[tooDense]> but was:<msg.[y]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHIGHPRESSURE", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURE, new HazardEffect(AtmosphereHazard.PRESSURE, 20,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, 3, 3, HazardEffect.NONE, false, false, true,"
+                    + " false, \"msg.z\"));",
+            fails = "expected:<msg.[muchTooDense]> but was:<msg.[z]>", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOT", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);", replacedBy = "put(table, Atmosphere.VERYHOT, OXYGEN_TOXICITY);",
+            fails = "expected:<msg.[tooHot]> but was:<msg.[highOxygen]>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATEDNOO2", member = "HazardExposure#messageKey",
+            at = "row.hazard().ordinal() < worst.hazard().ordinal()",
+            replacedBy = "row.hazard().ordinal() > worst.hazard().ordinal()",
+            fails = "expected:<msg.[noOxygen]> but was:<msg.[tooHot]>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURENOO2, new HazardEffect(AtmosphereHazard.SUFFOCATION, 10,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 4, 4, 2, false, false, true, true, \"msg.w\"),"
+                    + " PRESSURE);",
+            fails = "expected:<msg.[noOxygen]> but was:<msg.[w]>", on = "2026-10-17")
     @Test
     public void theWarningNamesTheMostUrgentThingWrong() {
         assertEquals("msg.noOxygen", of(Atmosphere.VACUUM).messageKey());
@@ -222,19 +307,59 @@ public class AtmosphereHazardTableTest {
 
     // ─── the numbers, as they were ─────────────────────────────────────────────────────────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
-            + " as a bare AssertionError at their own line. Each is a change to one row, named by its field."
-            + " NOO2 FIRES ON 10 - {@code AtmosphereHazards#SUFFOCATION} at {@code AtmosphereHazard.SUFFOCATION, 10} period 20: \"suffocating outright acts"
-            + " twice as often as merely running short expected:&lt;true&gt; but was:&lt;false&gt;\". LOWOXYGEN"
-            + " NOT ON 10 - {@code AtmosphereHazards#THIN_AIR} at {@code AtmosphereHazard.SUFFOCATION, 20} period 10. LOWOXYGEN ON 20 - the same row, period"
-            + " 40. HIGHOXYGEN NOT ON 20 - {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code AtmosphereHazard.OXYGEN_TOXICITY, 40} period 20: \"oxygen toxicity"
-            + " is the slowest of them expected:&lt;false&gt; but was:&lt;true&gt;\". HIGHOXYGEN ON 40 - the same"
-            + " row, period 80. VERYHOT DAMAGE - {@code AtmosphereHazards#HEAT} at {@code AtmosphereHandler.heatDamage, () -> 1} damage 2: \"the two heat rungs"
-            + " differ by their damage and nothing else expected:&lt;1&gt; but was:&lt;2&gt;\". SUPERHEATED"
-            + " DAMAGE - {@code AtmosphereHazards#SEARING_HEAT} at {@code AtmosphereHandler.heatDamage, () -> 4} damage 3: \"expected:&lt;4&gt; but was:&lt;3&gt;\"."
-            + " NOO2 SLOWNESS - {@code AtmosphereHazards#SUFFOCATION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"} slowness 3: \"and the two suffocation rungs"
-            + " by how hard they hit expected:&lt;4&gt; but was:&lt;3&gt;\". LOWOXYGEN SLOWNESS -"
-            + " {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, \"msg.noOxygen\"} slowness 3: \"expected:&lt;2&gt; but was:&lt;3&gt;\".")
+    @RedWitness(verdict = "NOO2 fires on 10", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);",
+            replacedBy = "put(table, Atmosphere.NOO2, new HazardEffect(AtmosphereHazard.SUFFOCATION, 20,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 4, 4, 1, false, false, true, true, \"msg.noOxygen\"));",
+            fails = "suffocating outright acts twice as often as merely running short expected:<true> but was:<false>",
+            on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN not on 10", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, new HazardEffect(AtmosphereHazard.SUFFOCATION, 10,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 2, 2, HazardEffect.NONE, false, false, true, false,"
+                    + " \"msg.noOxygen\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN on 20", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, new HazardEffect(AtmosphereHazard.SUFFOCATION, 40,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 2, 2, HazardEffect.NONE, false, false, true, false,"
+                    + " \"msg.noOxygen\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN not on 20", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, new HazardEffect(AtmosphereHazard.OXYGEN_TOXICITY, 20,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, HazardEffect.NONE, HazardEffect.NONE,"
+                    + " HazardEffect.NONE, false, false, true, false, \"msg.highOxygen\"));",
+            fails = "oxygen toxicity is the slowest of them expected:<false> but was:<true>", on = "2026-10-17")
+    @RedWitness(verdict = "HIGHOXYGEN on 40", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);",
+            replacedBy = "put(table, Atmosphere.HIGHOXYGEN, new HazardEffect(AtmosphereHazard.OXYGEN_TOXICITY, 80,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, HazardEffect.NONE, HazardEffect.NONE,"
+                    + " HazardEffect.NONE, false, false, true, false, \"msg.highOxygen\"));",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOT damage", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);",
+            replacedBy = "put(table, Atmosphere.VERYHOT, new HazardEffect(AtmosphereHazard.HEAT, 20,"
+                    + " AtmosphereHandler.heatDamage, () -> 2, 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false,"
+                    + " false, \"msg.tooHot\"));",
+            fails = "the two heat rungs differ by their damage and nothing else expected:<1> but was:<2>", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATED damage", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATED, new HazardEffect(AtmosphereHazard.HEAT, 20,"
+                    + " AtmosphereHandler.heatDamage, () -> 3, 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false,"
+                    + " false, \"msg.tooHot\"));",
+            fails = "expected:<4> but was:<3>", on = "2026-10-17")
+    @RedWitness(verdict = "NOO2 slowness", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);",
+            replacedBy = "put(table, Atmosphere.NOO2, new HazardEffect(AtmosphereHazard.SUFFOCATION, 10,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 3, 4, 1, false, false, true, true, \"msg.noOxygen\"));",
+            fails = "and the two suffocation rungs by how hard they hit expected:<4> but was:<3>", on = "2026-10-17")
+    @RedWitness(verdict = "LOWOXYGEN slowness", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.LOWOXYGEN, THIN_AIR);",
+            replacedBy = "put(table, Atmosphere.LOWOXYGEN, new HazardEffect(AtmosphereHazard.SUFFOCATION, 20,"
+                    + " AtmosphereHandler.lowOxygenDamage, () -> 1, 3, 2, HazardEffect.NONE, false, false, true, false,"
+                    + " \"msg.noOxygen\"));",
+            fails = "expected:<2> but was:<3>", on = "2026-10-17")
     @Test
     public void theRungsKeepTheirPeriodsAndTheirSeverities() {
         assertEquals("suffocating outright acts twice as often as merely running short",
@@ -262,13 +387,22 @@ public class AtmosphereHazardTableTest {
     // each is a candidate for deletion on its own merits. A failure here means somebody removed one
     // — which may well be right, but it is a decision about the GAME and must be made as one.
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
-            + " as a bare AssertionError at their own line. VERYHOT - the {@code AtmosphereHazards#HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, \"msg.tooHot\"} row not"
-            + " igniting: \"a hot breathable room sets you alight\". SUPERHEATED - the"
-            + " {@code AtmosphereHazards#SEARING_HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, \"msg.tooHot\"} row not igniting. VERYHOTNOO2 - the"
-            + " {@code AtmosphereHazards#HEAT_WHERE_AIRLESS} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, false, false, false, \"msg.tooHot\"} row igniting: \"and the same heat with no oxygen does"
-            + " not — deliberately preserved\". SUPERHEATEDNOO2 - the"
-            + " {@code AtmosphereHazards#SEARING_HEAT_WHERE_AIRLESS} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, false, false, false, \"msg.tooHot\"} row igniting.")
+    @RedWitness(verdict = "VERYHOT", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOT, HEAT);",
+            replacedBy = "put(table, Atmosphere.VERYHOT, HEAT_WHERE_AIRLESS);",
+            fails = "a hot breathable room sets you alight", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATED", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATED, SEARING_HEAT_WHERE_AIRLESS);",
+            fails = "null", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOTNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT);",
+            fails = "and the same heat with no oxygen does not", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHEATEDNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT);",
+            fails = "null", on = "2026-10-17")
     @Test
     public void hotAirIgnitesYouOnlyWhereYouCouldHaveBreathedIt() {
         assertTrue("a hot breathable room sets you alight",
@@ -280,12 +414,17 @@ public class AtmosphereHazardTableTest {
         assertFalse(row(Atmosphere.SUPERHEATEDNOO2, AtmosphereHazard.HEAT).ignites());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BREATHABLE DEEP - the"
-            + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code AtmosphereHandler.oxygenToxicityDamage, () -> 1} row given damage 2: \"crushing"
-            + " breathable air draws blood expected:&lt;1&gt; but was:&lt;2&gt;\". AIRLESS DEEP - the"
-            + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, \"msg.muchTooDense\"} row given a damage source and an amount"
-            + " of 1: \"crushing airless air does not —"
-            + " deliberately preserved expected:&lt;0&gt; but was:&lt;1&gt;\".")
+    @RedWitness(verdict = "breathable deep", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURE, new HazardEffect(AtmosphereHazard.PRESSURE, 20,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 2, 3, 3, HazardEffect.NONE, false, false, true,"
+                    + " false, \"msg.muchTooDense\"));",
+            fails = "crushing breathable air draws blood expected:<1> but was:<2>", on = "2026-10-17")
+    @RedWitness(verdict = "airless deep", member = "AtmosphereHazards#byAtmosphere",
+            at = "CRUSHING_PRESSURE_WHERE_AIRLESS);",
+            replacedBy = "new HazardEffect(AtmosphereHazard.PRESSURE, 20, AtmosphereHandler.oxygenToxicityDamage,"
+                    + " () -> 1, 3, 3, HazardEffect.NONE, true, false, false, false, \"msg.muchTooDense\"));",
+            fails = "crushing airless air does not", on = "2026-10-17")
     @Test
     public void theDeepestRungInjuresOnlyWhereTheAirIsBreathable() {
         assertEquals("crushing breathable air draws blood", 1,
@@ -294,11 +433,17 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURENOO2, AtmosphereHazard.PRESSURE).damageAmount());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. AIRLESS DEEP - the"
-            + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, \"msg.muchTooDense\"} row with narcosis off: \"the airless deep"
-            + " takes your jump — deliberately preserved\". BREATHABLE DEEP - the"
-            + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code 3, 3, HazardEffect.NONE, false, false, true, false, \"msg.muchTooDense\"} row with narcosis on: \"and the"
-            + " breathable deep does not\".")
+    @RedWitness(verdict = "airless deep", member = "AtmosphereHazards#byAtmosphere",
+            at = "CRUSHING_PRESSURE_WHERE_AIRLESS);",
+            replacedBy = "new HazardEffect(AtmosphereHazard.PRESSURE, 20, null, null, 3, 3, HazardEffect.NONE, false,"
+                    + " false, false, false, \"msg.muchTooDense\"));",
+            fails = "the airless deep takes your jump", on = "2026-10-17")
+    @RedWitness(verdict = "breathable deep", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURE, new HazardEffect(AtmosphereHazard.PRESSURE, 20,"
+                    + " AtmosphereHandler.oxygenToxicityDamage, () -> 1, 3, 3, HazardEffect.NONE, true, false, true,"
+                    + " false, \"msg.muchTooDense\"));",
+            fails = "and the breathable deep does not", on = "2026-10-17")
     @Test
     public void narcosisBelongsToTheAirlessDepthsAlone() {
         assertTrue("the airless deep takes your jump — deliberately preserved",
@@ -307,18 +452,22 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURE, AtmosphereHazard.PRESSURE).narcosis());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 - the"
-            + " {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, \"msg.noOxygen\"} row with nausea 1: \"depth makes suffocation more"
-            + " nauseating — deliberately preserved expected:&lt;2&gt; but was:&lt;1&gt;\"."
-            + " SUPERHIGHPRESSURENOO2 - {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,} suffocating through"
-            + " the plain row: \"expected:&lt;2&gt; but was:&lt;1&gt;\". VERYHOTNOO2 -"
-            + " {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);} suffocating through"
-            + " the dense row: \"while heat does not expected:&lt;1&gt; but was:&lt;2&gt;\". NOO2 -"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);}"
-            + " suffocating through the dense row: \"expected:&lt;1&gt; but was:&lt;2&gt;\". (Taken while the table"
-            + " was a static block; its rows are unchanged.)")
+    @RedWitness(verdict = "HIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);",
+            replacedBy = "put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION, PRESSURE);",
+            fails = "depth makes suffocation more nauseating", on = "2026-10-17")
+    @RedWitness(verdict = "SUPERHIGHPRESSURENOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,",
+            replacedBy = "put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION,",
+            fails = "expected:<2> but was:<1>", on = "2026-10-17")
+    @RedWitness(verdict = "VERYHOTNOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);",
+            replacedBy = "put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION_WHERE_DENSE, HEAT_WHERE_AIRLESS);",
+            fails = "while heat does not expected:<1> but was:<2>", on = "2026-10-17")
+    @RedWitness(verdict = "NOO2", member = "AtmosphereHazards#byAtmosphere",
+            at = "put(table, Atmosphere.NOO2, SUFFOCATION);",
+            replacedBy = "put(table, Atmosphere.NOO2, SUFFOCATION_WHERE_DENSE);",
+            fails = "expected:<1> but was:<2>", on = "2026-10-17")
     @Test
     public void suffocatingUnderPressureIsQueasierThanSuffocatingAnywhereElse() {
         assertEquals("depth makes suffocation more nauseating — deliberately preserved", 2,
@@ -329,10 +478,9 @@ public class AtmosphereHazardTableTest {
         assertEquals(1, row(Atmosphere.NOO2, AtmosphereHazard.SUFFOCATION).nausea());
     }
 
-    @LegacyWitness(prose = "with {@code AtmosphereHazards#byAtmosphere} at"
-            + " {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);} giving the vacuum suffocation instead of"
-            + " decompression: \"nothing in the game can inflict [DECOMPRESSION]\", 2026-09-30 (taken while the"
-            + " table was a static block; the row is unchanged).")
+    @RedWitness(member = "AtmosphereHazards#byAtmosphere", at = "put(table, Atmosphere.VACUUM, DECOMPRESSION);",
+            replacedBy = "put(table, Atmosphere.VACUUM, SUFFOCATION);",
+            fails = "nothing in the game can inflict [DECOMPRESSION]", on = "2026-10-17")
     @Test
     public void everyHazardTheModelDeclaresIsRaisedBySomething() {
         // The other half of "no storage without a consumer": a kind of harm nothing can inflict is

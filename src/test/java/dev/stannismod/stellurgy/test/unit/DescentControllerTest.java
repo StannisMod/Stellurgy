@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -455,13 +455,10 @@ public class DescentControllerTest {
      * where Luna is a long way from its parent — so a reading that took the two as sharing a frame,
      * or that compared cell names, gets the wrong answer rather than an unlucky one.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to"
-            + " each body's position at tick 0 instead of at the tick asked, this fails with \"a craft a third of"
-            + " a moon's shell from it must find the MOON … was not:&lt;null&gt;\". That inversion breaks"
-            + " the reading of a body's LIVE position. The other half of the defect this test is named for —"
-            + " a candidate list drawn from the craft's own cell — lives in the caller,"
-            + " {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:"
-            + " {@code SystemContentTest} witnesses {@code skyBodiesAt} itself, not which read the caller makes.")
+    @RedWitness(member = "DescentController#nearestDescentTarget",
+            at = "double distance = craftAt.distanceTo(body.absoluteAt(tick));",
+            replacedBy = "double distance = craftAt.distanceTo(body.absoluteAt(0L));",
+            fails = "a craft a third of a moon's shell from it must find the MOON", on = "2026-10-17")
     @Test
     public void aCraftClosedOnAMoonFindsItEvenThoughItIsInAnotherCell() {
         long tick = (long) (LUNA_PERIOD_TICKS / 4d); // a quarter turn: Luna is off Earth's own axis
@@ -511,9 +508,11 @@ public class DescentControllerTest {
      * <p>The craft stands between the flat radius and the shell, on both sides of the shell, for a
      * planet and for its moon — the shells differ, so a single radius cannot get all four right.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))}"
-            + " comparing against {@code ShipEntryController.DESCENT_RADIUS_BLOCKS} instead, this fails with"
-            + " \"inside the planet's shell but far outside the old flat radius, the PLANET … was not:&lt;null&gt;\".")
+    @RedWitness(member = "DescentController#nearestDescentTarget",
+            at = "shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))",
+            replacedBy = "shouldTriggerDescent(true, distance,"
+                    + " dev.stannismod.stellurgy.space.ShipEntryController.DESCENT_RADIUS_BLOCKS)",
+            fails = "inside the planet's shell but far outside the old flat radius, the PLANET", on = "2026-10-17")
     @Test
     public void eachBodyIsEnteredAtItsOwnShell() {
         long tick = (long) (LUNA_PERIOD_TICKS / 4d);
@@ -552,9 +551,8 @@ public class DescentControllerTest {
      * is the pair built here — a moon 600 blocks from its planet, both 512-block spheres, with the
      * craft in the lens where both reach.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code || distance >= nearestDistance)} keeping"
-            + " the FIRST in-range candidate instead of the nearer one, this fails with \"nearer the moon, the"
-            + " moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;\".")
+    @RedWitness(member = "DescentController#nearestDescentTarget", at = "|| distance >= nearestDistance)",
+            replacedBy = "|| nearest != null)", fails = "nearer the moon, the moon expected same:", on = "2026-10-17")
     @Test
     public void insideTwoShellsTheNearestBodyWins() {
         long tick = 0L;

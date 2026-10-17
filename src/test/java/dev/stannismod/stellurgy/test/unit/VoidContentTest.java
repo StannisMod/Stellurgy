@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -194,11 +194,9 @@ public class VoidContentTest {
      * A starless system is its world and the moons it kept — each moon named inside the rogue's own
      * zone — and nothing else.
      */
-    @LegacyWitness(prose = "2026-09-29, with {@code ClusteredGalaxyGenerator#rogueBodiesFor} at {@code SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,} naming a rogue's"
-            + " moon by the rogue's own cell (the shape before moons had cells of their own), this fails with"
-            + " \"a rogue's moon is named in the rogue's own zone expected:&lt;81453062671_-27624664390_8507222761&gt;"
-            + " but was:&lt;null&gt;\". The anchor is chosen to KEEP a moon, and the method asserts one was"
-            + " checked: on a moonless rogue the moon verdict ran on nothing.")
+    @RedWitness(member = "ClusteredGalaxyGenerator#rogueBodiesFor",
+            at = "SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId, Constants.INVALID_PLANET, reports),",
+            replacedBy = "rogue.name(),", fails = "a rogue's moon is named in the rogue's own zone", on = "2026-10-17")
     @Test
     public void aStarlessSystemIsTheWorldItsMoonsAndNothingElse() {
         // No belt and no companion, and neither is an omission: a belt is material that never accreted

@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
 import dev.stannismod.stellurgy.test.CleanCommandLaw;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
@@ -54,10 +54,8 @@ public class ShipMotionJointsTest {
      * Pins INV-SFM-13 (a readout figure is delivered whole).
      */
     @Pins("INV-SFM-13")
-    @LegacyWitness(prose = "with {@code ShipReadout#of} at {@code ShipCapability[] views = {design, live};}"
-            + " swapped to {@code {live, design}} (the readout handed the wrong view), this fails with \"burst hull,"
-            + " SURGE_POSITIVE SUSTAINED: the readout states 23.543976456 and the scheme delivers"
-            + " 11.523999999999997\", 2026-10-07.")
+    @RedWitness(member = "ShipReadout#of", at = "{design, live}", replacedBy = "{live, design}",
+            fails = "burst hull, SURGE_POSITIVE SUSTAINED: the readout states", on = "2026-10-17")
     @Test
     public void aReadoutFigureIsDeliveredWhole() {
         ControlScheme scheme = ControlScheme.cleanAxes();
@@ -120,10 +118,10 @@ public class ShipMotionJointsTest {
      * Pins INV-SFM-13 (a direction the readout calls unavailable is delivered nothing).
      */
     @Pins("INV-SFM-13")
-    @LegacyWitness(prose = "with {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] ="
-            + " views[v].authority(d, e);} handed {@code Endurance.SUSTAINED} for both endurances (the burst figure"
-            + " lost on the way to the readout), this fails with \"burst hull: ROLL_POSITIVE is NO_AUTHORITY on the"
-            + " readout, and the scheme delivered 270833.33333333326\", 2026-10-07.")
+    @RedWitness(member = "ShipReadout#of", at = "views[v].authority(d, e);",
+            replacedBy = "views[v].authority(d, Endurance.SUSTAINED);",
+            fails = "burst hull: ROLL_POSITIVE is NO_AUTHORITY on the readout, and the scheme delivered",
+            on = "2026-10-17")
     @Test
     public void aDirectionTheReadoutCallsUnavailableIsDeliveredNothing() {
         ControlScheme scheme = ControlScheme.cleanAxes();
@@ -164,10 +162,8 @@ public class ShipMotionJointsTest {
      * Pins INV-SFM-13 (the readout divides by the mass the frame weighs).
      */
     @Pins("INV-SFM-13")
-    @LegacyWitness(prose = "with {@code ShipReadout#of} at {@code mass.getContentMass()} replaced by"
-            + " {@code 0.0D} (the cargo dropped between the frame and the readout), this fails with \"SURGE_POSITIVE:"
-            + " the laden readout must divide the hull's force 4905000.0 N by the declared laden mass 485000.0 kg"
-            + " expected:&lt;10.11340206185567&gt; but was:&lt;29.727272727272727&gt;\", 2026-10-07.")
+    @RedWitness(member = "ShipReadout#of", at = "mass.getContentMass()", replacedBy = "0.0D",
+            fails = "SURGE_POSITIVE: the laden readout must divide the hull's force", on = "2026-10-17")
     @Test
     public void cargoTheFrameWeighsIsTheMassTheReadoutDividesBy() {
         ShipMotionCases.Hull empty = ShipMotionCases.symmetricHull();

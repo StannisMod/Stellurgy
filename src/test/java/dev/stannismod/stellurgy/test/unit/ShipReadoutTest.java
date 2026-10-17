@@ -7,8 +7,8 @@ import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Vector3d;
 import org.junit.Test;
 
@@ -70,10 +70,11 @@ public class ShipReadoutTest {
      * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Pins("INV-SFM-07")
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} recording the force"
-            + " scaled by the mass fails \"the same force\" with 50000 against 100000; {@code ShipReadout#acceleration} at {@code return m > 0.0D ? f / m : 0.0D;}"
-            + " dividing by the structural mass only fails \"the loaded ship accelerates less\" with 11.11 against"
-            + " 5.56.")
+    @RedWitness(verdict = "the same force", member = "ShipReadout#of", at = "views[v].authority(d, e);",
+            replacedBy = "views[v].authority(d, e) * views[v].mass().getStructuralMass() / views[v].mass().getTotalMass();",
+            fails = "the same force", on = "2026-10-17")
+    @RedWitness(verdict = "accelerates less", member = "ShipReadout#acceleration", at = "double m = totalMass();",
+            replacedBy = "double m = structuralMass();", fails = "the loaded ship accelerates less", on = "2026-10-17")
     @Test
     public void cargoLowersAccelerationNotForce() {
         ShipReadout empty = readout(0.0D, 9.81D);
@@ -96,10 +97,12 @@ public class ShipReadoutTest {
      * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Pins("INV-SFM-07")
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#canHover} at {@code return thrustToWeight(view) >= 1.0D;} demanding a ratio"
-            + " of 10 to hover fails \"it hovers on the light world\"; {@code ShipReadout#thrustToWeight} at {@code double weight = totalMass() * gravity;} weighing against a"
-            + " fixed 9.81 instead of the local field fails \"and not on one five times heavier\";"
-            + " {@code ShipReadout#thrustToWeight} at {@code return Double.POSITIVE_INFINITY;} answering 0 for no field fails \"infinite where there is no field\".")
+    @RedWitness(verdict = "hovers", member = "ShipReadout#canHover", at = "return thrustToWeight(view) >= 1.0D;",
+            replacedBy = "return thrustToWeight(view) >= 10.0D;", fails = "it hovers on the light world", on = "2026-10-17")
+    @RedWitness(verdict = "the local field", member = "ShipReadout#thrustToWeight", at = "double weight = totalMass() * gravity;",
+            replacedBy = "double weight = totalMass() * 9.81D;", fails = "and not on one five times heavier", on = "2026-10-17")
+    @RedWitness(verdict = "no field", member = "ShipReadout#thrustToWeight", at = "return Double.POSITIVE_INFINITY;",
+            replacedBy = "return 0.0D;", fails = "infinite where there is no field", on = "2026-10-17")
     @Test
     public void thrustToWeightIsAboutTheLocalField() {
         // 4T up against 9 t: TWR 4e5 / (9000 g)
@@ -113,10 +116,14 @@ public class ShipReadoutTest {
      * A direction the hull cannot give is named, never averaged away, and so is not being able to
      * hover.
      */
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#warningFor} at {@code if (!(authority(view, direction, Endurance.BURST) > 0.0D))} testing the"
-            + " sustained figure first fails \"reverse is named\" with BURST_ONLY; {@code ShipReadout#warningFor} at {@code return Warning.BURST_ONLY;}"
-            + " answering BURST_ONLY where nothing is wrong fails \"forward is not\"; {@code ShipReadout#warnings} at {@code out.add(Warning.CANNOT_HOVER);} not"
-            + " adding the hover warning fails \"cannot hover is named\".")
+    @RedWitness(verdict = "reverse is named", member = "ShipReadout#warningFor",
+            at = "if (!(authority(view, direction, Endurance.BURST) > 0.0D)) { return Warning.NO_AUTHORITY; }",
+            replacedBy = "if (!(authority(view, direction, Endurance.SUSTAINED) > 0.0D)) { return Warning.BURST_ONLY; }",
+            fails = "reverse is named", on = "2026-10-17")
+    @RedWitness(verdict = "forward is not", member = "ShipReadout#warningFor", at = "return null;",
+            replacedBy = "return Warning.BURST_ONLY;", fails = "forward is not", on = "2026-10-17")
+    @RedWitness(verdict = "cannot hover", member = "ShipReadout#warnings", at = "out.add(Warning.CANNOT_HOVER);",
+            replacedBy = "", fails = "cannot hover is named", on = "2026-10-17")
     @Test
     public void whatTheHullCannotDoIsNamed() {
         ShipReadout r = readout(0.0D, 5.0D * 9.81D);
@@ -130,12 +137,18 @@ public class ShipReadoutTest {
      * What crosses the wire arrives intact: every figure a surface reads, including an infinite
      * endurance, survives encoding and decoding.
      */
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — each by writing a zero in place of one"
-            + " field — {@code ShipReadout#write} at {@code out.writeLong(revision);} fails \"revision\"; {@code ShipReadout#write} at {@code out.writeDouble(structural);} fails \"mass\" with 1234 against"
-            + " 10234; {@code ShipReadout#write} at {@code out.writeDouble(gravity);} fails \"field\"; {@code ShipReadout#write} at {@code out.writeDouble(authority[v][e][d]);} fails \"every figure\" on DESIGN SURGE_POSITIVE;"
-            + " {@code ShipReadout#write} at {@code out.writeDouble(torque[v][e][d]);} fails \"every figure: torque\" on DESIGN ROLL_POSITIVE BURST (it was GREEN before the"
-            + " wheel was added — a hull with no rotation sends zeros there); {@code ShipReadout#write} at {@code out.writeDouble(seconds[v][d]);} fails \"endurance\" on"
-            + " an infinite figure.")
+    @RedWitness(verdict = "revision", member = "ShipReadout#write", at = "out.writeLong(revision);",
+            replacedBy = "out.writeLong(0L);", fails = "revision", on = "2026-10-17")
+    @RedWitness(verdict = "mass", member = "ShipReadout#write", at = "out.writeDouble(structural);",
+            replacedBy = "out.writeDouble(0.0D);", fails = "mass", on = "2026-10-17")
+    @RedWitness(verdict = "field", member = "ShipReadout#write", at = "out.writeDouble(gravity);",
+            replacedBy = "out.writeDouble(0.0D);", fails = "field", on = "2026-10-17")
+    @RedWitness(verdict = "every figure", member = "ShipReadout#write", at = "out.writeDouble(authority[v][e][d]);",
+            replacedBy = "out.writeDouble(0.0D);", fails = "every figure", on = "2026-10-17")
+    @RedWitness(verdict = "every torque", member = "ShipReadout#write", at = "out.writeDouble(torque[v][e][d]);",
+            replacedBy = "out.writeDouble(0.0D);", fails = "every figure: torque", on = "2026-10-17")
+    @RedWitness(verdict = "endurance", member = "ShipReadout#write", at = "out.writeDouble(seconds[v][d]);",
+            replacedBy = "out.writeDouble(0.0D);", fails = "endurance", on = "2026-10-17")
     @Test
     public void theWireCarriesEveryFigure() throws IOException {
         // A wheel aboard, so the rotational figures, their torques and a finite endurance exist to be

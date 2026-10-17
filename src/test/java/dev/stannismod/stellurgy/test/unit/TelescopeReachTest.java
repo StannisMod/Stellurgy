@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.RegionScan;
@@ -38,13 +38,14 @@ public class TelescopeReachTest {
      * assertion MEASURES what they buy — that the full-depth pointing really would not fit — so the
      * shortening below is one the tuning forced and not one it merely permitted.</p>
      */
-    @LegacyWitness(prose = "with {@code Tuning#fit} at {@code depth = Math.max(1, depth / 2);}"
-            + " reading {@code break;}, this fails with \"an aperture too good for the budget must be shortened,"
-            + " not refused: a pointing of half-angle 5,000 degrees holds more than 5000 looks …\"; at"
-            + " {@code if (aimed.totalLooks() <= maxCells)} reading {@code if (true)}, with \"the survey must fit"
-            + " under its ceiling: 1572443916 looks\"; at {@code int depth = Math.max(1, steps);} reading"
-            + " {@code int depth = 1;}, with \"and it must still be a survey past the instrument's own territory:"
-            + " 3525313 cells at a stride of 3525313\" — one inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "shortened, not refused", member = "Tuning#fit", at = "depth = Math.max(1, depth / 2);",
+            replacedBy = "break;", fails = "an aperture too good for the budget must be shortened, not refused",
+            on = "2026-10-17")
+    @RedWitness(verdict = "under its ceiling", member = "Tuning#fit", at = "if (aimed.totalLooks() <= maxCells)",
+            replacedBy = "if (true)", fails = "the survey must fit under its ceiling", on = "2026-10-17")
+    @RedWitness(verdict = "still a survey", member = "Tuning#fit", at = "int depth = Math.max(1, steps);",
+            replacedBy = "int depth = 1;", fails = "and it must still be a survey past the instrument's own territory",
+            on = "2026-10-17")
     @Test
     public void anApertureTooGoodForTheLookBudgetIsShortenedRatherThanRefused() {
         long stride = GalaxyGenConfig.DEFAULT_MIN_SPACING;

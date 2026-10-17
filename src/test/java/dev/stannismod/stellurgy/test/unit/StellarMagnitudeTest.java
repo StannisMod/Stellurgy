@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
 import org.junit.Test;
 
@@ -48,12 +49,15 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#luminositySuns} stops deciding brightness by
      * {@code R^2 (T/T_sun)^4}.</p>
      */
-    @LegacyWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
-            + " {@code return r * r * t * t * t * t;} doubled, this fails with \"the Sun is one Sun expected:<1.0>"
-            + " but was:<2.0>\"; with it reading {@code r * t * t * t * t}, \"twice the size is four times the"
-            + " light expected:<4.0> but was:<2.0>\"; with it reading {@code r * r * t * t * t}, \"twice the"
-            + " temperature is sixteen times the light expected:<16.0> but was:<8.0>\" — one inversion per run,"
-            + " 2026-10-02.")
+    @RedWitness(verdict = "one Sun", member = "StellarMagnitude#luminositySuns", at = "return r * r * t * t * t * t;",
+            replacedBy = "return 2 * r * r * t * t * t * t;", fails = "the Sun is one Sun expected:<1.0> but was:<2.0>",
+            on = "2026-10-17")
+    @RedWitness(verdict = "the square of the size", member = "StellarMagnitude#luminositySuns",
+            at = "return r * r * t * t * t * t;", replacedBy = "return r * t * t * t * t;",
+            fails = "twice the size is four times the light expected:<4.0> but was:<2.0>", on = "2026-10-17")
+    @RedWitness(verdict = "the fourth power of the temperature", member = "StellarMagnitude#luminositySuns",
+            at = "return r * r * t * t * t * t;", replacedBy = "return r * r * t * t * t;",
+            fails = "twice the temperature is sixteen times the light expected:<16.0> but was:<8.0>", on = "2026-10-17")
     @Test
     public void aStarsLightIsTheSquareOfItsSizeTimesTheFourthPowerOfItsTemperature() {
         double sun = StellarMagnitude.SOLAR_TEMPERATURE_UNITS;
@@ -73,13 +77,16 @@ public class StellarMagnitudeTest {
      * {@code StellarMagnitude#apparentMagnitude} stops dimming a star by five magnitudes per factor of
      * ten in distance.</p>
      */
-    @LegacyWitness(prose = "with {@code StellarMagnitude#detectionRangeLightYears} at"
-            + " {@code (limitMagnitude - absolute) / 5d + 1d} reading {@code / 2.5d}, this fails with \"five"
-            + " magnitudes of aperture is ten times the reach expected:<10.0> but was:<100.0>\"; reading"
-            + " {@code + 0d}, with \"… sees it out to ten parsecs expected:<32.6156> but was:<3.26156>\"; with"
-            + " {@code StellarMagnitude#apparentMagnitude} at {@code 5d * Math.log10(parsecs / 10d)} reading"
-            + " {@code 2.5d}, with \"and the same star ten times farther away looks five magnitudes fainter"
-            + " expected:<5.0> but was:<2.5>\" — one inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "ten times the reach", member = "StellarMagnitude#detectionRangeLightYears",
+            at = "(limitMagnitude - absolute) / 5d + 1d", replacedBy = "(limitMagnitude - absolute) / 2.5d + 1d",
+            fails = "five magnitudes of aperture is ten times the reach expected:<10.0> but was:<100.0>", on = "2026-10-17")
+    @RedWitness(verdict = "ten parsecs", member = "StellarMagnitude#detectionRangeLightYears",
+            at = "(limitMagnitude - absolute) / 5d + 1d", replacedBy = "(limitMagnitude - absolute) / 5d + 0d",
+            fails = "sees it out to ten parsecs expected:<32.6156> but was:<3.26156>", on = "2026-10-17")
+    @RedWitness(verdict = "five magnitudes fainter", member = "StellarMagnitude#apparentMagnitude",
+            at = "5d * Math.log10(parsecs / 10d)", replacedBy = "2.5d * Math.log10(parsecs / 10d)",
+            fails = "and the same star ten times farther away looks five magnitudes fainter expected:<5.0> but was:<2.5>",
+            on = "2026-10-17")
     @Test
     public void fiveMagnitudesOfApertureReachTenTimesFarther() {
         double sunLight = StellarMagnitude.luminositySuns(1d, StellarMagnitude.SOLAR_TEMPERATURE_UNITS);
@@ -108,13 +115,16 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#apparentMagnitude} stops deciding that extinction adds to
      * the apparent magnitude, or lets a negative extinction brighten a star.</p>
      */
-    @LegacyWitness(prose = "with {@code StellarMagnitude#apparentMagnitude} at"
-            + " {@code return absolute + modulus + Math.max(0d, extinctionMagnitudes);} dropping the extinction"
-            + " term, this fails with \"two and a half magnitudes of dust dim the star by two and a half"
-            + " magnitudes expected:<2.5> but was:<0.0>\"; with its {@code 5d * Math.log10(parsecs / 10d)} reading"
-            + " {@code 2.5d}, with \"five magnitudes of dust look exactly like ten times the distance\"; with the"
-            + " {@code Math.max(0d, …)} removed, with \"a negative column brightens nothing expected:<5.757…> but"
-            + " was:<2.757…>\" — one inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "dust dims", member = "StellarMagnitude#apparentMagnitude",
+            at = "return absolute + modulus + Math.max(0d, extinctionMagnitudes);", replacedBy = "return absolute + modulus;",
+            fails = "two and a half magnitudes of dust dim the star by two and a half magnitudes expected:<2.5> but was:<0.0>",
+            on = "2026-10-17")
+    @RedWitness(verdict = "the same currency", member = "StellarMagnitude#apparentMagnitude",
+            at = "5d * Math.log10(parsecs / 10d)", replacedBy = "2.5d * Math.log10(parsecs / 10d)",
+            fails = "five magnitudes of dust look exactly like ten times the distance", on = "2026-10-17")
+    @RedWitness(verdict = "a negative column", member = "StellarMagnitude#apparentMagnitude",
+            at = "Math.max(0d, extinctionMagnitudes)", replacedBy = "extinctionMagnitudes",
+            fails = "a negative column brightens nothing", on = "2026-10-17")
     @Test
     public void dustDimsAStarInTheSameCurrencyAsDistance() {
         double absolute = StellarMagnitude.SOLAR_ABSOLUTE_MAGNITUDE;
@@ -164,6 +174,9 @@ public class StellarMagnitudeTest {
             + " with {@code StellarMagnitude#absoluteMagnitude} at {@code return Double.POSITIVE_INFINITY;}"
             + " answering {@code 99d}, with \"so it looks infinitely faint even from a tenth of a light year\" — one"
             + " inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "infinitely faint", member = "StellarMagnitude#absoluteMagnitude",
+            at = "return Double.POSITIVE_INFINITY;", replacedBy = "return 99d;",
+            fails = "so it looks infinitely faint even from a tenth of a light year", on = "2026-10-17")
     @Test
     public void aBlackHoleIsDarkAtAnyDistance() {
         StellarBody hole = star(1f, (int) StellarMagnitude.SOLAR_TEMPERATURE_UNITS);
@@ -190,6 +203,10 @@ public class StellarMagnitudeTest {
             + " {@code if (Double.isInfinite(absolute))} returning {@code Double.MAX_VALUE}, with \"and no"
             + " aperture, however good, reaches anything that emits nothing expected:<0.0> but"
             + " was:<1.7976931348623157E308>\" — one inversion per run, 2026-10-02.")
+    @RedWitness(verdict = "no aperture reaches it", member = "StellarMagnitude#detectionRangeLightYears",
+            at = "if (Double.isInfinite(absolute)) { return 0d; }",
+            replacedBy = "if (Double.isInfinite(absolute)) { return Double.MAX_VALUE; }",
+            fails = "and no aperture, however good, reaches anything that emits nothing", on = "2026-10-17")
     @Test
     public void aWorldWithNoStarIsDarkAtAnyDistance() {
         assertTrue("a world with no star looks infinitely faint at any distance",

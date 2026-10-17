@@ -57,20 +57,48 @@ final class WitnessReplay {
                 "src/test/java"};
     }
 
+    /**
+     * How many records one JVM replays in process. Each in-process record loads the whole test runtime -- the
+     * game included -- into a class loader of its own, and the loaders are not collected: measured 2026-10-17,
+     * ~390 records filled the default 1 GB compressed class space and the run sat in back-to-back full GCs.
+     * Past this many, the replay forks one JVM per slice, so what one run holds is bounded by the slice.
+     */
+    private static final int RECORDS_PER_JVM = 100;
+
+    /** The branch a change is measured against, as the bindings check measures debt growth. */
+    private static final String MERGE_TARGET = "origin/1.12";
+
     private final Path root;
     private final List<String> tiers;
     private final boolean throughGradle;
+    private final boolean changedOnly;
+    /** This JVM's share, {slice, of}; {0, 1} for the whole set. */
+    private final int[] slice;
 
     private WitnessReplay(Path root, List<String> tiers, boolean throughGradle) {
+        this(root, tiers, throughGradle, false, new int[]{0, 1});
+    }
+
+    private WitnessReplay(Path root, List<String> tiers, boolean throughGradle, boolean changedOnly, int[] slice) {
         this.root = root;
         this.tiers = tiers;
         this.throughGradle = throughGradle;
+        this.changedOnly = changedOnly;
+        this.slice = slice;
     }
 
+    /**
+     * {@code --tiers t,…} (required), {@code --gradle} (through each tier's task), {@code --root DIR},
+     * {@code --changed} (only the records whose test file or member's file differs from the merge base with
+     * {@value #MERGE_TARGET}, the working tree and untracked files included) and {@code --slice K/N} (the K-th
+     * of N equal shares of the record list; what a forked child is handed).
+     */
     public static void main(String[] args) throws Exception {
         Path root = Paths.get("").toAbsolutePath();
         List<String> tiers = new ArrayList<>();
         boolean gradle = false;
+        boolean changed = false;
+        int[] slice = null;
         for (int i = 0; i < args.length; i++) {
             if ("--tiers".equals(args[i])) {
                 tiers.addAll(Arrays.asList(args[++i].split(",")));
@@ -78,13 +106,67 @@ final class WitnessReplay {
                 gradle = true;
             } else if ("--root".equals(args[i])) {
                 root = Paths.get(args[++i]).toAbsolutePath();
+            } else if ("--changed".equals(args[i])) {
+                changed = true;
+            } else if ("--slice".equals(args[i])) {
+                String[] kn = args[++i].split("/");
+                slice = new int[]{Integer.parseInt(kn[0]), Integer.parseInt(kn[1])};
             }
         }
         if (tiers.isEmpty()) {
             throw new IllegalArgumentException("--tiers unit,integration|server,client,milestone is required");
         }
-        System.exit(new WitnessReplay(root, tiers, gradle).run() ? 0 : 1);
+        if (slice != null) {
+            System.exit(new WitnessReplay(root, tiers, gradle, changed, slice).run() ? 0 : 1);
+        }
+        WitnessReplay whole = new WitnessReplay(root, tiers, gradle, changed, new int[]{0, 1});
+        int count = whole.records().size();
+        if (gradle || count <= RECORDS_PER_JVM) {
+            System.exit(whole.run() ? 0 : 1);
+        }
+        System.exit(whole.forkSlices(args, (count + RECORDS_PER_JVM - 1) / RECORDS_PER_JVM) ? 0 : 1);
     }
+
+    /**
+     * Replays the record list in {@code slices} child JVMs, one after another, each on this JVM's classpath and
+     * arguments plus its {@code --slice}; their rows are passed through, and the summary is the children's sum.
+     */
+    private boolean forkSlices(String[] args, int slices) throws Exception {
+        String java = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
+        int total = 0;
+        int bad = 0;
+        boolean ok = true;
+        for (int k = 0; k < slices; k++) {
+            List<String> cmd = new ArrayList<>(Arrays.asList(java, "-cp", System.getProperty("java.class.path"),
+                    "-Dstellurgy.tests=" + System.getProperty("stellurgy.tests", "true"), WitnessReplay.class.getName()));
+            cmd.addAll(Arrays.asList(args));
+            cmd.addAll(Arrays.asList("--root", root.toString(), "--slice", k + "/" + slices));
+            Process p = new ProcessBuilder(cmd).directory(root.toFile()).redirectErrorStream(true).start();
+            try (java.io.BufferedReader out = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = out.readLine()) != null) {
+                    Matcher summary = SUMMARY.matcher(line);
+                    if (summary.find()) {
+                        total += Integer.parseInt(summary.group(1));
+                        bad += Integer.parseInt(summary.group(2));
+                    } else {
+                        System.out.println(line);
+                    }
+                }
+            }
+            ok &= p.waitFor() == 0;
+        }
+        System.out.println("witness replay (" + String.join(",", tiers) + (changedOnly ? ", changed" : "") + "): "
+                + total + " record(s), " + bad + " not REPRODUCED, in " + slices + " JVMs");
+        return ok && bad == 0;
+    }
+
+    /**
+     * A slice's summary line, read back by the parent: the records it replayed and how many were not REPRODUCED.
+     * A constant: a compiled {@link Pattern} is immutable (every matcher holds its own state).
+     */
+    private static final Pattern SUMMARY = Pattern.compile("^witness replay \\([^)]*\\): (\\d+) record\\(s\\), (\\d+) not REPRODUCED");
 
     /**
      * Every replayable record of every tier LOCATED, nothing run: its member exists and its fragment occurs
@@ -162,12 +244,91 @@ final class WitnessReplay {
             System.out.println(String.format(Locale.ROOT, "  %-70s %s", r.testClass + "#" + r.method + " ["
                     + r.member + "]", verdict));
         }
-        System.out.println("witness replay (" + String.join(",", tiers) + "): " + records.size() + " record(s), "
-                + bad + " not REPRODUCED");
+        System.out.println("witness replay (" + String.join(",", tiers) + (changedOnly ? ", changed" : "") + "): "
+                + records.size() + " record(s), " + bad + " not REPRODUCED");
         return bad == 0;
     }
 
+    /** The record list this JVM replays: the tiers' records, narrowed to the changed ones and to its slice. */
     private List<Record> records() throws IOException {
+        List<Record> all = allRecords();
+        if (changedOnly) {
+            java.util.Set<String> changed = changedFiles();
+            if (changed == null) {
+                System.out.println("witness replay: the merge base with " + MERGE_TARGET + " could not be read, so"
+                        + " every record is replayed -- an unchanged record is not known to be unchanged");
+            } else {
+                List<Record> kept = new ArrayList<>();
+                for (Record r : all) {
+                    Path member = typeFile(r.member.substring(0, r.member.indexOf('#')));
+                    if (changed.contains(relative(Paths.get(r.file))) || (member != null && changed.contains(relative(member)))) {
+                        kept.add(r);
+                    }
+                }
+                all = kept;
+            }
+        }
+        List<Record> mine = new ArrayList<>();
+        for (int i = 0; i < all.size(); i++) {
+            if (i * slice[1] / Math.max(1, all.size()) == slice[0]) {
+                mine.add(all.get(i));
+            }
+        }
+        return mine;
+    }
+
+    private String relative(Path p) {
+        Path abs = p.isAbsolute() ? p : root.resolve(p);
+        return root.relativize(abs.normalize()).toString().replace('\\', '/');
+    }
+
+    /**
+     * Every file that differs from the merge base with {@value #MERGE_TARGET}: committed since it, changed in the
+     * working tree, or untracked. Null when git cannot answer, which the caller reports and treats as "all".
+     */
+    private java.util.Set<String> changedFiles() {
+        try {
+            String base = git("merge-base", "HEAD", MERGE_TARGET).trim();
+            if (base.isEmpty()) {
+                return null;
+            }
+            java.util.Set<String> out = new java.util.HashSet<>();
+            for (String listing : new String[]{git("diff", "--name-only", base), git("ls-files", "--others", "--exclude-standard")}) {
+                for (String line : listing.split("\\R")) {
+                    if (!line.trim().isEmpty()) {
+                        out.add(line.trim());
+                    }
+                }
+            }
+            return out;
+        } catch (IOException | InterruptedException e) {
+            return null;
+        }
+    }
+
+    private String git(String... args) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("git");
+        cmd.addAll(Arrays.asList(args));
+        Process p = new ProcessBuilder(cmd).directory(root.toFile()).redirectErrorStream(false).start();
+        byte[] out = readAll(p.getInputStream());
+        if (p.waitFor() != 0) {
+            throw new IOException("git " + String.join(" ", args) + " failed");
+        }
+        return new String(out, StandardCharsets.UTF_8);
+    }
+
+    private static byte[] readAll(java.io.InputStream in) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = in.read(chunk)) > 0) {
+            buf.write(chunk, 0, n);
+        }
+        return buf.toByteArray();
+    }
+
+    private List<Record> allRecords() throws IOException {
         Path dump = root.resolve("build/reports/test-bindings/test-bindings.json");
         JsonElement parsed = new JsonParser().parse(new String(Files.readAllBytes(dump), StandardCharsets.UTF_8));
         JsonArray rows = parsed.isJsonArray() ? parsed.getAsJsonArray() : parsed.getAsJsonObject().getAsJsonArray("rows");

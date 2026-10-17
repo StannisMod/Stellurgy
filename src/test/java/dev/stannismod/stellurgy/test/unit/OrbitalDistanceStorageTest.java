@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseScale;
@@ -22,12 +22,6 @@ import static org.junit.Assert.assertTrue;
  * <p>That reach is 5 000 AU, which is 7.5 billion units of 100 km: past what an {@code int} holds.
  * Each method's red names the one class whose storage narrowed the value.</p>
  */
-@LegacyWitness(prose = "2026-09-30, with each of the three writers —"
-        + " {@code StellarBody#writeToNBT} at {@code nbt.setLong(\"companionOrbit\", orbitalDistance)},"
-        + " {@code SystemBody#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDistance)} and"
-        + " {@code DimensionProperties#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDist)} — put back"
-        + " to {@code setInteger(key, (int) value)}: all three fail \"expected:&lt;7479895000&gt; but"
-        + " was:&lt;-1110039592&gt;\".")
 public class OrbitalDistanceStorageTest {
 
     /** The widest orbit the model names — read from production, not restated here. */
@@ -45,6 +39,9 @@ public class OrbitalDistanceStorageTest {
                 WIDEST_NAMED_ORBIT > Integer.MAX_VALUE);
     }
 
+    @RedWitness(member = "StellarBody#writeToNBT", at = "nbt.setLong(\"companionOrbit\", orbitalDistance);",
+            replacedBy = "nbt.setInteger(\"companionOrbit\", (int) orbitalDistance);",
+            fails = "expected:<7479895000> but was:<-1110039592>", on = "2026-10-17")
     @Test
     public void aCompanionStarKeepsItsOrbitThroughNbt() {
         requireBeyondInt();
@@ -59,6 +56,9 @@ public class OrbitalDistanceStorageTest {
         assertEquals(WIDEST_NAMED_ORBIT, read.getOrbitalDistance());
     }
 
+    @RedWitness(member = "SystemBody#writeToNBT", at = "nbt.setLong(\"orbitalDist\", orbitalDistance);",
+            replacedBy = "nbt.setInteger(\"orbitalDist\", (int) orbitalDistance);",
+            fails = "expected:<7479895000> but was:<-1110039592>", on = "2026-10-17")
     @Test
     public void aSystemBodyKeepsItsOrbitThroughNbt() {
         requireBeyondInt();

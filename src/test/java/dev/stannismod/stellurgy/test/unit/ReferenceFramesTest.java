@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ReferenceFrames;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -52,10 +52,14 @@ public class ReferenceFramesTest {
      * this codebase, so a formula that drifted to read a radius or a surface gravity would miss them
      * however self-consistent it stayed.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, both directions. With {@code ReferenceFrames#orbitalRadiusBlocks} at {@code return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick))}"
-            + " divided by 1000 this fails with \"Earth's sphere of influence, against the published 926 000 km"
-            + " expected:&lt;3704000.0&gt; but was:&lt;3698.588…&gt;\"; with (taken before the law moved into its own method) {@code ReferenceFrames#soiRadius} at {@code return orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)}"
-            + " multiplied by 10 it fails with the same message and \"was:&lt;3.698…E7&gt;\".")
+    @RedWitness(verdict = "the orbital radius", member = "ReferenceFrames#orbitalRadiusBlocks",
+            at = "return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick))",
+            replacedBy = "return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick)) / 1000",
+            fails = "Earth's sphere of influence, against the published 926 000 km", on = "2026-10-17")
+    @RedWitness(verdict = "the Laplace law", member = "ReferenceFrames#soiRadius",
+            at = "return orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)",
+            replacedBy = "return 10 * orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)",
+            fails = "Earth's sphere of influence, against the published 926 000 km", on = "2026-10-17")
     @Test
     public void aSpheresRadiusMatchesThePublishedValueForEarthAndForLuna() {
         SystemBody sol = sol();
@@ -78,9 +82,10 @@ public class ReferenceFramesTest {
      * A craft close to a moon is in the MOON's frame, not its planet's — the nesting C19 FRAME-2
      * asks for and the defect measured in {@code ParkedCraftKeepsStationTest}.
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code ReferenceFrames#orbitalRadiusBlocks} at {@code return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick))} divided by 1000"
-            + " (Luna's sphere shrinks below 20 000 blocks), this fails with \"a craft 20 000 blocks from Luna"
-            + " is inside Luna's 264 000-block sphere and must be in its frame, not in Earth's\".")
+    @RedWitness(member = "ReferenceFrames#orbitalRadiusBlocks",
+            at = "return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick))",
+            replacedBy = "return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick)) / 1000",
+            fails = "a craft 20 000 blocks from Luna is inside Luna's", on = "2026-10-17")
     @Test
     public void aCraftInsideAMoonsSphereIsInTheMoonsFrame() {
         SystemBody earth = earth();
@@ -99,10 +104,10 @@ public class ReferenceFramesTest {
     /**
      * A craft far from every moon falls back to the planet, which is the right answer and not a fallback.
      */
-    @LegacyWitness(prose = "2026-09-30, taken before the law moved into its own method, with"
-            + " {@code ReferenceFrames#soiRadius} at {@code return orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)} multiplied by 10 (Luna's"
-            + " sphere then reaches Earth), this fails with \"a craft beside Earth and far from Luna is in"
-            + " Earth's frame\".")
+    @RedWitness(member = "ReferenceFrames#soiRadius",
+            at = "return orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)",
+            replacedBy = "return 10 * orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT)",
+            fails = "a craft beside Earth and far from Luna is in Earth's frame", on = "2026-10-17")
     @Test
     public void aCraftOutsideEveryMoonsSphereIsInThePlanetsFrame() {
         SystemBody earth = earth();
@@ -129,10 +134,10 @@ public class ReferenceFramesTest {
      * its planet at the moon's own orbital speed — the same number, now describing the cell rather
      * than the body inside it.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code BodyEphemeris#velocityBlocksPerTickAt} at {@code double inPlane = distUnits * Math.cos(Math.toRadians(phiDegrees)) * unitBlocks} taking half the"
-            + " blocks per distance unit — the old 200-block moon step against today's 400 — this fails with \"a"
-            + " moon's CELL travels at the moon's orbital speed about its parent expected:&lt;14.734…&gt; but"
-            + " was:&lt;7.367…&gt;\".")
+    @RedWitness(member = "BodyEphemeris#velocityBlocksPerTickAt",
+            at = "double inPlane = distUnits * Math.cos(Math.toRadians(phiDegrees)) * unitBlocks",
+            replacedBy = "double inPlane = distUnits * Math.cos(Math.toRadians(phiDegrees)) * unitBlocks / 2",
+            fails = "a moon's CELL travels at the moon's orbital speed about its parent", on = "2026-10-17")
     @Test
     public void neitherAPlanetNorAMoonMovesInsideItsOwnCellWhileTheMoonsCellCarriesTheOrbit() {
         SystemBody earth = earth();

@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -137,9 +137,8 @@ public class CellSeamTest {
      * however far across the zone it had flown — which for Earth's zone is an error of millions of
      * blocks and always in the direction of "you have not left yet".</p>
      */
-    @LegacyWitness(prose = "2026-09-29, with {@code CellSeam#distanceFromZoneBody} at {@code double dx = (double) coord.sectorX() * width + coord.localX()} reading the in-cell"
-            + " offset alone (the {@code sector * width} term dropped), this fails with \"expected:&lt;5547882.0&gt;"
-            + " but was:&lt;0.0&gt;\" — a craft three cells out read as standing on the body.")
+    @RedWitness(member = "CellSeam#distanceFromZoneBody", at = "double dx = (double) coord.sectorX() * width + coord.localX();",
+            replacedBy = "double dx = coord.localX();", fails = "expected:<5547882.0> but was:<0.0>", on = "2026-10-17")
     @Test
     public void distanceIsMeasuredFromTheBodyAndNotFromTheCell() {
         // The body's own cell, a third of a cell out: the offset IS the distance. The 1-block
@@ -164,9 +163,8 @@ public class CellSeamTest {
      * re-decides its frame every tick and pays a full cut-and-paste each time — the same failure the
      * cube's two margins exist for, one level down, and the same ratio: ten to one.</p>
      */
-    @LegacyWitness(prose = "2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code && distanceBlocks < zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)} entering at the sphere itself"
-            + " (the {@code 1 - SPHERE_REENTRY_FRACTION} factor dropped), this fails with \"but a whisker inside"
-            + " is not — that is the gap\"; every other test in the class stays green on that inversion.")
+    @RedWitness(member = "CellSeam#hasEnteredZone", at = "zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)",
+            replacedBy = "zoneRadiusBlocks", fails = "but a whisker inside is not", on = "2026-10-17")
     @Test
     public void theSphereThresholdsAreAHysteresisAndNotOneBoundaryReadTwice() {
         double r = 264_000d; // Luna's sphere, in blocks
@@ -197,12 +195,10 @@ public class CellSeamTest {
      * it was never in; one that answered "entered" for the {@code -1} that
      * {@link CellSeam#distanceFromZoneBody} returns for a galactic coordinate would take it into one.</p>
      */
-    @LegacyWitness(prose = "2026-09-29, twice. With {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} stripped of its"
-            + " {@code zoneRadiusBlocks > 0} guard, this fails (then with a bare {@code AssertionError}; the"
-            + " assertions carry messages since). With {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} stripped of the same"
-            + " guard, it fails with \"with no sphere there is nothing to enter, even for the -1 a galactic"
-            + " coordinate's distance is\" — the assertion that read {@code (0, 0)} before could not see that"
-            + " guard at all, since {@code 0 < 0} is false without it.")
+    @RedWitness(verdict = "nothing to leave", member = "CellSeam#hasLeftZone", at = "return zoneRadiusBlocks > 0d &&",
+            replacedBy = "return", fails = "with no sphere there is nothing to leave", on = "2026-10-17")
+    @RedWitness(verdict = "nothing to enter", member = "CellSeam#hasEnteredZone", at = "return zoneRadiusBlocks > 0d &&",
+            replacedBy = "return", fails = "with no sphere there is nothing to enter, even for the -1", on = "2026-10-17")
     @Test
     public void noSphereMeansNoSphereAnswerRatherThanZero() {
         // The POSITIVE half first, in this method (STEP 7): the same distance against a real sphere
@@ -229,11 +225,9 @@ public class CellSeamTest {
      * {@code CellCrossingController.carryDestination} decides where the craft goes. Asked of the
      * cube, it would be the +X neighbour — a cube face nowhere near the sphere it crossed.</p>
      */
-    @LegacyWitness(prose = "2026-09-29, with {@code CellCrossingController#carryDestination} at {@code if (bySphere != null)} asking the cube"
-            + " BEFORE the sphere, this fails with \"where both fire the carry must be aimed by the sphere"
-            + " (20_0_0), not at the cube's neighbour: got 2_0_0\". (The version before that date asserted"
-            + " {@code past < 2R/2 + CARRY_MARGIN} on a cube of the test's own making, which production never"
-            + " consults.)")
+    @RedWitness(member = "CellCrossingController#carryDestination", at = "if (bySphere != null) {",
+            replacedBy = "if (bySphere != null && !CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])) {",
+            fails = "where both fire the carry must be aimed by the sphere", on = "2026-10-17")
     @Test
     public void theSphereFiresBeforeTheCubeWhereBothApply() {
         double radius = GalacticCoord.HALF_CELL;           // the widest sphere production realizes

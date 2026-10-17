@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.subsystem.network.*;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.DimensionType;
 import net.minecraft.world.World;
@@ -87,10 +88,9 @@ public class SubsystemNetworkFairShareTest {
      * <p>Plain max flow also answers 30/70 here — nothing but the request caps the small sink — so
      * this pins the share's cap, not the fairness the other cases pin.</p>
      */
-    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code given[i] += Math.min(low, requested[i] - given[i]);}"
-            + " raising every sink by the full {@code low}, uncapped by its request, this fails with \"the small"
-            + " request is met in full and the surplus goes to the other (small, large): arrays first differed"
-            + " at element [0]; expected:&lt;30&gt; but was:&lt;70&gt;\" (2026-10-06).")
+    @RedWitness(member = "SubsystemNetworkManager#shareTier", at = "given[i] += Math.min(low, requested[i] - given[i]);",
+            replacedBy = "given[i] += low;", fails = "the small request is met in full and the surplus goes to the other",
+            on = "2026-10-17")
     @Test
     public void aSmallRequestIsMetAndItsSurplusGoesToTheOthers() throws Exception {
         SubsystemNetworkManager manager = new SubsystemNetworkManager();
@@ -110,13 +110,12 @@ public class SubsystemNetworkFairShareTest {
      * The share is computed through the cables: a sink behind a cable carrying 10 gets 10, and the
      * other sink gets everything else — the tier still receives its whole max flow.
      */
-    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0}"
-            + " answered as always false — every sink retired at the first bottleneck — this fails with \"..."
-            + " (behind the cable, open): arrays first differed at element [1]; expected:&lt;90&gt; but"
-            + " was:&lt;10&gt;\" (2026-10-06).")
     @LegacyWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
             + " replaced by one plain max flow per tier (the shipped shape), this fails with \"... arrays first"
             + " differed at element [0]; expected:&lt;10&gt; but was:&lt;0&gt;\" (2026-10-06).")
+    @RedWitness(verdict = "a bottleneck retires only its own sink", member = "SubsystemNetworkManager#shareTier",
+            at = "trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0",
+            replacedBy = "false", fails = "(behind the cable, open): arrays first differed at element [1]", on = "2026-10-17")
     @Test
     public void aCableLimitedSinkLeavesTheRestToTheOthers() throws Exception {
         SubsystemNetworkManager manager = new SubsystemNetworkManager();

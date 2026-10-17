@@ -4,7 +4,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Rule;
@@ -37,14 +36,13 @@ public class ThermalTableFileTest {
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
      * so the expected values come from production's own table and none of them is typed here.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}."
-            + " RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing"
-            + " shipped row never enters the table: \"a material the file predates must still resolve\". FILE"
-            + " WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped"
-            + " row goes over the file's own: \"a row the file holds keeps the file's density"
-            + " expected:&lt;7875&gt; but was:&lt;7874&gt;\". WRITTEN — at {@code save(file, parsed);} removed: \"the added material must be written into the file"
-            + " … {\"materials\":{\"iron\":…}}\". The two premises at its head are arrangements and are not"
-            + " witnessed.")
+    @RedWitness(verdict = "resolves", member = "ThermalMaterials#read", at = "parsed.put(shipped.getKey(), shipped.getValue());",
+            replacedBy = "", fails = "a material the file predates must still resolve", on = "2026-10-17")
+    @RedWitness(verdict = "the file wins", member = "ThermalMaterials#read",
+            at = "if (!parsed.containsKey(shipped.getKey()))", replacedBy = "if (true)",
+            fails = "a row the file holds keeps the file's density", on = "2026-10-17")
+    @RedWitness(verdict = "written", member = "ThermalMaterials#read", at = "save(file, parsed);", replacedBy = "",
+            fails = "the added material must be written into the file", on = "2026-10-17")
     @Test
     public void aTableWrittenBeforeAMaterialShippedStillKnowsIt() throws Exception {
         Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");

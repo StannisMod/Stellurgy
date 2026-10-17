@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.subsystem.heat.HullMelting;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -23,9 +23,9 @@ public class HullMeltingTest {
         MinecraftBootstrap.ensure();
     }
 
-    @LegacyWitness(prose = "with {@code HullMelting#equilibriumKelvin} at {@code return 0.0D;} answering 1 K for no incident flux: \"an unlit"
-            + " surface is not driven anywhere by the environment expected:&lt;0.0&gt; but was:&lt;1.0&gt;\","
-            + " 2026-09-30.")
+    @RedWitness(member = "HullMelting#equilibriumKelvin", at = "if (incidentFluxPerCell <= 0.0D) { return 0.0D; }",
+            replacedBy = "if (incidentFluxPerCell <= 0.0D) { return 1.0D; }",
+            fails = "an unlit surface is not driven anywhere by the environment expected:<0.0> but was:<1.0>", on = "2026-10-17")
     @Test
     public void nothingArrivingIsNoTemperatureAtAll() {
         assertEquals("an unlit surface is not driven anywhere by the environment", 0.0D,

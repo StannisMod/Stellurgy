@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.integration;
 
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import org.junit.BeforeClass;
@@ -120,11 +120,18 @@ public class XMLPlanetLoaderTest {
 
     // ---- the procedural galaxy ----------------------------------------------
 
-    @LegacyWitness(prose = "with {@code DimensionPropertyCoupling#galaxyGenConfig} at"
-            + " {@code GalaxyGenConfig.defaults()} replaced by {@code GalaxyGenConfig.nonProcedural()}, the first"
-            + " verdict fails with \"no <galaxyGen> is the shipped procedural galaxy, not an empty one\"; replaced by"
-            + " the defaults with one more reserved galaxy, the second fails with \"and the shipped configuration,"
-            + " knob for knob expected:<[54856f457186f8ee]> but was:<[d2ed657bccc48b66]>\", 2026-10-05.")
+    @RedWitness(verdict = "procedural", member = "XMLPlanetLoader#readAllPlanets",
+            at = "DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();",
+            replacedBy = "DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();"
+                    + " coupling.galaxyGenConfig = dev.stannismod.stellurgy.universe.GalaxyGenConfig.nonProcedural();",
+            fails = "no <galaxyGen> is the shipped procedural galaxy, not an empty one", on = "2026-10-17")
+    @RedWitness(verdict = "knob for knob", member = "XMLPlanetLoader#readAllPlanets",
+            at = "DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();",
+            replacedBy = "DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();"
+                    + " coupling.galaxyGenConfig = dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults()"
+                    + ".withReservedGalaxies(java.util.Collections.singletonList("
+                    + "dev.stannismod.stellurgy.universe.GalaxyKey.of(1L, 0L, 0L)));",
+            fails = "and the shipped configuration, knob for knob", on = "2026-10-17")
     @Test
     public void aPackThatStatesNoGalaxyGenIsGivenTheShippedConfiguration() throws Exception {
         XMLPlanetLoader.DimensionPropertyCoupling read =
@@ -136,9 +143,9 @@ public class XMLPlanetLoaderTest {
                 GalaxyGenConfig.defaults().fingerprint(), read.galaxyGenConfig.fingerprint());
     }
 
-    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s branch at"
-            + " {@code if (\"false\".equalsIgnoreCase(value))} removed, this fails with \"procedural=\"false\" must be"
-            + " read as a galaxy with nothing between its anchors\", 2026-10-05.")
+    @RedWitness(member = "XMLPlanetLoader#readGalaxyGen", at = "return nonProcedural(node);",
+            replacedBy = "value = \"true\";",
+            fails = "procedural=\"false\" must be read as a galaxy with nothing between its anchors", on = "2026-10-17")
     @Test
     public void proceduralFalseIsAGalaxyOfAuthoredAnchorsOnly() throws Exception {
         XMLPlanetLoader.DimensionPropertyCoupling read = load("opt-out.xml",
@@ -148,10 +155,13 @@ public class XMLPlanetLoaderTest {
                 read.galaxyGenConfig.procedural);
     }
 
-    @LegacyWitness(prose = "with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made"
-            + " never true, this fails with \"a density beside procedural=\"false\" tunes a population the pack asked"
-            + " not to have — it must be refused, not ignored\"; with its message's {@code \"; remove \" + knobs}"
-            + " dropped, with \"the refusal must name the knob the pack must remove\", 2026-10-05.")
+    @RedWitness(verdict = "refused", member = "XMLPlanetLoader#nonProcedural", at = "if (!knobs.isEmpty())",
+            replacedBy = "if (false)",
+            fails = "a density beside procedural=\"false\" tunes a population the pack asked not to have",
+            on = "2026-10-17")
+    @RedWitness(verdict = "the knob named", member = "XMLPlanetLoader#nonProcedural",
+            at = "setting; remove \" + knobs", replacedBy = "setting\"",
+            fails = "the refusal must name the knob the pack must remove", on = "2026-10-17")
     @Test
     public void proceduralFalseBesideAKnobIsRefusedAndTheKnobNamed() throws Exception {
         try {
@@ -165,10 +175,13 @@ public class XMLPlanetLoaderTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!\"true\".equalsIgnoreCase(value))}"
-            + " made never true, this fails with \"procedural=\"no\" is neither answer — reading it as either would be"
-            + " a guess\"; with that refusal's message not naming the attribute, with \"the refusal must name the"
-            + " attribute\", 2026-10-05.")
+    @RedWitness(verdict = "refused", member = "XMLPlanetLoader#readGalaxyGen",
+            at = "if (!\"true\".equalsIgnoreCase(value))", replacedBy = "if (false)",
+            fails = "procedural=\"no\" is neither answer", on = "2026-10-17")
+    @RedWitness(verdict = "the attribute named", member = "XMLPlanetLoader#readGalaxyGen",
+            at = "throw new RuntimeException(\"<galaxyGen procedural=\\\"\" + procedural + \"\\\">: procedural is \"",
+            replacedBy = "throw new RuntimeException(\"value \" + value + \" is neither \"",
+            fails = "the refusal must name the attribute", on = "2026-10-17")
     @Test
     public void aProceduralValueThatIsNotTrueOrFalseIsRefused() throws Exception {
         try {

@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -24,9 +25,10 @@ public class DimListTest {
      * <p>Acceptance, stated before the code: {@code [0,2,5]} then {@code [0,5,9,7]} answers
      * {@code [9,7]}.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code DimList#addedSince} at {@code return java.util.Arrays.stream(registered()).filter(dim -> !earlier.holds(dim)).toArray()} — its filter — inverted"
-            + " ({@code earlier.holds(dim)}): \"arrays first differed at element [0]; expected:&lt;9&gt; but"
-            + " was:&lt;0&gt;\".")
+    @NotYetRed(prose = "not re-taken in the replayable form, 2026-10-17: the record names no production decision."
+            + " DimList is a test helper (src/test/java), so the build refuses it as a @RedWitness member. Taken"
+            + " 2026-09-30 with DimList#addedSince's filter `!earlier.holds(dim)` inverted to `earlier.holds(dim)`:"
+            + " \"arrays first differed at element [0]; expected:<9> but was:<0>\".")
     @Test
     public void addedSinceAnswersOnlyTheDimensionsTheLaterReadingGained() {
         int[] added = reading("0,5,9,7").addedSince(reading("0,2,5"));

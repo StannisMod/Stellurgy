@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -56,9 +57,10 @@ public class ThermalMaterialsTest {
                 * (m.ceilingKelvin() - margin - ambient);
     }
 
-    @LegacyWitness(prose = "with {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling the product: \"the energy a lump holds"
-            + " is rho * c * dT and nothing else expected:&lt;5013234068&gt; but was:&lt;10026468136&gt;\","
-            + " 2026-09-30.")
+    @RedWitness(member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            replacedBy = "return 2 * (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            fails = "the energy a lump holds is rho * c * dT and nothing else", on = "2026-10-17")
     @Test
     public void capacityIsDensityTimesSpecificHeatTimesTheUsableSpan() {
         ThermalMaterial iron = material("iron");
@@ -67,10 +69,14 @@ public class ThermalMaterialsTest {
                 expectedJoulesPerCubicMetre(iron, 293, 100), iron.joulesPerCubicMetre(293, 100));
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. COSTS CAPACITY - {@code ThermalMaterial#joulesPerCubicMetre} at {@code long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;}"
-            + " ignoring the margin: \"charging a slug short of its ceiling must cost capacity ...: 5366776668 -&gt;"
-            + " 5366776668\". EXACTLY THE MARGIN - {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling the product: \"and exactly"
-            + " the margin's worth of it expected:&lt;353542600&gt; but was:&lt;707085200&gt;\".")
+    @RedWitness(verdict = "costs capacity", member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;",
+            replacedBy = "long usable = (long) ceilingKelvin - startKelvin;",
+            fails = "charging a slug short of its ceiling must cost capacity", on = "2026-10-17")
+    @RedWitness(verdict = "exactly the margin", member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            replacedBy = "return 2 * (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            fails = "and exactly the margin's worth of it", on = "2026-10-17")
     @Test
     public void theMarginIsSubtractedFromTheSpanRatherThanIgnored() {
         ThermalMaterial iron = material("iron");
@@ -85,9 +91,8 @@ public class ThermalMaterialsTest {
                 withoutMargin - withMargin);
     }
 
-    @LegacyWitness(prose = "with the guard at {@code ThermalMaterial#joulesPerCubicMetre} at {@code if (usable <= 0L)} disabled: \"a slug in a room hotter"
-            + " than the slug melts is not a heat sink expected:&lt;0&gt; but was:&lt;-1462860&gt;\","
-            + " 2026-09-30.")
+    @RedWitness(member = "ThermalMaterial#joulesPerCubicMetre", at = "if (usable <= 0L)", replacedBy = "if (false)",
+            fails = "a slug in a room hotter than the slug melts is not a heat sink", on = "2026-10-17")
     @Test
     public void aMaterialAlreadyPastItsCeilingCarriesNothing() {
         ThermalMaterial lead = material("lead");
@@ -101,18 +106,22 @@ public class ThermalMaterialsTest {
      * lead is eleven times denser than water and barely better as a slug, because it gives up at
      * 600 K.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. LEAD UNDER TWICE WATER -"
-            + " {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} forgetting the specific heat: \"and yet a litre of it is worth less"
-            + " than twice a litre of water ...: water=80000 lead=3481380\". GRAPHITE BEATS IRON -"
-            + " {@code ThermalMaterial#joulesPerCubicMetre} at {@code long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;} capping the usable span at 100 K: \"graphite is denser than nothing"
-            + " much and beats iron anyway, on ceiling alone: carbon=160234000\". ONLY TUNGSTEN BEATS GRAPHITE -"
-            + " {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} forgetting the density: \"and only tungsten beats graphite:"
-            + " tungsten=455868\". The premise before them is an arrangement and is not witnessed.")
-    @LegacyWitness(prose = "the class arrangement, 2026-09-30, re-taken after each test began reading a"
-            + " table of its own: with {@code ThermalMaterials#defaults} at"
-            + " {@code put(m, new ThermalMaterial(\"iron\", 7874, 449, 1811));} made 20000 kg/m3, \"graphite is"
-            + " denser than nothing much and beats iron anyway, on ceiling alone: carbon=5779640380\". While the"
-            + " class read the run directory's table file, the same change left every method here green.")
+    @RedWitness(verdict = "lead under twice water", member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            replacedBy = "return (long) densityKgPerCubicMetre * usable;",
+            fails = "and yet a litre of it is worth less than twice a litre of water", on = "2026-10-17")
+    @RedWitness(verdict = "graphite beats iron", member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;",
+            replacedBy = "long usable = Math.min(100L, (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin);",
+            fails = "graphite is denser than nothing much and beats iron anyway, on ceiling alone", on = "2026-10-17")
+    @RedWitness(verdict = "graphite beats a denser iron", member = "ThermalMaterials#defaults",
+            at = "put(m, new ThermalMaterial(\"iron\", 7874, 449, 1811));",
+            replacedBy = "put(m, new ThermalMaterial(\"iron\", 20000, 449, 1811));",
+            fails = "graphite is denser than nothing much and beats iron anyway, on ceiling alone", on = "2026-10-17")
+    @RedWitness(verdict = "only tungsten beats graphite", member = "ThermalMaterial#joulesPerCubicMetre",
+            at = "return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;",
+            replacedBy = "return (long) specificHeatJoulesPerKgKelvin * usable;",
+            fails = "and only tungsten beats graphite", on = "2026-10-17")
     @Test
     public void aHigherCeilingBeatsAHigherDensity() {
         long water = material("water").joulesPerCubicMetre(293, 0);
@@ -140,14 +149,14 @@ public class ThermalMaterialsTest {
      * three units over" - asserting exact equality would be asserting that iron's fraction happens to
      * be under a quarter, which any rebalance can change without the slug stopping being linear.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. AT LEAST FOUR TIMES -"
-            + " {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} adding a flat 1000 units to every slug: \"four times the material is"
-            + " at least four times the heat ...: one=13733 four=51934\" (run with the shipped iron made denser"
-            + " for another verdict; the flat term is what breaks it). NO MORE THAN THREE OVER -"
-            + " {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} doubling every slug bigger than a litre: \"and no more than the three"
-            + " units four rounded-down fractions can add: one=5013 four=40104\". A change that stays linear is"
-            + " not a red: with {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling every capacity this stays green. The premise"
-            + " is an arrangement and is not witnessed.")
+    @RedWitness(verdict = "at least four times", member = "ThermalMaterials#slugCapacity",
+            at = "return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;",
+            replacedBy = "return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit + 1000L;",
+            fails = "four times the material is at least four times the heat", on = "2026-10-17")
+    @RedWitness(verdict = "no more than three over", member = "ThermalMaterials#slugCapacity",
+            at = "return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;",
+            replacedBy = "return (millilitres > 1_000L ? 2 : 1) * perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;",
+            fails = "and no more than the three units four rounded-down fractions can add", on = "2026-10-17")
     @Test
     public void volumeScalesTheSlugLinearly() {
         ThermalMaterial iron = material("iron");
@@ -163,11 +172,14 @@ public class ThermalMaterialsTest {
                 + oneLitre + " four=" + fourLitres, fourLitres <= 4 * oneLitre + 3);
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. ABSENT - {@code ThermalMaterials#byName} at {@code return name == null ? null : materials.get(name.toLowerCase(Locale.ROOT));}"
-            + " answering iron for a name it does not know: \"a material nobody described must read as absent"
-            + " expected null, but was:&lt;ThermalMaterial[iron ...]&gt;\". CARRIES NOTHING -"
-            + " {@code ThermalMaterials#slugCapacity} at {@code if (material == null || millilitres <= 0L)} substituting iron for a missing material: \"and absent must carry"
-            + " nothing rather than a default expected:&lt;0&gt; but was:&lt;5013&gt;\".")
+    @RedWitness(verdict = "absent", member = "ThermalMaterials#byName",
+            at = "materials.get(name.toLowerCase(Locale.ROOT));",
+            replacedBy = "materials.getOrDefault(name.toLowerCase(Locale.ROOT), materials.get(\"iron\"));",
+            fails = "a material nobody described must read as absent", on = "2026-10-17")
+    @RedWitness(verdict = "carries nothing", member = "ThermalMaterials#slugCapacity",
+            at = "if (material == null || millilitres <= 0L)",
+            replacedBy = "if (material == null) { material = INSTANCE.byName(\"iron\"); } if (millilitres <= 0L)",
+            fails = "and absent must carry nothing rather than a default", on = "2026-10-17")
     @Test
     public void anUnknownSubstanceIsNotSilentlyGivenACapacity() {
         assertNull("a material nobody described must read as absent",
@@ -180,10 +192,18 @@ public class ThermalMaterialsTest {
      * One row per substance, reached from every shape it comes in. The point of keying by material is
      * that an ingot, a block and a nugget of the same metal are the same substance.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each the {@code ThermalMaterials#PREFIXES} at {@code \"block\", \"ingot\", \"plate\", \"stick\", \"gear\", \"dust\", \"nugget\", \"gem\", \"ore\"}"
-            + " list forgetting one prefix. INGOT: \"an ore-dictionary ingot name must resolve\". BLOCK: \"a block of it"
-            + " is the same substance expected:&lt;iron&gt; but was:&lt;null&gt;\". DUST: \"so is a dust of it"
-            + " expected:&lt;iron&gt; but was:&lt;null&gt;\".")
+    @RedWitness(verdict = "ingot", member = "ThermalMaterials#byOreName", at = "for (String prefix : PREFIXES)",
+            replacedBy = "for (String prefix : java.util.Arrays.asList(\"block\", \"plate\", \"stick\", \"gear\", \"dust\","
+                    + " \"nugget\", \"gem\", \"ore\"))",
+            fails = "an ore-dictionary ingot name must resolve", on = "2026-10-17")
+    @RedWitness(verdict = "block", member = "ThermalMaterials#byOreName", at = "for (String prefix : PREFIXES)",
+            replacedBy = "for (String prefix : java.util.Arrays.asList(\"ingot\", \"plate\", \"stick\", \"gear\", \"dust\","
+                    + " \"nugget\", \"gem\", \"ore\"))",
+            fails = "a block of it is the same substance", on = "2026-10-17")
+    @RedWitness(verdict = "dust", member = "ThermalMaterials#byOreName", at = "for (String prefix : PREFIXES)",
+            replacedBy = "for (String prefix : java.util.Arrays.asList(\"block\", \"ingot\", \"plate\", \"stick\", \"gear\","
+                    + " \"nugget\", \"gem\", \"ore\"))",
+            fails = "so is a dust of it", on = "2026-10-17")
     @Test
     public void everyShapeOfOneSubstanceResolvesToTheSameRow() {
         ThermalMaterial fromIngot = table.byOreName("ingotIron");
@@ -201,15 +221,15 @@ public class ThermalMaterialsTest {
 
     // ─── volume: derived from the shape, never authored beside the item ─────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30 (taken while the table was filled in a"
-            + " static block; its rows are unchanged). A CUBIC METRE - {@code ThermalMaterials#prefixVolumes} at"
-            + " {@code volumes.put(\"block\", 1_000_000L);} making a block two: \"a block is a cubic metre of the"
-            + " stuff expected:&lt;1000000&gt; but was:&lt;2000000&gt;\". NINE INGOTS -"
-            + " {@code ThermalMaterials#prefixVolumes} at {@code volumes.put(\"ingot\", 1_000_000L / 9);} making an"
-            + " ingot an eighth: \"nine ingots to a block ... expected:&lt;111111&gt; but was:&lt;125000&gt;\". NINE"
-            + " NUGGETS - {@code ThermalMaterials#prefixVolumes} at {@code volumes.put(\"nugget\", 1_000_000L / 81);}"
-            + " making a nugget an eightieth: \"and nine nuggets to an ingot expected:&lt;12345&gt; but"
-            + " was:&lt;12500&gt;\".")
+    @RedWitness(verdict = "a cubic metre", member = "ThermalMaterials#prefixVolumes",
+            at = "volumes.put(\"block\", 1_000_000L);", replacedBy = "volumes.put(\"block\", 2_000_000L);",
+            fails = "a block is a cubic metre of the stuff", on = "2026-10-17")
+    @RedWitness(verdict = "nine ingots", member = "ThermalMaterials#prefixVolumes",
+            at = "volumes.put(\"ingot\", 1_000_000L / 9);", replacedBy = "volumes.put(\"ingot\", 1_000_000L / 8);",
+            fails = "nine ingots to a block", on = "2026-10-17")
+    @RedWitness(verdict = "nine nuggets", member = "ThermalMaterials#prefixVolumes",
+            at = "volumes.put(\"nugget\", 1_000_000L / 81);", replacedBy = "volumes.put(\"nugget\", 1_000_000L / 80);",
+            fails = "and nine nuggets to an ingot", on = "2026-10-17")
     @Test
     public void theShapeOfAnItemIsWhatSaysHowMuchSubstanceItIs() {
         long block = ThermalMaterials.volumeMillilitres("blockIron");
@@ -231,10 +251,9 @@ public class ThermalMaterialsTest {
                 ThermalMaterials.volumeMillilitres("clumpIron"));
     }
 
-    @LegacyWitness(prose = "with {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} adding a flat 1000 units to every slug: \"the"
-            + " substance is the same, so a litre of it is worth the same either way expected:&lt;5014&gt; but"
-            + " was:&lt;5022&gt;\", 2026-09-30. The premise before it is an arrangement and is not"
-            + " witnessed.")
+    @RedWitness(member = "ThermalMaterials#slugCapacity", at = "return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;",
+            replacedBy = "return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit + 1000L;",
+            fails = "the substance is the same, so a litre of it is worth the same either way", on = "2026-10-17")
     @Test
     public void twoShapesOfOneMetalDifferOnlyByHowMuchOfItThereIs() {
         ThermalMaterial iron = material("iron");
@@ -254,9 +273,9 @@ public class ThermalMaterialsTest {
                 blockPerLitre, ingotPerLitre);
     }
 
-    @LegacyWitness(prose = "with {@code ThermalMaterials#byName} at {@code return name == null ? null : materials.get(name.toLowerCase(Locale.ROOT));} answering iron for a name it does not know:"
-            + " \"a prefix is not a licence to invent a material expected null, but was:&lt;ThermalMaterial[iron"
-            + " ...]&gt;\", 2026-09-30.")
+    @RedWitness(member = "ThermalMaterials#byName", at = "materials.get(name.toLowerCase(Locale.ROOT));",
+            replacedBy = "materials.getOrDefault(name.toLowerCase(Locale.ROOT), materials.get(\"iron\"));",
+            fails = "a prefix is not a licence to invent a material", on = "2026-10-17")
     @Test
     public void anOreNameOfSomethingTheTableDoesNotKnowResolvesToNothing() {
         assertNull("a prefix is not a licence to invent a material",

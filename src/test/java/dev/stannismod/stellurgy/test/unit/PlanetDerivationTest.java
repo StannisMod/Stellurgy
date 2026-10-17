@@ -5,9 +5,10 @@ import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.universe.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.*;
@@ -477,10 +478,8 @@ public class PlanetDerivationTest {
     /**
      * A very close orbit is tidally locked and one a thousand AU out is not.
      */
-    @LegacyWitness(prose = "2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for"
-            + " every orbit, this fails with \"a distant orbit must not be locked\". That is what the distant leg"
-            + " can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the"
-            + " old \"1 AU = 100\") leaves it green, because 1 000 AU is outside the radius either way.")
+    @RedWitness(member = "PlanetDerivation#tidallyLockedAt", at = "return orbitalDistance <= lockDistance",
+            replacedBy = "return true", fails = "a distant orbit must not be locked", on = "2026-10-17")
     @Test
     public void aCloseOrbitIsLockedAndADistantOneIsNot() {
         StellarBody s = sol();

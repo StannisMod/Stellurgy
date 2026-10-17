@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
@@ -70,10 +70,15 @@ public class WeightEngineUnitTest {
                 Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has(\"formatVersion\")} checking no schema"
-            + " version fails \"must NOT be read\" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside"
-            + " fails \"must be kept beside the new one\"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails \"must write a fresh table\";"
-            + " {@code WeightEngine#save} at {@code json.addProperty(\"formatVersion\", FORMAT_VERSION);} not stamping the version fails \"retired again\".")
+    @RedWitness(verdict = "not read", member = "WeightEngine#read",
+            at = "if (root == null || !root.has(\"formatVersion\") || root.get(\"formatVersion\").getAsInt() != FORMAT_VERSION)",
+            replacedBy = "if (root == null)", fails = "must NOT be read", on = "2026-10-17")
+    @RedWitness(verdict = "kept beside", member = "WeightEngine#retireIncompatibleFile", at = "if (!current.renameTo(retired))",
+            replacedBy = "if (!current.delete())", fails = "must be kept beside the new one", on = "2026-10-17")
+    @RedWitness(verdict = "a fresh table", member = "WeightEngine#retireIncompatibleFile", at = "seedDefaults(); save();",
+            replacedBy = "seedDefaults();", fails = "must write a fresh table", on = "2026-10-17")
+    @RedWitness(verdict = "stamped", member = "WeightEngine#save", at = "json.addProperty(\"formatVersion\", FORMAT_VERSION);",
+            replacedBy = "", fails = "retired again", on = "2026-10-17")
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
         // The numbers in weights.json changed meaning when the tables were denominated in
