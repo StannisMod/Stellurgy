@@ -236,6 +236,12 @@ and `DeckFrameTick#followShipPoses` (`:99`) re-images every held body through th
 client does the same from its client tick (`ClientDeckFollowsItsShip.java:23`). It skips a player this side
 does not play (his client decides), riders and the dead (`DeckFrameTick.java:103-106`). `[T]`
 `test/client/VSCrewRidesRollingDeckTest.java` (red-witnessed with `followShipPoses` doing nothing).
+A seat bound to a craft is no deck's, so both handlers then re-glue every bound seat `EntityDummy` through
+the advanced pose and re-place its riders (`EntityDummy#followBoundSeats`, `#followSeat`): the seat's own
+update glued it to the pose before the advance, and its rider stood — and on the client was drawn — a tick
+behind the craft. The substrate's end-of-tick carry of bodies that touched a hull (`EntityDraggable`, run on both
+sides after the entities) does not move a seat's rider: the seat disarms it in `EntityDummy#updatePassenger`
+through `VSIntegration#suppressShipDrag`, after the rider's own update and before the carry. `[A]`
 
 **MECH-VSI-17 — Seeds: placing a body on an explicit deck point.** A server placement of a non-player body
 (a crossing's carried cargo) is `DeckFrameTick#holdAt`, refused for a body the deck would not take

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.entity.EntityDummy;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -26,6 +27,7 @@ public final class ClientDeckFollowsItsShip {
         if (event.phase == TickEvent.Phase.END && !Minecraft.getMinecraft().isGamePaused()
                 && Minecraft.getMinecraft().world != null) {
             DeckFrameTick.followShipPoses(Minecraft.getMinecraft().world);
+            EntityDummy.followBoundSeats(Minecraft.getMinecraft().world);
         }
     }
 }

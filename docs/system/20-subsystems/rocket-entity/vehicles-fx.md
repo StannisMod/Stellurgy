@@ -52,7 +52,7 @@ embedded inventory (`inv.writeToNBT`); position/velocity are vanilla `Entity` st
 |------|------|-------------|
 | `EntityItemAbducted` | item rising into a UFO/laser (motionY=2, `lifespan=200` ticks) | `Item`/`Age`/`Lifespan` |
 | `EntityLaserNode` | positional anchor + validity flag for a mining/space laser beam | none (intentionally unsaved) |
-| `EntityDummy` | invisible zero-height seat proxy so a player can sit on a chair | none |
+| `EntityDummy` | invisible zero-height seat proxy so a player can sit on a chair; one bound to a craft's seat is glued to that seat through the craft's pose and is its rider's only placer (C30 ENT-7, ENT-8) | none |
 | `FxSkyLaser`, `fx/FxLaser`, `FxLaserHeat`, `FxLaserSpark` | client laser-beam particles | client-only |
 | `fx/FxElectricArc`, `FxSystemElectricArc`, `FxGravityEffect` | arc / gravity visual particles | client-only |
 | `fx/OxygenCloudFX`, `OxygenTraceFX` | oxygen leak/vent particles | client-only |

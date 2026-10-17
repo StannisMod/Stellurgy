@@ -424,4 +424,222 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
                 + " a rider must never lose the vehicle he is riding." + measured,
                 0, notRiding);
     }
+
+    // --- a pilot is shown on his seat (C30 ENT-7, ENT-8) -------------------------------------------
+
+    /**
+     * How far beyond the launchpad's footprint the pilot-seat fixture reaches: its assembler and its
+     * structure tower each stand one block outside the pad (the fixture's own layout).
+     */
+    private static final int SEAT_FIXTURE_HALO = 1;
+
+    /**
+     * How far above the site the pilot-seat fixture and its seated pilot reach: the structure tower's
+     * top course is the site plus six, and a pilot seated on the seat (the site plus five) has his head
+     * near the site plus seven; eight covers both.
+     */
+    private static final int SEAT_FIXTURE_HEIGHT = 8;
+
+    /**
+     * How far the craft is lifted off its pad before it flies. The TEST'S OWN: enough that no part of
+     * the hull is in contact with the pad, whose contact tips an asymmetric hull (the lift's own
+     * javadoc), and small against the room the open-air band leaves above the site.
+     */
+    private static final int SEAT_LIFT_CLEARANCE_BLOCKS = 10;
+
+    /**
+     * How long the pilot holds his vertical key, in ticks of the craft's world. An EXPERIMENT: the dose
+     * that makes the craft fly. Forty ticks is two thirds of the setpoint's full sweep
+     * ({@code FA_SETPOINT_MAX_SPEED / SETPOINT_RAMP} = 60 ticks), so the craft is still accelerating at
+     * release and its pose changes on every tick of the window — which is what makes a rider a tick
+     * behind his seat distinguishable from one on it.
+     */
+    private static final int SEAT_CLIMB_DOSE_TICKS = 40;
+
+    /**
+     * How many client ticks of the window the craft must have MOVED on for the verdict to mean anything,
+     * and by how much. A still craft shows a rider a tick behind his seat at the seat exactly, so ticks
+     * on which the seat's image did not move are ticks on which the verdict cannot fail. Half the dose is
+     * far below what a forty-tick climb gives and far above zero; a tenth of a block per tick is below
+     * the ramp's first full tick (0.05 + 0.05 blocks/tick) and above float noise.
+     */
+    private static final int SEAT_MIN_MOVING_TICKS = SEAT_CLIMB_DOSE_TICKS / 2;
+    private static final double SEAT_MOVED_BLOCKS = 0.1;
+
+    /**
+     * How far a rider may stand from his seat's image plus vanilla's seating offset and still be ON it,
+     * in blocks: double rounding of world coordinates of a few hundred, and nothing else. A rider placed
+     * through a pose a tick old is a whole tick's travel — at least {@link #SEAT_MOVED_BLOCKS} on every
+     * tick the verdict counts — away.
+     */
+    private static final double SEAT_ON_HIS_SEAT_BLOCKS = 1.0e-6;
+
+    /**
+     * A seated pilot, on a craft in flight, stands exactly where his seat is on every tick, on both sides
+     * (C30 ENT-8), and the physics substrate's carry of bodies that touched a hull never acts on him (C30
+     * ENT-7: a rider is placed by his vehicle alone).
+     *
+     * <p><b>Where it reads.</b> At the HEAD of each side's tick, the state the previous tick left:
+     * {@code seat_rider_shown} on the client — every frame since the last tick has drawn the rider toward
+     * his current position and the craft toward its current pose, so these are what the pilot sees both
+     * arrive at — and {@code seat_rider_placed} on the server, where his position is what the tracker
+     * sends and the next tick starts from. Each takes the rider and the seat block's image through the
+     * craft's current pose on that side in one read. A rider glued to the pose BEFORE the end-of-tick
+     * advance stands a whole tick's travel below a climbing seat.</p>
+     *
+     * <p><b>Why the craft has a DECK.</b> The substrate arms its carry of a body only when the body's own
+     * move meets the hull, and a pilot on a seat over open air never meets it — with the seat's disarm
+     * removed, the carry stayed unarmed through a whole climb (2026-10-17), so on that craft the ENT-7
+     * verdict could not go red. A seated rider stands 0.15 below the bottom of his seat's block (the seat
+     * entity sits 0.2 into it, vanilla seats a player 0.35 below his vehicle), so over a deck his box
+     * meets the deck's top on every move — the shape of a real cockpit, and the one the carry arms on.
+     * The carry's state is read off the rider at the head of his seat's update ({@code dummy_glue}'s
+     * {@code riderDrag}): the substrate applies it at the end of a tick, after the seat's
+     * {@code updatePassenger}, so a carry still held there is one the seat did not disarm.</p>
+     *
+     * <p><b>It does not see</b>: the input pipeline into the seat — a probe binds the seat and seats him,
+     * and the climb is the pilot's key; and the frame mathematics of the seat's image, which the
+     * instruments compute with the same function the seat is glued with — this sees WHEN and by WHOM he
+     * is placed. It stages one region: a straight vertical climb of an upright craft, so a rotating
+     * craft's carry of the rider's YAW is not visited.</p>
+     */
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins({"ENT-7", "ENT-8"})
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ClientDeckFollowsItsShip#afterTheShipsHaveMoved",
+            at = "EntityDummy.followBoundSeats(Minecraft.getMinecraft().world);", replacedBy = "",
+            fails = "a seated pilot must be shown exactly where his seat is shown on the client", on = "2026-10-17",
+            verdict = "ENT-8 on the client")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "DeckFollowsItsShip#afterTheShipsHaveMoved",
+            at = "dev.stannismod.stellurgy.entity.EntityDummy.followBoundSeats(event.world);", replacedBy = "",
+            fails = "a seated pilot must be placed exactly where his seat is placed on the server", on = "2026-10-17",
+            verdict = "ENT-8 on the server")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "EntityDummy#updatePassenger",
+            at = "VSIntegration.suppressShipDrag(passenger);", replacedBy = "",
+            fails = "a seated pilot must be placed by his seat alone (C30 ENT-7)", on = "2026-10-17",
+            verdict = "ENT-7")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "liftClearOfThePad(craft.physicsId, SEAT_LIFT_CLEARANCE_BLOCKS);",
+            why = "the lift is arrangement whose own stretches are claimed and gated on it; nothing read after"
+                    + " it here is a reading of its settle — the next read is the seat, which the lift carries")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, SEAT_CLIMB_DOSE_TICKS,",
+            why = "the dose IS the experiment: the craft must fly for the placed positions of a rider and"
+                    + " his seat to be able to differ at all, and the windows read after it are the flight")
+    public void aSeatedPilotIsShownOnHisSeatOnEveryTickOfAFlight() throws Exception {
+        FixtureSite site = site();
+        Events.Probe arranging = c -> arrange(c).raw();
+        String what = "a piloted craft whose seated pilot is watched against his seat in flight";
+        Reply fixture = AssembledCraft.lay(site, arranging, "with-pilot-deck", SEAT_FIXTURE_HALO,
+                SEAT_FIXTURE_HEIGHT, what);
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), serverEvents(), fixture, what);
+        disposeOfShipAtEnd(craft.physicsId);
+        liftClearOfThePad(craft.physicsId, SEAT_LIFT_CLEARANCE_BLOCKS);
+
+        int seatId = SeatMount.onShip(c -> arrange(c).raw(), 0, craft.physicsId)
+                .requireSeatFound(what).requireDummyId();
+        long seating = clientEvents().mark();
+        Reply mounted = arrange("stellurgytest player mount-entity " + seatId);
+        scenario().requireArranged("the pilot must be seated on his craft's pilot seat: " + mounted,
+                mounted.ok());
+        awaitClientMount(seating, "the client must seat the pilot on the craft's pilot seat before his"
+                + " flight is watched", SEAT_LINK_BUDGET_TICKS, "");
+
+        long flight = clientEvents().mark();
+        long serverFlight = serverEvents().markInstrumented();
+        climbOnPilotKey(0, SEAT_CLIMB_DOSE_TICKS, "the pilot's held vertical key must reach his craft's"
+                + " flight computer, or the craft does not fly and nothing below can differ");
+
+        assertOnHisSeat("client", "shown", clientEvents().since(flight, "seat_rider_shown"),
+                "seat_rider_shown_events", seatId);
+        assertOnHisSeat("server", "placed", serverEvents().since(serverFlight, "seat_rider_placed"),
+                "seat_rider_placed_events", seatId);
+
+        String glue = clientEvents().since(flight, "dummy_glue");
+        Events.assertInstrumentRan(glue, "dummy_glue_events", "the rider's carry state must be observed at"
+                + " all before its absence can be read");
+        java.util.List<String> seatUpdates = Events.recordsWhere(glue, "e", String.valueOf(seatId));
+        int ridden = 0;
+        int carried = 0;
+        String firstCarried = null;
+        for (String update : seatUpdates) {
+            com.google.gson.JsonElement riderDrag = new com.google.gson.JsonParser().parse(update)
+                    .getAsJsonObject().get("riderDrag");
+            if (riderDrag == null || !riderDrag.isJsonObject()) {
+                // an update of the seat with nobody on it carries no rider to have carried
+                continue;
+            }
+            ridden++;
+            com.google.gson.JsonObject drag = riderDrag.getAsJsonObject();
+            if (drag.get("addedVelX").getAsDouble() != 0.0 || drag.get("addedVelY").getAsDouble() != 0.0
+                    || drag.get("addedVelZ").getAsDouble() != 0.0) {
+                carried++;
+                if (firstCarried == null) {
+                    firstCarried = update;
+                }
+            }
+        }
+        System.out.println("[seat-rider] ridden seat updates=" + ridden + " carried=" + carried);
+        scenario().requireArranged("the pilot's seat must have been updated with him on it during the"
+                + " flight, or nothing says what carried him: " + glue, ridden >= SEAT_MIN_MOVING_TICKS);
+        assertEquals("a seated pilot must be placed by his seat alone (C30 ENT-7): the physics substrate"
+                        + " held a carry for him on " + carried + " of " + ridden + " of his seat's"
+                        + " updates, first " + firstCarried,
+                0, carried);
+    }
+
+    /**
+     * The verdict of ENT-8 on one side: over the window's records of THIS seat's rider, on every tick his
+     * craft moved, he stands at his seat's image plus vanilla's seating offset.
+     *
+     * @param side  which side's records these are, for the message
+     * @param verb  what that side does with his position, for the message
+     */
+    private void assertOnHisSeat(String side, String verb, String window, String instrument, int seatId)
+            throws Exception {
+        Events.assertInstrumentRan(window, instrument, "the " + side + "'s view of a seated rider against"
+                + " his seat must be observed at all before it can be read as on his seat");
+        java.util.List<String> samples = Events.recordsWhere(window, "mount", String.valueOf(seatId));
+        int moving = 0;
+        int offSeat = 0;
+        double worstOff = 0.0;
+        String firstOff = null;
+        double lastSeatX = Double.NaN;
+        double lastSeatY = Double.NaN;
+        double lastSeatZ = Double.NaN;
+        for (String sample : samples) {
+            Reply s = Reply.of(sample);
+            scenario().requireArranged("the " + side + " must find the pilot's seat on his craft on every"
+                    + " tick of the flight: " + sample, s.bool("seatFound"));
+            double seatX = s.number("seatX");
+            double seatY = s.number("seatY");
+            double seatZ = s.number("seatZ");
+            if (!Double.isNaN(lastSeatX) && Math.sqrt((seatX - lastSeatX) * (seatX - lastSeatX)
+                    + (seatY - lastSeatY) * (seatY - lastSeatY)
+                    + (seatZ - lastSeatZ) * (seatZ - lastSeatZ)) >= SEAT_MOVED_BLOCKS) {
+                moving++;
+                double dx = s.number("riderX") - seatX;
+                double dy = s.number("riderY") - (seatY + s.number("offsetY"));
+                double dz = s.number("riderZ") - seatZ;
+                double off = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (off > SEAT_ON_HIS_SEAT_BLOCKS) {
+                    offSeat++;
+                    if (firstOff == null) {
+                        firstOff = sample;
+                    }
+                }
+                worstOff = Math.max(worstOff, off);
+            }
+            lastSeatX = seatX;
+            lastSeatY = seatY;
+            lastSeatZ = seatZ;
+        }
+        System.out.println("[seat-rider] " + side + " samples=" + samples.size() + " moving=" + moving
+                + " offSeat=" + offSeat + " worstOff=" + worstOff);
+        scenario().requireArranged("the craft must FLY under the pilot for " + SEAT_MIN_MOVING_TICKS
+                + " " + side + " ticks of the window, or a rider a tick behind his seat would be " + verb
+                + " on it: it moved on " + moving + " of " + samples.size() + " ticks: " + samples,
+                moving >= SEAT_MIN_MOVING_TICKS);
+        assertEquals("a seated pilot must be " + verb + " exactly where his seat is " + verb + " on the "
+                        + side + ", on every tick his craft moves (C30 ENT-8): on " + offSeat + " of " + moving
+                        + " such ticks he was not, worst " + worstOff + " blocks off, first " + firstOff,
+                0, offSeat);
+    }
 }

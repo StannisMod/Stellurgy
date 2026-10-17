@@ -27,6 +27,7 @@ public final class DeckFollowsItsShip {
     public void afterTheShipsHaveMoved(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             DeckFrameTick.followShipPoses(event.world);
+            dev.stannismod.stellurgy.entity.EntityDummy.followBoundSeats(event.world);
         }
     }
 }

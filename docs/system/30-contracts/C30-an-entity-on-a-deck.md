@@ -76,7 +76,8 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
 
 - **ENT-7 (no split) — an entity is moved by exactly one mechanism per tick.** An entity no deck holds
   is the substrate's until it is admitted; nothing is resolved by the deck AND by the substrate in the
-  same tick. **One gravity source per body** (ruled 2026-10-06): while a deck holds a body, an Area
+  same tick. **A rider is placed by his vehicle alone**: the substrate's carry of a body that touched a
+  hull never moves the rider of a seat bound to a craft. **One gravity source per body** (ruled 2026-10-06): while a deck holds a body, an Area
   Gravity Controller's field skips it. **The outer hull is the substrate's**: a body
   standing on S's world-facing surface is no deck's; the substrate collides it with S
   (`EntityCollisionInjector`), and it stands on a face within ~40.4° of level and slides off a steeper
@@ -85,7 +86,9 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
 - **ENT-8 (the seat is current, for every held entity) — every HELD entity is re-imaged through S's
   current pose at the end of each tick**, so it stands where its deck is and not where the deck was a
   tick ago (CREW-C15 for every class). This includes an entity that another RIDES: a HELD mount is
-  re-imaged like any held body, and vanilla's rider glue positions its rider.
+  re-imaged like any held body, and vanilla's rider glue positions its rider. A SEAT bound to S is held
+  by no deck and is current all the same: after S's pose advances it is re-glued to its seat block through
+  that pose, and its riders are placed on it again.
 
 - **ENT-9 (environment is read in both frames, each for its own fact)** — ruled 2026-09-30. Whether a
   WORLD fact holds (weather, biome, the dimension's own atmosphere, sky light) is read at the body's
@@ -119,8 +122,8 @@ none shows it inert (ENT-7).
 | ENT-3 | `VSItemOnADeckTest`, `VSLivingBodyOnADeckTest` — item, armor stand, cow; rolls, slews, gravity 0 | server |
 | ENT-4 | `VSItemOnADeckTest#anItemPlacedElsewhereOnTheDeckStaysWhereItWasPut`; `VSCrewCaptureContractTest#aTeleportAlongTheDeckIsWhereTheDeckHoldsHimFromThen` | server; client |
 | ENT-5 | `VSItemOnADeckTest#aPushMovesAnItemAlongTheDeckAndFrictionStopsIt` (0.7282 against a predicted 0.728) | server |
-| ENT-7 | client and server census `heldBy=deckFrame` in `VSCrewInteriorBoardingTest` (printed, not asserted) | client |
-| ENT-8 | the roll scenarios of `VSItemOnADeckTest` / `VSLivingBodyOnADeckTest`; the rider, `VSFlightSmoothnessAcrossJumpTest` (C23 DECKSYNC-5) | server; client |
+| ENT-7 | client and server census `heldBy=deckFrame` in `VSCrewInteriorBoardingTest` (printed, not asserted); a seat's rider never carried by the substrate, on a seat over a deck his box meets, `VSRiderKeepsHisMountAtCruiseTest#aSeatedPilotIsShownOnHisSeatOnEveryTickOfAFlight` (a pilot over open air never arms the carry, so only a deck can redden it) | client |
+| ENT-8 | the roll scenarios of `VSItemOnADeckTest` / `VSLivingBodyOnADeckTest`; the rider, `VSFlightSmoothnessAcrossJumpTest` (C23 DECKSYNC-5); a seat's rider on his seat every tick of a climb, on the client AND the server, `VSRiderKeepsHisMountAtCruiseTest#aSeatedPilotIsShownOnHisSeatOnEveryTickOfAFlight` | server; client |
 | ENT-9 | `VSShipAtmosphereFrameSpikeTest#aSealedShipCabinReachesItsOwnCrew` (enclosure half) | client |
 
 Nothing pins ENT-1 beyond the admitted classes, ENT-6, or the gravity-source half of ENT-7.

@@ -414,14 +414,12 @@ public class EntityDummy extends Entity {
      * left alone it is a constant that claims every ship in the game points the same way. Vanilla
      * has already copied this tick's rotation into {@code prev*} by the time we get here (see
      * {@code Entity.onEntityUpdate}), so the render interpolation sweeps rather than steps.</p>
+     *
+     * <p><b>It runs a second time per tick</b>, from {@link #followBoundSeats}, after the physics
+     * substrate has advanced its poses at the end of the tick: the update glues to the pose the craft
+     * had BEFORE that advance.</p>
      */
-    @Override
-    public void onUpdate() {
-        super.onUpdate();
-        if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {
-            setDead();
-            return;
-        }
+    public void followSeat() {
         BlockPos seat = getSeatPos();
         if (seat == null) {
             return;
@@ -437,9 +435,60 @@ public class EntityDummy extends Entity {
         if (worldSeat != null) {
             setPosition(worldSeat[0], worldSeat[1], worldSeat[2]);
         }
+    }
+
+    /**
+     * Every seat bound to a craft in {@code world} onto the pose just advanced, and its riders onto the
+     * seat — called on both sides once the physics substrate has moved its ships at the end of the
+     * tick, after the deck's own re-seat. A seat is held by no deck, so that re-seat passes it by, and
+     * a rider is left to his vehicle: without this a seated pilot stands a tick behind the craft
+     * around him.
+     */
+    public static void followBoundSeats(World world) {
+        for (Entity entity : world.loadedEntityList) {
+            if (!(entity instanceof EntityDummy) || entity.isDead || ((EntityDummy) entity).getSeatPos() == null) {
+                continue;
+            }
+            EntityDummy seat = (EntityDummy) entity;
+            seat.followSeat();
+            for (Entity rider : seat.getPassengers()) {
+                seat.updatePassenger(rider);
+            }
+        }
+    }
+
+    @Override
+    public void onUpdate() {
+        super.onUpdate();
+        if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {
+            setDead();
+            return;
+        }
+        if (getSeatPos() == null) {
+            return;
+        }
+        followSeat();
         if (!world.isRemote) {
             keepDismountedPilotOnDeck();
             syncFlightTelemetry();
+        }
+    }
+
+    /**
+     * Vanilla's rider glue, and then the substrate's own drag of that rider disarmed.
+     *
+     * <p>A rider is placed by his seat and by nothing else. The physics substrate also carries every
+     * body that recently touched a hull, at the end of the tick, by the hull's motion — riders
+     * included — so a seated pilot was moved twice a tick, and the second carry lapsed whenever his
+     * own move stopped meeting the hull: he sank against his seat for a second and a half and was
+     * snapped back in one tick. This runs after the rider's own update and before the substrate's
+     * end-of-tick carry, on both sides, so the carry finds nothing to apply.</p>
+     */
+    @Override
+    public void updatePassenger(Entity passenger) {
+        super.updatePassenger(passenger);
+        if (getSeatPos() != null && isPassenger(passenger)) {
+            VSIntegration.suppressShipDrag(passenger);
         }
     }
 

@@ -62,7 +62,9 @@ public abstract class MixinEntityDummyGlueTrace {
         String riderDrag = drag == null ? "null"
                 : "{\"touched\":" + (drag.get("lastTouchedShip") != null)
                 + ",\"ticksSince\":" + drag.get("ticksSinceTouchedShip")
+                + ",\"addedVelX\":" + drag.get("addedVelX")
                 + ",\"addedVelY\":" + drag.get("addedVelY")
+                + ",\"addedVelZ\":" + drag.get("addedVelZ")
                 + ",\"riderY\":" + rider.posY + "}";
         TestTrace.record(self, "dummy_glue", "\"riderDrag\":" + riderDrag + ",\"e\":" + self.getEntityId()
                 + ",\"dummyTick\":" + self.ticksExisted

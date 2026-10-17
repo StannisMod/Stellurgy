@@ -84,6 +84,26 @@ public final class TestTrace {
         }
     }
 
+    /**
+     * Refuse a payload that declares a key the record's ENVELOPE already carries — loudly, at the write.
+     *
+     * <p>A payload key with an envelope name does not fail anywhere: the rendered record carries it
+     * twice, the reader keeps the later one, and the record silently becomes another TYPE — its readers
+     * then count zero of it and report an instrument that never fired. Measured 2026-10-16: a payload
+     * field {@code "type":"SELF"} (the mover type of an entity's move) made every one of its records
+     * read as type {@code SELF}, and a count of the real type answered 0 over a window holding one of
+     * them every tick.</p>
+     */
+    private static void requireOwnKeys(String type, String payload) {
+        for (String key : new String[] {"\"seq\":", "\"tick\":", "\"side\":", "\"type\":"}) {
+            if (payload != null && payload.contains(key)) {
+                throw new IllegalArgumentException("a `" + type + "` record's payload declares the envelope key "
+                        + key + " — the rendered record would carry it twice and read as something else: "
+                        + payload);
+            }
+        }
+    }
+
     private static void recordOnServer(ServerEventLog log, long tick, String type, String payload) {
         if (log != null) {
             log.record("server", tick, type, payload);
@@ -116,6 +136,7 @@ public final class TestTrace {
      * side.
      */
     public static void recordServer(String type, String payload) {
+        requireOwnKeys(type, payload);
         net.minecraft.world.WorldServer overworld =
                 net.minecraftforge.common.DimensionManager.getWorld(0);
         recordOnServer(ServerEventLog.current(),
@@ -125,6 +146,7 @@ public final class TestTrace {
     /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. On the
      *  server the record carries the overworld's clock, like {@link #recordServer}. */
     public static void recordHere(String type, String payload) {
+        requireOwnKeys(type, payload);
         if (isRemoteThread()) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
@@ -139,6 +161,7 @@ public final class TestTrace {
     }
 
     public static void record(Entity entity, String type, String payload) {
+        requireOwnKeys(type, payload);
         if (entity.world.isRemote) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
@@ -168,6 +191,7 @@ public final class TestTrace {
 
     /** {@link #record} routed by the world the event happened IN — see {@link #instrument(net.minecraft.world.World, String)}. */
     public static void record(net.minecraft.world.World world, String type, String payload) {
+        requireOwnKeys(type, payload);
         if (world.isRemote) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
