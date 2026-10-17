@@ -164,10 +164,10 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   (empty buses stack); delayed-harvest keeps the TE alive for the drop. `BlockDataBusBig.java:46,79,92`
 - **MECH-BLK-21 Seat mount.** Activation mounts/creates an `EntityDummy` rider; explosion kills the dummy.
   A pilot seat's dummy aboard a ship keeps the uuid of the ship it was bound under (NBT `seatShip`, never
-  re-derived from the coordinate). A riderless dummy removes itself when EITHER its seat block no longer
-  stands OR the ship it was bound under has no live registry record (the second catches a new ship handed
-  the same claim with a seat at the same coordinate), in one condition in `EntityDummy#onUpdate`
-  (SHIPCTL-20); `BlockPilotSeat#boundDummyAt` skips such an orphan [T]
+  re-derived from the coordinate). A dummy whose ship has no live registry record removes itself,
+  setting its rider down where it stands (a new ship handed the same claim can have a seat at the same
+  coordinate, and the mount would otherwise glue the rider onto it); a riderless dummy also removes
+  itself when its seat block no longer stands — one condition in `EntityDummy#onUpdate` (SHIPCTL-20); `BlockPilotSeat#boundDummyAt` skips such an orphan [T]
   `VSPilotSeatDummyReuseTest#aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself`;
   `TileWearable` accrues slow wear that can block a crewed launch. `BlockSeat.java:100,79,43`
 - **MECH-BLK-22 Crystal color.** 6-meta crystal, `CrystalColorizer` supplies per-meta tint to block+item.

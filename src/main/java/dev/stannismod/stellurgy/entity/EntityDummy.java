@@ -416,11 +416,16 @@ public class EntityDummy extends Entity {
     @Override
     public void onUpdate() {
         super.onUpdate();
-        // Retired only once nobody rides it: a rider is taken off by whatever re-seats him, and pulling
-        // the mount out from under him here would race that. Its seat is gone when the block no longer
-        // stands, and also when the ship it was bound under is gone: the next ship handed the same claim
-        // can have a seat standing at that very position, and this mount is not that seat's.
-        if (!world.isRemote && getPassengers().isEmpty() && (!seatStands() || outlivedItsShip())) {
+        // A mount whose ship is gone is retired with its rider set down where it stands: the next ship
+        // handed the same claim can have a seat at this very coordinate, and re-gluing to it below would
+        // carry the rider onto a ship he never boarded. Nothing re-seats such a rider — a crossing takes
+        // its crew off their mounts before it cuts, and a seat taken before assembly is bound under no
+        // ship. A seat merely gone (its block no longer standing) retires only a riderless mount: across
+        // an assembly the pilot rides a mount bound to vacated coordinates until the rebind moves him.
+        if (!world.isRemote && (outlivedItsShip() || (getPassengers().isEmpty() && !seatStands()))) {
+            for (Entity rider : new java.util.ArrayList<>(getPassengers())) {
+                rider.dismountRidingEntity();
+            }
             setDead();
             return;
         }

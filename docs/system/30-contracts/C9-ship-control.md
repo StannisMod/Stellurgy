@@ -158,8 +158,13 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   deleted and whose blocks are therefore never broken. Its seat stands while the bound seat position
   holds a seat block, or — that position not loaded — while it lies in the shipyard under a REGISTERED
   ship (unloaded, and coming back); an unbound dummy's seat is the block it sits in (`EntityDummy`).
-  A RIDDEN dummy is never removed this way: across an assembly the pilot rides a stale mount bound to
-  vacated coordinates until the rebind moves him off it (`CrewTransfer.rebindAcrossAssembly`). The
+  A RIDDEN dummy is not removed for a seat that no longer stands: across an assembly the pilot rides a
+  stale mount bound to vacated coordinates until the rebind moves him off it
+  (`CrewTransfer.rebindAcrossAssembly`; such a mount was bound under no ship). A dummy bound under a ship
+  that has no live registry record IS removed, ridden or not, its rider set down where it stands: a
+  discarded ship's claim goes to the next ship, whose seat can stand at the same coordinate, and the
+  mount re-glued to it would carry the rider aboard a ship he never boarded. A crossing takes its crew
+  off their mounts before it cuts (`CrewTransfer#capture`), so no live crew rides such a mount. The
   block's own `breakBlock` remains the immediate path for a broken seat (SHIPCTL-14). It is vanilla's
   idiom for an entity bound to a block: a hanging entity checks its surface (`EntityHanging.onUpdate`),
   a sleeping player his bed (`EntityPlayer.isInBed`). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
