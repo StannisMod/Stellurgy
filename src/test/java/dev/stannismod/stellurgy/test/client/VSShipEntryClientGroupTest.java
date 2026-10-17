@@ -233,6 +233,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                     + " — that arrival is the first half of the contract and a link, so a seat binding that"
                     + " does not carry his input fails naming it rather than as a ship that would not climb —"
                     + " and one reading of his rendered altitude once the release has arrived.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
         SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
@@ -455,6 +457,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             + " its first decision was NO_SHIP_POSITION instead\", 2026-09-28. The wait before it is the link"
             + " that the gate decided at all, which that inversion passes by construction.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 
         SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());

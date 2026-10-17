@@ -130,6 +130,19 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
      */
     private static final int KEY_USE_ITEM = -99;
 
+    /** Client ticks the use key is held for: a mouse button's press. */
+    private static final int USE_PRESS_TICKS = 5;
+
+    /** The use key pressed, held across client ticks and let go — as the right mouse button is. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(USE_PRESS_TICKS);",
+            why = "the use key held down across client ticks, as a mouse button is; what the press did is the"
+                    + " caller's link, from a mark taken before it.")
+    private void pressTheUseKey() throws Exception {
+        bot().setKey(KEY_USE_ITEM, true);
+        bot().waitWorldTicks(USE_PRESS_TICKS);
+        bot().setKey(KEY_USE_ITEM, false);
+    }
+
     /**
      * A jump craft assembles whole, and both its consoles answer a real key press.
      */
@@ -140,11 +153,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             + " decides what comes along\", 2026-09-28. The other two waits the rewrite touched are arrangement"
             + " links (the ship usable, the client standing at the console).")
     @Test
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false); events.assertChain(seatPressMark,",
-            why = "the use key held down across client ticks, as a mouse button is.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false);"
-            + " events.await(navMark, \"right_click_block\", \"the use press aimed at the NAVIGATION CONSOLE \"",
-            why = "the use key held down across client ticks, as a mouse button is.")
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -305,9 +313,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // The CLIENT's own mark beside it: his client PERFORMS the mount when the server tells it
         // who is riding what, so the replication half below is a record on this log.
         long seatPressOnClient = clientEvents().mark();
-        bot().setKey(KEY_USE_ITEM, true);
-        bot().waitWorldTicks(5);
-        bot().setKey(KEY_USE_ITEM, false);
+        pressTheUseKey();
 
         // The two links a boarding IS, in the order the game commits them: Forge fires
         // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
@@ -348,9 +354,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // already says the handler answered with a container, which is all this step needs.
         long navMark = events.markInstrumented();
         long navClientMark = clientEvents().mark();
-        bot().setKey(KEY_USE_ITEM, true);
-        bot().waitWorldTicks(5);
-        bot().setKey(KEY_USE_ITEM, false);
+        pressTheUseKey();
 
         events.await(navMark, "right_click_block", "the use press aimed at the NAVIGATION CONSOLE "
                         + "must reach the server at all - an aim this test has already proven, with "

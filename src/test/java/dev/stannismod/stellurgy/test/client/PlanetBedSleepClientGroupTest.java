@@ -404,40 +404,14 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         // No Forge event reports that moment: the load event fires on an EMPTY chunk, before the data
         // is applied, so a recorder on it would confidently report a chunk that contains nothing.
         //
-        // He is teleported INSIDE the wait because chunks stream around where the player IS: waiting
-        // before putting him there waits for nothing, and once he is there he falls out of range of
-        // the very chunk he is waiting for.
-        // The adapter's mark makes the recorder check itself; it is caught and RE-TYPED here,
-        // because a recorder that is not running is this scenario's ARRANGEMENT failing and must not
-        // read as the contract under test breaking.
-        long chunkMark;
-        try {
-            chunkMark = clientEvents().mark();
-        } catch (AssertionError notArranged) {
-            scenario().arrangementFailed(notArranged.getMessage());
-            return; // unreachable: arrangementFailed always throws
-        }
-        // The re-sent teleport is the STIMULUS, not the wait: the chunk is sent because the player
-        // keeps arriving, so the loop's iterations are doing work rather than watching a clock.
-        // ONE record for the chunk at (0, 0) — two separate field tests are satisfied by a record
-        // for (0, 9) beside one for (7, 0).
-        try {
-            clientEvents().awaitMatching(chunkMark, "chunk_data_applied",
-                    reply -> Events.anyRecordHasAll(reply, "cx", "0", "cz", "0"),
-                    "for the chunk at (0, 0)",
-                    "the platform's chunk data never reached this client", 300,
-                    () -> arrange("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5").raw());
-        } catch (AssertionError never) {
-            scenario().arrangementFailed("the client never applied the platform's chunk data, so it"
-                    + " keeps simulating a fall through blocks the server has: "
-                    + never.getMessage());
-        }
-
+        // The base's placement instrument pays for both facts: when the client does not yet hold the
+        // platform's column, the first teleport is what makes the server send it and the chunk's own
+        // record is awaited; then ONE placement onto it, linked on the client applying it. A failure
+        // there is this scenario's ARRANGEMENT, and is thrown as one.
+        //
         // Vanilla console /tp (same-dim) puts the player on the platform, a bed-reach-range step
         // north of the bed head (|Δz| = 2.5 ≤ 3).
-        long placedMark = clientEvents().mark();
-        arrange("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
-        awaitClientPlacedNear(placedMark, 8.5, 7.5,
+        standOnFloorTheClientHolds(8.5, BED_Y, 7.5, 0.0F, 0.0F,
                 "the player's own client must stand him on the platform - his movement is his");
         bot().waitWorldTicks(20);
 

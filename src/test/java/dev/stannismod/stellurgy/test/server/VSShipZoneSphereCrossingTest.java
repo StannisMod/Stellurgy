@@ -592,7 +592,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         long entryMark = events.mark();
         arrange("stellurgytest vs unpark-by-id 0 " + padVsId);
         awaitEnteredSpace(events, entryMark, durableId,
-                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS, null);
+                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS);
         EntryStatus launched = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the entry was announced, so the ledger must hold this craft's row");
 

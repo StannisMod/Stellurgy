@@ -70,6 +70,15 @@ final class PilotThrust {
     /** Ticks a held or released key is given to REACH the flight computer — a link budget. */
     private static final int LINK_TICKS = 200;
 
+    /**
+     * Why a caller's {@link #climb} or {@link #hold} is an EXPERIMENT where it stands: the ticks it is handed
+     * are the dose of thrust, and what the caller reads next is what that dose did.
+     */
+    static final String THRUST_DOSE_CLAIM = "a dose of thrust on the pilot's own vertical key, counted on the"
+            + " hull's world from the key's linked arrival at the flight computer: the reading after it is what"
+            + " the dose bought. No record announces an altitude or a speed reached -- the computer integrates"
+            + " the held input every step and never decides it has climbed far enough.";
+
     private PilotThrust() { }
 
     /**
@@ -132,6 +141,9 @@ final class PilotThrust {
     }
 
     /** {@link #hold} then {@link #release}: a dose of thrust, cut, and the cut on the record. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "hold(bot, serverLog, server, dim, thrustTicks, what);",
+            why = "the dose under the held key, which hold counts from its arrival; the release after it is linked"
+                    + " on the computer's own record, so nothing here waits on a state.")
     static void climb(ClientBot bot, Events serverLog, TestClient server, int dim, int thrustTicks,
                       String what) throws Exception {
         hold(bot, serverLog, server, dim, thrustTicks, what);

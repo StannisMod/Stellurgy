@@ -6,7 +6,6 @@
 # than its line says fails, and one breaking it less often fails until its line is lowered.
 #
 # The loops listed when the rule was first set were all paid down. Re-listed when the exit rule learned what an
-# exit TESTS (2026-10-13), a method the first list already carried:
-#   the deck aim retries stands and pitches until the crosshair picks the ship -- a wait for the client's copy of
-#   the ship to become pickable, which no record yet publishes.
-dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#standOnTheDeckAndAimAtIt 1
+# exit TESTS (2026-10-13), a method the first list already carried, and paid on 2026-10-16: the deck aim that
+# retried stands and pitches until the crosshair picked the ship now links on the client's own `ship_loaded`
+# for that ship and sweeps a fixed list of pitches, choosing after the sweep.

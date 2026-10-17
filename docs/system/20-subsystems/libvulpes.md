@@ -361,7 +361,7 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
 - **INV-LVP-21 [V]** A hatch is mastered by the last controller that integrated it; the earlier master is not notified.
   `TileMultiBlock.java:357-372,508-510`.
 - **INV-LVP-22 [A]** A linker bound to an `ILinkAimedTile` hands it the block or creature the player's line of sight lands on.
-  `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233`.
+  `WeaponClientGroupTest#aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker`.
 - **INV-LVP-23 [V]** An output-only fluid hatch refuses external fills and accepts internal ones; at integration it is classed by
   `isOutputOnly`. `TileFluidHatch.java:98-103,135-143`, `TileMultiBlock.java:516-521`.
 - **INV-LVP-24 [V]** Plug capacity is `10^tier × 10000 × energy_multiplier` at construction; a saved `maxEnergy` overrides it on load.
@@ -433,7 +433,7 @@ The file is libVulpes' own (`<REGISTRY_DOMAIN>.cfg`, not the host's) and is read
 | INV-LVP-07 | `MultiblockControllerPreAssemblyTest.java:101,134`; `ObservatoryMultiblockTest.java:61,84,108,133` (server) |
 | INV-LVP-11 | `MachineRecipeEndToEndKit.java:293,311,337` via `ArcFurnace/Centrifuge/ChemicalReactor/Crystallizer/Electrolyser/Lathe/PrecisionAssembler/PrecisionLaserEtcher/RollingMachine` `RecipeEndToEndTest`; `MachineGuiClientGroupTest.java:551,553` |
 | INV-LVP-18 | `MachineGuiClientGroupTest.java:648,651,653,264,411` (client) |
-| INV-LVP-22 | `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233` (client) |
+| INV-LVP-22 | `WeaponClientGroupTest#aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker` (client) |
 | teardown does not throw | `SpaceElevatorUnlinkedDeconstructTest.java:71` (a machine whose master was never linked) |
 
 No test located for: placeholder restoration, hatch-content survival across deconstruction, the `PacketMachine` drop paths, the

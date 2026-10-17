@@ -677,18 +677,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                     + " inside the commanded 60.")
     @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);",
             why = "the slew is a server command to the flight computer; the read is the server's ship report.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
-            why = "the first tap's press")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
-            why = "the gap between taps, inside vanilla's toggle window")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
-            why = "the second tap's press, the one that toggles flight")
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(4);",
             why = "the held-ascend phase is defined to begin four client ticks after the second tap's release. A"
                     + " player's own motion is simulated by his client, one step per client tick, so this is"
@@ -701,18 +689,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                     + " about 1.0 block in four ticks of sneak (0.15/tick added, 0.6 kept), which a floored"
                     + " census can fail to register, and about 3.2 in ten. The deck below stops a longer fall;"
                     + " the old poll's ceiling was fourteen. The sink it bought is printed in the assertion.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
-            why = "the first press of the double-tap that toggles flight off")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
-            why = "the gap, inside vanilla's toggle window")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
-            why = "the second press")
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
             why = "a body that touched and then slid or bounced away is what the far end is for, and overshoot"
                     + " only gives it longer to do so.")
@@ -760,13 +736,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // window opened before the stimulus.
         Events clientEvents = clientEvents();
         long flightMark = clientEvents.mark();
-        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        doubleTapJump();
         bot().waitWorldTicks(4);
 
         // The double-tap itself climbs a few blocks (a deck jump + held-space flight ticks), so
@@ -865,13 +835,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         DeckCapture capEnd = null;
         double[] subSeated = subEnd;
         long flightOffMark = clientEvents.mark();
-        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
-        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        doubleTapJump();
         // THE LANDING IS A LINK, and it was already being asserted twenty lines below as one —
         // `deck_contact`, the tick the deck resolver put the body on a surface it was not on before.
         // So it is waited for HERE, off the mark taken before the flight toggle, and the geometry
@@ -1145,5 +1109,33 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     private static double distance(double[] a, double[] b) {
         double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * The double-tap of the jump key that toggles creative flight, in client ticks: press, gap, press.
+     * Vanilla toggles flight when the second press lands within seven client ticks of the first
+     * ({@code EntityPlayerSP.flyToggleTimer}), so the three parts must sum to less than that.
+     */
+    private static final int TAP_FIRST_PRESS_TICKS = 2;
+    /** The gap between the two presses of the double-tap, client ticks. */
+    private static final int TAP_GAP_TICKS = 2;
+    /** The second press of the double-tap, the one that toggles flight, client ticks. */
+    private static final int TAP_SECOND_PRESS_TICKS = 2;
+
+    /** Double-tap the jump key, as a player toggles creative flight on or off. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(TAP_FIRST_PRESS_TICKS);",
+            why = "the first tap's press")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(TAP_GAP_TICKS);",
+            why = "the gap between taps, inside vanilla's toggle window")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(TAP_SECOND_PRESS_TICKS);",
+            why = "the second tap's press, the one that toggles flight")
+    private void doubleTapJump() throws Exception {
+        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        bot().waitWorldTicks(TAP_FIRST_PRESS_TICKS);
+        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        bot().waitWorldTicks(TAP_GAP_TICKS);
+        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        bot().waitWorldTicks(TAP_SECOND_PRESS_TICKS);
+        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
     }
 }

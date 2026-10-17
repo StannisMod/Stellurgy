@@ -641,7 +641,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             + " key did not lift the ship (serverLift=0.0000 …)\", 2026-09-28. The waits each turn an expiry into"
             + " that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at"
             + " x=0 surfaces — the path this red went through.")
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int x : xLadder) { String arrangement = arrangeFarRung(x);",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int x : xLadder) {",
             why = "a pass over the rungs, one scenario each; the clock a rung spends of its own is the climb's"
                     + " held-key dose (farClimbLeg), the number the climb is measured over, and every other wait"
                     + " in a rung is a link on its own record.")
@@ -768,13 +768,13 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             for (String line : inconclusive) {
                 built.append("  INCONCLUSIVE ").append(line).append('\n');
             }
-            for (int x : xLadder) {
+            for (int rung : xLadder) {
                 boolean listed = false;
                 for (String line : inconclusive) {
-                    listed |= line.startsWith("x=" + x + " ");
+                    listed |= line.startsWith("x=" + rung + " ");
                 }
-                if (!verdicts.containsKey(x) && !listed) {
-                    built.append("  NOT REACHED x=").append(x).append('\n');
+                if (!verdicts.containsKey(rung) && !listed) {
+                    built.append("  NOT REACHED x=").append(rung).append('\n');
                 }
             }
             System.out.println(built);
@@ -846,6 +846,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      *
      * @return {@code "OK ..."} with the numbers, or the reason it failed
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "PilotThrust.climb(bot(), serverEvents(), serverClient(), 0,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     private String farClimbLeg(String farShipId, double yBefore) throws Exception {
         long carryMark = clientEvents().mark();
         PilotThrust.climb(bot(), serverEvents(), serverClient(), 0, PilotThrust.DOSE_TICKS,

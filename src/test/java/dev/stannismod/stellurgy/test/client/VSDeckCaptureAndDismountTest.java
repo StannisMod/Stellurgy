@@ -711,16 +711,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
-            + " info = shipInfo();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "long rolledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);",
             why = "a deck that has not tilted is not \"the airspace you cross flying up to a ship\" this leg"
                     + " describes.")
-    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo info = shipInfo();",
+    @ServerOnly(at = "long rolledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);",
             why = "the slew is a server command to the flight computer; the read is the server's ship report.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
-            + " lvl = shipInfo();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "long levelledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);",
             why = "the levelling slew; an attitude converges and nothing declares it reached.")
-    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo lvl = shipInfo();",
+    @ServerOnly(at = "long levelledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);",
             why = "the slew is a server command to the flight computer; the read is the server's ship report.")
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(DECK_LANDING_TICKS);",
             why = "the reading is DEFINED forty client ticks after the put-down reached the client. He is dropped"
@@ -741,10 +739,10 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).raw()).bool("commanded"));
-        GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
+        long rolledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         scenario().requireArranged("the ship must be rolled before the fly-in: upY " + upBeforeRoll
-                        + " -> " + info.upY() + " over " + SLEW_WINDOW_TICKS + " server ticks",
+                        + " -> " + info.upY() + " over " + rolledOver + " server ticks",
                 info.upY() < Math.cos(Math.toRadians(30.0)));
         double sx = info.x, sy = info.y, sz = info.z;
 
@@ -878,11 +876,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept levelling",
                 Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0").raw()
                         ).bool("commanded"));
-        GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
+        long levelledOver = GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo lvl = shipInfo();
         scenario().requireArranged("the ship must be level again before the positive control lands"
                         + " him on its deck: upY " + upBeforeLevel + " -> " + lvl.upY() + " over "
-                        + SLEW_WINDOW_TICKS + " server ticks",
+                        + levelledOver + " server ticks",
                 lvl.upY() > Math.cos(Math.toRadians(15.0)));
         // The control is the camera's STATE, and it may NOT be its engage edge — a fact about the
         // recorder, not a preference. `deck_camera_changed` is written at
@@ -1298,6 +1296,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
             why = "the hull's rate over 20 readings two ticks of its world apart — the stretch the poll it"
                     + " replaced could spend — and the verdict below is on the LARGEST of them.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(worldAndClient(0), 20, TURN_WINDOW_GAP_TICKS,",
+            why = "the hull's angular rate sampled across the turn, and the window's EXTREMUM is the measurement:"
+                    + " a hull commanded round passes through every attitude, so a last sample reads as unmoved."
+                    + " Nothing decides that a hull turned -- the attitude law integrates a torque every tick --"
+                    + " so no record answers.")
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1427,6 +1430,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
             why = "30 readings two ticks of the hull's world apart, the stretch the poll it replaced could spend;"
                     + " the verdict below is on the LARGEST.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(worldAndClient(0), 30, TURN_WINDOW_GAP_TICKS,",
+            why = "the hull's angular rate sampled across the turn, and the window's EXTREMUM is the measurement:"
+                    + " a hull commanded round passes through every attitude, so a last sample reads as unmoved."
+                    + " Nothing decides that a hull turned -- the attitude law integrates a torque every tick --"
+                    + " so no record answers.")
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;

@@ -582,6 +582,21 @@ public final class TestBindingsCheck {
         return commits == 0 ? "git knows no commit touching docs/system (a shallow or foreign checkout)" : null;
     }
 
+    /**
+     * What the boot-declaration rule says of the mechanics class {@code k} (not an e2e): every failure it
+     * reports, and {@code "without a reason"} when the class takes a boot of its own and names none, which
+     * is the line the own-boot debt list would have to hold.
+     */
+    public static List<String> bootDeclarationVerdict(Class<?> k) {
+        List<String> failures = new ArrayList<>();
+        Set<String> withoutReason = new HashSet<>();
+        Corpus.checkBootDeclaration(k, false, withoutReason, failures);
+        if (withoutReason.contains(k.getName())) {
+            failures.add("without a reason");
+        }
+        return failures;
+    }
+
     /** What is wrong with a red-witness record's form, or null when it is the complete replayable form. */
     public static String recordProblem(String verdict, String member, String at, String replacedBy, String fails,
                                 String on) {
@@ -916,6 +931,13 @@ public final class TestBindingsCheck {
          * class cannot claim a boot it does not take. A class on a shared base declares nothing: sharing the
          * boot is the default, and why it is a new group rather than a method of an old one is a judgement
          * no annotation could check. Declared on the class itself: neither is inherited.
+         *
+         * <p>A class of an own-boot base that declares, on itself, {@code @RunWith(ClassScopeRunner.class)} and
+         * a {@code @ClassScope} shares ONE pair across its scenarios — the scope boots it once for the class
+         * run and closes it at the end — so it is a group, and is judged as a shared-base class: it declares
+         * nothing (maintainer ruling 2026-10-16, on a relog group whose arrangement lives on an own-boot base
+         * no shared base can inherit). Not seen: whether that scope really holds the pair rather than
+         * booting one per method; a reader's.</p>
          */
         static void checkBootDeclaration(Class<?> k, boolean e2e, Set<String> withoutReason, List<String> failures) {
             // The bases that boot a server (and a client) for a mechanics class alone.
@@ -927,6 +949,11 @@ public final class TestBindingsCheck {
             for (Class<?> base : ownBootBases) {
                 ownBoot |= base.isAssignableFrom(k);
             }
+            org.junit.runner.RunWith runner = k.getDeclaredAnnotation(org.junit.runner.RunWith.class);
+            boolean classScopedGroup = runner != null
+                    && runner.value() == com.github.stannismod.forge.testing.junit.ClassScopeRunner.class
+                    && k.getDeclaredAnnotation(com.github.stannismod.forge.testing.junit.ClassScope.class) != null;
+            ownBoot &= !classScopedGroup;
             OwnBoot own = k.getAnnotation(OwnBoot.class);
             NewPath path = k.getAnnotation(NewPath.class);
             if (own != null && own.reason().length == 0) {
@@ -941,7 +968,8 @@ public final class TestBindingsCheck {
                 }
             } else if (own != null) {
                 failures.add(k.getName() + " carries @OwnBoot but runs on "
-                        + (e2e ? "the e2e base" : "a shared base") + ", not on a boot of its own -- the declaration"
+                        + (e2e ? "the e2e base" : classScopedGroup ? "a pair its own class scope shares" : "a shared base")
+                        + ", not on a boot of its own -- the declaration"
                         + " belongs to the class that takes the boot");
             }
             if (e2e && path == null) {

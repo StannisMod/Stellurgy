@@ -141,13 +141,6 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_RAMP_TICKS);",
             why = "CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured, see the"
                     + " constant); then the cruise is judged ONCE, by the window below.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s0 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
-            why = "three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names both. The"
-                    + " physics velocity controller never decides it has arrived, so no record answers.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s1 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
-            why = "a cruise speed is a value, not an event; no record answers.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s2 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);",
-            why = "the second speed of the pair.")
     @Wait(shape = Wait.Shape.WINDOW, at = "for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {",
             why = "it COUNTS how many samples of a cruise found the rider unseated, his mount missing or the"
                     + " anchor lagging, plus the WORST lag seen. Every one of those is a statistic over the"
@@ -320,19 +313,24 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
                 + commanded, readBool(commanded, "commanded"));
 
         advanceServerAndClient(CRUISE_RAMP_TICKS);
-        ShipInfo s0 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
-        advanceServerAndClient(SETTLE_SAMPLE_TICKS);
-        ShipInfo s1 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
-        advanceServerAndClient(SETTLE_SAMPLE_TICKS);
-        ShipInfo s2 = ShipInfo.byId(c -> read(c).raw(), dim, shipId);
-        double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
-        double second = Math.hypot(s2.x - s1.x, s2.z - s1.z) / SETTLE_SAMPLE_TICKS;
+        // Two consecutive windows on the ship's own world clock, each a speed over the ticks that
+        // really passed between its two reads -- the stamps the window reads itself, never the
+        // SETTLE_SAMPLE_TICKS asked for, which a slow box overshoots.
+        Window<ShipInfo> firstWindow = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), dim, shipId),
+                serverClient(), GameTicks.world(dim), this::advanceServerAndClient, SETTLE_SAMPLE_TICKS);
+        Window<ShipInfo> secondWindow = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), dim, shipId),
+                serverClient(), GameTicks.world(dim), this::advanceServerAndClient, SETTLE_SAMPLE_TICKS);
+        double first = Math.hypot(firstWindow.change(r -> r.x), firstWindow.change(r -> r.z))
+                / firstWindow.tickSpan();
+        double second = Math.hypot(secondWindow.change(r -> r.x), secondWindow.change(r -> r.z))
+                / secondWindow.tickSpan();
         scenario().requireArranged("the ship must be in a STEADY cruise above "
                 + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick - while it is still accelerating"
                 + " the mount re-pins its own tracking anchor every tick and nothing can be evicted,"
-                + " so an unsettled ship makes this leg unfalsifiable. Speeds over two consecutive "
-                + SETTLE_SAMPLE_TICKS + "-tick windows, " + CRUISE_RAMP_TICKS + " ticks after the"
-                + " command: " + first + ", " + second + " (steady within " + STEADY_TOLERANCE + ")",
+                + " so an unsettled ship makes this leg unfalsifiable. Speeds over two consecutive"
+                + " windows, " + CRUISE_RAMP_TICKS + " ticks after the command: " + first + " ("
+                + firstWindow + "), " + second + " (" + secondWindow + ") (steady within "
+                + STEADY_TOLERANCE + ")",
                 first > EVICTION_THRESHOLD_BLOCKS_PER_TICK && second > EVICTION_THRESHOLD_BLOCKS_PER_TICK
                         && Math.abs(first - second) < STEADY_TOLERANCE);
 

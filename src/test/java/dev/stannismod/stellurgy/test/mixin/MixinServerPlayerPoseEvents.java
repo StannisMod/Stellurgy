@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p>EDGE-ONLY per connection on the whole payload: a movement packet arrives every tick or so, and
  * the record is the change, not the stream. SILENT about position. Read by
- * {@code ALinkerNamesTheBatteryItsTargetTest}.</p>
+ * {@code WeaponClientGroupTest#aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker}.</p>
  */
 @Mixin(NetHandlerPlayServer.class)
 public abstract class MixinServerPlayerPoseEvents {

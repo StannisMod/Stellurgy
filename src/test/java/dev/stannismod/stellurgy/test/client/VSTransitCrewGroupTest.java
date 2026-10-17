@@ -654,6 +654,24 @@ private static final int SKY_RENDER_DISTANCE = 8;
      */
     private static final int RENDER_WINDOW_TICKS = 20;
 
+    /** The corridor window in flight: {@link #RENDER_WINDOW_TICKS}, so it is comparable with the control. */
+    private static final int IN_FLIGHT_RENDER_WINDOW_TICKS = RENDER_WINDOW_TICKS;
+
+    /**
+     * The windows of the livable-hyperspace and standing-crew scenarios, one per reading, in ticks of
+     * both clocks. Each is a span a counter is watched for growth over, so a longer one samples more and
+     * cannot change whether its assertion holds; a message below that says "20 ticks" means these.
+     */
+    private static final int CELL_SKY_WINDOW_TICKS = 20;
+    /** The flight computer's tick census watched in the origin cell — the control for the one below. */
+    private static final int CELL_COMPUTER_WINDOW_TICKS = 20;
+    /** The same census of the same ship in hyperspace, over the span its control was watched for. */
+    private static final int HYPERSPACE_COMPUTER_WINDOW_TICKS = CELL_COMPUTER_WINDOW_TICKS;
+    /** The corridor watched for a SEATED pilot in hyperspace. */
+    private static final int SEATED_CORRIDOR_WINDOW_TICKS = 20;
+    /** The sky and the corridor watched once he is on his feet in hyperspace. */
+    private static final int STANDING_SKY_WINDOW_TICKS = 20;
+
     /**
      * Spawn the ship's pilot-seat dummy and put the bot on it — ONCE. Four scenarios in this class
      * carried a copy of these ten lines.
@@ -794,11 +812,9 @@ private String hud() throws Exception {
             + " adding no line in the transit phase: \"no `ff_hud` whose latest drawn line names HYPERSPACE was"
             + " recorded within 600 ticks\".")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RENDER_WINDOW_TICKS); long skyAfter ="
-            + " skyFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RENDER_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RENDER_WINDOW_TICKS); long tunnelInFlight ="
-            + " tunnelFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(IN_FLIGHT_RENDER_WINDOW_TICKS);",
             why = "what grows across it is a frame COUNTER, which is not an event, so a longer window samples more"
                     + " frames and changes nothing about whether the assertion can hold; same length as the"
                     + " control window above, so the two readings are comparable. The HUD is NOT read off this"
@@ -864,7 +880,7 @@ private String hud() throws Exception {
         long tunnelAtStart = tunnelFrames();
         scenario().record("tunnelAtStart", tunnelAtStart);
 
-        advanceServerAndClient(RENDER_WINDOW_TICKS);
+        advanceServerAndClient(IN_FLIGHT_RENDER_WINDOW_TICKS);
         long tunnelInFlight = tunnelFrames();
 
         // The premise, read AFTER the window and before anything measured in it is believed: the jump
@@ -934,8 +950,8 @@ private String hud() throws Exception {
      * he steps off the edge and there is no crew member on a deck to carry (measured: the control
      * passed twice and failed on the third run, with the capture reporting not even aboard by
      * containment). Standing aboard is this scenario's PRECONDITION, not its mechanism, so the
-     * arrangement re-drops him over the deck until it takes, geometry-robustly rather than
-     * assuming one landing spot.</p>
+     * arrangement drops him once from above the ship's own position rather than trusting where the
+     * dismount left him, and links on the deck taking him.</p>
      */
     private DeckCapture standTheBotOnTheDeck(double shipX, double shipY, double shipZ) throws Exception {
         // One CLIENT mark for both routes: whichever gets him off, his own `dismountRidingEntity`
@@ -961,26 +977,20 @@ private String hud() throws Exception {
         scenario().requireArranged("...and he must still be off it when the capture is taken: "
                 + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
-        // The DROP is a stimulus and the capture is a LINK, so the two go into the pair built for
-        // that: `awaitField(…, stimulus)` re-drops him between reads until his own client
-        // records the deck taking him. What stood here re-read `deck-capture` after each drop and
-        // handed the last reading back for a caller to assert on — the same reading the loop had
-        // just exited on.
+        // ONE drop, over the ship's own world position, and the capture is a LINK on his own client's
+        // record of the deck taking him. Where vanilla put him when he dismounted does not decide where
+        // he lands: the drop is from above the ship, whatever edge he stepped off. A drop repeated
+        // until a capture appeared would have hidden a deck that let a body fall through the first time.
         //
         // The client's log, because the resolver that claims a body is the client's (the base's own
         // note on this family). Keyed on nothing but the type: this helper does not know the ship's
         // id, and the caller's assertions that follow name it.
-        // The 40-tick STIMULUS PERIOD is the fall: he has to be left alone long enough to land
-        // between re-drops, while the record is still read every five ticks. At the read cadence he
-        // would be teleported eight times per fall and never reach the deck. Where he LANDS is not
-        // the subject — this fixture's deck is 3x3 and the cell around it is void — so the stimulus
-        // puts him over it again rather than assuming one landing spot.
         long captureMark = clientEvents().mark();
         try {
+            arrange("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0");
             clientEvents().awaitMatching(captureMark, "deck_carry",
                     reply -> !Events.records(reply).isEmpty(), "for any body",
-                    "the deck never took the dropped body", 240,
-                    () -> arrange("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0").raw(), 40);
+                    "the deck never took the dropped body", 240);
         } catch (AssertionError neverCaught) {
             // Not a verdict here either: the caller reads the capture and makes its own claims, and
             // one of them is about a body the deck did NOT take. Swallowing keeps that case its to
@@ -1105,15 +1115,13 @@ private String hud() throws Exception {
             + " {@code player.attackEntityFrom(VOID_OF_HYPERSPACE, Float.MAX_VALUE)} never called: \"no"
             + " `player_died` carrying source = stellurgyHyperspaceVoid was recorded within 260 ticks\".")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterInCell = skyFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(CELL_SKY_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long cellTileTicksAfter ="
-            + " gameSeen(motionTrace(cellAfcKey));",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(CELL_COMPUTER_WINDOW_TICKS);",
             why = "a tick counter rising is not an event; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterStanding = skyFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(STANDING_SKY_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long tileTicksAfter ="
-            + " gameSeen(motionTrace(afcKey));",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(HYPERSPACE_COMPUTER_WINDOW_TICKS);",
             why = "a tick counter rising is not an event; nothing records it.")
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(serverClient(), GameTicks.server(),",
             why = "the dose is the void's grace plus a margin, in SERVER ticks — the clock the countdown runs on"
@@ -1157,7 +1165,7 @@ private String hud() throws Exception {
         // advanced in hyperspace" is a first reading rather than a change.
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        advanceServerAndClient(20);
+        advanceServerAndClient(CELL_SKY_WINDOW_TICKS);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
         assertTrue("CONTROL: this sky renderer must run in an ordinary cell, or every corridor"
@@ -1176,7 +1184,7 @@ private String hud() throws Exception {
         String cellAfcKey = originDim + " " + cellSeat.afcX
                 + " " + cellSeat.afcY + " " + cellSeat.afcZ;
         long cellTileTicks = gameSeen(motionTrace(cellAfcKey));
-        advanceServerAndClient(20);
+        advanceServerAndClient(CELL_COMPUTER_WINDOW_TICKS);
         long cellTileTicksAfter = gameSeen(motionTrace(cellAfcKey));
         assertTrue("CONTROL: the ship's flight computer must be recording server ticks in an"
                         + " ordinary cell, or the hyperspace reading below is a zero for the wrong"
@@ -1225,7 +1233,7 @@ private String hud() throws Exception {
 
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        advanceServerAndClient(20);
+        advanceServerAndClient(STANDING_SKY_WINDOW_TICKS);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
         // The renderer itself, first: a corridor counter standing still means nothing until the
@@ -1261,7 +1269,7 @@ private String hud() throws Exception {
         int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
         long tileTicksBefore = gameSeen(motionTrace(afcKey));
-        advanceServerAndClient(20);
+        advanceServerAndClient(HYPERSPACE_COMPUTER_WINDOW_TICKS);
         long tileTicksAfter = gameSeen(motionTrace(afcKey));
         assertTrue("the ship's flight computer must keep TICKING while the ship is parked in"
                         + " hyperspace — a jump during which the ship's machinery stops is a"
@@ -1370,22 +1378,18 @@ private String hud() throws Exception {
         // deliberately stopped ticking mid-flight — leaving a hull parked in the world every later
         // scenario shares, with a crew record for a player who is no longer alive to be re-seated.
         // Ending the transit puts the shared world back the way this scenario found it.
-        // The one pump left in this class, and it is an ACCELERATOR rather than a wait: nothing here
-        // is being observed. This scenario shares its world, and it ends the jump to put that world
-        // back the way it found it -- fast-forwarding past a flight nobody is watching is exactly
-        // what the verb is for now that the server drives transits on its own.
         // Kept even though this family's reset flies out any leftover jump before the NEXT scenario:
         // that net cannot cover the last scenario in the class, whose leftover would leave the class
         // with a jump still in the air for whoever shares this client next. Not a duplicate — a
         // different boundary.
-        // The bound comes from the flight this scenario ASKED FOR rather than from a round number:
-        // ten accelerated ticks an iteration, over the whole jump, with the same doubling the
-        // duration itself carries. A cleanup budget shorter than the flight leaves a hull parked in
-        // the world every later scenario in this class shares — which is a red somewhere else,
-        // blamed on something else.
-        // The accelerator is a STIMULUS and the settling is a LINK, which is the pair
-        // `awaitMatching(…, stimulus)` exists for: a mechanic that advances only on a tick nobody is
-        // running, so the test has to keep driving it WHILE it waits for the record.
+        //
+        // NOTHING IS PUMPED. The server flies a transit on its own tick, so the settle is a LINK on
+        // the record the flight writes when it ends, and its deadline is the flight this scenario
+        // ASKED FOR: transit-begin was given the speed that makes the whole jump last
+        // LIVABLE_FLIGHT_TICKS, part of which has already passed. A deadline shorter than the flight
+        // leaves a hull parked in the world every later scenario in this class shares — which is a
+        // red somewhere else, blamed on something else. (An accelerator re-sent until the record
+        // appeared was a dose with a poll behind it.)
         //
         // KEYED ON THE DURABLE NAME, and that is the whole lesson of getting it wrong once. The
         // first cut asked for `setup.requireShipId()` — the SUBSTRATE's id — and the wait expired with
@@ -1393,18 +1397,13 @@ private String hud() throws Exception {
         // which `TransitSetup.durableId` is documented to be: "the setup mints this on the
         // pad, onto the flight computer, and SETTLES THE LEDGER UNDER IT … Reading either one as the
         // other answers found:false — that is not a missing ship, it is the wrong question."
-        //
-        // The budget's arithmetic, since it is not the loop's: the wait drives the stimulus once per
-        // five ticks of budget and each stimulus accelerates ten, so half of LIVABLE_FLIGHT_TICKS of
-        // budget delivers the whole flight the scenario asked for.
         try {
             events.awaitField(mark, "transit_settled", "ship", setup.requireDurableId(),
                     "the jump must be flown out before this scenario returns: it shares its"
                             + " hyperspace with every other scenario in this class, and a transit"
                             + " left running parks a hull there with a crew record for a player who"
                             + " is no longer alive to be re-seated",
-                    (int) (LIVABLE_FLIGHT_TICKS / 2L),
-                    () -> act("stellurgytest space transit-tick 10").raw());
+                    (int) LIVABLE_FLIGHT_TICKS);
         } catch (AssertionError never) {
             // ARRANGEMENT, like the family reset that does the same job before the NEXT scenario:
             // this scenario's own verdict was reached above, and a world it failed to put back is a
@@ -1603,11 +1602,11 @@ private String hud() throws Exception {
     /** Pins CON-C14-18 (hyperspace's backdrop belongs to the world, so a standing crew member still sees the corridor). */
     @Pins("CON-C14-18")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterInCell = skyFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(CELL_SKY_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long tunnelAfterSeated = tunnelFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SEATED_CORRIDOR_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterStanding = skyFrames();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(STANDING_SKY_WINDOW_TICKS);",
             why = "frame counters grow; nothing records it.")
     public void aStandingCrewMemberStillSeesTheHyperspaceCorridor() throws Exception {
 
@@ -1629,7 +1628,7 @@ private String hud() throws Exception {
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        advanceServerAndClient(20);
+        advanceServerAndClient(CELL_SKY_WINDOW_TICKS);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
         assertTrue("this sky renderer must run in an ordinary cell (sky frames " + skyInCell + " -> "
@@ -1654,7 +1653,7 @@ private String hud() throws Exception {
         // is asserted INSIDE, where the chain that would explain a failure is still readable.
         JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         long tunnelSeated = tunnelFrames();
-        advanceServerAndClient(20);
+        advanceServerAndClient(SEATED_CORRIDOR_WINDOW_TICKS);
         long tunnelAfterSeated = tunnelFrames();
         long drawnSeated = tunnelAfterSeated - tunnelSeated;
         assertTrue("the corridor must be drawn for a SEATED pilot in hyperspace — this is the leg that"
@@ -1677,7 +1676,7 @@ private String hud() throws Exception {
         // ── READING 3, THE CONTRACT: on his feet, the corridor is still coming ───────────────────
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        advanceServerAndClient(20);
+        advanceServerAndClient(STANDING_SKY_WINDOW_TICKS);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
         long skyDrawnStanding = skyAfterStanding - skyStanding;

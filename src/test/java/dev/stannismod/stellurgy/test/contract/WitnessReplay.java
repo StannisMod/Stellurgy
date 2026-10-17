@@ -275,10 +275,15 @@ final class WitnessReplay {
         return found.size() == 1 ? found.get(0) : null;
     }
 
-    /** The span inside the braces of the first declaration of {@code member}, or null. */
+    /**
+     * The span inside the braces of the first declaration of {@code member}, or null. A declaration's name
+     * follows its return type or a modifier, separated by whitespace; a call site's name follows an operator
+     * or a bracket. A call such as "if (!canFire()) {" has the shape of a declaration otherwise, and was taken
+     * for one, so a record on the member it called was looked for in the method that called it.
+     */
     private static int[] memberBody(String src, String member) {
         // NOT-A-PROBE-REPLY: Java source -- a member's declaration.
-        Matcher m = Pattern.compile("(?<![\\w.])" + Pattern.quote(member)
+        Matcher m = Pattern.compile("(?<=[\\w>\\]])\\s+" + Pattern.quote(member)
                 + "\\s*\\([^;{]*\\)\\s*(?:throws[^{;]*)?\\{").matcher(src);
         if (!m.find()) {
             return null;

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -44,6 +45,14 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             + " the zone's air only: \"air with carbon monoxide past its limit is said to be poisonous, outdoors"
             + " too\". Run apart: the statement is asserted first and would have hidden the harm.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long cleanTicks = GameTicks.advanceObserved(",
+            why = "the CONTROL's dose: EXPOSURE_TICKS of the world's clean air, and the verdict is that this much"
+                    + " of it took no health. The hurt a golem takes has no record (the hurt recorder and the"
+                    + " poison gate record players alone), and an absence over a dose is what is asserted.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long poisonedTicks = GameTicks.advanceObserved(",
+            why = "the subject's dose: the same EXPOSURE_TICKS in poisoned air. No record carries a golem's hurt"
+                    + " (players alone are recorded), so the health read after the dose is the measurement; a"
+                    + " longer stretch on a slow box only deepens a harm the control shows clean air never does.")
     public void aLivingThingBreathingPoisonedAirIsHurtByTheDoseAndNotInCleanAir() throws Exception {
         FixtureSite site = clearedSite(1, 4, "the golem is held in this air");
         int x = site.x, y = site.y + 1, z = site.z;
@@ -62,10 +71,11 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             assertFalse("CONTROL: the world's own air is not said to be poisonous",
                     statements(x, y, z).contains("TOXIC"));
             Reply start = info(golem);
-            GameTicks.advance(client(), GameTicks.world(OVERWORLD), EXPOSURE_TICKS);
+            long cleanTicks = GameTicks.advanceObserved(client(), GameTicks.world(OVERWORLD), EXPOSURE_TICKS);
             Reply clean = info(golem);
             assertTrue("CONTROL: the golem was updated while it breathed (ticksExisted "
-                            + start.integer("ticksExisted") + " -> " + clean.integer("ticksExisted") + ")",
+                            + start.integer("ticksExisted") + " -> " + clean.integer("ticksExisted") + " over "
+                            + cleanTicks + " ticks of its world)",
                     clean.integer("ticksExisted") - start.integer("ticksExisted") >= EXPOSURE_TICKS);
             assertEquals("CONTROL: clean air does not hurt it", start.number("health"),
                     clean.number("health"), 0.0D);
@@ -75,10 +85,11 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             assertTrue("air with carbon monoxide past its limit is said to be poisonous, outdoors too",
                     statements(x, y, z).contains("TOXIC"));
 
-            GameTicks.advance(client(), GameTicks.world(OVERWORLD), EXPOSURE_TICKS);
+            long poisonedTicks = GameTicks.advanceObserved(client(), GameTicks.world(OVERWORLD), EXPOSURE_TICKS);
             Reply poisoned = info(golem);
             assertTrue("the same golem, the same time, in poisoned air is hurt: health "
-                            + clean.number("health") + " -> " + poisoned.number("health"),
+                            + clean.number("health") + " -> " + poisoned.number("health") + " over "
+                            + poisonedTicks + " ticks of its world",
                     poisoned.number("health") < clean.number("health"));
             assertEquals("and what hurt it last was the poison", "Poison", poisoned.text("lastDamageType"));
         } finally {

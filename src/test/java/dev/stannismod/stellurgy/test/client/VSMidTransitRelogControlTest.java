@@ -464,6 +464,8 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
      * read the same as one that worked at once, and a key that never arrived read as "did not climb".
      * Now the arrival fails naming itself, and the climb is judged once.</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(dim, PILOT_THRUST_DOSE_TICKS, what);",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     private boolean climbedOnADose(String what) throws Exception {
         double from = clientPlayerY();
         int dim = bot().reportWeather().get("dim").getAsInt();

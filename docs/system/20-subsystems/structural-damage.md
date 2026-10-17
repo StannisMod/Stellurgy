@@ -183,20 +183,22 @@ surviving blocks' bounds widened by `HOLE_SWEEP_MARGIN` (8), for the same reason
 and that margin is a BOUND, not a proof: a hole further out than 8 blocks from any surviving block is
 left behind.
 
-**MECH-DMG-15 — A player's pickaxe clears the record; the engine's does not.** `BlockEvent.BreakEvent`
-and `PlaceEvent` forget the position's record (`DamageInvalidationHandler.java:28-42` [V]). Neither
-fires for the damage engine's own destruction or for a relocation cut, both of which write through
-`setBlockState` — so this reaches exactly the case it is for. It is also the price list for hand
-repair: replacing a damaged block is a repair paid for with the block. [A: the machine repair ladder
-is not built, so hand replacement is currently the only repair.]
+- **MECH-DMG-15 — A player's pickaxe clears the record; the engine's does not.** `BlockEvent.BreakEvent`
+  and `PlaceEvent` forget the position's record (`DamageInvalidationHandler.java:28-42` [V]). Neither
+  fires for the damage engine's own destruction or for a relocation cut, both of which write through
+  `setBlockState` — so this reaches exactly the case it is for. It is also the price list for hand
+  repair: replacing a damaged block is a repair paid for with the block. [A: the machine repair ladder
+  is not built, so hand replacement is currently the only repair.]
+  [T `WeaponClientGroupTest#aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed`, `…#aDamagedBlockAPlayerBreaksLeavesNoDamageBehind`]
 
-**MECH-DMG-16 — One stage per use, priced from the block's own recipe (repair T0).** The repair
-welder removes one stage per right-click, charging the ingredients of the block's crafting recipe
-scaled by `repairCostPerStageFraction` over its stages, plus stored Forge Energy
-(`RepairCost.java:57-88`, `ItemRepairWelder.java:74-113` [V]) [T `RepairWelderTest`]. Its answer is
-a type — `REPAIRED / UNDAMAGED / NO_RECIPE / NO_MATERIALS / NO_CHARGE` — and nothing is taken on any
-refusal. A block nothing crafts cannot be priced and is refused; the pickaxe remains its only repair.
-Full rules in contract C20. Neither damage nor repair asks a war switch (`weapons` MECH-GUN-35); the welder's own verdicts are pinned by `RepairWelderTest`.
+- **MECH-DMG-16 — One stage per use, priced from the block's own recipe (repair T0).** The repair
+  welder removes one stage per right-click, charging the ingredients of the block's crafting recipe
+  scaled by `repairCostPerStageFraction` over its stages, plus stored Forge Energy
+  (`RepairCost.java:57-88`, `ItemRepairWelder.java:74-113` [V]) [T `RepairWelderTest`; the wiring from a
+  player's hand, `WeaponClientGroupTest#aWelderInAPlayersHandTakesOneStageOff`]. Its answer is
+  a type — `REPAIRED / UNDAMAGED / NO_RECIPE / NO_MATERIALS / NO_CHARGE` — and nothing is taken on any
+  refusal. A block nothing crafts cannot be priced and is refused; the pickaxe remains its only repair.
+  Full rules in contract C20. Neither damage nor repair asks a war switch (`weapons` MECH-GUN-35); the welder's own verdicts are pinned by `RepairWelderTest`.
 
 **MECH-DMG-18 — A block may ANSWER a travelling body, and that answer is not this subsystem's.** Since
 the contact seam a block met by a shot is asked what happens (`projectile-substrate` MECH-SHOT-15) and

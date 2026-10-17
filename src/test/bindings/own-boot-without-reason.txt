@@ -3,13 +3,3 @@
 # (checkTestBindings) fails on an own-boot class without @OwnBoot that is not listed here, and on a
 # line here that no longer names one. This list only shrinks: fold a class into a shared group, or
 # give it a reason it really has, then delete its line.
-dev.stannismod.stellurgy.test.client.ABentBeamIsDrawnBentTest
-dev.stannismod.stellurgy.test.client.ALinkerNamesTheBatteryItsTargetTest
-dev.stannismod.stellurgy.test.client.APlayersHandRepairsTest
-dev.stannismod.stellurgy.test.client.BeamReachesClientTest
-dev.stannismod.stellurgy.test.client.SensorFriendIsNeverAcquiredTest
-dev.stannismod.stellurgy.test.client.ShotReachesClientTest
-dev.stannismod.stellurgy.test.client.SpaceCellRelogGroupTest
-dev.stannismod.stellurgy.test.client.TurretAimReachesClientTest
-dev.stannismod.stellurgy.test.client.TurretFriendOrFoeTest
-dev.stannismod.stellurgy.test.client.WeaponGuiButtonsReachTheServerTest

@@ -607,6 +607,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      *                   measured after the thrust is cut
      * @return the craft's report at the altitude it is left hovering at
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     protected final String hoverOnPilotThrust(String shipId, double gainBlocks) throws Exception {
         String before = shipInfoById(shipId);
         scenario().requireArranged("the craft must report an altitude before a climb from it can be"

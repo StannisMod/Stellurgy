@@ -56,12 +56,12 @@ cold, quiet ship can only be engaged by someone who has stopped being quiet them
 [T `FireControlSensorTest#aCoolTargetTooFarToHoldByListeningIsHeldByIlluminating`,
 `SignatureModelTest#illuminatingHoldsAColdTargetThatListeningCannot`]
 
-**MECH-FCS-03 — A friend never becomes a CONTACT.** The credential is screened during the sweep, not
-at the trigger, so an ally's position is never written anywhere a gun could read it and no stale
-order, race or second console can produce a shot at them. The gun checks again at the trigger as
-depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
-[T `SensorFriendIsNeverAcquiredTest`, falsified: with the screen removed the code-carrying player
-enters the list at quality 0.30 and the test reddens]
+- **MECH-FCS-03 — A friend never becomes a CONTACT.** The credential is screened during the sweep, not
+  at the trigger, so an ally's position is never written anywhere a gun could read it and no stale
+  order, race or second console can produce a shot at them. The gun checks again at the trigger as
+  depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
+  [T `WeaponClientGroupTest#aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes`, falsified: with the screen removed the code-carrying player
+  enters the list at quality 0.30 and the test reddens]
 
 **MECH-FCS-04 — Standing on our own deck is itself the credential.** An entity inside the sensor's
 own ship's bounds is excluded whatever it is carrying: a crew does not acquire code devices before a
@@ -123,14 +123,14 @@ connection and looks correct only in single player, where both sides share one J
 Sent on a threshold — a contact appearing or going, the mode changing, the illuminator losing power,
 or the lock moving by more than a twentieth. `TileFireControlSensor.java:159-180,482-520` [V]
 
-**MECH-FCS-14 — The mode button is a PACKET, because the button runs where the sweep does not.** A
-GUI button fires on the client (`ModuleButton.actionPerform` is client-only), and the mode it flips
-is read by the sweep on the server; so the press travels as a `PacketMachine` and the server flips
-its OWN mode in `useNetworkData`, answering to the GUI's `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
-on a dedicated server. `TileFireControlSensor#onInventoryButtonPressed`,
-`#useNetworkData` [V] [T `WeaponGuiButtonsReachTheServerTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
-`canInteractWithContainer` is vanilla's usability rule (same world, not invalid,
-distanceSq ≤ 64.0) and the server branch refuses a press that fails it — weapons MECH-GUN-44 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
+- **MECH-FCS-14 — The mode button is a PACKET, because the button runs where the sweep does not.** A
+  GUI button fires on the client (`ModuleButton.actionPerform` is client-only), and the mode it flips
+  is read by the sweep on the server; so the press travels as a `PacketMachine` and the server flips
+  its OWN mode in `useNetworkData`, answering to the GUI's `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
+  on a dedicated server. `TileFireControlSensor#onInventoryButtonPressed`,
+  `#useNetworkData` [V] [T `WeaponClientGroupTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
+  `canInteractWithContainer` is vanilla's usability rule (same world, not invalid,
+  distanceSq ≤ 64.0) and the server branch refuses a press that fails it — weapons MECH-GUN-44 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
 
 ## Invariants
 

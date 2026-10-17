@@ -642,8 +642,8 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // THE OVER-THE-LINE POLL IS GONE, AND NOTHING REPLACED IT, because the settle link at the
         // end of this method already establishes what it established: a craft that reaches SETTLED
         // was above the line. What the poll bought was an EARLIER and more specific failure, and
-        // that is now bought by the settle link's own failure message, which carries the gate trace
-        // its stimulus collects plus the computer records below.
+        // that is now bought by the settle link's own failure message, which carries the entry gate's
+        // reply plus the computer records below.
         //
         // IT WAS FIRST REPLACED BY A LINK ON `entry_decided`, AND THAT WAS WRONG — MEASURED, not
         // argued, on the gate of 2026-09-22, where all three legs of this class failed with the
@@ -654,9 +654,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // above the ceiling, and this arrangement teleports it there two lines BEFORE the unpark the
         // mark follows — so the record can precede any mark placed here. A link whose record is
         // written before the only mark you can take is not a link.
-        //
-        // The gate's own readings, collected by the settle link's stimulus below.
-        final StringBuilder gateTrace = new StringBuilder();
 
         // AND THE COMPUTER IS RUNNING. The on-ramp has exactly one caller — this craft's own flight
         // computer, inside its own tick — so every input being right proves nothing until the
@@ -732,20 +729,9 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // should arrive carrying what the pool DID: a pool does not run out because it is full, it
         // runs out because every loaded cell is still CLAIMED, and those want different fixes.
         // Records, not a snapshot — a snapshot cannot say who took a claim and never gave it back.
-        //
-        // The gate trace is kept and is now taken by the STIMULUS, one reading in ten steps, so a
-        // failure still carries the craft's trajectory over the whole wait rather than one last
-        // sample: a craft that never got up there and one that got up there, was not looked at and
-        // came back down are opposite findings.
-        final int[] steps = {0};
         try {
             WorldCommandFixtures.awaitEnteredSpace(events, overLineMark, stellurgyShipId,
-                    "the ship never reached space through the entry path", SETTLE_TICKS,
-                    () -> {
-                        if (steps[0]++ % 10 == 0) {
-                            gateTrace.append(gateDigest(entryGate(srcVsId))).append(' ');
-                        }
-                    });
+                    "the ship never reached space through the entry path", SETTLE_TICKS);
         } catch (AssertionError neverSettled) {
             // ASK THE GATE ITSELF. The claim dump says what the scenario BOUND; it cannot say why
             // the on-ramp did not finish, so "never asked" and "asked and refused" are told apart
@@ -753,7 +739,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
             throw new AssertionError(neverSettled.getMessage()
                     + " || last ledger=" + ledger(stellurgyShipId).raw()
                     + " | entry gate: " + entryGate(srcVsId)
-                    + " | gate trace, oldest first: " + gateTrace
                     + " | cell claims since this scenario began: " + claimsSince(claimMark));
         }
         LedgerEntry status = ledger(stellurgyShipId)
@@ -918,29 +903,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * is already failing, and an exception here would replace the assertion's message — the reading
      * that matters — with the diagnostic's stack trace.</p>
      */
-    /**
-     * One gate reading as a short token — {@code y=1200.0/1000 trig=true latched=false} — so a
-     * sequence of them reads as a TRAJECTORY rather than as a wall of repeated JSON.
-     *
-     * <p>Carries the ceiling beside the altitude deliberately: "y=94.9" is only a failure against
-     * the line it is being compared with, and the two numbers have different owners.</p>
-     */
-    private static String gateDigest(String gate) {
-        // absence is the answer: this builds a DIAGNOSTIC line for a failure message, and a
-        // gate reply that carries nothing is exactly the "[afc-gone]" it reports.
-        if (!Reply.of(gate).boolOr("afcResolved", false)) {
-            return "[afc-gone]";
-        }
-        return "[y=" + extractDouble(gate, "shipY") + "/" + extractInt(gate, "ceiling")
-                + " trig=" + (Reply.of(gate).reported("wouldTrigger"))
-                + " latched=" + (Reply.of(gate).reported("latched"))
-                + " posed=" + (Reply.of(gate).reported("posed"))
-                // The computer's own tick census, because every other field here is an INPUT to a
-                // check that only runs if the computer runs: a reading with all four inputs right
-                // and `trig=true` still says nothing until this number is seen to MOVE.
-                + " ticks=" + extractString(gate, "tickCensus") + "]";
-    }
-
     private String entryGate(String vsId) {
         try {
             return read("stellurgytest space entry-gate 0 " + vsId).raw();

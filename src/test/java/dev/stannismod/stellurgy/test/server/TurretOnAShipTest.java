@@ -173,7 +173,12 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
             + " carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio"
             + " 17.746478873207156)\" (2026-10-05).")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "Reply before = ship.info();",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advanceObserved(client(), GameTicks.server(), SETTLE_TICKS);",
+            why = "how long the velocity command stands before the hull's motion is measured. No record announces"
+                    + " a hull reaching a speed -- the computer realizes the command every physics tick and"
+                    + " never decides it has arrived -- so the window after it measures the speed it reached,"
+                    + " and the arrangement gate on that rate is what refuses a hull still spinning up.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "long elapsed = GameTicks.advanceObserved(client(), GameTicks.server(), WINDOW_TICKS);",
             why = "the hull's own displacement over ticks the box actually delivered, read twice.")
     public void aRoundFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
         arrange("stellurgytest shot clear 0").requireOk("clear the air");

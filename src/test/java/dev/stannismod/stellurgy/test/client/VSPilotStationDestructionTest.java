@@ -235,6 +235,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
      * (probe mount — the harness cannot right-click a subspace block), and fly it up a couple of
      * blocks on a REAL held key. Returns with the climb key still held.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     private FlyingShip assembleLoadAndFly(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;

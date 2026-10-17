@@ -119,7 +119,7 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         // durable id — "somebody settled" is a different question, and a slot the entry stack has
         // ledgered twice used to answer it with a neighbour's row.
         awaitEnteredSpace(events, climbMark, durableId,
-                "auto-takeoff must climb the ship into space", CLIMB_TICKS, null);
+                "auto-takeoff must climb the ship into space", CLIMB_TICKS);
     }
 
     /** Server ticks for the craft to be named and become usable: one or two ticks away. */

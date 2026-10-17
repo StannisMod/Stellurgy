@@ -238,7 +238,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
     private EntryStatus awaitEntered(long mark, String setup, int budgetTicks, String durableId)
             throws Exception {
         WorldCommandFixtures.awaitEnteredSpace(events, mark, durableId,
-                "the ship must finish entering space", budgetTicks, null);
+                "the ship must finish entering space", budgetTicks);
         return EntryStatus.forShip(c -> read(c).raw(), durableId);
     }
 

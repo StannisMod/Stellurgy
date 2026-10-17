@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * with it; that is read off the map itself. A cancelled event never reaches these subscribers (they
  * sit at the lowest priority and do not receive cancelled events), so a vetoed break writes no
  * record. Server log, filed against the world the block is in. Read by
- * {@code APlayersHandRepairsTest}.</p>
+ * {@code WeaponClientGroupTest}.</p>
  *
  * <p>SILENT about a block changed by anything that fires neither event — the damage engine, a
  * relocation's cut, a probe's fill — and about a client world.</p>

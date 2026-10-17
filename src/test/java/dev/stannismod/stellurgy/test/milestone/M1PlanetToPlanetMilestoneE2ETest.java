@@ -335,6 +335,12 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             + " the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at"
             + " their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and"
             + " without the on-ramp the client-world wait fails before the {@code STARTED} read.")
+    @RedWitness(verdict = "the rocket assembler opens on one real use press",
+            member = "BlockTile#onBlockActivated",
+            at = "player.openGui(Constants.modId, guiId, world, pos.getX(), pos.getY(), pos.getZ());",
+            replacedBy = ";",
+            fails = "a real use-key press aimed at the rocket assembler must open its screen, and it never did",
+            on = "2026-10-16")
     @RedWitness(verdict = "THE BANK, fed by the craft's own grid",
             member = "TileJumpCapacitor#acceptCharge",
             at = "charge = charge() + accepted;",
@@ -1568,6 +1574,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (String[] piece : SUIT) {",
             why = "a pass over the four pieces, each pass his own hotbar key and use press; the ticks it spends are"
                     + " those presses' durations, and what each press did is the server's set-slot, linked.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(1);",
+            why = "the one client tick the look is held for before the pick is read: vanilla re-derives the"
+                    + " crosshair's target from the look once a tick (Minecraft.runTick -> getMouseOver), so this is"
+                    + " the tick that applies it. Nothing records a pick; the read after is that tick's result.")
     private void putOnTheSpaceSuit() throws Exception {
         input().setLook(0f, -90f);
         client().waitWorldTicks(1);
@@ -1828,9 +1838,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /**
-     * Put the crosshair on the navigation console from the deck square beside it and press use until
-     * its screen opens. The crosshair is confirmed on the console's own block before every press, so
-     * a red names the hop that failed rather than merely the outcome.
+     * Put the crosshair on the navigation console from the deck square beside it and press use once,
+     * linking on the screen it opens. The crosshair is confirmed on the console's own block before the
+     * press, so a red names the hop that failed rather than merely the outcome.
      */
     private String openConsoleFromTheDeck(int dim, int[] afcSub, int[] navSub, int budget)
             throws Exception {
@@ -1838,33 +1848,29 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         if (!already.isEmpty()) {
             return already;
         }
-        // The aim-and-press is the STIMULUS and `client_gui_opened` is the link. The crosshair is
-        // re-derived before every press because a freshly settled craft moves under it, and the
-        // press is re-issued every 60 ticks while the log is read every 5 — a press that never
-        // registered is not recoverable by reading longer, which is what makes this a stimulus.
-        Aim[] aim = {new Aim()};
+        // The crosshair is put on the console and confirmed on its own block, then ONE press, and
+        // `client_gui_opened` is the link from a mark taken before it. A press the console never
+        // answered is a red naming the aim it was made with, never a re-press: a re-press until a
+        // screen appeared hid a press the seam had swallowed.
+        Aim aim = aimAt(dim, afcSub, navSub, offStand, 0.5, 0.5, 0.5, budget);
+        assertAimed(aim, navSub, "navigation console", "navigationcomputer");
         long mark = clientEvents().mark();
+        pressUse();
         try {
             clientEvents().awaitMatching(mark, "client_gui_opened",
                     reply -> Events.records(reply).size()
                             > Events.recordsWhere(reply, "gui", "none").size(),
-                    "opening any screen", "the navigation console must open", 360,
-                    () -> {
-                        aim[0] = aimAt(dim, afcSub, navSub, offStand, 0.5, 0.5, 0.5, budget);
-                        assertAimed(aim[0], navSub, "navigation console", "navigationcomputer");
-                        pressUse();
-                    }, 60);
+                    "opening any screen", "the navigation console must open", 360);
         } catch (ArrangementFailure alreadyTyped) {
-            // The aim ran inside the stimulus and its premises are arrangement READS: a ship with no
-            // pose or a client with no world is a failure of the arrangement, and it is TYPED as one.
-            // `ArrangementFailure` is an `AssertionError`, so the catch below would swallow it and
-            // turn it into "the console never opened" — a premise refusal read as a broken mechanic.
+            // A premise refusal is an arrangement failure and is TYPED as one. `ArrangementFailure`
+            // is an `AssertionError`, so the catch below would swallow it and turn it into "the
+            // console never opened" — a premise refusal read as a broken mechanic.
             throw alreadyTyped;
         } catch (AssertionError neverOpened) {
-            // Thrown again with the last aim's diagnosis: a press the console never answered is a red
+            // Thrown again with the aim's diagnosis: a press the console never answered is a red
             // here, not a value a caller may read past. A caller that is ARRANGING wraps the call.
             throw new AssertionError("a real use-key press aimed at the NAVIGATION CONSOLE must open its"
-                    + " screen, and it never did;" + aim[0].diagnosis + " | " + neverOpened.getMessage(), neverOpened);
+                    + " screen, and it never did;" + aim.diagnosis + " | " + neverOpened.getMessage(), neverOpened);
         }
         return screenOf(client().reportState());
     }
@@ -1880,6 +1886,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      *
      * @return the client's items, read after that tick
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(1);",
+            why = "the one client tick the key press is defined to land in (Minecraft.runTick -> processKeyBinds)."
+                    + " The client records no hotbar change of its own, and the server's CPacketHeldItemChange"
+                    + " answers the server's copy, not the slot this client shows; the read after is that tick's.")
     private JsonObject pressHotbarKey(int slot) throws Exception {
         input().setKey(Keyboard.KEY_1 + slot, true);
         input().setKey(Keyboard.KEY_1 + slot, false);
@@ -2234,9 +2244,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /**
-     * Put the crosshair on the assembler and press the use key, retrying the whole aim-and-press
-     * until a screen opens. The crosshair is confirmed on the machine's own block before every
-     * press, so a red names the hop that failed rather than merely the outcome.
+     * Put the crosshair on the assembler and press the use key once, linking on the screen it opens.
+     * The crosshair is confirmed on the machine's own block before the press, so a red names the hop
+     * that failed rather than merely the outcome.
      */
     private String openBuilderScreenByRealKeyPress(int[] builderPos, int budget) throws Exception {
         return openScreenByRealKeyPress(builderPos, "rocket assembler", "rocketbuilder", budget);
@@ -2253,28 +2263,24 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         if (!already.isEmpty()) {
             return already;
         }
-        // Same pair as openConsoleFromTheDeck: aim-and-press is the stimulus, `client_gui_opened`
-        // is the link, and the crosshair is re-derived every press because the machine's world
-        // position is read fresh.
-        Aim[] aim = {new Aim()};
+        // Same shape as openConsoleFromTheDeck: the crosshair is put on the machine and confirmed on
+        // its block, ONE press, and `client_gui_opened` is the link from a mark taken before it.
+        Aim aim = aimAtWorldBlock(machinePos, 0.5, 0.5, 0.5, budget);
+        assertAimed(aim, machinePos, what, blockNeedle);
         long mark = clientEvents().mark();
+        pressUse();
         try {
             clientEvents().awaitMatching(mark, "client_gui_opened",
                     reply -> Events.records(reply).size()
                             > Events.recordsWhere(reply, "gui", "none").size(),
-                    "opening any screen", "the " + what + " must open", 360,
-                    () -> {
-                        aim[0] = aimAtWorldBlock(machinePos, 0.5, 0.5, 0.5, budget);
-                        assertAimed(aim[0], machinePos, what, blockNeedle);
-                        pressUse();
-                    }, 60);
+                    "opening any screen", "the " + what + " must open", 360);
         } catch (ArrangementFailure alreadyTyped) {
-            // As above: the aim's premises are arrangement READS, and this catch must not turn a
+            // As above: the wait's premises are arrangement READS, and this catch must not turn a
             // client with no world into "a machine that swallows the press" three frames up.
             throw alreadyTyped;
         } catch (AssertionError neverOpened) {
             throw new AssertionError("a real use-key press aimed at the " + what + " must open its screen, and"
-                    + " it never did;" + aim[0].diagnosis + " | " + neverOpened.getMessage(), neverOpened);
+                    + " it never did;" + aim.diagnosis + " | " + neverOpened.getMessage(), neverOpened);
         }
         return screenOf(client().reportState());
     }

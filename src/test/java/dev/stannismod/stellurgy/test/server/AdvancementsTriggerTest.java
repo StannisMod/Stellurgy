@@ -123,6 +123,9 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
     /** Standing on Luna within the distance gate grants WENT_TO_THE_MOON
      *  within 1–2 %20-tick trigger windows. Baseline asserted first. */
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "stationAndTick(DIM_LUNA, 2347, 95, 67, 0);",
+            why = "the baseline's dose: stationing with no living update, and the verdict is that it granted"
+                    + " nothing yet -- an absence over a dose, which no grant record can answer.")
     public void standingNearLanderOnLunaFiresWentToTheMoon() throws Exception {
         // Station only, with NO living update: this spot is already inside the distance gate, so a
         // single update that happened to land on a %20 window granted the very advancement the
@@ -148,6 +151,9 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
 
     /** Name gate: a Stellurgy dim NOT named "Luna" never fires, same coords. */
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "stationAndTick(DIM_OTHER, 2347, 95, 67, 50);",
+            why = "the dose is fifty living updates (stationAndTick claims its own stretch), and the verdict is"
+                    + " that none of them granted it: an absence over a dose, which no grant record can answer.")
     public void nonLunaStellurgyDimDoesNotFireWentToTheMoon() throws Exception {
         stationAndTick(DIM_OTHER, 2347, 95, 67, 50);
         assertEquals("non-Luna Stellurgy dim must NOT fire WENT_TO_THE_MOON at the magic coords",
@@ -156,6 +162,9 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
 
     /** Distance gate: Luna but distSq ≥ 512 (100 blocks off in z) never fires. */
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "stationAndTick(DIM_LUNA, 2347, 95, 167, 50);",
+            why = "the dose is fifty living updates (stationAndTick claims its own stretch), and the verdict is"
+                    + " that none of them granted it: an absence over a dose, which no grant record can answer.")
     public void farFromLanderCoordsOnLunaDoesNotFire() throws Exception {
         stationAndTick(DIM_LUNA, 2347, 95, 167, 50);
         assertEquals("far from lander coords on Luna must NOT grant WENT_TO_THE_MOON",

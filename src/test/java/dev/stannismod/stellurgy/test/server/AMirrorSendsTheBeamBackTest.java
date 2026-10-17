@@ -5,6 +5,8 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.List;
@@ -51,9 +53,13 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
      * over the same window, or the plating is not reflecting but merely being slow to break. Either
      * half alone passes for the wrong reason.</p>
      */
-    @LegacyWitness(prose = "with {@code HeldBeam.emit}'s deflection branch ({@code HeldBeam#emit} at {@code if (answer.isDeflected())})"
-            + " made to end the beam at the plating — the answer thrown away, as it once was — this fails at"
-            + " \"the gun that fired into a mirror took nothing at all\" (2026-09-29).")
+    @RedWitness(verdict = "the reflection reaches the gun that fired",
+            member = "HeldBeam#emit",
+            at = "if (answer.isDeflected()) {",
+            replacedBy = "if (answer.isDeflected()) { path.add(contact);"
+                    + " return new Emission(contact, travelled, hitShield, true, 0, path); } if (answer.isDeflected()) {",
+            fails = "the gun that fired into a mirror took nothing at all",
+            on = "2026-10-16")
     @LegacyWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering \"passed through, carrying"
             + " everything\" on nineteen ticks in twenty and deflecting on the twentieth, this fails at \"the iron"
             + " BEHIND the mirror was damaged before the reflection reached the gun ... [{...pos:9713,84,9560,"
@@ -61,6 +67,11 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
             + " staged by the reflected quarter before the iron by the rest, and the run stayed green — so this"
             + " verdict catches a mirror that leaks most of a beam, not one that leaks some of it.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "String hitHome = events.awaitMatching(held, \"block_stage_set\",",
+            why = "the gun burns its buffer to hold the beam, and a player's power line keeps refilling it while"
+                    + " the beam is held; the feed is that supply, sent when the buffer read off the gun would not"
+                    + " last to the next feed. What decides is still the record -- the stage written at the gun's"
+                    + " own controller -- and no record stands in for a supply that must keep running.")
     public void aBeamHeldOnAMirrorComesBackToTheGunThatFiredIt() throws Exception {
         buildSite();
         long built = events.markInstrumented();
@@ -83,7 +94,16 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
                         + " The reflected energy went nowhere: the plating answered with a deflection"
                         + " and the beam path threw the answer away, which is what made a mirror look"
                         + " like armour and behave like a hole in the world's bookkeeping",
-                Weapons.SUBJECT_TICKS, this::charge, FEED_EVERY_TICKS);
+                Weapons.SUBJECT_TICKS, () -> {
+                    // A power supply that tops the buffer up when what is left would not burn the beam
+                    // until the next feed: read the gun, and feed it only then. A gun the reflection
+                    // has already worn away answers no buffer, and there is nothing to feed.
+                    Reply gun = read("stellurgytest turret read " + DIM + " " + GUN_X + " " + Y + " " + Z);
+                    boolean hasBuffer = gun.ok() && gun.has("energy") && gun.has("beamPower");
+                    if (hasBuffer && gun.number("energy") < gun.number("beamPower") * FEED_EVERY_TICKS) {
+                        arrange("stellurgytest turret charge " + DIM + " " + GUN_X + " " + Y + " " + Z);
+                    }
+                }, FEED_EVERY_TICKS);
         long home = (long) Events.number(Events.recordsWhereAll(hitHome, "dim", String.valueOf(DIM),
                 "pos", Weapons.at(GUN_X, Y, Z)).get(0), "seq");
 

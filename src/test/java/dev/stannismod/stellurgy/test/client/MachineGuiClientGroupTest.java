@@ -194,12 +194,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * Right-clicks the machine open, and asserts the open as the CHAIN it is: the click reached the
      * server, the server opened a container for it, and the client displayed a screen.
      *
-     * <p>The re-click stays, because it is a stimulus and not an observation: a single interaction
-     * is occasionally dropped (the packet lands a tick before the chunk and the player have settled)
-     * and no amount of waiting recovers a click that never registered. What changed is what the loop
-     * WATCHES — the client's own record of a GUI being displayed, read from a mark taken before the
-     * first click, instead of sampling {@code report_state} and hoping the sample lands while the
-     * screen is there.</p>
+     * <p>One click, and the wait is on the client's own record of a GUI being displayed, read from a
+     * mark taken before the click, instead of sampling {@code report_state} and hoping the sample
+     * lands while the screen is there. A dropped click is a red that names its hop, never a retry.</p>
      *
      * <p><b>Does not await {@code gui_container_served}.</b> Since libVulpes was folded into
      * Stellurgy's container, every machine here (libVulpes' own {@code BlockTile} /
@@ -233,19 +230,17 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         long serverMark = events.mark();
         long clientMark = clientEvents().mark();
 
-        // The CLICK is a stimulus and the screen is a LINK, so they go into the pair built for it:
-        // `awaitMatching(…, stimulus)` re-clicks between reads until the client records a GUI of its
-        // own. What stood here was a retry loop around a wait that returned its last reading either
-        // way, which meant the six attempts were really six budgets spent in series with no verdict
-        // between them. The failure stays a ARRANGEMENT one and keeps its whole diagnostic.
+        // ONE click, from the marks above, and the screen is a LINK. A click the server dropped is
+        // not recovered by clicking again: the chain below says where it stopped -- the click that
+        // reached the server, the container it opened, the screen the client displayed -- and the
+        // failure stays an ARRANGEMENT one with its whole diagnostic.
         String displayed = "";
         try {
+            bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP, EnumHand.MAIN_HAND);
             displayed = clientEvents().awaitMatching(clientMark, "client_gui_opened",
                     reply -> !Events.recordsContainingAll(reply, "\"gui\":\"Gui").isEmpty(),
                     "carrying a Gui* screen",
-                    "right-clicking the machine must open its GUI on the CLIENT", 6 * 60,
-                    () -> bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP,
-                            EnumHand.MAIN_HAND));
+                    "right-clicking the machine must open its GUI on the CLIENT", GUI_LINK_BUDGET_TICKS);
         } catch (AssertionError never) {
             displayed = clientEvents().since(clientMark, "client_gui_opened");
         }
@@ -1265,7 +1260,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
      * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
-     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
+     * the screen's own button, which {@code WeaponClientGroupTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      */
     @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
@@ -1361,7 +1356,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * The fire-control sensor answers a press the way the weapon console does: by vanilla's usability
      * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
      * player standing on it switches it to illuminating. Both presses are forged by the real client
-     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerTest}'s.
+     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponClientGroupTest}'s.
      */
     @LegacyWitness(prose = "(2026-10-06, one inversion per run):"
             + " {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering"

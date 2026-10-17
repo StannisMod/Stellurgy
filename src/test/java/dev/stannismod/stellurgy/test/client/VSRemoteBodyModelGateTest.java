@@ -186,8 +186,10 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
             + " when the remote-body model gate asks that predicate, and re-stage the subject inside the"
             + " hull's world box but outside its field.")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "String shipAtOpen = shipInfo();",
-            why = "the precondition is read at BOTH ends, and the verdict is only a verdict if it held at both."
+    @Wait(shape = Wait.Shape.WINDOW, at = "String legWindow = watchModelGate(60);",
+            why = "sixty client ticks of the model gate's decisions, summarised by the one record the window"
+                    + " writes at its close -- an absence of rotations over the stretch, which no single record of"
+                    + " a decision can say. And the precondition is read at BOTH ends, and the verdict is only a verdict if it held at both."
                     + " \"Beside the hull\" is a relation to a hull that stays put; a held hull that moves"
                     + " during the reading can sweep onto the body — then rotating it is right, and leg B's"
                     + " contract — or away from it, and then a gate that rotates everything in the box would"
@@ -279,6 +281,10 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
     // ---- Leg B (control): the gate must still rotate a body the ship DOES carry ----------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "String legWindow = watchModelGate(60);",
+            why = "sixty client ticks of the model gate's decisions, summarised by the one record the window"
+                    + " writes at its close: the verdict is a count over the stretch (rotations pushed, their"
+                    + " largest angle), and no single record of a decision answers for the whole stretch.")
     public void aBodyCarriedByARolledDeckIsStillDrawnShipAligned() throws Exception {
         // GROUND-SUBJECT: the second and last clean plot. This class's two scenarios share ONE world
         // and the pinned seed offers no third, so this sits sixteen blocks from leg A's — which is

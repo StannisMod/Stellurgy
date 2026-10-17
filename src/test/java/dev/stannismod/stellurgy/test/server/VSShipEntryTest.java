@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
@@ -158,8 +159,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // same question one reading at a time, so its verdict moved with how often the box let it
         // look; the record is written by the subject, at the instant it happens.
         awaitEnteredSpace(events, entryMark, durableId,
-                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS,
-                null);
+                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
 
@@ -192,6 +192,11 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * the target, so "settled at the target" cannot pass by never having moved.</p>
      */
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(client(), GameTicks.world(arrivedSlot),",
+            why = "samples of the arrived ship's address over its slot world's own ticks, each one asserted: the"
+                    + " claim is that the address HOLDS once the flight computer self-reports, which is a state"
+                    + " over an interval. The arrival's record (ship_transit_ended, linked above) says it got"
+                    + " there; no record says it stayed.")
     public void aShipThatEnteredSpaceCanJumpToAnotherCellOnTheLiveStack() throws Exception {
 
         String setup = arrange("stellurgytest space entry-setup 2").raw();
@@ -213,8 +218,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         arrange("stellurgytest vs unpark-by-id 0 " + shipId);
 
         awaitEnteredSpace(events, entryMark, durableId,
-                "precondition: the ship must enter space, or there is nothing to jump", SETTLE_TICKS,
-                null);
+                "precondition: the ship must enter space, or there is nothing to jump", SETTLE_TICKS);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = status.slotDim;

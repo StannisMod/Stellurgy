@@ -43,17 +43,13 @@ final class WorldCommandFixtures {
      * that reaches it — but if this wait ever times out while the ledger says SETTLED, that guard is
      * the first place to look and this sentence is why.
      *
-     * @param stimulus arrangement the wait must keep re-applying — on a headless server there is no
-     *                 player to keep the destination slots' ships load-queued. Not the observation:
-     *                 what decides is still the record.
      * @return the record that ended the wait, for a caller that wants a field of what happened
      */
     static String awaitEnteredSpace(dev.stannismod.stellurgy.test.Events events, long mark,
-                                    String durableShipId, String what, int tickBudget,
-                                    dev.stannismod.stellurgy.test.Events.Stimulus stimulus)
+                                    String durableShipId, String what, int tickBudget)
             throws Exception {
         return events.awaitField(mark, "ship_left_planet", "ship", durableShipId,
-                what, tickBudget, stimulus);
+                what, tickBudget);
     }
 
     /** First line that contains the substring, or {@code null}. Useful

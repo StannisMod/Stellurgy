@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -226,6 +227,14 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
             + " {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at"
             + " \"from the helm a block was outlined as the one about to be hit (over 60 ticks)\" (2026-10-05).")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(1);",
+            why = "one client tick after the block reached his client's world (linked above): the tick in which"
+                    + " vanilla re-derives the crosshair's pick from that world (Minecraft.runTick ->"
+                    + " getMouseOver). Nothing records a pick, and the read after is that tick's.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(window);",
+            why = "the three buttons are held for `window` client ticks -- a multiple of the slowest act measured"
+                    + " on foot on this run -- and the verdict is that none of them acted and nothing was outlined"
+                    + " over it: an absence over a dose, which no record can announce.")
     public void fromTheHelmTheCursorActsOnNothing() throws Exception {
         Events server = serverEvents();
         Events client = clientEvents();
@@ -263,16 +272,22 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         double[] eye = new double[3];
         double[] heading = steadyView(eye);
         double[] ahead = along(eye, heading, 3.0D);
-        Reply nose = Reply.of(arrange("stellurgytest place 0 " + (int) Math.floor(ahead[0]) + " "
-                + (int) Math.floor(ahead[1]) + " " + (int) Math.floor(ahead[2]) + " minecraft:stone").raw())
+        int noseX = (int) Math.floor(ahead[0]), noseY = (int) Math.floor(ahead[1]), noseZ = (int) Math.floor(ahead[2]);
+        long noseMark = client.mark();
+        Reply nose = Reply.of(arrange("stellurgytest place 0 " + noseX + " " + noseY + " " + noseZ
+                + " minecraft:stone").raw())
                 .requireOk("a block before the nose");
         ArrangementFailure.requireArranged("the block before the nose was not placed: " + nose, nose.bool("placed"));
 
         // The outline half asks whether a block UNDER his cursor is outlined; with none under it, its
-        // silence would be about the aim. His client's own crosshair is read a few ticks after the block
-        // was placed; a block his client has not been sent yet fails this as an ARRANGEMENT, loudly. The
-        // server sends the block and the client draws it, so both clocks run the window.
-        advanceServerAndClient(VIEW_WINDOW_TICKS);
+        // silence would be about the aim. So the block must be in his CLIENT's world before his crosshair
+        // is read: linked on the client applying the server's block change, from a mark taken before the
+        // placement. A block his client was never sent fails this as an ARRANGEMENT, naming it.
+        ArrangementFailure.arranged(() -> client.awaitRecordWithFields(noseMark, "client_block_changed",
+                "the block placed before the nose must reach his client's world", ROUND_TRIP_TICKS,
+                "x", String.valueOf(noseX), "y", String.valueOf(noseY), "z", String.valueOf(noseZ),
+                "block", "minecraft:stone"));
+        bot().waitWorldTicks(1);
         JsonObject cursor = bot().reportMouseOver();
         ArrangementFailure.requireArranged("from the helm his cursor is on no block, so nothing could be"
                 + " outlined either way: " + cursor, "BLOCK".equals(cursor.get("typeOfHit").getAsString()));
@@ -334,6 +349,9 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * His view direction, read off his client twice {@link #VIEW_WINDOW_TICKS} apart and required to
      * agree, by vanilla's own rotation-to-direction formula; fills {@code eye} with his eye position.
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(VIEW_WINDOW_TICKS);",
+            why = "two reads of his view and the requirement names both: they must agree. Nothing in the game"
+                    + " decides that a view has come to rest, so no record answers.")
     private double[] steadyView(double[] eye) throws Exception {
         JsonObject first = bot().reportState();
         bot().waitWorldTicks(VIEW_WINDOW_TICKS);

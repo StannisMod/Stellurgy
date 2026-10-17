@@ -566,44 +566,20 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // rather than an invisible flip.
         awaitFlightSet(events, launchMark, rocketId, true,
                 "start-free-flight must put THIS rocket in flight");
-        // The v1 takeoff is a decaying kick + grace window; on a slow/contended
-        // harness the bot round-trips can outlast it and the rocket re-lands
-        // before the test's input arrives, failing on "never moved" instead of
-        // the contract under test. Confirm we're STILL airborne, retrying the start —
-        // same pattern as the assemble retry above. (The
-        // engine-start hover removes the kick and this crutch with it.)
-        // The re-issued start is the STIMULUS and `rocket_flight_set` is the link this class uses
-        // everywhere else: the flag's own write, carrying the rocket it was made on. The poll of
-        // `rocket info` this replaced could only sample the state that record announces, and its
-        // "not in flight" was equally produced by a kick that had decayed and by one that had not
-        // landed yet. The start is re-sent every 2 ticks, as the loop did, because a kick that
-        // decayed is not recoverable by reading longer.
-        if (rocketInfo(rocketId).inFlight) {
-            return rocketId;
-        }
-        long restartMark = events.markInstrumented();
-        try {
-            events.awaitMatching(restartMark, "rocket_flight_set",
-                    reply -> !Events.recordsWhereAll(reply, "e", String.valueOf(rocketId),
-                            "inFlight", "true").isEmpty(),
-                    "putting THIS rocket back in flight",
-                    "the takeoff kick must leave the rocket airborne long enough to be flown", 6,
-                    () -> arrange("stellurgytest rocket start-free-flight " + rocketId).raw(), 2);
-            return rocketId;
-        } catch (AssertionError neverLit) {
-            // Fall through to the diagnosis below, which prints what the rocket itself says.
-        }
+        // The v1 takeoff is a decaying kick + grace window, and the rocket can re-land before the
+        // test's input arrives. Whether it is STILL airborne is read once, here, and not bought by
+        // re-issuing the start until it is: a start repeated until the flag holds is a dose with a
+        // poll behind it, and a scenario whose rocket re-landed has not disproved anything about
+        // flight controls -- it is an arrangement that did not hold.
         RocketInfo lastInfo = rocketInfo(rocketId);
-        String last = lastInfo.raw();
         if (lastInfo.inFlight) {
             return rocketId;
         }
-        // ARRANGEMENT, and typed as one: a scenario whose rocket re-landed before it began has not
-        // disproved anything about flight controls. The log says which of the two happened — a
-        // launch that never committed, or one that committed and was undone by the touchdown
-        // detector — where the state read alone could not.
-        scenario().arrangementFailed("this rocket must be in flight after start-free-flight (retried"
-                + " 3 times, last state " + last + "). What the in-flight flag DID do since the"
+        // ARRANGEMENT, and typed as one. The log says which of the two happened — a launch that
+        // never committed, or one that committed and was undone by the touchdown detector — where
+        // the state read alone could not.
+        scenario().arrangementFailed("this rocket must be in flight after start-free-flight (state "
+                + lastInfo.raw() + "). What the in-flight flag DID do since the"
                 + " launch: " + events.since(launchMark, "rocket_flight_set"));
         return rocketId; // unreachable: arrangementFailed always throws
     }
@@ -1109,18 +1085,22 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
+    /** The climb dose before the cut, ticks of both clocks from R's arrival; the messages below say "twelve". */
+    private static final int CUT_CLIMB_DOSE_TICKS = 12;
+
+    /** The window the cut is judged over, ticks of both clocks from X's arrival; the message says "twelve". */
+    private static final int CUT_WINDOW_TICKS = 12;
+
     @LegacyWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
             + " the setpoint on a cut:"
             + " \"when the cut arrived 1.4499, twelve ticks later 2.0498\", 2026-09-28. The precondition at its"
             + " head is an arrangement and is not witnessed.")
     @Test
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(12); double myClimb ="
-            + " rocketInfo(rocketId).motionY;",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CUT_CLIMB_DOSE_TICKS);",
             why = "twelve ticks of R from its arrival is the dose, and the precondition is what they did — upward"
                     + " motion. Not a difference from the moment R arrived: the liftoff hover may still be"
                     + " rising then, and the pilot's setpoint takes over from zero.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(12); double myCut ="
-            + " rocketInfo(rocketId).motionY;",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(CUT_WINDOW_TICKS);",
             why = "a change of velocity is a value, not an event; no record answers.")
     public void throttleCutKeyNeutralisesThrust() throws Exception {
         // X (cut) with FA on zeroes the velocity setpoint even while R is held:
@@ -1131,7 +1111,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // the time a packet takes to cross is not charged against what is measured.
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
-        advanceServerAndClient(12);
+        advanceServerAndClient(CUT_CLIMB_DOSE_TICKS);
         double myClimb = rocketInfo(rocketId).motionY;
         assertTrue("precondition: R must be producing upward motion twelve ticks after it"
                         + " arrived, got " + myClimb,
@@ -1142,7 +1122,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
                 "holding X must deliver a throttle cut to this rocket");
         double myAtCut = rocketInfo(rocketId).motionY;
-        advanceServerAndClient(12);
+        advanceServerAndClient(CUT_WINDOW_TICKS);
         double myCut = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_X);
         bot().releaseKey(Keyboard.KEY_R);

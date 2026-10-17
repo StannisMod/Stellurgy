@@ -129,7 +129,7 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
         // check whose hands are on the stick.
         awaitEnteredSpace(events, entryMark, durableId,
                 "a ship with NOBODY at the controls must still cross out of the atmosphere",
-                SETTLE_TICKS, null);
+                SETTLE_TICKS);
         EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,

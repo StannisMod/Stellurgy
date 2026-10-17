@@ -309,7 +309,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                     + " seat packet or dummy) from a ship that got it and did not rise.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 12; i++) {",
             why = "the deflection — an input, not a wait.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> spinRates = new java.util.ArrayList<Double>();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(worldAndClient(0), SPIN_WINDOW_SAMPLES, SPIN_WINDOW_GAP,",
             why = "the hull's angular rate over SPIN_WINDOW_SAMPLES readings SPIN_WINDOW_GAP ticks of its world"
                     + " apart, with the cursor still deflected; the claim is on the LARGEST of them. No record"
                     + " says \"it turned\" — the attitude law integrates a torque every tick and nothing"
@@ -433,9 +433,13 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), scenarioDim, BRAKE_SETTLE_TICKS);",
             why = "the brake is the flight computer's, with the centred input linked above; the read is the"
                     + " server's ship report.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> hold = new java.util.ArrayList<Double>();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), HOLD_SAMPLES,",
             why = "HOLD_SAMPLES readings HOLD_TICKS_BETWEEN ticks of the cell's world apart; the claim is on the"
                     + " worst of them, so a rate that dips and rises back is caught.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.observe(worldAndClient(scenarioDim), SPIN_WINDOW_SAMPLES,",
+            why = "the premise's measurement: the hull's angular rate sampled with the cursor deflected, and the"
+                    + " LARGEST reading is what says it spins. Nothing decides that a hull turned -- the attitude"
+                    + " law integrates a torque every tick -- so no record answers.")
     @ServerOnly(at = "GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), HOLD_SAMPLES,",
             why = "the brake is the flight computer's, with the centred input linked above; the read is the"
                     + " server's ship report.")
@@ -899,6 +903,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                     + " craft that drifts and corrects reads zero at the end, so the extremum is the quantity"
                     + " and a last read would miss it. The hold never decides it is holding, so no record"
                     + " answers. What it cannot see: an excursion inside one 3-tick sample.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
+    @Wait(shape = Wait.Shape.STIMULUS, at = "cutTheCruise(10, \"the cut key must zero the cruise",
+            why = "how long the cut key is held; what it did -- the cruise zeroed -- is linked inside on the"
+                    + " computer's own cruise_setpoint_changed, so nothing after it waits on a state.")
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1429,6 +1438,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      */
     private static final int ROLE_DOSE_TICKS = 40;
 
+    /** The deck leg's dose: {@link #ROLE_DOSE_TICKS}, so the deck's count is taken over the helm's span. */
+    private static final int DECK_ROLE_DOSE_TICKS = ROLE_DOSE_TICKS;
+
     /**
      * The pilot receives the readout; the same player, off the helm and standing on the deck, does
      * not.
@@ -1460,11 +1472,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
             + " audience) fails \"standing on the deck, off the helm and with no console open, a passenger must"
             + " receive none of his ship's readouts\" with 4 received against the pilot's 4, 2026-09-30")
     @Test
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(ROLE_DOSE_TICKS); int atTheHelm ="
-            + " Events.recordsWhereAll(clientEvents().since(helmWindow, \"client_ship_readout_received\"),",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(ROLE_DOSE_TICKS);",
             why = "the dose both legs are compared over; the server sends, the client records.")
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(ROLE_DOSE_TICKS); String onDeck ="
-            + " clientEvents().since(deckWindow, \"client_ship_readout_received\");",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(DECK_ROLE_DOSE_TICKS);",
             why = "the same dose as at the helm.")
     public void aShipsReadoutReachesItsPilotAndNotAPassenger() throws Exception {
         FixtureSite site = site();
@@ -1526,7 +1536,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         deckCaptureOfThisShip(physicsId, "off the helm, the player must be standing aboard this"
                 + " craft — a passenger, not a bystander");
         long deckWindow = clientEvents().mark();
-        advanceServerAndClient(ROLE_DOSE_TICKS);
+        advanceServerAndClient(DECK_ROLE_DOSE_TICKS);
         String onDeck = clientEvents().since(deckWindow, "client_ship_readout_received");
         Events.assertInstrumentRan(onDeck, "client_ship_readout_received",
                 "a passenger received no readout — the recorder must be one that fires, as it did"

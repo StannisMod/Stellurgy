@@ -171,17 +171,17 @@ seam, so armour answers it exactly as it answers everything else. What does not 
 STRIKE happens every tick, and a beam that resolved once would be a weapon a player could never see
 working. `HeldBeam.java` [V] [T `ABeamIsHeldNotThrownTest`]
 
-**MECH-SHOT-29 — A beam is replicated as a STATE that is repeated, not as two events.** A round is
-announced at the muzzle and at the end because its path is determined by the launch numbers; a beam has
-no such determinism — it is wherever its gun points THIS tick and it stops the instant the trigger is
-released. So the client is sent the current segment whenever it moves or the light goes on or off, plus
-a heartbeat while it burns, and it DROPS a beam nobody has mentioned lately. The staleness rule is the
-load-bearing half: a gun that is blown up, unloaded, or left behind by a player walking out of range
-stops burning with no tick in which to say so, and an edge-triggered channel would leave a beam drawn
-across the sky until the player relogged. The heartbeat must therefore be quicker than the client's
-timeout, which is a two-sided arrangement the test reads from both ends rather than restating.
-`BeamReplication.java`, `PacketBeamState.java`, `ClientBeamTracker.java`, `RenderBeams.java` [V]
-[T `BeamReplicationCadenceTest`, `BeamReachesClientTest`]
+- **MECH-SHOT-29 — A beam is replicated as a STATE that is repeated, not as two events.** A round is
+  announced at the muzzle and at the end because its path is determined by the launch numbers; a beam has
+  no such determinism — it is wherever its gun points THIS tick and it stops the instant the trigger is
+  released. So the client is sent the current segment whenever it moves or the light goes on or off, plus
+  a heartbeat while it burns, and it DROPS a beam nobody has mentioned lately. The staleness rule is the
+  load-bearing half: a gun that is blown up, unloaded, or left behind by a player walking out of range
+  stops burning with no tick in which to say so, and an edge-triggered channel would leave a beam drawn
+  across the sky until the player relogged. The heartbeat must therefore be quicker than the client's
+  timeout, which is a two-sided arrangement the test reads from both ends rather than restating.
+  `BeamReplication.java`, `PacketBeamState.java`, `ClientBeamTracker.java`, `RenderBeams.java` [V]
+  [T `BeamReplicationCadenceTest`, `WeaponClientGroupTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot`]
 
 **MECH-SHOT-32 — A shell that could not pay the whole price does not stop a beam.** `isIntercepted`
 is true on an UNDERPAY as well as on a full stop; `isFullyAbsorbed` is the one that means the shell
@@ -233,21 +233,21 @@ a burst of cheap fire into a way of deleting incoming fire. `ShotRegistry.java:7
 being looked up per tick, because the lookup's answer changes when a region unloads and a round that
 curves differently depending on who is watching cannot be aimed. `ShotEnvironment.java:6-16` [V]
 
-**MECH-SHOT-13 — A client is TOLD about a round whose path passes near it, once.** The path is fully
-determined by the launch numbers, so replication is one packet at the muzzle plus one at the end rather
-than a position stream: the client integrates its own copy with the same arithmetic and is corrected
-when the server says the round stopped. The end packet is what keeps a client from drawing a round
-sailing through the hull that stopped it. `ShotReplication.java:43-79`, `PacketShotSpawn.java:12-27`,
-`PacketShotEnd.java:12-21`, `ClientShotTracker.java:13-28` [V]
-[T `ShotReachesClientTest`]
+- **MECH-SHOT-13 — A client is TOLD about a round whose path passes near it, once.** The path is fully
+  determined by the launch numbers, so replication is one packet at the muzzle plus one at the end rather
+  than a position stream: the client integrates its own copy with the same arithmetic and is corrected
+  when the server says the round stopped. The end packet is what keeps a client from drawing a round
+  sailing through the hull that stopped it. `ShotReplication.java:43-79`, `PacketShotSpawn.java:12-27`,
+  `PacketShotEnd.java:12-21`, `ClientShotTracker.java:13-28` [V]
+  [T `WeaponClientGroupTest#aRoundThatStopsNearbyIsToldToTheClientAsEnded`]
 
-**MECH-SHOT-14 — Who is told is decided by the PATH, not by the muzzle.** A player is told when the
-round's forward segment (capped at 200 ticks of flight) passes within `shotVisibilityRadius` of them —
-which is what makes a round fired from four kilometres away visible to the person it is fired AT, the
-case a muzzle-distance filter gets exactly backwards. The end packet is keyed on the end point instead:
-a player too far to be in range there cannot see the impact either, and their copy ages out on its
-stated lifetime. `ShotReplication.java:33-40,43-79`, `ProximityBroadcast.java` (MECH-SHOT-30) [V]
-[T `ShotReachesClientTest` — the far-shot control]
+- **MECH-SHOT-14 — Who is told is decided by the PATH, not by the muzzle.** A player is told when the
+  round's forward segment (capped at 200 ticks of flight) passes within `shotVisibilityRadius` of them —
+  which is what makes a round fired from four kilometres away visible to the person it is fired AT, the
+  case a muzzle-distance filter gets exactly backwards. The end packet is keyed on the end point instead:
+  a player too far to be in range there cannot see the impact either, and their copy ages out on its
+  stated lifetime. `ShotReplication.java:33-40,43-79`, `ProximityBroadcast.java` (MECH-SHOT-30) [V]
+  [T `WeaponClientGroupTest#aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot` — the far-shot control]
 
 **MECH-SHOT-12 — A shot ends for a stated reason at a stated place, remembered briefly after it is
 gone.** Absence from the registry cannot tell a hit from a timeout, so the last 64 endings keep their

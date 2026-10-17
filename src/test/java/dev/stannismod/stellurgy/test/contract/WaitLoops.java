@@ -271,10 +271,12 @@ final class WaitLoops {
     private final Set<String> spanningNow = new TreeSet<>();
     /**
      * owner#name+desc of every test-source method that hands an int parameter of its own, unchanged, to the tick
-     * count of a clock primitive or of another such method: a call to it chooses a number of ticks as a
-     * primitive's call does ({@code advanceServerAndClient(n)}).
+     * count of a clock primitive or of another such method -- with the ordinals of those parameters: a call to it
+     * chooses a number of ticks as a primitive's call does ({@code advanceServerAndClient(n)}). Only a TICK
+     * COUNT makes a wrapper: a world id handed on to {@code advanceWorld(client, dim, ticks)} is not one, so a
+     * helper that advances a constant stretch of the world it was told is judged inside, by its own claims.
      */
-    private final Set<String> tickWrappers = new HashSet<>();
+    private final Map<String, Set<Integer>> tickWrappers = new HashMap<>();
     /** Every event-log wait driving a stimulus: {method, line, claimed|UNCLAIMED, source file, lambda}. */
     private final List<String[]> stimulusWaits = new ArrayList<>();
     /** Every straight-line advance followed by a read: {method, line, named|UNNAMED, source file, via}. */
@@ -490,34 +492,47 @@ final class WaitLoops {
         while (grew) {
             grew = false;
             for (Map.Entry<String, MethodNode> e : methods.entrySet()) {
-                if (tickWrappers.contains(e.getKey()) || instrumentKey(e.getKey())) {
+                if (instrumentKey(e.getKey())) {
                     continue;
                 }
                 AbstractInsnNode[] code = e.getValue().instructions.toArray();
-                for (int i = 0; i < code.length && !tickWrappers.contains(e.getKey()); i++) {
+                for (int i = 0; i < code.length; i++) {
                     if (!(code[i] instanceof MethodInsnNode)) {
                         continue;
                     }
                     MethodInsnNode mi = (MethodInsnNode) code[i];
-                    String target = declared(mi.owner, mi.name, mi.desc);
-                    if (!primitive(mi.owner, mi.name, mi.desc) && (target == null || !tickWrappers.contains(target))) {
-                        continue;
-                    }
-                    Type[] args = Type.getArgumentTypes(mi.desc);
-                    for (int a = 0; a < args.length; a++) {
-                        if (args[a].getSort() != Type.INT) {
-                            continue;
-                        }
+                    for (int a : tickArguments(mi)) {
                         SourceValue v = argument(e.getKey(), code, i, a);
-                        if (v != null && parameterHandedOnInt(e.getValue(), v) != null) {
-                            tickWrappers.add(e.getKey());
+                        Integer p = v == null ? null : parameterHandedOnInt(e.getValue(), v);
+                        if (p != null && tickWrappers.computeIfAbsent(e.getKey(), k -> new TreeSet<>()).add(p)) {
                             grew = true;
-                            break;
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * The ordinals of the arguments of the call {@code mi} that are a TICK COUNT: every int argument of a clock
+     * primitive save the world id of {@code GameTicks.advanceWorld(client, dim, ticks)}, and the parameters a
+     * test-source wrapper hands on to one ({@link #tickWrappers}); none for any other call.
+     */
+    private Set<Integer> tickArguments(MethodInsnNode mi) {
+        if (primitive(mi.owner, mi.name, mi.desc)) {
+            Set<Integer> out = new TreeSet<>();
+            Type[] args = Type.getArgumentTypes(mi.desc);
+            for (int a = 0; a < args.length; a++) {
+                boolean worldId = GAME_TICKS.equals(mi.owner) && "advanceWorld".equals(mi.name) && a == 1;
+                if (args[a].getSort() == Type.INT && !worldId) {
+                    out.add(a);
+                }
+            }
+            return out;
+        }
+        String target = declared(mi.owner, mi.name, mi.desc);
+        Set<Integer> handed = target == null ? null : tickWrappers.get(target);
+        return handed == null ? Collections.<Integer>emptySet() : new TreeSet<>(handed);
     }
 
     /** Whether a method key belongs to a class that IS the clock ({@link #instrument}). */
@@ -1341,7 +1356,7 @@ final class WaitLoops {
             int line = lineAt(code, i);
             MethodInsnNode mi = (MethodInsnNode) code[i];
             String target = declared(mi.owner, mi.name, mi.desc);
-            boolean dose = primitive(mi.owner, mi.name, mi.desc) || (target != null && tickWrappers.contains(target));
+            boolean dose = primitive(mi.owner, mi.name, mi.desc) || (target != null && tickWrappers.containsKey(target));
             if (!dose) {
                 continue;
             }

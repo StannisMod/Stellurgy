@@ -54,18 +54,18 @@ the `turret read` probe. A gun's silent states are only "holding fire" and "noth
 `enableFireControlSensor` is a different question and survives (`fire-control-sensor` INV-FCS-02).
 [V]
 
-**MECH-GUN-34 — The gun tells the players around it what its beam is doing, on every path.** The beam
-has no existence apart from the gun holding it, so there is no register of live beams to walk and no
-static map keyed by position: each controller keeps its own replication channel and offers it this
-tick's state. Every way of NOT burning — no trigger, too hot, saving up, no line of fire, rebuilt into a
-thrower, blown up, chunk unloaded — reaches that channel by the same road burning does, because a path
-that ended without saying so would leave a beam drawn on a gun that had stopped firing. The channel
-decides what is worth a packet (`projectile-substrate` MECH-SHOT-29); the gun decides only what is true.
-`TileTurret#holdBeam`, `#burnOneTick`, `#extinguishBeam` [V]
-[T `BeamReachesClientTest`, `BeamReplicationCadenceTest`]
+- **MECH-GUN-34 — The gun tells the players around it what its beam is doing, on every path.** The beam
+  has no existence apart from the gun holding it, so there is no register of live beams to walk and no
+  static map keyed by position: each controller keeps its own replication channel and offers it this
+  tick's state. Every way of NOT burning — no trigger, too hot, saving up, no line of fire, rebuilt into a
+  thrower, blown up, chunk unloaded — reaches that channel by the same road burning does, because a path
+  that ended without saying so would leave a beam drawn on a gun that had stopped firing. The channel
+  decides what is worth a packet (`projectile-substrate` MECH-SHOT-29); the gun decides only what is true.
+  `TileTurret#holdBeam`, `#burnOneTick`, `#extinguishBeam` [V]
+  [T `WeaponClientGroupTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot`, `BeamReplicationCadenceTest`]
 
-**MECH-GUN-37 — What the gun offers the channel is a PATH, not two ends.** A beam can be turned — a mirror sends it back along the reflected direction as a further leg of the same tick — so the corner is a real point on the line it occupies. The tick's emission carries the whole path, the channel compares the whole path when deciding whether the drawing has moved (two ends can stay put while a corner walks along the plating), and the packet carries a point count. A beam nothing turned is exactly its two ends, which is the overwhelming case and costs one extra byte. `HeldBeam.Emission#path`, `TileTurret#replicatedPath`, `BeamReplication.Channel#offer` [V]
-[T `ABentBeamIsDrawnBentTest` — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
+- **MECH-GUN-37 — What the gun offers the channel is a PATH, not two ends.** A beam can be turned — a mirror sends it back along the reflected direction as a further leg of the same tick — so the corner is a real point on the line it occupies. The tick's emission carries the whole path, the channel compares the whole path when deciding whether the drawing has moved (two ends can stay put while a corner walks along the plating), and the packet carries a point count. A beam nothing turned is exactly its two ends, which is the overwhelming case and costs one extra byte. `HeldBeam.Emission#path`, `TileTurret#replicatedPath`, `BeamReplication.Channel#offer` [V]
+  [T `WeaponClientGroupTest#aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt` — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
 
 ## Responsibility boundary
 
@@ -248,13 +248,13 @@ outside the real world, and both the shot substrate and the damage engine read t
 barrel would stop being something a round could hit. `RendererTurret.java:13-25`,
 `TileTurret#getBarrelLength` [V]
 
-**MECH-GUN-18 — The client is sent the COMMAND, not the pose.** The bearing changes every tick while
-a mount swings and the command changes once per engagement, so the tile's update tag carries the
-commanded bearing, the traverse rate and the drive state, and the client runs the same
-`TurretMechanism` against them. Sent only when the command has moved more than 2 degrees or the drive
-state changed — a battery would otherwise put its barrels on the connection at the same rate as its
-rounds. `TileTurret.java:198-224`, `:330-360` [V]
-[T `TurretAimReachesClientTest` — falsified against a build with the sync disabled]
+- **MECH-GUN-18 — The client is sent the COMMAND, not the pose.** The bearing changes every tick while
+  a mount swings and the command changes once per engagement, so the tile's update tag carries the
+  commanded bearing, the traverse rate and the drive state, and the client runs the same
+  `TurretMechanism` against them. Sent only when the command has moved more than 2 degrees or the drive
+  state changed — a battery would otherwise put its barrels on the connection at the same rate as its
+  rounds. `TileTurret.java:198-224`, `:330-360` [V]
+  [T `WeaponClientGroupTest#theBearingTheServerCommandsArrivesAtTheClient` — falsified against a build with the sync disabled]
 
 **MECH-GUN-44 — Only a player within reach operates a console or a sensor.**
 `TileWeaponConsole#canInteractWithContainer` and `TileFireControlSensor#canInteractWithContainer`
@@ -266,52 +266,52 @@ Needed because `PacketMachine` resolves the CLIENT's dimension and position (a g
 every other machine). Pinned by `MachineGuiClientGroupTest#aWeaponConsolePressFromBeyondReachChangesNothing`
 (a forged press from 24 blocks is judged out of reach and changes nothing). `[T]`
 
-**MECH-GUN-19 — A console is a stateless EDITOR, not an owner.** It keeps no target, no hold-fire
-flag and no copy of the network's state; every button writes to `WeaponNetworkState` and every
-readout reads from it. Two consoles on one network therefore cannot disagree — they are looking at
-the same object — and breaking one loses the window, not the setting. Its `writeToNBT` deliberately
-saves nothing of its own. `TileWeaponConsole.java:39-49,96-161,275-282` [V]
-[T `WeaponConsoleTest#aConsolePointsEveryGunOnItsNetwork`]
-Its BUTTONS reach that state through a packet: a GUI button fires on the client, where the network
-state does not exist, so Hold Fire and Clear Target send a `PacketMachine` and the server applies
-them in `useNetworkData` (the toggle computed from the server's own flag), under the GUI's
-`canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileWeaponConsole.java:595-603`); nothing is written to the client tile, which a dedicated server would never hear. `TileWeaponConsole#onInventoryButtonPressed`, `#useNetworkData` [V]
-[T `WeaponGuiButtonsReachTheServerTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`]
+- **MECH-GUN-19 — A console is a stateless EDITOR, not an owner.** It keeps no target, no hold-fire
+  flag and no copy of the network's state; every button writes to `WeaponNetworkState` and every
+  readout reads from it. Two consoles on one network therefore cannot disagree — they are looking at
+  the same object — and breaking one loses the window, not the setting. Its `writeToNBT` deliberately
+  saves nothing of its own. `TileWeaponConsole.java:39-49,96-161,275-282` [V]
+  [T `WeaponConsoleTest#aConsolePointsEveryGunOnItsNetwork`]
+  Its BUTTONS reach that state through a packet: a GUI button fires on the client, where the network
+  state does not exist, so Hold Fire and Clear Target send a `PacketMachine` and the server applies
+  them in `useNetworkData` (the toggle computed from the server's own flag), under the GUI's
+  `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileWeaponConsole.java:595-603`); nothing is written to the client tile, which a dedicated server would never hear. `TileWeaponConsole#onInventoryButtonPressed`, `#useNetworkData` [V]
+  [T `WeaponClientGroupTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`]
 
-**MECH-GUN-38 — The console's screen is TOLD by the server, while it is open.** Every line the screen
-shows — network status, hold-fire, gun and on-target counts, the target, the sensor's contact — is
-the network's or the guns' state, which exists only in the server session. So the server builds the
-readout (`readoutTag`) and a module in the open container (`ReadoutSync`) sends it to that player as a
-`PacketMachine` on opening and again whenever it differs from the last one sent; the client only
-translates it into lines. A window property cannot carry it (a `short`; a target coordinate is not),
-and an update tag would make every console push forever for screens nobody has open. The client
-builds its lines BLANK until the first readout lands, rather than answering "no network" from its own
-empty JVM. The client never derives a line itself (`TileWeaponConsole.java:432-440`): on a dedicated server the panel would always read "no network" / not holding, and in single player it would read the integrated server's objects
-across threads. `TileWeaponConsole#getModules`, `#readoutTag`, `#showReadout`,
-`ReadoutSync` [V]
-[T `WeaponGuiButtonsReachTheServerTest#theConsolesScreenShowsTheServersNetwork`]
+- **MECH-GUN-38 — The console's screen is TOLD by the server, while it is open.** Every line the screen
+  shows — network status, hold-fire, gun and on-target counts, the target, the sensor's contact — is
+  the network's or the guns' state, which exists only in the server session. So the server builds the
+  readout (`readoutTag`) and a module in the open container (`ReadoutSync`) sends it to that player as a
+  `PacketMachine` on opening and again whenever it differs from the last one sent; the client only
+  translates it into lines. A window property cannot carry it (a `short`; a target coordinate is not),
+  and an update tag would make every console push forever for screens nobody has open. The client
+  builds its lines BLANK until the first readout lands, rather than answering "no network" from its own
+  empty JVM. The client never derives a line itself (`TileWeaponConsole.java:432-440`): on a dedicated server the panel would always read "no network" / not holding, and in single player it would read the integrated server's objects
+  across threads. `TileWeaponConsole#getModules`, `#readoutTag`, `#showReadout`,
+  `ReadoutSync` [V]
+  [T `WeaponClientGroupTest#theConsolesScreenShowsTheServersNetwork`]
 
-**MECH-GUN-39 — A player names a target by LOOKING at it through a linker bound to the weapon
-(ruled 2026-10-04).** Two acts. **Bind**: a linker clicked on a console (a SNEAKING right-click — a
-plain one opens the console's screen, as on every machine with one) or on a gun is bound to that
-tile; a linker already bound elsewhere is re-bound, because the second click has no other meaning
-here. **Designate**: a right-click with the bound linker anywhere that is not a linkable machine — into
-the air, or on an ordinary block within arm's reach — traces the player's line of sight and hands the
-tile the first thing it crosses. A creature becomes an entity order (followed as it moves, MECH-GUN-21);
-a block becomes a POINT order at the spot the sight landed on, in WORLD coordinates — a ship block's
-point is reported globally by the physics substrate, so no frame conversion is needed. One replaces
-the other, because a followed entity outranks a point and a stale order would win. Bound to a CONSOLE
-the order goes to the network (every gun on it); bound to a GUN it is that gun's own order, which a
-network order still outranks (MECH-GUN-14). A console on no network refuses and says so. The trace
-reaches the server's view distance — the farthest the server keeps the world loaded around a player,
-so nothing he can see is beyond it and a trace past it would load chunks for a click. Every refusal
-the player could not otherwise tell from success is a chat line: nothing in sight, a binding whose
-machine is not loaded here, a console with no network. The design question (a click on a block reaches
-only ~5 blocks, useless for a battery) was put to the maintainer, who chose the line-of-sight form.
-Both `onLinkStart` and `onLinkComplete` bind the linker to the console (`TileWeaponConsole.java:397-408`); the order itself is given by `onLinkAimed` (`:415`). `ItemLinker#onItemRightClick`, `#lineOfSight`, `ILinkAimedTile`,
-`LinkerDesignation`, `TileWeaponConsole#onLinkAimed`, `TileTurret#onLinkAimed` [V]
-[T `ALinkerNamesTheBatteryItsTargetTest` — a real client binds, looks and clicks; the battery turns
-onto a block 22 blocks off and fires, then onto a creature]
+- **MECH-GUN-39 — A player names a target by LOOKING at it through a linker bound to the weapon
+  (ruled 2026-10-04).** Two acts. **Bind**: a linker clicked on a console (a SNEAKING right-click — a
+  plain one opens the console's screen, as on every machine with one) or on a gun is bound to that
+  tile; a linker already bound elsewhere is re-bound, because the second click has no other meaning
+  here. **Designate**: a right-click with the bound linker anywhere that is not a linkable machine — into
+  the air, or on an ordinary block within arm's reach — traces the player's line of sight and hands the
+  tile the first thing it crosses. A creature becomes an entity order (followed as it moves, MECH-GUN-21);
+  a block becomes a POINT order at the spot the sight landed on, in WORLD coordinates — a ship block's
+  point is reported globally by the physics substrate, so no frame conversion is needed. One replaces
+  the other, because a followed entity outranks a point and a stale order would win. Bound to a CONSOLE
+  the order goes to the network (every gun on it); bound to a GUN it is that gun's own order, which a
+  network order still outranks (MECH-GUN-14). A console on no network refuses and says so. The trace
+  reaches the server's view distance — the farthest the server keeps the world loaded around a player,
+  so nothing he can see is beyond it and a trace past it would load chunks for a click. Every refusal
+  the player could not otherwise tell from success is a chat line: nothing in sight, a binding whose
+  machine is not loaded here, a console with no network. The design question (a click on a block reaches
+  only ~5 blocks, useless for a battery) was put to the maintainer, who chose the line-of-sight form.
+  Both `onLinkStart` and `onLinkComplete` bind the linker to the console (`TileWeaponConsole.java:397-408`); the order itself is given by `onLinkAimed` (`:415`). `ItemLinker#onItemRightClick`, `#lineOfSight`, `ILinkAimedTile`,
+  `LinkerDesignation`, `TileWeaponConsole#onLinkAimed`, `TileTurret#onLinkAimed` [V]
+  [T `WeaponClientGroupTest#aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker` — a real client binds, looks and clicks; the battery turns
+  onto a block 22 blocks off and fires, then onto a creature]
 
 **MECH-GUN-40 — A pilot names a SHIP as his battery's target with T (rulings 2026-10-05).**
 *"по нажатию T выдавать целеуказание на корабль, находящийся в окрестности курсора игрока (по сути же
@@ -369,22 +369,22 @@ the target, so a battery watching an approaching ship does not have to forget wh
 stop shooting. Releasing it resumes. `TileWeaponConsole.java:133-150`, `WeaponNetworkState.java:36-45`
 [V] [T `WeaponConsoleTest#holdFireStopsTheShootingAndKeepsTheTarget`]
 
-**MECH-GUN-21 — A gun tracks an ENTITY, not only a point.** A target that moves is followed: the
-aim is recomputed each tick from the entity's body centre, and an entity that dies or logs out simply
-stops being found, which leaves the mount holding its bearing rather than swinging to a remembered
-position. `TileTurret.java:172-206` [V]
-[T `TurretFriendOrFoeTest`]
+- **MECH-GUN-21 — A gun tracks an ENTITY, not only a point.** A target that moves is followed: the
+  aim is recomputed each tick from the entity's body centre, and an entity that dies or logs out simply
+  stops being found, which leaves the mount holding its bearing rather than swinging to a remembered
+  position. `TileTurret.java:172-206` [V]
+  [T `WeaponClientGroupTest#aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot`]
 
-**MECH-GUN-22 — Friend-or-foe is a credential the TARGET carries.** *(Only a
-PLAYER can present it — `CodeUtils.entityHasMatchingCode` returns false for anything else,
-`affs/util/CodeUtils.java:43`. The network's code survives a restart on its consoles — MECH-GUN-43.)* An entity presenting the
-installation's access code is a friend for exactly as long as it carries it; nothing keeps a list of
-who is friendly. A gun with no code recognises nobody, deliberately: a battery that shoots nothing is
-indistinguishable from a broken one. The code lives on the NETWORK when there is one, because "whose
-side are we on" is a property of the installation and guns that disagreed would shoot the crew at
-random. `TileTurret.java:208-230`, `TileWeaponConsole.java:133-160`, `CodeUtils#entityHasMatchingCode` [V]
-[T `TurretFriendOrFoeTest`, falsified: with the check removed the gun shoots the code-carrying
-player]
+- **MECH-GUN-22 — Friend-or-foe is a credential the TARGET carries.** *(Only a
+  PLAYER can present it — `CodeUtils.entityHasMatchingCode` returns false for anything else,
+  `affs/util/CodeUtils.java:43`. The network's code survives a restart on its consoles — MECH-GUN-43.)* An entity presenting the
+  installation's access code is a friend for exactly as long as it carries it; nothing keeps a list of
+  who is friendly. A gun with no code recognises nobody, deliberately: a battery that shoots nothing is
+  indistinguishable from a broken one. The code lives on the NETWORK when there is one, because "whose
+  side are we on" is a property of the installation and guns that disagreed would shoot the crew at
+  random. `TileTurret.java:208-230`, `TileWeaponConsole.java:133-160`, `CodeUtils#entityHasMatchingCode` [V]
+  [T `WeaponClientGroupTest#aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot`, falsified: with the check removed the gun shoots the code-carrying
+  player]
 
 **MECH-GUN-36 — Commanding a battery is UNGUARDED, and that is the ruling (2026-08-20).** The
 console's commands — `assignTarget`, `assignTargetEntity`, `setAccessCode`, `clearTarget`,

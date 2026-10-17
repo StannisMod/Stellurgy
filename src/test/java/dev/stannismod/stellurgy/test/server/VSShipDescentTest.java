@@ -79,7 +79,7 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // over and over until it agrees.
         awaitEnteredSpace(events, entryMark, shipId,
                 "precondition: the ship must enter space, or there is nothing to descend from",
-                SETTLE_TICKS, null);
+                SETTLE_TICKS);
         EntryStatus entryStatus = EntryStatus.forShip(c -> read(c).raw(), shipId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = entryStatus.slotDim;

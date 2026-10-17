@@ -1378,6 +1378,17 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
 
     /**
+     * The double-tap that starts creative flight, in client ticks: press, gap, press. Three parts of one
+     * input, each its own number; their sum must stay inside vanilla's seven-tick
+     * {@code EntityPlayerSP.flyToggleTimer} for the second press to toggle flight.
+     */
+    private static final int DOUBLE_TAP_FIRST_PRESS_TICKS = 2;
+    /** The gap between the two presses of the double-tap, client ticks. */
+    private static final int DOUBLE_TAP_GAP_TICKS = 2;
+    /** The second press of the double-tap, client ticks. */
+    private static final int DOUBLE_TAP_SECOND_PRESS_TICKS = 2;
+
+    /**
      * A pilot who dismounts and takes to creative flight is never pulled back down by the deck.
      */
     @LegacyWitness(prose = "only with BOTH defences removed — the dismount hold's exclusion of an excluded"
@@ -1389,15 +1400,14 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line"
             + " decides.")
     @Test
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE);"
-            + " bot().waitWorldTicks(2);",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(DOUBLE_TAP_FIRST_PRESS_TICKS);",
             why = "the first press. Vanilla toggles flight when a second jump press lands within seven client"
                     + " ticks of the first (`EntityPlayerSP.flyToggleTimer`), so the three two-tick intervals"
                     + " here ARE the double-tap; overshoot that pushed them past seven would fail loudly, on"
                     + " the rise check after the window.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().holdKey(Keyboard.KEY_SPACE);",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(DOUBLE_TAP_GAP_TICKS);",
             why = "the gap between the two presses")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE); double y0 =",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(DOUBLE_TAP_SECOND_PRESS_TICKS);",
             why = "the second press")
     @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 25; i++) {",
             why = "the worst DROP below the running high-water mark is an extremum over the whole hold, which no"
@@ -1429,11 +1439,11 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         arrange("stellurgytest player dismount");
         // Double-tap space IMMEDIATELY - inside the hold window - to start creative flight.
         bot().holdKey(Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
+        bot().waitWorldTicks(DOUBLE_TAP_FIRST_PRESS_TICKS);
         bot().releaseKey(Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
+        bot().waitWorldTicks(DOUBLE_TAP_GAP_TICKS);
         bot().holdKey(Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2);
+        bot().waitWorldTicks(DOUBLE_TAP_SECOND_PRESS_TICKS);
         bot().releaseKey(Keyboard.KEY_SPACE);
 
         // Hold space well past the hold window: a flying player RISES steadily and, on this
@@ -2401,6 +2411,11 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- Deck-frame look: the walking crew's aim lives in the deck frame ------------------------
 
+    /** Ticks of both clocks the hold is given to slew the deck to its first roll, sixty degrees. */
+    private static final int AIM_FIRST_ROLL_SLEW_TICKS = 150;
+    /** Ticks of both clocks the hold is given to slew the deck on to its second roll, eighty-five degrees. */
+    private static final int AIM_SECOND_ROLL_SLEW_TICKS = 150;
+
     /**
      * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
      */
@@ -2409,14 +2424,14 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts"
             + " after the roll were not touched and are not witnessed.")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); double[] up = shipUpFromInfo(shipInfo());",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(AIM_FIRST_ROLL_SLEW_TICKS);",
             why = "an attitude converges and nothing in production declares it reached, so there is no record to"
                     + " wait on. Overshoot brings the hull nearer its commanded 60 degrees, which is inside the"
                     + " band.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < DECK_LOOK_TURNS; i++) {",
             why = "the swept ANGLE is a sum over the steps, which no record could carry. What it cannot see: how"
                     + " the look travelled inside one step.")
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); double[] up2 = shipUpFromInfo(shipInfo());",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(AIM_SECOND_ROLL_SLEW_TICKS);",
             why = "overshoot only lets the deck turn further, which the roll gate measures instead of assuming.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int dir = 0; dir < 4; dir++) {",
             why = "four legs whose result is an extremum — the largest yaw divergence across the four directions."
@@ -2494,7 +2509,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
-        advanceServerAndClient(150);
+        advanceServerAndClient(AIM_FIRST_ROLL_SLEW_TICKS);
         double[] up = shipUpFromInfo(shipInfo());
         scenario().requireArranged("the ship must be steeply rolled for the frames to diverge (upY " + upBeforeRoll
                         + " -> " + up[1] + ")",
@@ -2578,7 +2593,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the second roll",
                 Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0").raw()).bool("commanded"));
-        advanceServerAndClient(150);
+        advanceServerAndClient(AIM_SECOND_ROLL_SLEW_TICKS);
         double[] up2 = shipUpFromInfo(shipInfo());
         double rolledBy = Math.toDegrees(Math.acos(clampUnit(dot(up, up2))));
         // THE TEST'S OWN sensitivity bar: the leg below asks whether the aim TURNED WITH the deck,

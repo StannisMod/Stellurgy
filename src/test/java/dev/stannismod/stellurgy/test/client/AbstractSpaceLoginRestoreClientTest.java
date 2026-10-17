@@ -1687,6 +1687,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * @param key  the pilot's vertical-up key — the only key {@link PilotThrust} drives
      * @param what what this climb proves, for the failure — the caller's own sentence
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "PilotThrust.climb(bot(), serverEvents(), serverHarness.client(),",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     private double climbWith(int key, double from, String what, boolean arrangement)
             throws Exception {
         assertTrue("climbWith drives the vertical-up key only", key == Keyboard.KEY_R);

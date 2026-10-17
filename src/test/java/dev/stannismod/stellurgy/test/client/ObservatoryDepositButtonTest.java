@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.TelescopeReading;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -50,6 +51,12 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
             + " `crystal_deposited` carrying pos = … was recorded within 200 ticks\". THE WORLD LEARNS —"
             + " {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: \"after the click a pad here must"
             + " be offered that world: … known:false\".")
+    @RedWitness(verdict = "a right-click on the complete observatory opens its GUI",
+            member = "BlockMultiblockMachine#onBlockActivated",
+            at = "playerIn.openGui(Constants.modId, guiId, worldIn, pos.getX(), pos.getY(), pos.getZ());",
+            replacedBy = ";",
+            fails = "the right-click at 5200,150,5200 must open a GUI — no `client_gui_opened`",
+            on = "2026-10-16")
     @Test
     public void pressingDepositTeachesTheWorldTheCrystalsAddresses() throws Exception {
         String where = "0 " + X + " " + Y + " " + Z;

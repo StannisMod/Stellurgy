@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -100,6 +101,11 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
             fails = "asking for an immediate load of a ship the world was already loading in the background took"
                     + " the dedicated server down",
             on = "2026-10-12")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), BOTH_WANTERS_SERVED_TICKS);",
+            why = "two reads of the server's clock around the ticks on which both wanters are served, and the"
+                    + " verdict names both. A link would end too early: the ship's load is announced when the"
+                    + " FIRST wanter is served, and the second -- the satisfied request that used to throw -- is"
+                    + " served by a skip that writes nothing, so only a clock seen to pass it says it was survived.")
     public void anImmediateLoadOfAPermanentlyLoadedShipDoesNotKillTheServer() throws Exception {
         final int baseX = 8200, baseZ = 8200;
         ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the ship has to UNLOAD before anything can ask for it twice");

@@ -13,11 +13,8 @@ import net.minecraft.util.EnumHand;
  *
  * <p>The right-click &rarr; server {@code onBlockActivated} &rarr; {@code openGui} &rarr;
  * client {@code displayGuiScreen} round-trip is driven over a socket bridge to
- * a real Minecraft client. A single {@code rightClickBlock} call is
- * occasionally a no-op (the interaction lands a tick before the chunk/player is
- * fully settled, or the packet is otherwise dropped), and no amount of polling
- * recovers a click that never registered — so {@link #openGuiByRightClick}
- * <em>re-issues</em> the right-click between polls.</p>
+ * a real Minecraft client. {@link #openGuiByRightClick} clicks once and links on the
+ * client's own record of the screen it was told to display.</p>
  */
 final class ClientGuiTestSupport {
 
@@ -30,9 +27,8 @@ final class ClientGuiTestSupport {
     }
 
     /**
-     * Right-clicks the block at (x,y,z) until a GUI screen opens, re-issuing the
-     * click each attempt. Returns the open screen's class, or {@code ""} if no
-     * GUI opened across all attempts.
+     * Right-clicks the block at (x,y,z) once and waits for the client to display a screen;
+     * fails when it never does. Returns the open screen's class as the client reports it after.
      */
     static String openGuiByRightClick(ClientBot bot, Events clientEvents, int x, int y, int z)
             throws Exception {
@@ -40,26 +36,28 @@ final class ClientGuiTestSupport {
         if (!already.isEmpty()) {
             return already;
         }
-        long mark = clientEvents.mark();
-        // The click is the STIMULUS and `client_gui_opened` is the link: the recorder sits on
-        // GuiOpenEvent at LOWEST with receiveCanceled, so a CANCELLED open is recorded too and a
-        // test that finds one has learned exactly what it needed. `gui` is "none" when a screen
+        // ONE click, from a mark taken before it, and `client_gui_opened` is the link: the recorder
+        // sits on GuiOpenEvent at LOWEST with receiveCanceled, so a CANCELLED open is recorded too and
+        // a test that finds one has learned exactly what it needed. `gui` is "none" when a screen
         // CLOSES, which is why the condition asks for a record that is not one of those.
         //
-        // The click is re-issued every 60 ticks while the log is read every 5. A single
-        // rightClickBlock is occasionally a no-op — the interaction lands a tick before the chunk
-        // or the player has settled — and no amount of READING recovers a click that never
-        // registered, which is what makes the re-click a stimulus rather than patience.
+        // The click is not repeated. The verb runs the client's own processRightClickBlock on its
+        // thread, which sends the use packet for any block inside the world border (vanilla's
+        // PlayerControllerMP); what can drop it is the server's reach check against where the
+        // player stands, and that is the caller's arrangement to have linked before it calls (the
+        // placement's own record). A re-click until a screen appeared turned a dropped click into a
+        // retry nobody saw.
         //
         // It THROWS rather than answering "": an open that never happened is news, and the wait's
         // own failure names what the client WAS told. The caller's assertion is a different
         // question — whether the screen is still open and is the one it meant.
+        long mark = clientEvents.mark();
+        bot.rightClickBlock(x, y, z, EnumFacing.UP, EnumHand.MAIN_HAND);
         clientEvents.awaitMatching(mark, "client_gui_opened",
                 reply -> Events.records(reply).size()
                         > Events.recordsWhere(reply, "gui", "none").size(),
                 "opening any screen",
-                "the right-click at " + x + "," + y + "," + z + " must open a GUI", 360,
-                () -> bot.rightClickBlock(x, y, z, EnumFacing.UP, EnumHand.MAIN_HAND), 60);
+                "the right-click at " + x + "," + y + "," + z + " must open a GUI", 360);
         return screenOf(bot.reportState());
     }
 

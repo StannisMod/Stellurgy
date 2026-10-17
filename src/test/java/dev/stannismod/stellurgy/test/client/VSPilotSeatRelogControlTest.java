@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -285,6 +286,8 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
      * sinks while the control chain works perfectly. {@code up} is the world-frame Y of the ship's
      * own up: 1.0 upright, 0 on its side.</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(dim, PILOT_THRUST_DOSE_TICKS,",
+            why = PilotThrust.THRUST_DOSE_CLAIM)
     private Climb climbWith(int key, double from) throws Exception {
         assertTrue("climbWith drives the vertical-up key only", key == Keyboard.KEY_R);
         StringBuilder trace = new StringBuilder("[start ").append(shipPose()).append("] ");

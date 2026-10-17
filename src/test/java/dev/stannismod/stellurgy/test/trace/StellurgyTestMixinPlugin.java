@@ -73,7 +73,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinDelayedActionBarEvents", "MixinEntityPlayerMPEvents", "MixinTileEntityFieldGeneratorEvents",
             "MixinTileEntityFieldGeneratorMembraneEvents", "MixinForceFieldExplosionHandlerEvents",
             "MixinTilePilotSeatEvents", "MixinBlockPilotSeatEvents", "MixinMinecraftServerSideTrace",
-            "MixinEntityTraceMemory", "MixinClientCursorActs", "MixinClientBlockOutline",
+            "MixinEntityTraceMemory", "MixinClientCursorActs", "MixinClientBlockOutline", "MixinClientBlockChangeEvents",
             "MixinShipFrameTravelWrites", "MixinClientDeckPoseTrace", "MixinClientDeckPoseTickTrace",
             "MixinEntityDummyCarryEvents", "MixinBoundarySkyDiag", "MixinHyperspaceTunnelDiag",
             "MixinKeyBindingsMotionSample", "MixinKeyBindingsSeatGate", "MixinKeyBindingsFlightCursor",

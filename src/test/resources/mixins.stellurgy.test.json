@@ -116,6 +116,7 @@
   "client": [
     "MixinClientCursorActs",
     "MixinClientBlockOutline",
+    "MixinClientBlockChangeEvents",
     "MixinEntityVelocityWriters",
     "MixinShipTransformEntityWrites",
     "MixinShipFrameTravelWrites",
