@@ -76,11 +76,14 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
 - **CREW-C3 (stay)** `[T]` ABOARD persists inside S's subspace region grown by a margin
   (measured in SUBSPACE — attitude-invariant; `DeckFrameTick.java:543-548`). Jumping/
   falling above the deck does not release. Pinned: `jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt`.
-- **CREW-C4 (release)** `[T]` ABOARD(S) ends only on: S unloading; leaving the grown region; no deck
-  below and no enclosure (`noDeckBelow`, `DeckBoarding.deckMayKeep:719`); entering an excluded state
-  (riding, elytra, creative flight — only when NOT aboard/claimable
-  (`DeckBoarding.flyCaptureEligible:68`) —, water/ladder, levitation — `excludedStateOf:43`). Release
-  is EXPLICIT (`DeckFrameTick.release:827`, reason recorded). Pinned:
+- **CREW-C4 (release)** `[A]` ABOARD(S) ends only on: S unloading; leaving the grown region; no deck
+  below and no enclosure (`noDeckBelow`, `DeckBoarding.deckMayKeep:719`); entering a state that gives
+  the body ANOTHER owner (riding, elytra, creative flight — only when NOT aboard/claimable
+  (`DeckBoarding.flyCaptureEligible:68`)). **Water, lava, ladders, levitation and no-gravity do NOT end
+  it** — superseded 2026-10-17 by C30 ENT-1's R4 ruling (a medium aboard is the craft's; the world's acts
+  only where S does not enclose the body; levitation and no-gravity run in S's frame). **Known violated**:
+  the code still releases on all five (`excludedStateOf:43-52`). Release is EXPLICIT
+  (`DeckFrameTick.release:827`, reason recorded). The creative-flight half is pinned by
   `aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold`.
   A body stepping onto world terrain is not released by this clause: the deck refuses terrain at
   admission only, and a held body over world ground is held by the keep test — consistent with

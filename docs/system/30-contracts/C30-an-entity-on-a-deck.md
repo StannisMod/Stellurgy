@@ -40,8 +40,12 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
   body on that craft. *Out of this clause*: projectiles, which never call `move` and advance by their
   own raytrace (`EntityArrow:297`, `EntityThrowable:269`, `EntityFireball:107`); they stay the
   substrate's, and their interaction across the hull is out of this contract.
-  **Open**: which states exclude a NON-living body (an item in water today is released). No default
-  is assumed in code; the class gate is not widened until it is ruled.
+  **Which states end HELD — ruled 2026-10-17 (R4), for every class.** Only a state that hands the body
+  to ANOTHER owner ends it: riding or ridden (ENT-8's vehicle), elytra flight, creative flight outside
+  a claim (C8 CREW-C4). A MEDIUM aboard is the craft's: S's own water, lava and ladders act on the body
+  in S's frame through its own update, and it stays held; the world's medium acts on a held body only
+  where S does not ENCLOSE it (ENT-9's boundary). Levitation and no-gravity stay held too — they run in
+  S's frame, so the body keeps the deck's orientation and view even on a craft with no gravity.
 
 - **ENT-2 (one resolution per mode) — while HELD, every displacement that carries a direction, own
   movement or foreign push, is resolved by the one collision of the body's MODE, in S's frame.**
@@ -103,6 +107,7 @@ the reverse (a raytrace through subspace both ways).
 | clause | what the code does instead | where |
 |---|---|---|
 | ENT-1 | admission by CLASS: `EntityItem` and `EntityLivingBase` only — a minecart, boat, XP orb, TNT or falling block is never held. The field (CREW-C17) is absent: admission is a 0.30 standing probe, an enclosed interior, or a declared craft | `DeckFrameTick.admissible:753-770`, `admissionFor:870-929` `[V]` |
+| ENT-1 (R4) | a MEDIUM releases: a living body in water, lava or on a ladder, levitating or with no gravity; an item in water or lava. Which frame each flag is read in is not measured — `isInWater` is the flag of the body's last update (run in subspace, and the substrate hooks `handleWaterMovement`), `isOnLadder` is asked at the world position | `DeckBoarding.excludedStateOf:43-52`, `DeckFrameTick.admissible:761` `[V]` |
 | ENT-2 | foreign pushes are not replayed: `moveHeld` takes `PLAYER` only, so `PISTON` / `SHULKER` / `SHULKER_BOX` go through the world pipeline; no world collision for a held body (the subspace `move` sees shipyard blocks only) | `DeckFrameTick.moveHeld:367`; vanilla callers `TileEntityPiston:202,297`, `EntityShulker:386`, `TileEntityShulkerBox:191` `[V]` |
 | ENT-6 | unimplemented — see ENT-2; a ship-mounted piston's subspace-facing delta is applied as a world translation | as above `[V]` |
 | ENT-7 | the gravity controller skips no body: its field acts on every entity in its radius, a deck-held body included | `TileAreaGravityController.java:212`, the `getEntitiesWithinAABB` loop `[V]` |
@@ -137,6 +142,11 @@ Nothing pins ENT-1 beyond the admitted classes, ENT-6, or the gravity-source hal
   20-block fall, walking. Its stand-or-slide limit is its own (`VSMath.STANDING_TOLERANCE = 0.42`, ~40.4°),
   by the ruling *"давай вернем допуск на старый VS-овский. Это чуть более логично, да и разница
   небольшая"*; a 43° face sheds a body.
-- **R4** (2026-09-29) excluded states of a non-living body — OPEN.
+- **R4** (opened 2026-09-29, RULED 2026-10-17) which states end HELD — ENT-1: only another owner; a
+  medium aboard is the craft's, the world's only where S does not enclose the body; levitation and
+  no-gravity stay held. On the last point, verbatim: *"Эти двое - в системе корабля все равно (ибо без
+  захвата игрок не будет повернут, и смотреть в кадре корабля не будет, что полезно, даже если на
+  корабле нет гравитации)"* — without the hold the player is not turned with the craft and does not
+  look in its frame, which is useful even on a craft without gravity.
 - **2026-10-06**: ENT-2 is per mode with CREW-C17's world collision; the held mount is a known violation
   (ENT-8); one gravity source per body (the controller skips a held body).
