@@ -139,9 +139,9 @@ rotates a ring by the last planetary sky's angles.
   `DimensionProperties` it falls back to the connection galaxy's `getOverworldProperties()`. `RenderPlanetarySky.java:608-616`.
 - **INV-CLR-15 [V][BEH]** Warp visuals are gated on both `spaceDimId` **and** parent == `WARPDIMID`, so
   a normal space station does not render travel motion. `RenderPlanetarySky.java:554-560`.
-- **INV-CLR-16 [A]** `RenderSpaceSky`/`RenderSpaceTravelSky` are chosen by identity in
+- **INV-CLR-16 [V]** `RenderSpaceSky`/`RenderSpaceTravelSky` are chosen by identity in
   `WorldProviderSpace.getSkyRenderer` (`instanceof` swap); this subsystem assumes that provider
-  logic keeps them mutually exclusive per world state. `world/provider/WorldProviderSpace.java:64-72`.
+  logic keeps them mutually exclusive per world state. `world/provider/WorldProviderSpace.java:64-72`. `WorldProviderSpace.java:55-75` returns exactly one renderer per call.
 
 ## Failure modes & edge cases
 

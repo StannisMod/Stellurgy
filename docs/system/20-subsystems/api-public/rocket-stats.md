@@ -96,9 +96,9 @@ declarations are owned here (`RocketEvent.java`).
   passes the outer nbt to `readFromNBT` too (unwrapping twice would return an empty stat) — pinned by
   `FreeFlightNbtRoundTripTest#statsReadThroughTheApiFactoryWriteWhatTheRocketWrote`. No live
   production caller uses it. FOR: save format: rocket stats NBT.
-- **INV-API-11 [A]** Engine `×2`/`÷2` packing assumes engine offsets are integer or half-integer;
+- **INV-API-11 [V]** Engine `×2`/`÷2` packing assumes engine offsets are integer or half-integer;
   a quarter-block offset would round. No test pins this; assumed from the assembler placing engines
-  on block/half-block grid.
+  on block/half-block grid. The packing is `(int)(vec.x*2)` at `StatsRocket.java:837-839` (a truncating cast, not a round), read back `/2` at `:927`; the scans place engines at `x + 0.5` (`TileRocketAssemblingMachine.java:578`) and `xCurr - sizeX/2 + 0.5` (`StorageChunk.java:278`).
 
 ## State & persistence (C1)
 

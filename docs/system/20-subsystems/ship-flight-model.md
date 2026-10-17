@@ -113,7 +113,7 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 - **INV-SFM-07** `[T][BEH]` Cargo lowers acceleration, never force; TWR is about the local field and is
   infinite where there is none (`ShipReadoutTest`). Pinned by `ShipReadoutTest#cargoLowersAccelerationNotForce`, `ShipReadoutTest#thrustToWeightIsAboutTheLocalField`.
 - **INV-SFM-08** `[V][BEH]` Mass is planet-independent; gravity enters only the field and TWR.
-- **INV-SFM-09** `[A][BEH]` A hull with no actuators does not move under command — no e2e pins this yet.
+- **INV-SFM-09** `[V][BEH]` A hull with no actuators does not move under command — no e2e pins this yet. `TileAdvancedFlightComputer.java:1854-1876` (force and torque stay zero unless `scheme.allocate` returns them), `CleanAxisScheme.java:53-56,95`.
 - **INV-SFM-10** `[A][BEH]` A built ship accelerates as its readout predicts — no e2e pins this yet.
 - **INV-SFM-11** `[T][V][SYS]` A wheel the command leaves idle is given back its momentum: run
   toward empty, never past, while the sustained rotation recipes cancel its moment, in the room the

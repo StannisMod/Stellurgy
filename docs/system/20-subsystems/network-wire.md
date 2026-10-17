@@ -101,7 +101,7 @@ written to disk.
 - **INV-NW-03 [V]** `PacketBackToRocketGui` is the only Stellurgy packet with a real `executeServer`;
   it re-validates via `RocketGuiNavigation`, not trusting client-sent coords blindly.
   `PacketBackToRocketGui.java:58`.
-- **INV-NW-04 [A][SYS]** NBT-envelope packets round-trip byte-for-byte through
+- **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
   `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
   SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `PacketSerializationTest#packetSatelliteRoundTrip`, `PacketSerializationTest#packetConfigSyncRoundTrip`, `PacketSerializationTest#packetAsteroidInfoRoundTrip`, `PacketSerializationTest#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
 - **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
@@ -111,8 +111,8 @@ written to disk.
 - **INV-NW-06 [V][SYS]** `PacketStationUpdate.Type` ordinal is the wire value
   (`writeInt(type.ordinal())` / `Type.values()[readInt()]`); reordering the enum is a
   breaking wire change. `PacketStationUpdate.java:44,88`. FOR: wire format: same build on both sides.
-- **INV-NW-07 [A]** A hostile out-of-range `Type` ordinal fails bounded (no OOB read past a
-  bad buffer) — inferred from the read at `PacketStationUpdate.java:86` (`Type.values()[in.readInt()]`,
+- **INV-NW-07 [V]** A hostile out-of-range `Type` ordinal fails bounded (no OOB read past a
+  bad buffer) — inferred from the read at `PacketStationUpdate.java:85` (`Type.values()[in.readInt()]`,
   which throws on an out-of-range index rather than reading past anything). No test pins it.
 
 ## Failure modes & edge cases

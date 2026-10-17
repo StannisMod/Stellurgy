@@ -115,10 +115,10 @@ No NBT owned. Command-driven persistence is delegated:
 
 - **INV-CMD-01 [V][BEH]** Root command requires OP permission level 2; every leaf is server-side
   (`CommandBase.execute`), none client-registered. `StellurgyCommandRoot.java:64`. [V]
-- **INV-CMD-02 [A][BEH]** Player-requiring leaves obtain the player via `getCommandSenderAsPlayer`,
+- **INV-CMD-02 [T][BEH]** Player-requiring leaves obtain the player via `getCommandSenderAsPlayer`,
   so a console/non-player sender is refused with the vanilla "must be a player" message,
   not an NPE. Pinned for addTorch/setGravity/fillData/goto/fetch. `WorldCommandGuardContractTest.java:29-62`. Pinned by `WorldCommandGuardContractTest#addTorchRefusesConsoleSender`, `WorldCommandGuardContractTest#setGravityRefusesConsoleSenderWithUsage`, `WorldCommandGuardContractTest#fillDataRefusesConsoleSender`, `WorldCommandGuardContractTest#gotoRefusesConsoleSender`, `WorldCommandGuardContractTest#fetchRefusesConsoleSender`.
-- **INV-CMD-03 [A][BEH]** `weatherRefusalKey` is a pure function of (action, rainMarker, thunderMarker,
+- **INV-CMD-03 [T][BEH]** `weatherRefusalKey` is a pure function of (action, rainMarker, thunderMarker,
   canRain) and returns a refusal lang-key (or null) matching what `updateWeather` would
   revert. `WeatherCommand.java:118-133`, `WeatherCommandRefusalTest.java:26-92`. Pinned by `WeatherCommandRefusalTest#rainAllowedWhenDynamicMarkerAndAtmosphereOk`, `WeatherCommandRefusalTest#rainRefusedByNeverMarker`, `WeatherCommandRefusalTest#rainRefusedByThinAtmosphere`, `WeatherCommandRefusalTest#clearRefusedByAlwaysRainMarker`.
 - **INV-CMD-04 [V][BEH]** `planet set atmosphereDensity` bypasses reflection and calls
@@ -132,10 +132,10 @@ No NBT owned. Command-driven persistence is delegated:
 - **INV-CMD-07 [A][BEH]** `/ar` primary command and its help/usage survive server registration and a
   malformed invocation without crashing the server. `[T]` for registration and help only —
   `CommandsSmokeTest.java:21,36`; the malformed-invocation half is `[A]` (no test pins it). Pinned by `CommandsSmokeTest#primaryCommandsAreRegistered`, `CommandsSmokeTest#stellurgyHelpCommandPrintsUsageWithoutCrash`.
-- **INV-CMD-08 [A][BEH]** Planet/star edit commands assume the target dimension/star is
+- **INV-CMD-08 [V][BEH]** Planet/star edit commands assume the target dimension/star is
   registered (guarded by `isDimensionCreated`/`getStar != null`); unloaded worlds are not
   re-created by get/set (unlike goto/create which init the dim). Inferred from guards, not
-  a dedicated test.
+  a dedicated test. `PlanetSetCommand.java:60-61`, `PlanetGetCommand.java:49-50`, `StarSetCommand.java:40-42`, `StarGetCommand.java:33-35`; `GoToDimensionCommand.java:38-39` initialises the dimension.
 
 ## Failure modes & edge cases
 

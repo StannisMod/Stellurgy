@@ -477,20 +477,20 @@ free because each half keeps what its own blocks held.
 - **INV-HEAT-26 [T][BEH]** A drive with no coolant against it reads zero and is NOT refused: an unmeasured
   drive is not a hot one.
   `test/server/HeatFailureLadderTest#aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused`
-- **INV-HEAT-27 [A][BEH]** The same total power arranged two ways is ONE detection range and TWO different
+- **INV-HEAT-27 [V][BEH]** The same total power arranged two ways is ONE detection range and TWO different
   locks: an array four times the size and a quarter as bright is found at the same distance and is a
   quarter of the target. Unpinned: a pin needs a loaded
-  configuration.
-- **INV-HEAT-28 [A][BEH]** Range goes as the square root of power, exactly - twice the shedding buys 1.41x
-  the distance and no more. Unpinned.
+  configuration. `ThermalSignature.java:99,112-114,124-129`.
+- **INV-HEAT-28 [V][BEH]** Range goes as the square root of power, exactly - twice the shedding buys 1.41x
+  the distance and no more. Unpinned. `ThermalSignature.java:129`.
 - **INV-HEAT-29 [T][BEH]** With every sink shut, most of what a ship radiates goes with them and what is
   left is a FLOOR: it is above zero, it is still lockable, and it does not change when the loop is
   emptied - so it is the hull and not leakage.
   `test/server/RunningSilentTest#aShipRunningSilentIsFoundCloserAndIsStillFound`
 - **INV-HEAT-30 [T][BEH]** A hotter cabin is a hotter skin and a brighter ship, and two loops threading one
   sealed room are ONE body. `test/server/RunningSilentTest#theHullGlowsWithTheAirItEncloses`
-- **INV-HEAT-31 [A][BEH]** A config asking for a perfectly cold skin is refused, so no configuration makes
-  a ship invisible. Unpinned: a pin would have to write the configuration.
+- **INV-HEAT-31 [V][BEH]** A config asking for a perfectly cold skin is refused, so no configuration makes
+  a ship invisible. Unpinned: a pin would have to write the configuration. The fraction is raised to a floor where it is read: `ThermalBody.java:49,237-240`.
 
 ## Integration seams
 

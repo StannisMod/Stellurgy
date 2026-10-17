@@ -341,8 +341,8 @@ final class E2EModeGate {
      * Why the role a harness bridge command was sent in does not admit what the command is, as a JSON
      * object; {@code null} when it does, or when the sender is not the harness's bridge (a player, the
      * console, a command a command runs). The role travels in the bridge sender's name, after
-     * {@link #HARNESS_BRIDGE_ROLE_SEPARATOR}. A probe verb's kinds are its {@link ProbeVerbKind} row's; a
-     * command of any other root has the one kind {@link #rootKind} gives its form. An unclassified probe verb is left
+     * {@link #HARNESS_BRIDGE_ROLE_SEPARATOR}. A probe call has the one kind {@link ProbeVerbKind#formOf} gives
+     * its form; a command of any other root has the one kind {@link #rootKind} gives its form. An unclassified probe verb is left
      * to the mode's judgement, which refuses it naming why; so is a root with no kind on an e2e server, which
      * refuses every root it does not name. On a mechanics server a bridge command of a root with no kind is
      * refused here — only the bridge's: the console's {@code stop} and a player's own commands are not sent
@@ -362,18 +362,16 @@ final class E2EModeGate {
             return refusal(name, verb, "NO_ROLE", "a harness command is sent in a role -- read, arrange or act --"
                     + " and this one names none (the bridge sender is " + sent + ")");
         }
-        Set<ProbeVerbKind> kinds = probe ? ProbeVerbKind.kindsOf(args) : EnumSet.of(rootKind(command, args));
-        if (kinds.contains(ProbeVerbKind.UNCLASSIFIED)) {
+        ProbeVerbKind kind = probe ? ProbeVerbKind.formOf(args) : rootKind(command, args);
+        if (kind == ProbeVerbKind.UNCLASSIFIED) {
             return probe || servesAnE2E ? null : refusal(name, verb, ProbeVerbKind.UNCLASSIFIED.name(),
                     "no kind is declared for this command root, so no role admits it");
         }
-        for (ProbeVerbKind kind : kinds) {
-            if (role.admits(kind)) {
-                return null;
-            }
+        if (role.admits(kind)) {
+            return null;
         }
         return refusal(name, verb, "ROLE", "sent to " + role.name().toLowerCase(Locale.ROOT) + ", but it is "
-                + kinds + ": read admits READ and a named instrument, arrange admits ARRANGE, BUILD and DECIDE,"
+                + kind + ": read admits READ and a named instrument, arrange admits ARRANGE, BUILD and DECIDE,"
                 + " act admits TRIGGER");
     }
 

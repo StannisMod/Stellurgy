@@ -85,7 +85,8 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinClientShotTrackerEvents", "MixinTileWeaponConsoleReadoutEvents",
             "MixinPacketThreadUtilRespawnWindow", "MixinTestClientMuteEvents", "MixinMinecraftSideTrace",
             "MixinEntityRocketClientGateEvents", "MixinPacketSenderReachEvents",
-            "MixinTileMultiBlockFormationEvents", "MixinTileOxygenVentScrubEvents")));
+            "MixinTileMultiBlockFormationEvents", "MixinTileOxygenVentScrubEvents",
+            "MixinWorldClientShipManagerPickable", "MixinNetHandlerChunkDataPickable")));
 
     /**
      * Mixins that change what the game does — the declared ENVIRONMENT of a mechanics child, each with the

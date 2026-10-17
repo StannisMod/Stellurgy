@@ -103,9 +103,9 @@ Config: see `C4-config-surface`.
   (`TileHolographicPlanetSelector.java:189`; `SpaceStationObject.java:613-619`).
 - **INV-STN-20 [V]** The warp controller drops its cached station on chunk unload / invalidate,
   so a moved or reloaded station is not served stale (`:992-1003`).
-- **INV-STN-21 [A]** `getData(id)` returns the destination body for `id==0` and the current orbit
+- **INV-STN-21 [V]** `getData(id)` returns the destination body for `id==0` and the current orbit
   for `id==1`; the naming of the two `setData` slots (`srcPlanet`/`dstPlanet`) is confusing but the
-  observed GUI values are correct (`:670-701`) — unverified against a test.
+  observed GUI values are correct (`TileWarpController.java:680-711`) — unverified against a test.
 
 ## Failure modes & edge cases
 

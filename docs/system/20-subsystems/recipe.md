@@ -98,9 +98,9 @@ but that logic lives in util-core, not here.)
   deletion.)
 - **INV-RCP-03 [V]** Only factory ids present in `_factories.json` are loadable; the class set (10)
   is a strict superset of the registered set (8). `_factories.json:2-11`.
-- **INV-RCP-04 [A]** A recipe JSON with a `type` id absent from `_factories.json` fails to load
+- **INV-RCP-04 [V]** A recipe JSON with a `type` id absent from `_factories.json` fails to load
   (Forge cannot find a factory). Inferred from Forge's `IRecipeFactory` dispatch; not exercised by
-  a repo test.
+  a repo test. Forge's `CraftingHelper.getRecipe` throws `JsonSyntaxException("Unknown recipe type")` for a missing factory (Forge 1.12.2-14.23.5.2860 sources, `net/minecraftforge/common/crafting/CraftingHelper.java:414`) and the loader logs it and refuses that recipe (`:726-728`).
 
 ## Failure modes & edge cases
 

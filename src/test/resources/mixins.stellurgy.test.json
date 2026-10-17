@@ -154,6 +154,8 @@
     "MixinTileWeaponConsoleReadoutEvents",
     "MixinPacketThreadUtilRespawnWindow",
     "MixinTestClientMuteEvents",
-    "MixinMinecraftSideTrace"
+    "MixinMinecraftSideTrace",
+    "MixinWorldClientShipManagerPickable",
+    "MixinNetHandlerChunkDataPickable"
   ]
 }

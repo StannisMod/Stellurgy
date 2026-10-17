@@ -89,9 +89,9 @@ transiently from other subsystems during a single tooltip render.
   server via STARTLOC/ENDLOC markers, WAILA on client via I18n). `AbstractDataContext.java:24`.
 - **INV-DL-04 [V][BEH]** Station-deployed rockets are handled before the guidance-computer path,
   so they always show harvest-gas info, never a guidance line. `RocketDataLoader.java:51-54`.
-- **INV-DL-05 [A]** Only `*Server` concrete loaders exist; the abstract bases were designed
+- **INV-DL-05 [V]** Only `*Server` concrete loaders exist; the abstract bases were designed
   for a client/server split that was never realized, so WAILA (client) reads server-shaped
-  state (`rocket.storage`) on the client. Inferred from the absence of any `*Client` class.
+  state (`rocket.storage`) on the client. Inferred from the absence of any `*Client` class. `RocketDataLoaderServer.java:13`, `DataBlockDataLoaderServer.java:6`, `WirelessTransceiverDataLoaderServer.java:5`; no `*Client` loader class in `src/`.
 
 ## Failure modes & edge cases
 

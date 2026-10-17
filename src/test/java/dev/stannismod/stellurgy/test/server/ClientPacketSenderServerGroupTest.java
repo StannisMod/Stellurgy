@@ -819,7 +819,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
 
     /** The zone priority the port at that position holds. */
     private int priorityAt(int dim, int x, int y, int z) throws Exception {
-        return act("stellurgytest vent priority " + dim + " " + x + " " + y + " " + z).integer("priority");
+        return read("stellurgytest vent priority " + dim + " " + x + " " + y + " " + z).integer("priority");
     }
 
     /** The machine id on the projector in the sender's hand; refuses when the item carries none. */

@@ -86,9 +86,9 @@ serialized — they are pure live views over item/tile state.
 - **INV-CAP-07 [V][BEH]** All four suit pieces resolve the `IProtectiveArmor` capability at runtime —
   asserted by `MachineDomainSmokeSuite#suitItemsAndEnchantAreWiredUp` (`MachineDomainSmokeSuite.java:388-399`),
   a class whose name does not end in `Test`, so the pin checker cannot count it.
-- **INV-CAP-08 [A]** The `IProtectiveArmor`/`IPartWear` caps are never persisted, so removing this
+- **INV-CAP-08 [V]** The `IProtectiveArmor`/`IPartWear` caps are never persisted, so removing this
   mod's items from a save cannot leave dangling capability NBT (follows from the no-op `IStorage`;
-  not exercised by a round-trip test).
+  not exercised by a round-trip test). Both `IStorage`s are no-ops: `CapabilitySpaceArmor.java:19-31`, `CapabilityWear.java:36-45`.
 
 ## Failure modes & edge cases
 

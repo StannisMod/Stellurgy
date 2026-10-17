@@ -161,8 +161,8 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 
 ## Invariants
 
-- **INV-SPC-03 [A]**  The transit map and the ledger never disagree: in the map ⇔ `IN_TRANSIT`
-  (`ShipTransitManagerTest.java:679`).
+- **INV-SPC-03 [V]**  The transit map and the ledger never disagree: in the map ⇔ `IN_TRANSIT`
+  (`ShipTransitManagerTest.java:679`). Every put into the map is followed by the ledger's `beginTransit` and every removal by `settle`: `ShipTransitManager.java:535-536,699-705,769-770,1210-1211`.
 - **INV-SPC-05** [V] The ledger holds a coordinate, never a slot dimension; the dimension is derived
   (`ShipLedger.java:11-16`; `SpaceManager.java:284-290`; `ShipLedgerDataTest.java:96`).
 - **INV-SPC-07** [V] The space clock advances exactly once per server tick, is monotonic across saves and is not

@@ -410,6 +410,14 @@ tasks.named('check') {
     dependsOn 'replayFastWitnesses'
 }
 
+// `build` produces the jars and nothing else: a build is never gated by tests. Gradle's own wiring makes it
+// depend on `check`, which runs the unit tier and the binding check -- and that check needs git history
+// (`origin/1.12`), so a source archive, a shallow clone or a fork with another remote could not build at all.
+// The verification stays where it was, on `check` and on every test task.
+tasks.named('build') {
+    setDependsOn([tasks.named('assemble')])
+}
+
 // Every translation key the code hands to a localization call as a string literal must exist in a
 // shipped catalogue: 1.12.2 resolves a missing key to the key itself, so the player reads
 // `msg.lowOxygen` across the HUD instead of a sentence. Four such keys once shipped at once before
