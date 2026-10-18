@@ -913,6 +913,18 @@ public final class ShipFrameTravel {
         return firstContactCandidate(entity);
     }
 
+    /**
+     * Whether {@code entity} is ON ship {@code shipId}: held by that ship's capture, in either mode,
+     * or standing on its blocks. The capture is what keeps a crew member aboard across a jump, when
+     * nothing is under his feet; the standing probe answers for a body this side never moves, which
+     * no capture holds. A body inside the ship's box and on neither is not on it — being near a hull
+     * is not being aboard, and the box is a candidate list, never a verdict.
+     */
+    public static boolean isOnShip(EntityLivingBase entity, String shipId) {
+        return shipId != null && entity != null
+                && (shipId.equals(capturedShipId(entity)) || shipId.equals(standingOnShipIdFor(entity)));
+    }
+
     /** The ANCHOR ship id this class resolves {@code entity} against in ABOARD (deck) mode, or
      *  {@code null} when it is not aboard (never captured, or held in HULL-STAND mode). The
      *  deck-frame look derives the crew member's world aim through THIS ship - the capture

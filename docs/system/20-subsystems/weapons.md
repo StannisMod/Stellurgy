@@ -349,7 +349,8 @@ aim follows; red with the shipyard bounds read instead]
 credential, so `HullAllegiance#isFriend(world, ship, code)` decides, and the console's "Friendly Ships"
 button cycles the network through `HullAllegianceRule`: `CODE_ON_WEAPONS` (a console or gun aboard that
 ship carries our code — a new network's rule, the one its owner controls), `CODE_ON_CREW` (a player
-aboard carries our code), `NONE`. An empty code recognises no hull, as it recognises no creature. A
+aboard carries our code — "aboard" is `ShipFrameTravel#isOnShip`, held by that ship's deck or standing
+on it, never inside its box; fire-control-sensor MECH-FCS-04), `NONE`. An empty code recognises no hull, as it recognises no creature. A
 friend is not fired on (`TileTurret#targetIsFriendly`).
 
 **MECH-GUN-43 — A battery's orders live on its CONSOLES and come back after a restart (rulings 2026-10-05).** The network is still never saved — it has no durable name and is rebuilt from

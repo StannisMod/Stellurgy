@@ -59,7 +59,7 @@ public enum HullAllegianceRule implements HullAllegiance {
                 return false;
             }
             for (EntityPlayer player : world.playerEntities) {
-                if (VSIntegration.shipIdsAt(world, player.posX, player.posY, player.posZ).contains(shipId)
+                if (dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isOnShip(player, shipId)
                         && CodeUtils.entityHasMatchingCode(player, accessCode)) {
                     return true;
                 }

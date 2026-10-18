@@ -144,11 +144,9 @@ public final class TacticalScan {
                 entity.posZ - entity.lastTickPosZ);
     }
 
-    /** Whether this entity is standing on the ship the sensor is part of. */
+    /** Whether this entity is on the ship the sensor is part of — held by its deck or standing on it. */
     private static boolean isAboard(World world, String ownShipId, Entity entity) {
-        if (ownShipId == null) {
-            return false;
-        }
-        return VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ).contains(ownShipId);
+        return entity instanceof EntityLivingBase
+                && dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isOnShip((EntityLivingBase) entity, ownShipId);
     }
 }

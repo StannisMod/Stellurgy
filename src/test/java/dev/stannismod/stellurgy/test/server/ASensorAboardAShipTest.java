@@ -38,6 +38,12 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
 
     /** This class's own build site and parking spot, clear of every other ship scenario. */
     private static final int SITE_X = 12400, SITE_Z = 12400;
+    /**
+     * The build site of the scenario with a body beside the hull. An open-air site is asserted empty,
+     * never cleared, and an assembly leaves its pad and tower behind — so each scenario that builds a
+     * hull needs a site of its own; this is 40 blocks along Z from the other, past its halo.
+     */
+    private static final int BESIDE_SITE_Z = SITE_Z + 40;
     private static final int PARK_X = 12400, PARK_Y = 150, PARK_Z = 14800;
 
     /**
@@ -174,6 +180,84 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
                 + " somewhere else: " + sweep, Math.abs(reported - expected) < RANGE_AGREEMENT);
     }
 
+    /**
+     * A body beside the hull, inside the box the substrate draws around it but standing on nothing of
+     * it, is a contact: "standing on our own deck" is the credential, and being near the hull is not.
+     *
+     * <p>The body hangs in the band the hull's box is grown by — found by walking out from the sensor
+     * along world +X until the substrate's own containment test ({@code vs ship-contains}, the test the
+     * sensor's aboard check makes) stops answering yes, and taking the last spot where it still did.
+     * That it stands on nothing is measured, not assumed: the deck-support decision's own inputs
+     * ({@code vs deck-support}) count no ship block under its feet. The verdict is one sweep holding
+     * it.</p>
+     */
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipFrameTravel#isOnShip",
+            at = "shipId.equals(standingOnShipIdFor(entity))",
+            replacedBy = "VSIntegration.shipIdsAt(entity.world, entity.posX, entity.posY, entity.posZ).contains(shipId)",
+            fails = "the sensor never held the creeper beside its hull, standing on nothing of it",
+            on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.Pins("MECH-FCS-04")
+    @Test
+    public void aBodyBesideTheHullThatStandsOnNothingOfItIsAContact() throws Exception {
+        config("enableFireControlSensor", "true");
+        int sweepInterval = Integer.parseInt(configText("fireControlSensorScanIntervalTicks"));
+
+        String hull = assembleHullAt(FixtureSite.openAir(DIM, SITE_X, BESIDE_SITE_Z));
+        parkStill(hull);
+        int[] at = sensorOnTheSeat(hull);
+        double[] sensor = toWorld(hull, at[0] + 0.5D, at[1] + 0.5D, at[2] + 0.5D);
+
+        // Walk out of the box along +X in quarter blocks; the hull is a few blocks across, so twelve
+        // blocks of walk leave it whatever its pose.
+        double[] beside = null;
+        for (double dx = 0.0D; dx <= 12.0D; dx += 0.25D) {
+            double[] spot = {sensor[0] + dx, sensor[1], sensor[2]};
+            if (!read("stellurgytest vs ship-contains " + DIM + " " + hull + " " + spot[0] + " " + spot[1] + " "
+                    + spot[2]).requireOk("ask whether the hull's box contains a spot").bool("contains")) {
+                break;
+            }
+            beside = spot;
+        }
+        requireArranged("no spot along +X from the sensor is inside hull " + hull + "'s box", beside != null);
+        holdChunksAround(sensor, beside);
+
+        long mark = events.markInstrumented();
+        Creeper near = drop(beside, "the creeper beside the hull");
+        Reply support = read("stellurgytest vs deck-support " + DIM + " " + near.entityId)
+                .requireOk("read the deck-support inputs for the creeper beside the hull");
+        System.out.println("[sensor-aboard] beside the hull at " + java.util.Arrays.toString(beside)
+                + ", support " + support);
+        requireArranged("the creeper beside the hull stands on a block of it, so it is aboard: " + support,
+                support.integer("standing") == 0);
+
+        String pos = at[0] + "," + at[1] + "," + at[2];
+        events.awaitMatching(mark, "sensor_swept",
+                reply -> sweepHolding(reply, pos, near.entityId) != null,
+                "at " + pos + " holding entity " + near.entityId,
+                "the sensor never held the creeper beside its hull, standing on nothing of it — it screens"
+                        + " a body for being near the ship, not for being on it",
+                SWEEPS_OF_DEADLINE * sweepInterval);
+    }
+
+    /**
+     * Put a fire-control sensor on top of {@code hull}'s pilot seat — a block the hull owns, the one
+     * above it in the same yard column — and answer its subspace address, once the registry says the
+     * block is that hull's.
+     */
+    private int[] sensorOnTheSeat(String hull) throws Exception {
+        Reply seat = read("stellurgytest vs find-seat " + DIM + " id " + hull).requireOk("find the hull's seat");
+        requireArranged("hull " + hull + " has no pilot seat to build on: " + seat, seat.bool("seatFound"));
+        int[] at = {seat.integer("seatX"), seat.integer("seatY") + 1, seat.integer("seatZ")};
+        Reply placed = arrange("stellurgytest place " + DIM + " " + at[0] + " " + at[1] + " " + at[2]
+                + " stellurgy:fireControlSensor").requireOk("place the sensor");
+        requireArranged("the sensor was not placed: " + placed, placed.bool("placed"));
+        Reply owner = read("stellurgytest vs managed-by " + DIM + " " + at[0] + " " + at[1] + " " + at[2])
+                .requireOk("ask which hull manages the sensor block");
+        requireArranged("the sensor block is not a block of hull " + hull + ": " + owner,
+                hull.equals(owner.textOr("shipId", null)));
+        return at;
+    }
+
     /** The first sweep of the sensor at {@code pos} whose tracks hold this entity, or null. */
     private static Reply sweepHolding(String reply, String pos, int entityId) {
         for (String record : Events.recordsWhere(reply, "pos", pos)) {
@@ -194,7 +278,11 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
      * physics object being built ({@code ship_loaded}, keyed by that physics id).
      */
     private String assembleHull() throws Exception {
-        FixtureSite site = FixtureSite.openAir(DIM, SITE_X, SITE_Z);
+        return assembleHullAt(FixtureSite.openAir(DIM, SITE_X, SITE_Z));
+    }
+
+    /** As {@link #assembleHull}, on the open-air {@code site} given. */
+    private String assembleHullAt(FixtureSite site) throws Exception {
         long mark = events.markInstrumented();
         // The fixture verb lays a 6x6 pad with its builder and tower one block outside it, and its
         // tallest part is that tower, six above the pad: a halo of 4 and a height of 12 contain it.

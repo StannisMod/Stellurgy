@@ -63,11 +63,20 @@ depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
 [T `SensorFriendIsNeverAcquiredTest`, falsified: with the screen removed the code-carrying player
 enters the list at quality 0.30 and the test reddens]
 
-**MECH-FCS-04 — Standing on our own deck is itself the credential.** An entity inside the sensor's
-own ship's bounds is excluded whatever it is carrying: a crew does not acquire code devices before a
-boarding action, and a battery that shells its own deck is the failure this subsystem exists to make
-impossible rather than merely unlikely. A ground installation has no such frame and no such
-exclusion. `TacticalScan.java:96-100,147-152` [V]
+- **MECH-FCS-04 [T][BEH] — Being ON our own ship is itself the credential; being near it is not.** An
+  entity on the sensor's own ship is excluded whatever it is carrying: a crew does not acquire code
+  devices before a boarding action, and a battery that shells its own deck is the failure this
+  subsystem exists to make impossible rather than merely unlikely. "On" is one predicate,
+  `ShipFrameTravel#isOnShip`: held by that ship's deck capture in either mode (which carries a crew
+  member across a jump, when nothing is under his feet), or standing on its blocks (the support
+  probe, for a body no capture holds). The ship's box grown by `ABOARD_MARGIN` is a candidate list,
+  never this verdict: a body in an empty corner of a tilted hull, in the band around it, or on
+  another craft whose box overlaps is a contact. A ship's allegiance by its crew's code
+  (`HullAllegianceRule.CODE_ON_CREW`) asks the same predicate. A ground installation has no such
+  frame and no such exclusion. `TacticalScan#isAboard`. Pinned by
+  `ASensorAboardAShipTest#aBodyBesideTheHullThatStandsOnNothingOfItIsAContact` (the band beside the
+  hull; until 2026-10-18 the box itself was the verdict, and such a body was screened as crew).
+  Not seen by a test: the capture half — a crew member mid-jump during a sweep.
 
 **MECH-FCS-05 — The sweep is on a cadence; the tracking is every tick.** The sensor reconsiders WHICH
 contact to hand over every `fireControlSensorScanIntervalTicks`, and the gun re-reads that contact's
