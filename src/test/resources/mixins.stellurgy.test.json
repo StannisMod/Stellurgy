@@ -15,6 +15,7 @@
     "MixinWorldServerAlwaysTicks",
     "MixinEntityPositionWriters",
     "MixinEntityShipTouchEvents",
+    "MixinSubstrateCarryEvents",
     "MixinAboardBodiesEvents",
     "MixinSpaceSubsystemSaveFaultEvents",
     "MixinPlanetWeatherCycleEvents",

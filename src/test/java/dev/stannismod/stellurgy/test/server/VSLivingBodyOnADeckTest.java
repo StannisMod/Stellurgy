@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShipInfo;
@@ -370,6 +371,200 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
     public void anArmorStandOnTheOuterHullOfAFlyingInvertedCraftRidesWithIt() throws Exception {
         // R11-OK: as above, with the craft's carry of the body in flight; asserted in standOnTheOuterHull.
         standOnTheOuterHull(HULL_FLIGHT_VELOCITY);
+    }
+
+    // -- one mover per tick: the substrate's carry keeps off a body the deck holds ------------------
+
+    /**
+     * The craft's speed once the deck has taken the body, blocks per second along world X, away from
+     * where the world support stood. Any non-zero translation makes the substrate's carry of a body
+     * associated with the craft non-zero (it moves the body by the craft's own between-tick motion,
+     * here 0.05 blocks a tick, five orders above {@link #AT_REST}); slow enough that a body carried
+     * twice over the substrate's whole association lifetime (one block) is still on the deck.
+     */
+    private static final double CARRY_FLIGHT_SPEED = 1.0;
+
+    /** How far below the feet the deck frame looks for a floor, and for world terrain that declines a body ({@code DeckFrameTick.SUPPORT_PROBE}). */
+    private static final double DECK_SUPPORT_PROBE = 0.30;
+
+    /**
+     * How many ticks the substrate keeps carrying a body after it last touched a hull
+     * ({@code VSConfig.ticksToStickToShip}).
+     */
+    private static final int SUBSTRATE_STICK_TICKS = 20;
+
+    /**
+     * How long the substrate's carry is watched from the jump, in server ticks: three times its
+     * association lifetime, so the whole stretch in which it would still carry the stand lies inside.
+     */
+    private static final int CARRY_WINDOW_TICKS = 3 * SUBSTRATE_STICK_TICKS;
+
+    /**
+     * The upward velocity the stand leaves the edge with, blocks per tick. At a living body's 0.08
+     * blocks/tick^2 and 0.98 drag it rises about six ticks (1.3 blocks) - time for the support to be
+     * taken away and the craft to start under it - and is back at the deck after about twelve, inside
+     * the substrate's 20 ticks, so the deck takes it in the air with the association still alive.
+     */
+    private static final double JUMP_MOTION = 0.5;
+
+    /**
+     * How far below the deck's top the world support's top is put, in blocks. Inside the deck
+     * frame's support probe ({@code DeckFrameTick.SUPPORT_PROBE}, 0.30) - so a body over it is on
+     * world terrain and the deck declines it - and above zero, so the body rests on the deck and the
+     * substrate collides it with the hull. The support is built to within 1/16 of this (a snow layer
+     * is 1/8 high), so its top lies 0.09 to 0.21 below the deck.
+     */
+    private static final double SUPPORT_BELOW_DECK_TOP = 0.15;
+
+    /** How far a deck axis may lean off the world's for the craft to count as axis-aligned. */
+    private static final double AXIS_ALIGNED = 1.0e-3;
+
+    /** The server's log, read for the substrate carry's own records about the held body. */
+    private final Events carryLog =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+
+    /**
+     * An armor stand a deck takes is moved by the deck alone from then on: the physics substrate's
+     * carry, which moves a body for a while after it last touched a hull, never moves it once the
+     * deck holds it - though the substrate had associated it with this craft the moment before, and
+     * the craft is flying.
+     *
+     * <p>The substrate carries a body only while it remembers a hull the body touched, and it forgets
+     * one the moment the body's own update ends on something - which a held body's update, run on
+     * the deck, does every tick it lies there. So the one state in which the decision can be seen is a
+     * body the deck takes IN THE AIR, soon after the substrate collided it with the hull: a mob
+     * jumping from a pier onto a deck. Arranged so: the stand stands on the deck's edge with its other
+     * half over a world block just below the deck's top, so the deck declines it (a body over world
+     * terrain is the world's) and the substrate collides it with the hull; it is given a jump, the
+     * block is taken away and the craft flies, and the deck takes it on the way down. Measured
+     * 2026-10-17: a body lowered onto a deck from above never gets an association at all (the deck
+     * takes it before it touches), and one that steps off the support onto the deck loses it on its
+     * first held update, so neither could show the substrate carrying it, held or not.</p>
+     *
+     * <p>Read where the substrate decides: its per-body carry step and the one call that moves a body
+     * ({@code MixinSubstrateCarryEvents}). Not seen here: the client's own copy of the carry
+     * ({@code EventsClient}), which moves the client's copy of a body; a player, whose movement the
+     * server replays rather than runs; a body boarding from another craft's hull, or from this one's
+     * outer hull.</p>
+     */
+    @RedWitness(member = "DeckFrameTick#mapOut", at = "VSIntegration.suppressShipDrag(entity);", replacedBy = "",
+            fails = "a body a deck holds must be moved by the deck alone (C30 ENT-7): the substrate's carry moved"
+                    + " the held stand 1 times", on = "2026-10-17")
+    @Pins("ENT-7")
+    @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
+            why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks; what a landing"
+                    + " leaves depends on which mechanism holds the body, so a link on it would decide by mechanism.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), CARRY_WINDOW_TICKS);",
+            why = "the flight is the dose: the substrate's carry runs every tick of it, and the verdict is over"
+                    + " every carry record of the stretch, not a state at its end.")
+    public void anArmorStandTheDeckTakesFromAWorldSupportIsNeverCarriedByTheSubstrate() throws Exception {
+        Craft craft = buildCraft();
+        // The deck's +X and -X edges (5x5, the seat's column 2 blocks from the -X edge), on the row
+        // beside the seat's. A craft stands where its physics put it, so an edge is rarely on a block
+        // boundary; a world block reaching under the deck would sit inside the hull and the world's
+        // collision would shove the craft. So the support goes in the first whole column OUTSIDE an
+        // edge, on the side where the gap to it is under half a block, and the stand (half a block
+        // wide) is centred over the gap: one half over the deck, the other over the support.
+        double[] plusEdge = toWorld(craft, 3.0, 0.0, -0.5);
+        double[] oneOut = toWorld(craft, 4.0, 0.0, -0.5);
+        requireArranged("the craft must stand axis-aligned, its deck +X along world +X (one block out maps to "
+                + (oneOut[0] - plusEdge[0]) + "," + (oneOut[1] - plusEdge[1]) + "," + (oneOut[2] - plusEdge[2]) + ")",
+                Math.abs(oneOut[0] - plusEdge[0] - 1.0) <= AXIS_ALIGNED && Math.abs(oneOut[1] - plusEdge[1]) <= AXIS_ALIGNED
+                        && Math.abs(oneOut[2] - plusEdge[2]) <= AXIS_ALIGNED);
+        double plusGap = Math.ceil(plusEdge[0]) - plusEdge[0];
+        int side = plusGap < 0.5 ? 1 : -1;
+        double edgeX = side > 0 ? 3.0 : -2.0;
+        double[] edgeTop = toWorld(craft, edgeX, 0.0, -0.5);
+        double gap = side > 0 ? plusGap : edgeTop[0] - Math.floor(edgeTop[0]);
+        requireArranged("one of the deck's X edges must lie under half a block from a block boundary (gap " + gap
+                + ")", gap < 0.5);
+        int bx = side > 0 ? (int) Math.ceil(edgeTop[0]) : (int) Math.floor(edgeTop[0]) - 1;
+        int bz = (int) Math.floor(edgeTop[2]);
+        double standX = edgeX + side * gap / 2.0;
+        double supportTop = edgeTop[1] - SUPPORT_BELOW_DECK_TOP;
+        int y0 = (int) Math.floor(supportTop);
+        int layers = (int) Math.round((supportTop - y0) * 8.0);
+        // A snow layer of meta m collides m/8 high and needs a solid block under it.
+        int stoneY = layers == 8 ? y0 : y0 - 1;
+        String snow = layers == 0 || layers == 8 ? null : "setblock " + bx + " " + y0 + " " + bz
+                + " minecraft:snow_layer " + layers;
+        arrange("setblock " + bx + " " + stoneY + " " + bz + " minecraft:stone");
+        if (snow != null) {
+            arrange(snow);
+        }
+        double builtTop = layers == 8 ? y0 + 1.0 : snow == null ? y0 : y0 + layers / 8.0;
+        requireArranged("the world support must stand inside the deck's support probe and below its top (top "
+                + builtTop + ", deck top " + edgeTop[1] + ")",
+                builtTop < edgeTop[1] && edgeTop[1] - builtTop < DECK_SUPPORT_PROBE);
+
+        long mark = carryLog.markInstrumented();
+        double[] at = toWorld(craft, standX, 0.1, -0.5);
+        Reply spawned = Reply.of(arrange("stellurgytest entity spawn 0 " + at[0] + " " + at[1] + " " + at[2]
+                + " minecraft:armor_stand").raw());
+        requireArranged("the armor stand must have been spawned: " + spawned, spawned.boolOr("spawned", false));
+        int standId = spawned.integer("entityId");
+        String id = String.valueOf(standId);
+        GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
+        requireTicked(craft, standId);
+        onTheDeckTop(craft, standId, "the deck's edge");
+        String touches = carryLog.since(mark, "entity_touched_ship");
+        Events.assertInstrumentRan(touches, "entity_ship_touch_events",
+                "the substrate associated the stand with the craft");
+        requireArranged("the substrate must have associated the stand with THIS craft as it landed on the edge,"
+                + " or it would never carry it, held or not: " + touches,
+                Events.anyRecordHasAll(touches, "entity", id, "vsShip", craft.shipId));
+        String before = carryLog.since(mark, "substrate_carry_visit");
+        requireArranged("the deck must have declined the stand over the world support, or it took a body the"
+                + " substrate had never been allowed to carry: " + before,
+                Events.recordsWhere(before, "e", id).isEmpty());
+
+        long taken = carryLog.mark();
+        double jumpedAt = deckPoint(craft, standId)[3];
+        Reply jumped = Reply.of(arrange("stellurgytest entity set-motion 0 " + standId + " 0.0 " + JUMP_MOTION
+                + " 0.0").raw());
+        requireArranged("the stand must have been given its jump: " + jumped, jumped.ok());
+        if (snow != null) {
+            arrange("setblock " + bx + " " + y0 + " " + bz + " minecraft:air");
+        }
+        arrange("setblock " + bx + " " + stoneY + " " + bz + " minecraft:air");
+        Reply flown = Reply.of(arrange("stellurgytest vs force-vel-by-id 0 " + craft.shipId + " "
+                + (-side * CARRY_FLIGHT_SPEED) + " 0.0 0.0").raw());
+        requireArranged("the craft must accept the flight command: " + flown, flown.bool("afcResolved"));
+        double shipXBefore = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId).x;
+        GameTicks.advance(client(), GameTicks.server(), CARRY_WINDOW_TICKS);
+        double flownX = ShipInfo.byId(c -> read(c).raw(), 0, craft.shipId).x - shipXBefore;
+        arrange("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
+
+        String visits = carryLog.since(taken, "substrate_carry_visit");
+        String applied = carryLog.since(taken, "substrate_carry_applied");
+        Events.assertInstrumentRan(visits, "substrate_carry_events",
+                "the substrate's carry never moved the held stand");
+        // A quarter of the commanded travel: the craft starts from rest and ramps up (measured 2026-10-17,
+        // healthy: 1.70 of 3.0), and all this premise needs is that its pose was moving between ticks.
+        double commanded = CARRY_FLIGHT_SPEED * CARRY_WINDOW_TICKS / 20.0;
+        requireArranged("the craft must have flown while the stand lay on it (moved " + flownX + " blocks of a"
+                + " commanded " + commanded + ")", Math.abs(flownX) >= commanded / 4.0);
+        java.util.List<String> heldVisits = Events.recordsWhereAll(visits, "e", id, "heldShip", craft.shipId);
+        requireArranged("the deck must have held the stand for most of the window, or a carry it escaped is"
+                + " about nothing (held at " + heldVisits.size() + " of " + CARRY_WINDOW_TICKS + " carry steps): "
+                + visits, heldVisits.size() >= CARRY_WINDOW_TICKS / 2);
+        // The one state in which the substrate would carry a held body: taken by the deck while still in
+        // the air, within the substrate's association lifetime of its last touch (the jump) - once a
+        // held body's own update ends on the deck, the substrate's own bookkeeping forgets the hull.
+        String firstHeld = heldVisits.get(0);
+        double heldAfter = Events.number(firstHeld, "ticks") - jumpedAt;
+        requireArranged("the deck must have taken the stand in the air, within " + SUBSTRATE_STICK_TICKS
+                + " ticks of its jump off the hull (taken " + heldAfter + " ticks after): " + firstHeld,
+                "false".equals(Events.text(firstHeld, "onGround")) && heldAfter < SUBSTRATE_STICK_TICKS);
+
+        java.util.List<String> carriedWhileHeld = Events.recordsWhereAll(applied, "e", id, "held", "true");
+        System.out.println("[deck-living] substrateCarry heldVisits=" + heldVisits.size() + " carriedWhileHeld="
+                + carriedWhileHeld.size() + " flownX=" + flownX + " firstVisit="
+                + (heldVisits.isEmpty() ? "none" : heldVisits.get(0)));
+        assertTrue("a body a deck holds must be moved by the deck alone (C30 ENT-7): the substrate's carry"
+                + " moved the held stand " + carriedWhileHeld.size() + " times: " + carriedWhileHeld,
+                carriedWhileHeld.isEmpty());
     }
 
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",

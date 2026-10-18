@@ -39,7 +39,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
      */
     public static final Set<String> OBSERVATION =Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "MixinChunkLoadCount", "MixinWorldEntityRemoval", "MixinWorldFlightComputerTickCensus",
-            "MixinEntityPositionWriters", "MixinEntityShipTouchEvents", "MixinAboardBodiesEvents",
+            "MixinEntityPositionWriters", "MixinEntityShipTouchEvents", "MixinSubstrateCarryEvents", "MixinAboardBodiesEvents",
             "MixinSpaceSubsystemSaveFaultEvents", "MixinPlanetWeatherCycleEvents", "MixinEntityVelocityWriters",
             "MixinShipTransformEntityWrites", "MixinShipVelocityAtPoint",
             "MixinDeckMovementBoundInputs", "MixinFlightComputerMotionSample",
