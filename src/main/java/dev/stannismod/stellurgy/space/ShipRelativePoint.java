@@ -97,7 +97,7 @@ public final class ShipRelativePoint {
             return null;
         }
         String vsShipId = ShipFrameTravel.aboardShipId(body);
-        if (vsShipId == null || !vsShipId.equals(VSIntegration.registeredShipIdManagingBlock(world, afcPos))) {
+        if (vsShipId == null || !vsShipId.equals(VSIntegration.shipIdOfBlock(world, afcPos))) {
             return null;
         }
         double[] deckPoint = ShipFrameTravel.aboardShipFramePoint(body);
@@ -123,7 +123,7 @@ public final class ShipRelativePoint {
             if (!(te instanceof TileAdvancedFlightComputer)) {
                 continue;
             }
-            if (vsShipId.equals(VSIntegration.registeredShipIdManagingBlock(world, te.getPos()))) {
+            if (vsShipId.equals(VSIntegration.shipIdOfBlock(world, te.getPos()))) {
                 return te.getPos();
             }
         }

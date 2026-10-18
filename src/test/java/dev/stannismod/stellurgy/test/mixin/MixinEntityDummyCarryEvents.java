@@ -52,7 +52,7 @@ public abstract class MixinEntityDummyCarryEvents {
         }
         TestTrace.instrument(passenger, INSTRUMENT);
         BlockPos seatPos = ((EntityDummy) self).getSeatPos();
-        String shipId = seatPos == null ? null : VSIntegration.registeredShipIdManagingBlock(self.world, seatPos);
+        String shipId = seatPos == null ? null : VSIntegration.shipIdOfBlock(self.world, seatPos);
         double[] ship = seatPos == null ? null : VSIntegration.getShipWorldPosition(self.world, seatPos);
         TestTrace.record(passenger, "seat_carried", "\"e\":" + passenger.getEntityId()
                 + ",\"seat\":" + self.getEntityId()

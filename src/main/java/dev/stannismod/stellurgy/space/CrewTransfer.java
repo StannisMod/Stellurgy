@@ -493,7 +493,7 @@ public final class CrewTransfer {
         // hold outlives the moment, and the ship it waits for is precisely the one that arrived.
         dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.holdOnDeck(player,
                 vsShipUuid == null
-                        ? VSIntegration.registeredShipIdManagingBlock(dstWorld, afc.pos) : vsShipUuid.toString(),
+                        ? VSIntegration.shipIdOfBlock(dstWorld, afc.pos) : vsShipUuid.toString(),
                 sub[0], sub[1], sub[2]);
         return null;
     }
@@ -629,7 +629,7 @@ public final class CrewTransfer {
                 seen.add(p.getX() + "," + p.getY() + "," + p.getZ() + "="
                         + ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) te)
                                 .shipIdOrNull()
-                        + "@" + VSIntegration.registeredShipIdManagingBlock(world, p));
+                        + "@" + VSIntegration.shipIdOfBlock(world, p));
             }
             boolean inYard = yard != null && yard.contains(new net.minecraft.util.math.Vec3d(
                     p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5));

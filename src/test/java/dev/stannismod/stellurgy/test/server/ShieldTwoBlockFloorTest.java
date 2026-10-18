@@ -181,7 +181,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
             on = "2026-10-15")
     @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "no coil spent on nothing",
             member = "TileEntityFieldGenerator#update",
-            at = "if (VSIntegration.isShipyardRemnant(pos, VSIntegration.registeredShipIdManagingBlock(world, pos)))",
+            at = "if (VSIntegration.isShipyardRemnant(pos, VSIntegration.shipIdOfBlock(world, pos)))",
             replacedBy = "if (false)",
             fails = "an emitter in the shipyard that no ship claims spent its coil on a shell over nothing",
             on = "2026-10-15")

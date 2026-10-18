@@ -1331,7 +1331,7 @@ public final class ShipTransitManager {
             return;
         }
         String vsShipId = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                .registeredShipIdManagingBlock(world, originAnchor);
+                .shipIdOfBlock(world, originAnchor);
         if (vsShipId == null) {
             LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: nothing manages the "
                     + "origin anchor {} in slot {}", shipId, originAnchor, originSlotDim);

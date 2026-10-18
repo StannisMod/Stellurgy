@@ -155,7 +155,7 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
         String dim = self.getWorld() == null ? "null"
                 : String.valueOf(self.getWorld().provider.getDimension());
         String vsShip = self.getWorld() == null || self.getPos() == null ? null
-                : VSIntegration.registeredShipIdManagingBlock(self.getWorld(), self.getPos());
+                : VSIntegration.shipIdOfBlock(self.getWorld(), self.getPos());
         TestTrace.recordHere("pilot_input_set", stellurgyTest$posAndShip()
                 + ",\"dim\":" + dim + ",\"vsShip\":\"" + vsShip + "\""
                 + ",\"input\":\"" + what + "\"" + channels);
@@ -376,7 +376,7 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
         }
         TestTrace.recordHere("afc_attitude", stellurgyTest$posAndShip()
                 + ",\"dim\":" + self.getWorld().provider.getDimension()
-                + ",\"vsShip\":\"" + VSIntegration.registeredShipIdManagingBlock(self.getWorld(), self.getPos()) + "\""
+                + ",\"vsShip\":\"" + VSIntegration.shipIdOfBlock(self.getWorld(), self.getPos()) + "\""
                 + ",\"via\":\"" + (probe != null ? "probe" : "pilot") + "\""
                 + ",\"upY\":" + TestTrace.fmt(1.0 - 2.0 * (q.x * q.x + q.z * q.z))
                 + ",\"qw\":" + TestTrace.fmt(q.w) + ",\"qx\":" + TestTrace.fmt(q.x)

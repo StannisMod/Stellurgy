@@ -113,7 +113,7 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
     public boolean isManagedByShip(World seatWorld) {
         return seatWorld != null
                 && dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .registeredShipIdManagingBlock(seatWorld, pos) != null;
+                        .shipIdOfBlock(seatWorld, pos) != null;
     }
 
     /** Client-side: the linked computer's Flight-Assist state, as last synced from the server.

@@ -27,7 +27,7 @@ public final class FieldFrames {
         if (world == null || pos == null) {
             return WorldFieldFrame.INSTANCE;
         }
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.shipIdOfBlock(world, pos);
         if (shipId != null) {
             return new ShipFieldFrame(world, shipId);
         }

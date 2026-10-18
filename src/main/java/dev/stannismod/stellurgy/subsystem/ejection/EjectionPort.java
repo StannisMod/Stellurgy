@@ -71,7 +71,7 @@ public final class EjectionPort {
         EntityItem item = new EntityItem(world, x, y, z, stack.copy());
         item.setPickupDelay(20);
 
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.shipIdOfBlock(world, pos);
         double[] carry = shipId == null ? null : VSIntegration.shipVelocityAtPointFor(world, shipId, x, y, z);
         double carryX = carry == null ? 0.0D : carry[0];
         double carryY = carry == null ? 0.0D : carry[1];

@@ -274,7 +274,7 @@ public final class DeckHold {
         // aboard at his post and tell him who took the chair.
         player.dismountRidingEntity();
         respawned.setDead();
-        String shipId = VSIntegration.registeredShipIdManagingBlock(player.world, seatPos);
+        String shipId = VSIntegration.shipIdOfBlock(player.world, seatPos);
         if (shipId != null) {
             double subX = seatPos.getX() + 0.5, subY = seatPos.getY(), subZ = seatPos.getZ() + 0.5;
             double[] deck = VSIntegration.toWorldFrameFor(player.world, shipId, subX, subY, subZ);
@@ -626,7 +626,7 @@ public final class DeckHold {
         if (afcPos == null) {
             return;
         }
-        String shipId = VSIntegration.registeredShipIdManagingBlock(player.world, afcPos);
+        String shipId = VSIntegration.shipIdOfBlock(player.world, afcPos);
         double[] sub = dev.stannismod.stellurgy.space.ShipRelativePoint.subspacePointOf(
                 afcPos, hold.dx, hold.dy, hold.dz);
         if (shipId != null && sub != null) {

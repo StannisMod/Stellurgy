@@ -365,7 +365,7 @@ public class TileNavigationComputer extends TileInventoryHatch
      */
     private void adoptShipFlightComputer() {
         String myShip = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                .registeredShipIdManagingBlock(world, pos);
+                .shipIdOfBlock(world, pos);
         if (myShip == null) {
             return; // not aboard a ship — there is nothing to adopt
         }
@@ -376,7 +376,7 @@ public class TileNavigationComputer extends TileInventoryHatch
             }
             BlockPos afc = te.getPos();
             if (!myShip.equals(dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .registeredShipIdManagingBlock(world, afc))) {
+                    .shipIdOfBlock(world, afc))) {
                 continue; // another ship's flight computer
             }
             linkToFlightComputer(afc);

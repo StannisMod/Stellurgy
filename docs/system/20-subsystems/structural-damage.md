@@ -203,7 +203,7 @@ refusal. A block nothing crafts cannot be priced and is refused; the pickaxe rem
 Full rules in contract C20. Neither damage nor repair asks a war switch (`weapons` MECH-GUN-35); the welder's own verdicts are pinned by `RepairWelderTest`.
 
 **MECH-DMG-36 — The ship bay works the ship it stands on, and only that (repair T1).** A
-`TileRepairBay` resolves its own ship by `VSIntegration.registeredShipIdManagingBlock` and its work as
+`TileRepairBay` resolves its own ship by `VSIntegration.shipIdOfBlock` and its work as
 the damaged positions inside that ship's shipyard box (`VSIntegration.shipyardBoundsOf`), in BOTH
 homes of a stage: the damage records there (`BlockDamageSavedData#positionsIn`), then every tile of
 the box's LOADED chunks that carries `IPartWear` with a stage above 0 — an engine, a tank

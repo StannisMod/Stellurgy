@@ -178,7 +178,7 @@ locked is a player's decision rather than a fault; dead alone stops the shooting
 
 **MECH-GUN-09 — A ship gun aims in the ship's frame; a ground gun aims in the world's.** The mount's
 bearing is held in whichever frame the gun sits in, so a rolling hull carries the barrel exactly as it
-carries the deck. The ship id comes from the REGISTRY (`registeredShipIdManagingBlock`), so a gun does
+carries the deck. The ship id comes from the REGISTRY (`shipIdOfBlock`), so a gun does
 not stop belonging to its ship when nobody is near enough for it to be simulated.
 `TurretFireControl.java:48-73`, `TileTurret.java:115-121` [V]
 

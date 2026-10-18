@@ -1142,7 +1142,7 @@ public final class VSIntegration {
      * — so its coordinates are a shipyard address with no place in the world, and anything that reads
      * them as world coordinates acts in the region every parked hull sits in.
      *
-     * <p>{@code shipId} is {@link #registeredShipIdManagingBlock}'s answer for {@code pos}, passed by a
+     * <p>{@code shipId} is {@link #shipIdOfBlock}'s answer for {@code pos}, passed by a
      * caller that already holds it; the remnant decision is this one method for every subsystem.</p>
      */
     public static boolean isShipyardRemnant(BlockPos pos, String shipId) {
@@ -1167,9 +1167,9 @@ public final class VSIntegration {
      * of the id, through the id-keyed operations below ({@link #toWorldFrameFor} and its family),
      * which answer {@code null} while the ship has no physics object.</p>
      */
-    public static String registeredShipIdManagingBlock(World world, BlockPos pos) {
+    public static String shipIdOfBlock(World world, BlockPos pos) {
         return (world == null || pos == null)
-                ? null : VSBridge.registeredShipIdManagingBlock(world, pos);
+                ? null : VSBridge.shipIdOfBlock(world, pos);
     }
 
     /** UUID strings of every loaded ship whose grown world AABB contains {@code (x,y,z)} — the

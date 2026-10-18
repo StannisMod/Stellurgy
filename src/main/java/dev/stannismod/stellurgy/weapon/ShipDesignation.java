@@ -44,7 +44,7 @@ public final class ShipDesignation {
      *         the pilot has already been told the reason for
      */
     public static String designate(World world, BlockPos seatPos, EntityPlayer pilot) {
-        String own = VSIntegration.registeredShipIdManagingBlock(world, seatPos);
+        String own = VSIntegration.shipIdOfBlock(world, seatPos);
         if (own == null) {
             pilot.sendMessage(new TextComponentTranslation("msg.shipDesignation.notAboard"));
             return null;
@@ -85,7 +85,7 @@ public final class ShipDesignation {
             for (TileWeaponConsole console : manager.nodesIn(WeaponNetworkDomain.INSTANCE, world,
                     TileWeaponConsole.class)) {
                 WeaponNetworkState network = console.network();
-                if (network != null && own.equals(VSIntegration.registeredShipIdManagingBlock(world,
+                if (network != null && own.equals(VSIntegration.shipIdOfBlock(world,
                         console.getPos()))) {
                     batteries.add(network);
                 }

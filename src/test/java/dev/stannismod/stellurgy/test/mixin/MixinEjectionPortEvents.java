@@ -56,7 +56,7 @@ public abstract class MixinEjectionPortEvents {
     }
 
     private static String stellurgyTest$describe(Entity item, World world, BlockPos pos) {
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.shipIdOfBlock(world, pos);
         StringBuilder payload = new StringBuilder()
                 .append("\"portX\":").append(pos.getX())
                 .append(",\"portY\":").append(pos.getY())

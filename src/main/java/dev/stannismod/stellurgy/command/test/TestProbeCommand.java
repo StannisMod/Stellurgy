@@ -2235,7 +2235,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            String owner = dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipIdManagingBlock(
+            String owner = dev.stannismod.stellurgy.integration.vs.VSIntegration.shipIdOfBlock(
                     world, new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)));
             send(sender, "{\"ok\":true,\"managed\":" + (owner != null)
                     + ",\"shipId\":" + (owner == null ? "null" : "\"" + escapeJson(owner) + "\"") + "}");
@@ -2926,13 +2926,13 @@ public class TestProbeCommand extends CommandBase {
             // and resolved through a nearest-ship lookup: a caller that meant one particular hull
             // was trusting a distance to a thing that has no extent in the world. The seat is
             // matched through the ship's own chunk CLAIM on its registry record
-            // (registeredShipIdManagingBlock), so the seat found belongs to that hull or none is
+            // (shipIdOfBlock), so the seat found belongs to that hull or none is
             // returned.
             wantShipId = args[3];
             dev.stannismod.stellurgy.tile.TilePilotSeat seat = null;
             for (dev.stannismod.stellurgy.tile.TilePilotSeat candidate : seats) {
                 if (wantShipId.equals(dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .registeredShipIdManagingBlock(world, candidate.getPos()))) {
+                        .shipIdOfBlock(world, candidate.getPos()))) {
                     seat = candidate;
                     break;
                 }
@@ -4946,7 +4946,7 @@ public class TestProbeCommand extends CommandBase {
         }
         world.getChunkProvider().provideChunk(afc.getX() >> 4, afc.getZ() >> 4);
         String ship = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                .registeredShipIdManagingBlock(world, afc);
+                .shipIdOfBlock(world, afc);
         if (!(world.getTileEntity(afc) instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)
                 || ship == null) {
             send(sender, "{\"error\":\"no assembled ship's flight computer at that position\"}");

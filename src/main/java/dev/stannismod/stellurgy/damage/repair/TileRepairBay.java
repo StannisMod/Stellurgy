@@ -146,7 +146,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
     /** Find a position of this bay's ship to work, claim it, and say what this bay is doing. */
     private void look() {
         size = RepairBaySize.of(world, pos);
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.shipIdOfBlock(world, pos);
         // Null when this block belongs to no registered ship.
         AxisAlignedBB yard = shipId == null ? null : VSIntegration.shipyardBoundsOf(world, UUID.fromString(shipId));
         if (yard == null) {

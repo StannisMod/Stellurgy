@@ -1204,7 +1204,7 @@ public class TileAdvancedFlightComputer extends TileEntity
      */
     private void tickMassRound() {
         String vsShipId = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                .registeredShipIdManagingBlock(world, getPos());
+                .shipIdOfBlock(world, getPos());
         if (vsShipId == null) {
             return; // not aboard a ship, or the mod is absent: nothing to weigh
         }
@@ -1280,7 +1280,7 @@ public class TileAdvancedFlightComputer extends TileEntity
     private double clientWheelFill = 0.0D;
 
     private void tickFlightModel() {
-        String vsShipId = VSIntegration.registeredShipIdManagingBlock(world, getPos());
+        String vsShipId = VSIntegration.shipIdOfBlock(world, getPos());
         if (vsShipId == null) {
             flightModel = null;
             return;
@@ -1505,7 +1505,7 @@ public class TileAdvancedFlightComputer extends TileEntity
             return;
         }
         durableIdBindAttempted = true;
-        String vsShipId = VSIntegration.registeredShipIdManagingBlock(world, getPos());
+        String vsShipId = VSIntegration.shipIdOfBlock(world, getPos());
         if (vsShipId == null) {
             return; // not aboard a ship: a computer on the ground has no record to bind
         }

@@ -81,7 +81,7 @@ public final class AboardBodies {
         if (world == null || afcPos == null) {
             return stowed;
         }
-        String vsShipId = VSIntegration.registeredShipIdManagingBlock(world, afcPos);
+        String vsShipId = VSIntegration.shipIdOfBlock(world, afcPos);
         AxisAlignedBB stay = vsShipId == null
                 ? null : VSIntegration.subspaceStayRegion(world, vsShipId, ABOARD_MARGIN);
         if (stay == null) {
@@ -173,7 +173,7 @@ public final class AboardBodies {
         // ship. A null here is an inconsistency rather than a "not yet" — but it is treated as "not
         // yet" deliberately: retrying is what the caller already does, while placing an UNHELD body
         // would be the very defect this method exists to avoid, dressed as success.
-        String shipId = VSIntegration.registeredShipIdManagingBlock(dstWorld, afcPos);
+        String shipId = VSIntegration.shipIdOfBlock(dstWorld, afcPos);
         if (shipId == null) {
             LOGGER.warn("[SPACE] the ship at {} answers for its own points but has no id to hold a "
                     + "carried body to; releasing nothing this pass", afcPos);

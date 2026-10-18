@@ -82,7 +82,7 @@ public final class ThermalBody {
             return null;
         }
         AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, anchor);
+        String shipId = VSIntegration.shipIdOfBlock(world, anchor);
         List<HeatNetworkState> loops = loopsOf(world, handler, shipId, (HeatNetworkState) own);
 
         int volume = 0;
@@ -137,7 +137,7 @@ public final class ThermalBody {
                 continue;
             }
             if (shipId != null) {
-                if (!shipId.equals(VSIntegration.registeredShipIdManagingBlock(world, pos))) {
+                if (!shipId.equals(VSIntegration.shipIdOfBlock(world, pos))) {
                     continue;
                 }
             } else if (!sharesACompartment(handler, hull, (HeatNetworkState) state)) {

@@ -254,7 +254,7 @@ public class EntityDummy extends Entity {
         if (exit instanceof net.minecraft.entity.player.EntityPlayerMP) {
             // The anchor ship, resolved from the seat's SUBSPACE block - unambiguous (subspace claims
             // of distinct ships never overlap), unlike containment among overlapping world boxes.
-            String shipId = VSIntegration.registeredShipIdManagingBlock(world, seatPos);
+            String shipId = VSIntegration.shipIdOfBlock(world, seatPos);
             if (shipId != null) {
                 dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
                         new dev.stannismod.stellurgy.network.PacketDeckCapture(
@@ -359,7 +359,7 @@ public class EntityDummy extends Entity {
             return world.getBlockState(seat).getBlock() instanceof dev.stannismod.stellurgy.block.BlockSeat;
         }
         return VSIntegration.isBlockInShipyard(seat)
-                && VSIntegration.registeredShipIdManagingBlock(world, seat) != null;
+                && VSIntegration.shipIdOfBlock(world, seat) != null;
     }
 
     @Override

@@ -86,27 +86,27 @@ public class UnsimulatedHullGroupTest extends AbstractSharedServerTest {
             on = "2026-10-07")
     @RedWitness(verdict = "DOMAIN while simulated",
             member = "ShieldDomains#forBlock",
-            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            at = "String shipId = VSIntegration.shipIdOfBlock(world, pos);",
             replacedBy = "String shipId = null;",
             fails = "while the hull is simulated, its emitter must be in the hull's shield domain",
             on = "2026-10-07")
     @RedWitness(verdict = "the aboard-and-ready link",
             member = "FieldFrames#forBlock",
-            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
+            at = "String shipId = VSIntegration.shipIdOfBlock(world, pos);",
             replacedBy = "String shipId = null;",
             fails = "the emitter never resolved its frame onto hull",
             on = "2026-10-07")
     @RedWitness(verdict = "FRAME",
             member = "FieldFrames#forBlock",
-            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
-            replacedBy = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos); if (shipId != null"
+            at = "String shipId = VSIntegration.shipIdOfBlock(world, pos);",
+            replacedBy = "String shipId = VSIntegration.shipIdOfBlock(world, pos); if (shipId != null"
                 + " && VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) == null) { shipId = null; }",
             fails = "an emitter aboard a hull nobody is near was not framed on its own hull",
             on = "2026-10-15")
     @RedWitness(verdict = "DOMAIN after the unload",
             member = "ShieldDomains#forBlock",
-            at = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);",
-            replacedBy = "String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos); if (shipId != null"
+            at = "String shipId = VSIntegration.shipIdOfBlock(world, pos);",
+            replacedBy = "String shipId = VSIntegration.shipIdOfBlock(world, pos); if (shipId != null"
                 + " && VSIntegration.toWorldFrameFor(world, shipId, 0.0D, 0.0D, 0.0D) == null) { shipId = null; }",
             fails = "an emitter aboard a hull nobody is near left the hull's shield domain",
             on = "2026-10-15")

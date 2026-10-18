@@ -342,7 +342,7 @@ public final class ShipDrive {
      * live one because a ship nobody stands near still owns its machines.</p>
      */
     private AxisAlignedBB yardBounds() {
-        String myShip = VSIntegration.registeredShipIdManagingBlock(world, flightComputerPos);
+        String myShip = VSIntegration.shipIdOfBlock(world, flightComputerPos);
         if (myShip == null) {
             return null; // not aboard a ship — an unassembled build on the ground
         }

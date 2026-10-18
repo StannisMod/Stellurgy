@@ -10,7 +10,7 @@ import net.minecraft.world.World;
  * so every console on a ship edits the same configuration and destroying one console loses nothing.
  *
  * <p>Two kinds exist. A block a ship's registry record claims belongs to that ship's domain, which
- * follows the hull wherever it flies (the same {@code registeredShipIdManagingBlock} resolution the
+ * follows the hull wherever it flies (the same {@code shipIdOfBlock} resolution the
  * field frame uses, so frame and domain can never disagree) — whether or not anybody is near enough
  * for the hull to be simulated. Everything else — a planet base, an asteroid outpost —
  * belongs to its dimension's domain. Base identity has no first-class concept in Stellurgy yet, so a dimension
@@ -31,7 +31,7 @@ public final class ShieldDomains {
         if (world == null || pos == null) {
             return null;
         }
-        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.shipIdOfBlock(world, pos);
         if (shipId != null) {
             return SHIP_PREFIX + shipId;
         }

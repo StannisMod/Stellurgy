@@ -341,7 +341,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
     @RedWitness(verdict = "the shipyard gun runs", member = "TileTurret#update",
             at = "if (!registered) {",
             replacedBy = "if (dev.stannismod.stellurgy.integration.vs.VSIntegration.isShipyardRemnant(pos,"
-                + " dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipIdManagingBlock(world, pos)))"
+                + " dev.stannismod.stellurgy.integration.vs.VSIntegration.shipIdOfBlock(world, pos)))"
                 + " { return; } if (!registered) {",
             fails = "the shipyard gun never counted its build",
             on = "2026-10-15")

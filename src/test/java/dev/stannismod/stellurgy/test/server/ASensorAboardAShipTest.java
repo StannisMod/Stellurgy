@@ -107,7 +107,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
 
         // The sensor goes on top of the pilot seat: the seat is a block this hull owns, and the block
         // above it is in the same chunk column of the yard. Whether it landed on THIS hull is then
-        // read back from the same question production asks (registeredShipIdManagingBlock).
+        // read back from the same question production asks (shipIdOfBlock).
         Reply seat = read("stellurgytest vs find-seat " + DIM + " id " + hull).requireOk("find the hull's seat");
         requireArranged("hull " + hull + " has no pilot seat to build on: " + seat, seat.bool("seatFound"));
         int sx = seat.integer("seatX"), sy = seat.integer("seatY") + 1, sz = seat.integer("seatZ");

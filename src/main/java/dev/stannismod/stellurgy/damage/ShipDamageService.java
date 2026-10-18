@@ -221,7 +221,7 @@ public final class ShipDamageService {
                 continue;
             }
             BlockPos pos = new BlockPos(Math.floor(local[0]), Math.floor(local[1]), Math.floor(local[2]));
-            if (candidate.equals(VSIntegration.registeredShipIdManagingBlock(world, pos))) {
+            if (candidate.equals(VSIntegration.shipIdOfBlock(world, pos))) {
                 return candidate;
             }
         }

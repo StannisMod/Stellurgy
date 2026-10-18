@@ -105,7 +105,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
             updateClientPrediction();
             return;
         }
-        if (VSIntegration.isShipyardRemnant(pos, VSIntegration.registeredShipIdManagingBlock(world, pos))) {
+        if (VSIntegration.isShipyardRemnant(pos, VSIntegration.shipIdOfBlock(world, pos))) {
             // A remnant: no ship owns this block, so its position is a shipyard address with no place
             // in the world. It does not draw on its coil, project, or push anyone: a field it cannot
             // place has nothing correct to do.

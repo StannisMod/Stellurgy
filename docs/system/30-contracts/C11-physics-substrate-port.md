@@ -21,7 +21,7 @@ physics substrate, in one place, so a future backend swap has a finite, known su
 **port** = the Stellurgy-owned code permitted to name substrate types. **facade** = `VSIntegration`, the
 Stellurgy-facing API that carries no substrate types. **business logic** = everything else (space/, crew,
 tiles, events, GUI, commands). **ship id** = the substrate's ship identity as a string, read off the
-ship's REGISTRY RECORD (`VSIntegration.registeredShipIdManagingBlock`; bridge `VSBridge`) `[V]` — and it
+ship's REGISTRY RECORD (`VSIntegration.shipIdOfBlock`; bridge `VSBridge`) `[V]` — and it
 IS Stellurgy's own durable `shipId` (C10), the same value, not a second one (PORT-13). **simulated** =
 the ship has a physics object, which the substrate builds only while a player is within its load
 distance; a ship that is not simulated is still named, still has a persisted transform, and its chunks
@@ -61,7 +61,7 @@ may be loaded and ticking (PORT-16).
   | frame conversion, **id-keyed** | `toShipFrameFor`, `toWorldFrameFor`, `rotateToShipFrameFor`, `rotateToWorldFrameFor`, **`renderToWorldFrameFor`** |
   | attitude / transform reads | `getShipAttitude`, `shipAttitudeAt`, `shipAttitudeForId`, `shipWorldPosition`, `seatWorldPosition`, `shipDownDirection` |
   | velocity reads | `shipLinearVelocity` (blocks/second), `shipVelocityAtPointFor` (blocks/**tick** — converted in the port; there is no per-second variant), `shipAngularVelocityById` |
-  | ownership / identity | `registeredShipIdManagingBlock` (THE block→ship entry point, PORT-16), `isBlockInShipyard`, `isShipyardRemnant`, `shipIdsAt`, `shipyardBoundsAt`, `subspaceStayRegion`, `shipBlockCount` |
+  | ownership / identity | `shipIdOfBlock` (THE block→ship entry point, PORT-16), `isBlockInShipyard`, `isShipyardRemnant`, `shipIdsAt`, `shipyardBoundsAt`, `subspaceStayRegion`, `shipBlockCount` |
   | kinematic transform-set | `teleportShipToByUuid` (guard-flag recipe — see PORT-9) |
   | lifecycle / assembly | `assembleTier2Ship`, `assembleBuiltTier2Ship`, `parkShipAt`, `unparkShipAt`, `declareDeparture`, `loadAllShipsCounted`, `loadShip`, `ensureShipPhysicsEnabled`, `discardShip` |
   | substrate configuration | `shipYPositionMaximum(World)`, `coverShipAltitudeBand(World, floor, ceiling)` (per-world band, not config statics) |
@@ -172,8 +172,8 @@ may be loaded and ticking (PORT-16).
   contract) — fixed without a red test.
 
 - **PORT-16** `[T][SYS]` **ONE ENTRY POINT FOR A BLOCK'S SHIP, AND IT READS THE RECORD.** "Which ship is
-  this block part of" has exactly one answer in the facade, `VSIntegration.registeredShipIdManagingBlock`,
-  and it is read off the ship's REGISTRY RECORD (`VSBridge.registeredShipIdManagingBlock`,
+  this block part of" has exactly one answer in the facade, `VSIntegration.shipIdOfBlock`,
+  and it is read off the ship's REGISTRY RECORD (`VSBridge.shipIdOfBlock`,
   `ValkyrienUtils.getShipManagingBlock` → `QueryableShipData.getShipFromChunk`), never off a physics
   object. **There is no "unnamed ship"**: a spawn injects the claim's chunks and registers the record
   in one synchronous pass on the game thread (`WorldServerShipManager.spawnNewShips`), and a load finds

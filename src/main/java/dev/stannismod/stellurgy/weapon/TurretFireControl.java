@@ -55,7 +55,7 @@ public final class TurretFireControl {
      * ship when no player happens to be near enough for it to be simulated.
      */
     public static String shipIdAt(World world, BlockPos pos) {
-        return VSIntegration.registeredShipIdManagingBlock(world, pos);
+        return VSIntegration.shipIdOfBlock(world, pos);
     }
 
     /**

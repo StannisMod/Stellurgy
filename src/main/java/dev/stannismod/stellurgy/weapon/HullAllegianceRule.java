@@ -95,6 +95,6 @@ public enum HullAllegianceRule implements HullAllegiance {
     }
 
     private static boolean aboard(World world, String shipId, BlockPos pos) {
-        return shipId.equals(VSIntegration.registeredShipIdManagingBlock(world, pos));
+        return shipId.equals(VSIntegration.shipIdOfBlock(world, pos));
     }
 }

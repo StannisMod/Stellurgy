@@ -183,7 +183,7 @@ assembler records the link for every `TileShipComponent` in the build. [T] `Ship
 
 **Which claim, and how it is resolved.** The claim is the one
 BELONGING TO the flight computer's own ship, resolved from the block's managing ship record
-(`VSIntegration.registeredShipIdManagingBlock` → `shipyardBoundsOf`). It is not "the claim of the
+(`VSIntegration.shipIdOfBlock` → `shipyardBoundsOf`). It is not "the claim of the
 registered ship nearest the flight computer", which would rank ships by their WORLD transform position
 against a SUBSPACE block — two frames, so with two ships loaded the drive could skip its own machines
 and permanently adopt a neighbour's. A block's managing claim is exact: distinct ships' claims never
