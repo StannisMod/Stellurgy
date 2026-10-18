@@ -43,15 +43,18 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     /**
      * Regeneration arrives from three blocks away, over ducts the plant never has to know about.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, taken while the network's zone sink was"
-            + " the oxygen vent; the method moved unchanged to the port and now stands at {@code"
-            + " TileVentilationPort#receive}. CLEARS — {@code TileVentilationPort#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}"
-            + " regenerating nothing: \"the plant must clear the room's CO2 through the ducts (removed 0)\". ONE"
-            + " FOR ONE — the same method drawing back half the oxygen it returned: \"and every unit of CO2 it"
-            + " took must come back to the room as oxygen\". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}"
-            + " no longer turning the carbon into dust: \"`slots` holds no element whose `item` is"
-            + " stellurgy:carbondust — it holds 0\". The three network premises are arrangements and are not"
-            + " witnessed.")
+    @RedWitness(verdict = "clears", member = "TileVentilationPort#receive",
+            at = "long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));",
+            replacedBy = "long converted = 0L;",
+            fails = "the plant must clear the room's CO2 through the ducts", on = "2026-10-18")
+    @RedWitness(verdict = "one for one", member = "TileVentilationPort#receive",
+            at = "long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));",
+            replacedBy = "long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume)); air.drawOxygen(converted / 2L);",
+            fails = "and every unit of CO2 it took must come back to the room as oxygen", on = "2026-10-18")
+    @RedWitness(verdict = "dust in the plant", member = "TileLifeSupportPlant#extract",
+            at = "emitDust();",
+            replacedBy = "",
+            fails = "holds no element whose `item` is stellurgy:carbondust", on = "2026-10-18")
     @Test
     public void aCentralPlantRegeneratesARoomItDoesNotStandIn() throws Exception {
         int cxPlant = stand("a stale room ducted to a plant that stands outside it");
@@ -119,12 +122,10 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * Pins INV-NET-01 (domains are isolated: a shield cable in a duct run carries no air).
      */
     @Pins("INV-NET-01")
-    @LegacyWitness(prose = "with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);} letting other domains' cables into"
-            + " the life-support graph: \"the vent's ventilation network must end at the shield cable, with no"
-            + " source on its side: … \\\"sources\\\":1\", 2026-09-30, taken with the oxygen vent as the room's sink."
-            + " The sink premise is an arrangement and is not"
-            + " witnessed. Taken on the pre-merge form {@code SubsystemNetworkRegistry.snapshot(domain)}, the"
-            + " same per-domain snapshot read from the static registry.")
+    @RedWitness(member = "WorldState#rebuild",
+            at = "Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);",
+            replacedBy = "Set<ISubsystemNetworkNode> nodes = new java.util.HashSet<>(registry.snapshot(domain)); nodes.addAll(registry.snapshot(dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager.DOMAIN));",
+            fails = "the port's ventilation network must end at the shield cable", on = "2026-10-18")
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {
         int cxIsolation = stand("a room whose duct run is broken by a shield cable");

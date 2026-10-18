@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -92,10 +93,10 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         arrange("stellurgytest config set " + key + " " + value).requireOk("set " + key);
     }
 
-    @LegacyWitness(prose = "with {@code StructureCrossing#firstAlong} at {@code for (Map.Entry<String, AxisAlignedBB> ship : ships.entrySet())}'s loop over candidate ships skipped (only"
-            + " the world frame traversed), this fails with \"the shot is still in the air with its budget"
-            + " untouched after a step that crossed the hull ... {...present:true,energy:60,hull:null...}\". The"
-            + " block-damaged and crossing-point verdicts were not separately witnessed. 2026-09-30.")
+    @RedWitness(verdict = "the ship's own block damaged", member = "StructureCrossing#shipFrameHit",
+            at = "if (localFrom == null || localTo == null)",
+            replacedBy = "if (localFrom == null || localTo == null || shipId != null)",
+            fails = "the shot crossed the hull but the ship's own block is untouched at its subspace", on = "2026-10-18")
     @LegacyWitness(prose = "with {@code StructureCrossing#visit} at {@code worldPoint = new Vec3d(w[0], w[1], w[2]);} leaving a ship-frame crossing point in"
             + " the ship's frame instead of mapping it back out, this fails at \"after crossing the hull the shot"
             + " is at (1.9200001E7,126.99770000005135,51200.0), 1.919364683222029E7 blocks off the vertical line it"
@@ -183,16 +184,10 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
      * {@code ShotBoresOverTimeTest#aRoundTooPoorForAStageComesOutOfTheFarSide}, which pins that
      * defect on its own. The teleport was only ever coincident with the exit.</p>
      */
-    @LegacyWitness(prose = "with {@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);} answering, for a lodged round, the world point it"
-            + " was embedded at instead of mapping its plate coordinates through the hull's CURRENT pose, this"
-            + " fails with \"the round left the hull when the ship moved: {...z:8800.0...hull:null}\" — the round"
-            + " left behind where the ship used to be. 2026-09-30. (Witnessed on the earlier, single-read form"
-            + " of this method, whose message that is; not re-run against the two-read form below.)")
-    @LegacyWitness(prose = "with {@code ShotFrame.worldPosition} ({@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);}) mapping a lodged"
-            + " round's Z to where the ship used to stand (z 8800) instead of through the hull's current pose,"
-            + " this fails at \"the round left the hull once the ship moved, in the pass the teleport answered in:"
-            + " {...z:8800.0...}\" (2026-09-30). The hull-frame and position verdicts after it were not reached by"
-            + " that inversion.")
+    @RedWitness(verdict = "left the hull", member = "ShotSubstrate#step",
+            at = "ShotFrame.embedIfInside(world, shot, endedInsideHull);",
+            replacedBy = "if (boringHull == null) { ShotFrame.embedIfInside(world, shot, endedInsideHull); }",
+            fails = "the round left the hull once the ship moved", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "int approachSteps = (int) Math.ceil(approach / speed) + 5;",
             why = "each iteration is one probe-driven step of the substrate, and the read after it is of the step"

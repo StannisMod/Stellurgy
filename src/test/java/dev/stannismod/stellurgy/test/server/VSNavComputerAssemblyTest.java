@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -40,9 +40,11 @@ public class VSNavComputerAssemblyTest extends AbstractSharedServerTest {
     /**
      * The assembler links the navigation computer it found in the build, read on the ship it built.
      */
-    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);} (the navigation computer's"
-            + " {@code linkToFlightComputer}) skipped fails \"the assembler must link the navigation computer it"
-            + " found in the build\" with {@code \"linked\":false}, 2026-09-30.")
+    @NotYetRed(prose = "TileRocketAssemblingMachine#assembleRocket at"
+            + " ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor); -> dropped: the verdict stayed"
+            + " green, 2026-10-18 (w2b-replay-9). A second hand links it as well:"
+            + " TileNavigationComputer#adoptShipFlightComputer adopts the flight computer of the ship it stands on,"
+            + " so the verdict does not see which of the two linked it.")
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
 

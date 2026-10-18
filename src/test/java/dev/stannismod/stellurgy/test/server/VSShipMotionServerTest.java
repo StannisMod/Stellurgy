@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
@@ -86,10 +86,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
      * A velocity commanded through the ship's own flight computer moves it; a raw substrate setpoint
      * does not (the control).
      */
-    @LegacyWitness(prose = "with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
-            + " {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by"
-            + " {@code 0.0}, this fails at the subject with \"it moved -0.506 blocks in 25 server ticks, needing"
-            + " more than 1.0\", the setpoint control still green — 2026-09-28.")
+    @RedWitness(verdict = "translates", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "force.set(command.force()).mul(k);",
+            replacedBy = "force.set(command.force()).mul(0.0D);",
+            fails = "needing more than", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);",
             why = "z is read before the setpoint and after this stretch, and the control is an UPPER bound on the"

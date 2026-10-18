@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
@@ -380,9 +381,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a craft delivers the authority
      * its readout reports.</p>
      */
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the allocated force scaled by 0.5 on its"
-            + " way into the solver) fails \"driven forward at its authority, the craft must accelerate at the"
-            + " readout's live surge figure (17.44 m/s²)\" with 8.456 m/s², 2026-09-30")
+    @RedWitness(member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "force.set(command.force()).mul(k);",
+            replacedBy = "force.set(command.force()).mul(k * 0.5D);",
+            fails = "driven forward at its authority, the craft must accelerate at the readout's live surge figure", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = drive(craft,", why = DRIVE_IS_THE_DOSE)
     public void aBuiltShipAcceleratesAsItsReadoutPredicts() throws Exception {
@@ -429,16 +431,18 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that cargo lowers a craft's
      * acceleration and never its force.</p>
      */
-    @LegacyWitness(prose = "{@code ShipHullMass#addContents} at {@code double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);} (a hull's contents weighed at zero) fails \"the flight"
-            + " computer must weigh the cargo that was stowed aboard — the readout's mass must GROW by it\" with"
-            + " no heavier model inside 200 ticks, 2026-09-30 — taken on the pre-merge form of that line, which"
-            + " read the table through the engine's former singleton; the line is otherwise unchanged")
-    @LegacyWitness(prose = "{@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} (each authority scaled by the structural share of the"
-            + " mass) fails \"cargo must not change the craft's surge force\" with empty 4 905 000 N, laden"
-            + " 4 044 474 N, 2026-09-30")
-    @LegacyWitness(prose = "{@code ShipHullMass#addContents} at {@code builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,} (content mass placed ten blocks off the block that holds"
-            + " it) fails \"laden, the craft must accelerate less by exactly the ratio of its masses\" with empty"
-            + " 56.74, laden 28.54 blocks per engine second², 2026-09-30")
+    @RedWitness(verdict = "weighs the cargo", member = "ShipHullMass#addContents",
+            at = "double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);",
+            replacedBy = "double held = 0.0D;",
+            fails = "the flight computer must weigh the cargo that was stowed aboard", on = "2026-10-18")
+    @RedWitness(verdict = "same force", member = "ShipReadout#of",
+            at = "a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);",
+            replacedBy = "a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e) * views[v].mass().getStructuralMass() / views[v].mass().getTotalMass();",
+            fails = "cargo must not change the craft's surge force", on = "2026-10-18")
+    @RedWitness(verdict = "by the mass ratio", member = "ShipHullMass#addContents",
+            at = "builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,",
+            replacedBy = "builder.add(MassContributor.ofBlock(x + 10.5 - ox, y + 0.5 - oy, z + 0.5 - oz,",
+            fails = "laden, the craft must accelerate less by exactly the ratio of its masses", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String emptyDrive = drive(craft,", why = DRIVE_IS_THE_DOSE)
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), BRAKE_TICKS);",
@@ -528,14 +532,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a hull with no actuators has no
      * authority and does not move under command (no transition mode).</p>
      */
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to"
-            + " the solver) fails \"the CONTROL — a craft with motors under the same command — must accelerate"
-            + " at its readout's forward figure, 17.44 m/s²\" (re-witnessed 2026-09-30 on this form, which reads"
-            + " the saturated steps' acceleration instead of the speed reached after the dose)")
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration"
-            + " times mass, bypassing the hull's actuators — the pre-actuator controller) fails \"under a command"
-            + " to go forward and hold its altitude, the motorless hull must not move forward or sideways, and"
-            + " must fall exactly as gravity takes it\", 2026-09-30")
+    @RedWitness(verdict = "the control", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "calc.addForceAndTorque(force, torque);",
+            replacedBy = "",
+            fails = "the CONTROL — a craft with motors under the same command — must accelerate", on = "2026-10-18")
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);}"
+            + " (the force taken as wanted acceleration times mass, bypassing the hull's actuators — the pre-actuator"
+            + " controller) fails \"under a command to go forward and hold its altitude, the motorless hull must not"
+            + " move forward or sideways, and must fall exactly as gravity takes it\", 2026-09-30")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String controlDrive = drive(control,", why = DRIVE_IS_THE_DOSE)
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String onPad = drive(bare,", why = DRIVE_IS_THE_DOSE)
@@ -621,12 +625,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a reaction wheel turns a hull
      * and never pushes it.</p>
      */
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to"
-            + " the solver) fails \"told to turn about the vertical at 2.0 rad per engine second, the wheel-only"
-            + " hull must reach that rate\" with no turn, 2026-09-30")
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration"
-            + " times mass, bypassing the hull's actuators) fails \"turning, the wheel-only hull must not"
-            + " translate\", 2026-09-30")
+    @RedWitness(verdict = "turns", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "calc.addForceAndTorque(force, torque);",
+            replacedBy = "",
+            fails = "the wheel-only hull must reach that rate", on = "2026-10-18")
+    @RedWitness(verdict = "does not translate", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "force.set(command.force()).mul(k);",
+            replacedBy = "force.set(a).mul(model.live().mass().getTotalMass() * k);",
+            fails = "turning, the wheel-only hull must not translate", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String turn = drive(craft,", why = DRIVE_IS_THE_DOSE)
     public void aWheelOnlyHullTurnsAndDoesNotTranslate() throws Exception {
@@ -691,12 +697,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a hull delivers no more than its
      * authority, and that a hull with enough of it hovers.</p>
      */
-    @LegacyWitness(prose = "{@code ShipInertiaWriter#applyTo} at {@code record.setGameTickMass(frame.getTotalMass());} (the physics mass written 10% heavier than the"
-            + " frame the readout is solved for) fails \"told to hover with less heave than weight, the weak craft"
-            + " must sink at what its readout leaves it (-1.6002 m/s²)\" with -4.130 m/s², 2026-09-30")
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code gx = g.x(); gy = g.y(); gz = g.z();} (the gravity feed-forward zeroed) fails"
-            + " \"the CONTROL — a craft whose heave exceeds its weight — must hold its altitude\" with a vertical"
-            + " velocity of -1.6 blocks per engine second, 2026-09-30")
+    @RedWitness(verdict = "sinks", member = "ShipInertiaWriter#applyTo",
+            at = "record.setGameTickMass(frame.getTotalMass());",
+            replacedBy = "record.setGameTickMass(frame.getTotalMass() * 1.1D);",
+            fails = "told to hover with less heave than weight, the weak craft must sink at what its readout leaves it", on = "2026-10-18")
+    @RedWitness(verdict = "the control", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "gx = g.x(); gy = g.y(); gz = g.z();",
+            replacedBy = "",
+            fails = "the CONTROL — a craft whose heave exceeds its weight — must hold its altitude", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String strongHover = drive(strong,", why = DRIVE_IS_THE_DOSE)
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "String weakHover = drive(weak,", why = DRIVE_IS_THE_DOSE)
@@ -769,15 +777,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that the live readout follows the
      * hull as it changes.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, on the form whose wait IS the verdict. With"
-            + " {@code TileAdvancedFlightComputer#tickFlightModel} at {@code boolean due = flightModel == null}"
-            + " (a model rebuilt only when the computer has none), it fails \"with one forward motor gone, the"
-            + " craft's live forward authority must drop below the 4905000.0 N it had, without re-assembly\". With"
-            + " {@code TileAdvancedFlightComputer#rebuildFlightModel} at"
-            + " {@code survey.mass(), survey.design(), survey.live(),} solving every rebuild over the"
-            + " FIRST survey's live actuators instead of the new survey's, the same verdict fails (taken on the"
-            + " form whose line ended {@code HELM_FRAME);}, before the helm frame moved to {@code ControlFrame}). Earlier records"
-            + " (2026-09-30) were taken on a form that waited for the next rebuild and then asserted.")
+    @RedWitness(member = "TileAdvancedFlightComputer#tickFlightModel",
+            at = "boolean due = flightModel == null || loadRound || (hullChanged && now - lastSurveyTick >= SURVEY_MIN_TICKS);",
+            replacedBy = "boolean due = flightModel == null;",
+            fails = "with one forward motor gone, the craft's live forward authority must drop below", on = "2026-10-18")
     @Test
     public void removingAWorkingMotorLowersLiveAuthorityWithoutReassembly() throws Exception {
         standInVacuum();
@@ -892,13 +895,18 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * Pins INV-SFM-14 (a motor worn to its last stage puts no force into the craft).
      */
     @Pins("INV-SFM-14")
-    @LegacyWitness(prose = "one break per place the decision lives, each failing the verdict with \"with every"
-            + " motor worn out, nothing may push the craft in any direction … expected:&lt;0.0&gt; but"
-            + " was:&lt;86.36976495536865&gt;\", 2026-10-07: the wear threshold — {@code"
-            + " ChemicalMotorActuators#working} at {@code wear.getStage() < wear.getMaxStage()} turned to"
-            + " {@code <=}; the routing into LIVE — {@code HullSurvey#collect} at {@code if (block.isWorking(world,"
-            + " pos, state))} made always true; the controller — {@code TileAdvancedFlightComputer#onPhysicsTick}"
-            + " at {@code scheme.allocate(model.live(), a,} handed {@code model.design()}.")
+    @RedWitness(member = "ChemicalMotorActuators#working",
+            at = "wear.getStage() < wear.getMaxStage()",
+            replacedBy = "wear.getStage() <= wear.getMaxStage()",
+            fails = "with every motor worn out, nothing may push the craft in any direction", on = "2026-10-18")
+    @RedWitness(member = "HullSurvey#collect",
+            at = "if (block.isWorking(world, pos, state))",
+            replacedBy = "if (block.isWorking(world, pos, state) || state != null)",
+            fails = "with every motor worn out, nothing may push the craft in any direction", on = "2026-10-18")
+    @RedWitness(member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "scheme.allocate(model.live(), a,",
+            replacedBy = "scheme.allocate(model.design(), a,",
+            fails = "with every motor worn out, nothing may push the craft in any direction", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);",
             why = "the brake's duration; the verdict reads acceleration, never position or speed.")
@@ -992,10 +1000,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * Pins INV-SFM-11 (a wheel the command leaves idle is given back its momentum).
      */
     @Pins("INV-SFM-11")
-    @LegacyWitness(prose = "2026-10-05, after a healthy run (0.0588 → 0.0) — with"
-            + " {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed it"
-            + " fails \"an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705"
-            + " of its capacity, and 20 ticks later 0.058823529411764705\".")
+    @RedWitness(member = "CleanAxisScheme#allocate",
+            at = "desaturate(capability, u, momentum, dt);",
+            replacedBy = "",
+            fails = "an idle craft must give its wheel back", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), UNLOAD_WINDOW_TICKS);",
             why = "the fill is a value that converges; two reads, and the verdict names both.")
@@ -1079,12 +1087,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * Pins INV-SFM-12 (the craft does not turn under a straight push).
      */
     @Pins("INV-SFM-12")
-    @LegacyWitness(prose = "2026-10-07 — {@code CleanAxisScheme#allocate} at {@code recipe ="
-            + " burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} taking the burst recipe"
-            + " unconditionally fails \"a craft whose wheel was spent must not turn … it reached 7.396 rad/s\","
-            + " the turn growing 0.54 → 6.35 rad/s over ticks 10-30 (taken on the form that passed"
-            + " {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same"
-            + " verdict failed at 0.29 rad/s — a kick each time the wheel filled.")
+    @RedWitness(member = "CleanAxisScheme#allocate",
+            at = "recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);",
+            replacedBy = "recipe = capability.recipe(direction, Endurance.BURST);",
+            fails = "a craft whose wheel was spent must not turn", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {",
             why = "the drive is the dose; the wheel is read along it because \"was it spent\" is a question about"
@@ -1176,12 +1182,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a jump's speed is set by the mass
      * of the hull it carries.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, after a healthy run (321 250 → 311 250 kg, 1556 → 1606"
-            + " blocks/tick) — with {@code ShipMassProvider#massOf} at"
-            + " {@code return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));} answering"
-            + " {@code DriveTuning.BASELINE_SHIP_MASS} for every hull, as the placeholder did, it fails \"a lighter"
-            + " hull must be forecast faster by its mass ratio: 321250.0 kg at 125000 blocks/tick, 311250.0 kg"
-            + " at 125000 expected:&lt;1.0321285140562249&gt; but was:&lt;1.0&gt;\".")
+    @RedWitness(member = "ShipMassProvider#massOf",
+            at = "return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));",
+            replacedBy = "return OptionalLong.of(DriveTuning.BASELINE_SHIP_MASS);",
+            fails = "a lighter hull must be forecast faster by its mass ratio", on = "2026-10-18")
     @Test
     public void theDriveForecastsALighterHullFasterByItsMassRatio() throws Exception {
         FixtureSite site = site();
@@ -1282,19 +1286,22 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a ship under unit
      * thrust-to-weight is built only on confirmation.</p>
      */
-    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate's condition inverted, so a"
-            + " craft that CAN hover is the one warned about) fails \"a craft that can hover must be built on the"
-            + " FIRST press\" with shipCut false, 2026-09-30")
-    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate disabled) fails \"a ship that"
-            + " cannot hold its weight here must NOT be built on the first press\" with shipCut true,"
-            + " 2026-09-30")
-    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code warnedThrustToWeight = twr;} (the warned thrust-to-weight never"
-            + " remembered, so every press warns afresh) fails \"a second press on the SAME build must build it\""
-            + " with shipCut false, 2026-09-30")
-    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the"
-            + " physics mod) fails \"the build the second press made must become a named ship\" with no"
-            + " ship_lifecycle named inside 200 ticks, 2026-09-30 — taken on the pre-2026-10-07 form, which handed"
-            + " over a pasted snapshot at that line.")
+    @RedWitness(verdict = "first press", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "if (tier2Readout != null && !tier2Readout.canHover(",
+            replacedBy = "if (tier2Readout != null && tier2Readout.canHover(",
+            fails = "a craft that can hover must be built on the FIRST press", on = "2026-10-18")
+    @RedWitness(verdict = "not on the first press", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "if (tier2Readout != null && !tier2Readout.canHover(",
+            replacedBy = "if (tier2Readout != null && tier2Readout == null && !tier2Readout.canHover(",
+            fails = "a ship that cannot hold its weight here must NOT be built on the first press", on = "2026-10-18")
+    @RedWitness(verdict = "second press", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "warnedThrustToWeight = twr;",
+            replacedBy = "",
+            fails = "a second press on the SAME build must build it", on = "2026-10-18")
+    @RedWitness(verdict = "a named ship", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "VSIntegration.assembleBuiltTier2Ship(world, rocketBB);",
+            replacedBy = "",
+            fails = "the build the second press made must become a named ship", on = "2026-10-18")
     @Test
     public void theAssemblerAsksTwiceBeforeBuildingAShipThatCannotHover() throws Exception {
         standInVacuum();
@@ -1384,11 +1391,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the process exited rather than that a hull was 4% light — so the number arrives here in the
      * record and the failure can carry it.</p>
      */
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 (the {@code Drift} form — with"
-            + " {@code ShipMassTrigger#recompute} at {@code if (event.cause != ShipLifecycleEvent.Cause.LOADED)} comparing only on a LOAD, the wait for this craft's comparison fails —"
-            + " \"the assembly never compared the full hull pass against the running total\"; with"
-            + " {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, the verdict fails on {@code agrees}"
-            + " (\"disagree\").")
+    @RedWitness(verdict = "compared", member = "ShipMassTrigger#recompute",
+            at = "if (event.cause != ShipLifecycleEvent.Cause.LOADED)",
+            replacedBy = "if (event.cause == ShipLifecycleEvent.Cause.LOADED)",
+            fails = "the assembly never compared the full hull pass against the running total", on = "2026-10-18")
+    @RedWitness(verdict = "agrees", member = "ShipInertiaWriter#compare",
+            at = "if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)",
+            replacedBy = "if (!(Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE))",
+            fails = "the full hull pass and the running total the engine kept while assembling this", on = "2026-10-18")
     @Test
     public void theAuthoritativeRecomputeAgreesWithTheIncrementalTotalOnAFreshAssembly()
             throws Exception {
@@ -1426,10 +1436,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * whole fixture. So this separates the two models without pinning the table's exact numbers,
      * which are balance and may be tuned.</p>
      */
-    @LegacyWitness(prose = "with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return Stellurgy.weights().getWeight(asItem);}, read by both the hull pass"
-            + " and the per-block path) answering 1.0 for every block, the verdict fails — \"recorded mass is"
-            + " 35.0 kg, below the 125000.0 kg of iron deck\" — 2026-09-29, taken on the pre-merge form of that"
-            + " line, which read the table through the engine's former singleton.")
+    @RedWitness(member = "StellurgyBlockMass#of",
+            at = "return Stellurgy.weights().getWeight(asItem);",
+            replacedBy = "return 1;",
+            fails = "below the 125000.0 kg of iron deck", on = "2026-10-18")
     @Test
     public void anAssembledShipWeighsWhatTheBlockTableSays() throws Exception {
         long mark = events.markInstrumented();
@@ -1466,10 +1476,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * that is the one arrangement that puts a block diagonally beside the craft once the assembler has
      * lifted it, the way weather does on a real pad. Read as a premise: at least one cell took snow.</p>
      */
-    @LegacyWitness(prose = "with {@code SpatialDetector#tryExpanding} at {@code if (x < footprint.minX || x >"
-            + " footprint.maxX} disabled, the pad verdict fails — \"the ship took 36 of its 36 cells with it … (32"
-            + " snowed-on cells beside it) expected:&lt;36&gt; but was:&lt;0&gt;\" — 2026-10-06. The builder verdict"
-            + " is not witnessed separately.")
+    @RedWitness(verdict = "the pad stays", member = "SpatialDetector#tryExpanding",
+            at = "if (x < footprint.minX || x > footprint.maxX || y < footprint.minY || y > footprint.maxY || z < footprint.minZ || z > footprint.maxZ)",
+            replacedBy = "if (footprint == null)",
+            fails = "cells with it, so the search for the ship's blocks", on = "2026-10-18")
     @Test
     public void aShipAssembledOnASnowedOnPadLeavesTheLaunchSiteBehind() throws Exception {
         FixtureSite site = site();
@@ -1624,9 +1634,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the round's. The consequence — that cargo makes its ship heavier — is
      * {@link #theSameShipCarryingCargoAcceleratesLessByItsMassRatio}'s.</p>
      */
-    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer.tickMassRound} returning before its"
-            + " {@code backgroundRound} call ({@code TileAdvancedFlightComputer#tickMassRound} at {@code dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);}), the round wait fails, \"no record"
-            + " carrying ship = … and path = round was recorded within 200 ticks\", 2026-09-29.")
+    @RedWitness(member = "TileAdvancedFlightComputer#tickMassRound",
+            at = "dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);",
+            replacedBy = "",
+            fails = "and path = round was recorded", on = "2026-10-18")
     @Test
     public void aSettledShipIsMeasuredAgainWithNothingHappeningToIt() throws Exception {
 
@@ -1674,11 +1685,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that the fluid a craft carries is part
      * of its mass.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, after a healthy run (306 250 => 311 250 kg for 1000 mB) — with"
-            + " {@code WeightEngine#heldWeight} at {@code weight += getWeight(info.getContents());} adding nothing"
-            + " for a tank's contents, it fails \"the flight computer must weigh the water poured into the craft's"
-            + " tank — the readout's mass must GROW by it — no `flight_model_changed` for this craft, solved for"
-            + " more than the 306250.0 kg it weighed with its tank empty was recorded within 200 ticks\".")
+    @RedWitness(member = "WeightEngine#heldWeight",
+            at = "weight += (float) fluidMass(info.getContents().getFluid(), info.getContents().amount);",
+            replacedBy = "",
+            fails = "the flight computer must weigh the water poured into the craft's tank", on = "2026-10-18")
     @Test
     public void aFilledTankOutweighsAnEmptyOne() throws Exception {
         FixtureSite site = site();
@@ -1753,20 +1763,18 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Witnessed 2026-10-05, after a healthy run (80.0 kg added, solved at the seat block's middle,
      * 0.30 above its floor), one break per verdict:</p>
      */
-    @LegacyWitness(prose = "with {@code ShipHullMass#isCarried} at {@code if (body.isRiding())} never"
-            + " taken, it fails \"the flight computer must weigh the occupant seated aboard — the readout's mass"
-            + " must GROW by him — no `flight_model_changed` for this craft, solved for more than the 281250.0 kg"
-            + " it weighed empty was recorded within 200 ticks\".")
-    @LegacyWitness(prose = "with {@code ShipInertiaWriter#applyTo} at"
-            + " {@code record.setGameTickMass(frame.getTotalMass());} writing the total less the crew, it fails"
-            + " \"the craft's physics record must grow by the occupant's mass its readout reports (80.0 kg); it"
-            + " grew by 0.0 kg\".")
-    @LegacyWitness(prose = "with {@code ShipHullMass#addCrew} at"
-            + " {@code builder.add(MassContributor.ofBlock(local[0] - ox, local[1] - oy, local[2] - oz,} placing"
-            + " the occupant at its WORLD position instead, it fails \"the occupant's mass must sit where the"
-            + " occupant sits aboard — in the column of the pilot seat at 19200001,128,51200 (subspace), inside"
-            + " that block — and the centre of mass moved as if it sat at 4023.500004246831,156.30000000148743,"
-            + " 4023.4999999994398\".")
+    @RedWitness(verdict = "weighed", member = "ShipHullMass#isCarried",
+            at = "if (body.isRiding())",
+            replacedBy = "if (body.isRiding() && body == null)",
+            fails = "the flight computer must weigh the occupant seated aboard", on = "2026-10-18")
+    @RedWitness(verdict = "the physics record", member = "ShipInertiaWriter#applyTo",
+            at = "record.setGameTickMass(frame.getTotalMass());",
+            replacedBy = "record.setGameTickMass(frame.getTotalMass() - frame.getCrewMass());",
+            fails = "the craft's physics record must grow by the occupant's mass its readout reports", on = "2026-10-18")
+    @RedWitness(verdict = "where it sits", member = "ShipHullMass#addCrew",
+            at = "builder.add(MassContributor.ofBlock(local[0] - ox, local[1] - oy, local[2] - oz,",
+            replacedBy = "builder.add(MassContributor.ofBlock(body.posX - ox, body.posY - oy, body.posZ - oz,",
+            fails = "the occupant's mass must sit where the occupant sits aboard", on = "2026-10-18")
     @Test
     public void aSeatedOccupantIsWeighedWhereItSits() throws Exception {
         FixtureSite site = site();
@@ -1951,11 +1959,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * and asserted to fall. The control comes first deliberately: if the hold is already broken, the test
      * says so instead of reporting a successful fall.</p>
      */
-    @LegacyWitness(prose = "with the unmanned branch's {@code !flightAssistEnabled} release in"
-            + " {@code TileAdvancedFlightComputer} ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)}) never taken, the fall verdict fails — \"sank only"
-            + " 0.0 blocks in 61 ticks\" — after the hold passed, 2026-09-29. With that branch taken ALWAYS"
-            + " ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — \"must keep station, and this one moved"
-            + " from 235.7 to 57.1\" — 2026-09-30.")
+    @RedWitness(verdict = "falls", member = "TileAdvancedFlightComputer#update",
+            at = "if (!flightAssistEnabled)",
+            replacedBy = "if (!flightAssistEnabled && world == null)",
+            fails = "sank only", on = "2026-10-18")
+    @RedWitness(verdict = "holds", member = "TileAdvancedFlightComputer#update",
+            at = "if (!flightAssistEnabled)",
+            replacedBy = "if (!flightAssistEnabled || world != null)",
+            fails = "with Flight Assist ON an unpiloted craft must keep station", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "long heldTicks = GameTicks.advanceObserved(client(),"
             + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
@@ -2029,9 +2040,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the feed-forward were left on Earth's field while the solver used the body's, a held craft over a
      * quarter-gravity body would CLIMB by the difference.</p>
      */
-    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return VSConfig.gravity().mul(multiplier, new Vector3d());} answering the configured vector instead of"
-            + " scaling it by the body's multiplier, the ratio verdict fails at 1.015 (\"outside [0.125, 0.5]\"),"
-            + " 2026-09-29.")
+    @RedWitness(member = "StellurgyWorldGravity#of",
+            at = "return VSConfig.gravity().mul(multiplier, new Vector3d());",
+            replacedBy = "return new Vector3d(VSConfig.gravity());",
+            fails = "outside [0.125, 0.5]", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "long heldTicks = GameTicks.advanceObserved(client(), GameTicks.server(),"
             + " COMPARISON_SAMPLE_TICKS);",
@@ -2111,12 +2123,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * a test mixin at that branch): in a cell a HELD craft is as still as a released one and cancels any
      * field it is given, so without the link a broken release would leave this verdict unable to fail.</p>
      */
-    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return WEIGHTLESS;} answering the configured vector for a space"
-            + " slot instead of zero, the stillness verdict fails — \"moved 74.2 blocks vertically in 41 ticks\" —"
-            + " on a craft that was {@code ready:true} when released, 2026-09-29; again on the piloted fixture"
-            + " assembled in the cell with its scaffolding removed, \"This one moved 64.53 blocks vertically in 41"
-            + " ticks\", 2026-09-30. With the scaffolding left in place that break stayed GREEN — sank 1.0 and"
-            + " stopped on the launchpad — which is why the arrangement removes it.")
+    @RedWitness(verdict = "keeps its altitude", member = "StellurgyWorldGravity#of",
+            at = "return WEIGHTLESS;",
+            replacedBy = "return VSConfig.gravity();",
+            fails = "a released craft in a space cell must keep its altitude", on = "2026-10-18")
     @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} never taken,"
             + " the scenario stops at that premise — \"no `unmanned_mode` released, for this craft's flight"
             + " computer … within 200 ticks\" — 2026-10-04.")

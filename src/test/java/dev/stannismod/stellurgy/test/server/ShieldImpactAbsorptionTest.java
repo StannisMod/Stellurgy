@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -91,11 +92,10 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
      * is decided, inside one handler call — and not off two probe reads of the coil a round trip
      * apart, which a refill from the network could make equal under load.</p>
      */
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#tryAbsorbExplosionImpact} at"
-            + " {@code return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;} reduced to"
-            + " {@code return impactEnergy > 0;} — the glass still saved, nothing paid — this fails at \"the"
-            + " emitter took the glass out of the blast without paying for it (coil 37689 as the blast was"
-            + " heard, 37689 once decided)\" (2026-10-03).")
+    @RedWitness(verdict = "without paying for it", member = "TileEntityFieldGenerator#tryAbsorbExplosionImpact",
+            at = "return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;",
+            replacedBy = "return impactEnergy > 0;",
+            fails = "the emitter took the glass out of the blast without paying for it", on = "2026-10-18")
     @Test
     public void chargedShieldProtectsBlocksFromExplosion() throws Exception {
         // Control first: an unshielded glass block is destroyed by the blast. Without this the shielded

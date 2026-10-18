@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Test;
@@ -88,12 +89,12 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
      * Pins INV-DMG-07 (a relocated ship carries the damage it left with and leaves none behind).
      */
     @Pins("INV-DMG-07")
-    @LegacyWitness(prose = "with {@code BlockDamageSavedData#move} at {@code if (from == null || to == null || from.equals(to))}'s {@code move} made a no-op, this fails"
-            + " with \"the relocated ship does not carry the damage it left with ... expected:&lt;[0/true/"
-            + " stellurgy:advrocketmotor, ...4/true/minecraft:iron_block]&gt; but was:&lt;[]&gt;\". The"
-            + " left-behind verdict is held by TWO lines: {@code BlockDamageSavedData#move} at {@code Entry entry = entries.remove(from.toLong());} copying instead of"
-            + " moving stayed GREEN on its own, because {@code StorageChunk#cutWorldBB} at {@code if (!worldObj.isRemote)}'s clear of the cut region"
-            + " still emptied the old yard; with both broken it fails with \"the relocation left 4 damage records"
+    @RedWitness(verdict = "carries the damage", member = "BlockDamageSavedData#move",
+            at = "if (from == null || to == null || from.equals(to))",
+            replacedBy = "if (from == null || to == null || from.equals(to) || entries != null)",
+            fails = "the relocated ship does not carry the damage it left with", on = "2026-10-18")
+    @LegacyWitness(prose = "The left-behind verdict is held by TWO lines: {@code BlockDamageSavedData#move} at {@code Entry entry = entries.remove(from.toLong());} copying instead of moving stayed GREEN on its own,"
+            + " because {@code StorageChunk#cutWorldBB} at {@code if (!worldObj.isRemote)}'s clear of the cut region still emptied the old yard; with both broken it fails with \"the relocation left 4 damage records"
             + " at the vacated subspace address 19200001,129,51200\". 2026-09-30.")
     @Test
     public void aRelocatedShipCarriesItsDamageAndLeavesNoneBehind() throws Exception {
@@ -161,10 +162,12 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
      * Pins INV-DMG-08 (replacing the flight computer changes no other position's record).
      */
     @Pins("INV-DMG-08")
-    @LegacyWitness(prose = "with a line inserted at {@code TileAdvancedFlightComputer#invalidate} at {@code super.invalidate();} clearing"
-            + " the damage map for 64 blocks round the computer when its tile is invalidated (the computer as the"
-            + " hull's custodian), this fails with \"replacing the flight computer changed the hull's damage"
-            + " expected:&lt;[0/true/stellurgy:advrocketmotor, ...]&gt; but was:&lt;[]&gt;\". 2026-09-30.")
+    @RedWitness(member = "TileAdvancedFlightComputer#invalidate",
+            at = "super.invalidate();",
+            replacedBy = "super.invalidate(); if (world != null && !world.isRemote) {"
+                    + " for (net.minecraft.util.math.BlockPos p : net.minecraft.util.math.BlockPos.getAllInBox(pos.add(-64, -64, -64), pos.add(64, 64, 64))) {"
+                    + " dev.stannismod.stellurgy.damage.BlockDamageSavedData.get(world).clear(p); } }",
+            fails = "replacing the flight computer changed the hull's damage", on = "2026-10-18")
     @Test
     public void breakingAndReplacingTheFlightComputerDoesNotRepairTheHull() throws Exception {
         arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");

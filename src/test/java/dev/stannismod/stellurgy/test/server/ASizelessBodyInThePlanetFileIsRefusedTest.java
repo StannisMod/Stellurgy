@@ -7,6 +7,7 @@ import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
@@ -91,9 +92,9 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
         if (harness != null) harness.close();
     }
 
-    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the"
-            + " sizeless airless planet: {@code \"stellurgyDimensions\":[3,4]} (2026-10-01).")
+    @RedWitness(member = "XMLPlanetLoader#readPlanetFromNode", at = "if (!properties.hasBulkProperties())",
+            replacedBy = "if (false)",
+            fails = "a planet that states no mass and radius must be refused, not given a size", on = "2026-10-17")
     @Test
     public void aBodyThatStatesNoSizeIsNotLoadedAndTheOverworldIsHeldToTheSameRule() throws Exception {
         harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);

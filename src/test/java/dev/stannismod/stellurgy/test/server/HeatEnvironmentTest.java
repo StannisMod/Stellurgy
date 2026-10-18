@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
@@ -113,10 +114,9 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Pins({"INV-HEAT-14", "HEAT-8"})
-    @LegacyWitness(prose = "with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each"
-            + " cell: \"a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a"
-            + " world and -1129 in space, a difference of 1179.0, against a reported flux difference of"
-            + " 589.965\", 2026-09-30. The premises on both legs are arrangements and are not witnessed.")
+    @RedWitness(member = "HeatEnvironment#incidentFluxPerCell", at = "return unshieldedFluxPerCell;",
+            replacedBy = "return 2.0D * unshieldedFluxPerCell;",
+            fails = "a warm world and a distant star must reach a radiator through ONE term", on = "2026-10-17")
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
         int x0 = stand("one radiating loop on the overworld, and the same loop in a space cell");
@@ -186,14 +186,15 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Pins({"INV-HEAT-15", "HEAT-8"})
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}"
-            + " exchanging only positive shares: \"under a star this strong the net must run BACKWARDS … \\\"rejected\\\":0\"."
-            + " IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: \"and the energy must"
-            + " actually be in the loop, not merely reported: … \\\"rejected\\\":-76764,\\\"heatStored\\\":0\". NO"
-            + " RADIATING SURFACE — {@code HeatNetwork#rejectHeat} at {@code return 0L;} giving a loop with no cells the incident flux:"
-            + " \"a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;"
-            + " but was:&lt;76800&gt;\". The three premises before the star is turned up are arrangements and are"
-            + " not witnessed.")
+    @RedWitness(verdict = "backwards", member = "HeatNetwork#rejectHeat", at = "if (share != 0L)",
+            replacedBy = "if (share > 0L)", fails = "under a star this strong the net must run BACKWARDS", on = "2026-10-17")
+    @RedWitness(verdict = "in the loop", member = "HeatNetwork#tickThermodynamics",
+            at = "stored = Math.max(0L, stored - rejected);",
+            replacedBy = "stored = Math.max(0L, stored - Math.max(0L, rejected));",
+            fails = "and the energy must actually be in the loop, not merely reported", on = "2026-10-17")
+    @RedWitness(verdict = "no radiating surface", member = "HeatNetwork#rejectHeat", at = "return 0L;",
+            replacedBy = "return -(long) environment.unshieldedFluxPerCell();",
+            fails = "a loop with no radiating surface must take nothing from the environment", on = "2026-10-17")
     @Test
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
         Cell cell = occupyHomeCell();
@@ -250,11 +251,12 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-10 (a shield attenuates incident flux and never eliminates it).
      */
     @Pins({"INV-HEAT-16", "HEAT-10"})
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}"
-            + " treating no cell as covered: \"a raised shield must take most of the incident flux off the ship"
-            + " (shielded=76764 unshielded=76764)\". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take"
-            + " everything: \"and it must NOT take all of it, however much the configuration asks for … (shielded=0)\"."
-            + " The emitter premise and the unshielded premise are arrangements and are not witnessed.")
+    @RedWitness(verdict = "most", member = "HeatEnvironment#incidentFluxPerCell",
+            at = "if (ShieldCoverage.isCovered(shieldGenerators, world, pos))", replacedBy = "if (false)",
+            fails = "a raised shield must take most of the incident flux off the ship", on = "2026-10-17")
+    @RedWitness(verdict = "not all", member = "HeatEnvironment#shieldAttenuation",
+            at = "return Math.max(0.0D, Math.min(MAX_SHIELD_ATTENUATION, asked));", replacedBy = "return Math.max(0.0D, asked);",
+            fails = "and it must NOT take all of it, however much the configuration asks for", on = "2026-10-17")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
             why = "fifteen rounds of charge, generator tick and network solve are the DOSE that brings the emitter"

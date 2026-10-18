@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -174,11 +175,11 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
      * grace is let go by the release and by nothing else on that path. The login is the real
      * handler — the event a join fires once the save file has been read, posted for this player.</p>
      */
-    @LegacyWitness(prose = "with the orphan branch of {@code SpaceEventHandler#onPlayerLoadFromFile} at"
-            + " {@code .playerRelease().toTheWorld(player)} releasing nothing instead of calling"
-            + " {@code playerRelease().toTheWorld}: \"a player orphaned from"
-            + " a ship the server no longer knows must come back bound to nothing … {\\\"bound\\\":[\\\"rocket transfer"
-            + " grace\\\"]}\", 2026-09-28.")
+    @RedWitness(member = "SpaceEventHandler#onPlayerLoadFromFile",
+            at = "java.util.List<String> released = dev.stannismod.stellurgy.Stellurgy .playerRelease().toTheWorld(player);",
+            replacedBy = "java.util.List<String> released = new java.util.ArrayList<String>();",
+            fails = "a player orphaned from a ship the server no longer knows must come back bound to nothing",
+            on = "2026-10-17")
     @Test
     public void aReturningPlayerWhoseShipIsGoneIsReleasedFromEverything() throws Exception {
         ensurePlayer();

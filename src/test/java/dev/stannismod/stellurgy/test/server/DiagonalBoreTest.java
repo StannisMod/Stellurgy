@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -53,10 +54,10 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
      * Pins INV-DMG-09 (The damaged blocks of one impact form an UNBROKEN chain).
      */
     @Pins("INV-DMG-09")
-    @LegacyWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered"
-            + " through a Z face (a sampled path's missed diagonal step), this fails with \"the bore has 6"
-            + " hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)\"; the axis-aligned control stayed"
-            + " green on the same run. 2026-09-30.")
+    @LegacyWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s"
+            + " ray visitor made to skip every voxel entered through a Z face (a sampled path's missed diagonal step),"
+            + " this fails with \"the bore has 6 hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)\"; the"
+            + " axis-aligned control stayed green on the same run. 2026-09-30.")
     @Test
     public void anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore() throws Exception {
         arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
@@ -109,9 +110,9 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
                 0, holes.size());
     }
 
-    @LegacyWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one"
-            + " block south, this fails with \"a straight shot along X wandered off its row: (11800,84,11601)"
-            + " expected:&lt;11600&gt; but was:&lt;11601&gt;\". 2026-09-30.")
+    @RedWitness(member = "SweptVolume#visit", at = "List<BlockPos> blocks = new ArrayList<BlockPos>(1);",
+            replacedBy = "if ((pos.getX() & 1) == 0) { pos = pos.south(); } List<BlockPos> blocks = new ArrayList<BlockPos>(1);",
+            fails = "a straight shot along X wandered off its row", on = "2026-10-17")
     @Test
     public void anAxisAlignedImpactIsUnaffected() throws Exception {
         // The control for the change, and the reason it is safe: where the ray is parallel to an axis

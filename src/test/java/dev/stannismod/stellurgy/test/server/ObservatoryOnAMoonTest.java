@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -138,13 +139,12 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
         return TelescopeReading.at(c -> read(c).raw(), at(site));
     }
 
-    @LegacyWitness(prose = "with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:"
-            + " \"an observatory on the moon must survey from its system's galactic cell … expected 19_0_0 but"
-            + " was 19_0_0.1_0_0\"; with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: \"the"
+    @RedWitness(verdict = "from its system's cell", member = "TileObservatory#scanOrigin",
+            at = ".map(GalacticCoord::galacticCell).orElse(null);", replacedBy = ".orElse(null);",
+            fails = "an observatory on the moon must survey from its system's galactic cell", on = "2026-10-17")
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: \"the"
             + " moon's local radar must name the moon it stands on\"; and skipping a {@code PLANET}: \"and the"
-            + " world that moon orbits … crystalDims:[2]\" — one inversion per run, 2026-09-30. (An earlier"
-            + " version of this class also measured what the origin inversion does past the assertion: the"
-            + " dedicated server goes down with \"Ticking block entity\" from {@code TelescopeScan.detect}.)")
+            + " world that moon orbits … crystalDims:[2]\" — one inversion per run, 2026-09-30.")
     @Test
     public void anObservatoryOnTheMoonSurveysFromItsSystemsGalacticCell() throws Exception {
         defaultGameLocalRadar();

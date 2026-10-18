@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import org.junit.Assume;
@@ -309,9 +310,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * is a broken system — a parent that does not list its moon draws a sky without it, a moon that
      * does not name its parent is laid out as a planet of the star.
      */
-    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code properties.addChildPlanet(child);} removed, this fails with both halves wrong —"
-            + " {@code Primus.children=[]} and {@code PrimusMoon.parent=-2147483647} (the invalid sentinel).")
+    @RedWitness(member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "properties.addChildPlanet(child);",
+            replacedBy = "",
+            fails = "a nested <planet> must be its parent's child AND name the parent", on = "2026-10-17")
     @Test
     public void aNestedPlanetIsMadeAChildOfTheBodyItIsWrittenInside() throws Exception {
         DimList dims = dims();
@@ -347,12 +349,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins DIMID-3 (an allocated id is never a stated one).
      */
     @Pins({"DIMID-1", "DIMID-2", "DIMID-3"})
-    @LegacyWitness(prose = "2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code statesADimId(planetNode)} put back to the shipped allocation — every body allocated"
-            + " {@code getNextFreeDim(offset)} at parse time, before the file's stated ids were known — this"
-            + " fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and"
-            + " {@code StatesTheFirstFreeId.dims=[]}. On the shipped tree, before the fix, it failed on"
-            + " production as it stood (2026-10-02, {@code logs/bugs-b-repro3.log}).")
+    @RedWitness(member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "statesADimId(planetNode) ? dev.stannismod.stellurgy.api.Constants.INVALID_PLANET : allocateUnstatedDim(into)",
+            replacedBy = "into.getNextFreeDim(offset)",
+            fails = "a body the pack gave no DIMID must be ONE world under an id no other body states", on = "2026-10-17")
     @Test
     public void aPlanetThatStatesNoDimensionIsGivenAFreeOne() throws Exception {
         Reply named = probe("stellurgytest planet named " + UNNUMBERED);
@@ -417,10 +417,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins DIMID-4 (a refused registration is bound to no holder and the load continues).
      */
     @Pins({"DIMID-1", "DIMID-4"})
-    @LegacyWitness(prose = "2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the"
-            + " shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}"
-            + " skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.")
+    @RedWitness(member = "DimensionManager#createAndLoadDimensions",
+            at = "if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))",
+            replacedBy = "if (!this.registerDimNoUpdate(properties, properties.isNativeDimension) && false)",
+            fails = "the earlier of two bodies stating", on = "2026-10-17")
     @Test
     public void aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar() throws Exception {
         Reply owner = probe("stellurgytest planet authored " + HELD_TWICE);
@@ -462,13 +462,14 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * that id among its children, since the body under it is not its moon. Unless it IS — two moons of
      * one planet stating one id leave the first holding it, and that one stays the planet's child.
      */
-    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing"
-            + " {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06).")
-    @LegacyWitness(prose = "with {@code DimensionManager#detachFromParseParent} at"
-            + " {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails"
-            + " showing {@code Tertius.children=[]} — the first moon, which holds the id, dropped with the"
-            + " refused second (2026-10-06).")
+    @RedWitness(verdict = "detached", member = "DimensionManager#createAndLoadDimensions",
+            at = "detachFromParseParent(refused);",
+            replacedBy = "",
+            fails = "a parent must list exactly the moons that are its own", on = "2026-10-17")
+    @RedWitness(verdict = "the holder kept", member = "DimensionManager#detachFromParseParent",
+            at = "if (holder != null && holder.getParentPlanet() == parentId)",
+            replacedBy = "if (false)",
+            fails = "a parent must list exactly the moons that are its own", on = "2026-10-17")
     @Test
     public void aRefusedMoonIsNoLongerItsParentsChild() throws Exception {
         DimList dims = dims();
@@ -529,14 +530,18 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * stack — what every other reader of {@code oreIron} receives — keeps the count it was
      * registered with.
      */
-    @LegacyWitness(prose = "2026-10-02, three inversions, one run each: with"
-            + " {@code XMLPlanetLoader#readPlanetFromNode} at {@code String oreName = parts[0].trim();}"
-            + " untrimmed this fails with {@code Driller.laserDrillOres=[]}; with"
-            + " {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code item.setCount(Integer.parseInt(parts[1].trim()));} untrimmed, with"
-            + " {@code [minecraft:iron_ore@0x1]}; with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code ItemStack item = ores.get(0).copy();} not copied, with"
-            + " {@code dictionary.oreIron.count=3}.")
+    @RedWitness(verdict = "the name trimmed", member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "String oreName = parts[0].trim();",
+            replacedBy = "String oreName = parts[0];",
+            fails = "' oreIron ; 3 ' must resolve to oreIron x3 without touching the dictionary's", on = "2026-10-17")
+    @RedWitness(verdict = "the count trimmed", member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "item.setCount(Integer.parseInt(parts[1].trim()));",
+            replacedBy = "item.setCount(Integer.parseInt(parts[1]));",
+            fails = "' oreIron ; 3 ' must resolve to oreIron x3 without touching the dictionary's", on = "2026-10-17")
+    @RedWitness(verdict = "copied", member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "ItemStack item = ores.get(0).copy();",
+            replacedBy = "ItemStack item = ores.get(0);",
+            fails = "' oreIron ; 3 ' must resolve to oreIron x3 without touching the dictionary's", on = "2026-10-17")
     @Test
     public void aLaserDrillEntryIsTrimmedCountedAndCopiedOffTheDictionary() throws Exception {
         DimList dims = dims();
@@ -567,9 +572,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * other entries still resolve. (Before this was decided, the empty lookup threw, and the per-planet
      * isolation dropped the whole planet.)
      */
-    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code if (ores.isEmpty())} made never to hold (so the empty list reaches {@code ores.get(0)}),"
-            + " this fails with {@code DrillerUnresolved.registered=false}: the whole planet was dropped.")
+    @RedWitness(member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "if (ores.isEmpty())",
+            replacedBy = "if (false)",
+            fails = "a body naming an unresolvable ore must stay a world", on = "2026-10-17")
     @Test
     public void aLaserDrillOreThatResolvesToNothingIsSkippedAndThePlanetKept() throws Exception {
         Reply unresolved = probe("stellurgytest oredict get " + RESERVED_EMPTY_ORE);
@@ -601,14 +607,14 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * type without the whitespace around it; a value the game does not know does not cost the pack
      * its planet — the body is kept and generates natively.
      */
-    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
-            + " {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code properties.setTerrainSource(TerrainSource.byName(planetPropertyNode.getTextContent().trim()));}"
-            + " calling a strict {@code TerrainSource.valueOf} on the same text, this fails with"
-            + " {@code ModTerrain.registered=false} and {@code BogusTerrain.registered=false} (both planets"
-            + " dropped); with {@code XMLPlanetLoader#readPlanetFromNode} at"
-            + " {@code properties.setTerrainWorldType(planetPropertyNode.getTextContent().trim());} untrimmed,"
-            + " with {@code ModTerrain.terrainWorldType= flat }.")
+    @RedWitness(verdict = "tolerant", member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "properties.setTerrainSource(TerrainSource.byName(planetPropertyNode.getTextContent().trim()));",
+            replacedBy = "properties.setTerrainSource(TerrainSource.valueOf(planetPropertyNode.getTextContent().trim()));",
+            fails = "' mod_worldtype ' / ' flat ' must read as MOD_WORLDTYPE / flat", on = "2026-10-17")
+    @RedWitness(verdict = "trimmed", member = "XMLPlanetLoader#readPlanetFromNode",
+            at = "properties.setTerrainWorldType(planetPropertyNode.getTextContent().trim());",
+            replacedBy = "properties.setTerrainWorldType(planetPropertyNode.getTextContent());",
+            fails = "' mod_worldtype ' / ' flat ' must read as MOD_WORLDTYPE / flat", on = "2026-10-17")
     @Test
     public void aTerrainSourceIsReadTolerantlyAndAnUnknownOneKeepsThePlanet() throws Exception {
         DimList dims = dims();
@@ -636,12 +642,14 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * keeps the shared one. The flag read is the one {@code WorldProviderPlanet#updateWeather}
      * branches on.
      */
-    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
-            + " {@code DimensionProperties#updateCustomWorldInfo} at {@code customWorldInfo = !isDefault;}"
-            + " negated, this fails with {@code StatesAWeatherLength.usesCustomWorldInfo=false} (and"
-            + " {@code StatesNoWeather} stays false — a planet stating no weather never reaches that method);"
-            + " with {@code DimensionProperties#usesCustomWorldInfo} at {@code return customWorldInfo;} made to"
-            + " answer {@code true}, with {@code StatesNoWeather.usesCustomWorldInfo=true}.")
+    @RedWitness(verdict = "engages", member = "DimensionProperties#updateCustomWorldInfo",
+            at = "customWorldInfo = !isDefault;",
+            replacedBy = "customWorldInfo = isDefault;",
+            fails = "a stated rainStartLength must engage the planet's own cycle", on = "2026-10-17")
+    @RedWitness(verdict = "none shared", member = "DimensionProperties#usesCustomWorldInfo",
+            at = "return customWorldInfo;",
+            replacedBy = "return true;",
+            fails = "a stated rainStartLength must engage the planet's own cycle", on = "2026-10-17")
     @Test
     public void aStatedWeatherLengthEngagesThePlanetsOwnCycleAndNoneLeavesItShared() throws Exception {
         DimList dims = dims();
@@ -669,19 +677,11 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * out from the SHIPPED spiral, and a weight of one; and an attribute the element leaves out takes
      * the shipped default.
      */
-    @LegacyWitness(prose = "2026-10-02, two verdicts. The generator verdict: with"
-            + " {@code UniverseRegistry#populate} at"
-            + " {@code reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),}"
-            + " handed {@code null} for the config, this fails with {@code EmptyGalaxyGenerator}. The"
-            + " configuration verdict, three runs: with {@code XMLPlanetLoader#readGalaxyType} at"
-            + " {@code attrInt(node, ATTR_ARMS, stock.armCount)} defaulting to 0 and at"
-            + " {@code attrInt(node, ATTR_WEIGHT, 1)} defaulting to 7, it fails with {@code Thick} at"
-            + " {@code armCount=0, weight=7}; with {@code XMLPlanetLoader#readGalaxyGen} at"
-            + " {@code List<GalaxyGenConfig.StarType> types = new ArrayList<>();} and at"
-            + " {@code List<GalaxyGenConfig.GalaxyType> galaxyTypes = new ArrayList<>();} seeded with the"
-            + " stock tables, and at {@code int minSpacing = attrInt(node, ATTR_MINSPACING, defaults.minSpacing);}"
-            + " defaulting one higher, it fails with the stock star and galaxy types ahead of the authored ones"
-            + " and {@code minSpacing} one over the shipped default.")
+    @RedWitness(verdict = "the generator", member = "UniverseRegistry#populate",
+            at = "reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),",
+            replacedBy = "reg.attachSchemaGenerator(schema.generator(dev.stannismod.stellurgy.universe.GalaxyGenConfig.nonProcedural(), galaxy.getPlanetTypes(),",
+            fails = "a file with a <galaxyGen> must run a procedural generator", on = "2026-10-17")
+    @LegacyWitness(prose = "2026-10-02. The configuration verdict, three runs: with {@code XMLPlanetLoader#readGalaxyType} at {@code attrInt(node, ATTR_ARMS, stock.armCount)} defaulting to 0 and at {@code attrInt(node, ATTR_WEIGHT, 1)} defaulting to 7, it fails with {@code Thick} at {@code armCount=0, weight=7}; with {@code XMLPlanetLoader#readGalaxyGen} at {@code List<GalaxyGenConfig.StarType> types = new ArrayList<>();} and at {@code List<GalaxyGenConfig.GalaxyType> galaxyTypes = new ArrayList<>();} seeded with the stock tables, and at {@code int minSpacing = attrInt(node, ATTR_MINSPACING, defaults.minSpacing);} defaulting one higher, it fails with the stock star and galaxy types ahead of the authored ones and {@code minSpacing} one over the shipped default.")
     @Test
     public void aPacksGalaxyGenIsTheConfigurationTheRunningUniverseUses() throws Exception {
         Reply inForce = probe("stellurgytest space gen-config");
@@ -735,12 +735,14 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * another, and every other galaxy an anchor names is RESERVED in the generator's configuration —
      * its cell holds a galaxy under every seed, so the authored system has somewhere to be.
      */
-    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
-            + " {@code XMLPlanetLoader#readGalaxyKey} at {@code return GalaxyKey.HOME;} (the unstated branch)"
-            + " answering galaxy {@code 1,0,0}, this fails with {@code Sol.galaxy=1,0,0}; with"
-            + " {@code XMLPlanetLoader#readAllPlanets} at"
-            + " {@code if (coupling.galaxyGenConfig != null && !coupling.declaredGalaxies.isEmpty())} negated on"
-            + " its second half, with {@code reservedGalaxies=[home]}.")
+    @RedWitness(verdict = "home", member = "XMLPlanetLoader#readGalaxyKey",
+            at = "if (raw == null || raw.trim().isEmpty()) { return GalaxyKey.HOME; }",
+            replacedBy = "if (raw == null || raw.trim().isEmpty()) { return GalaxyKey.parse(\"1,0,0\"); }",
+            fails = "an unqualified anchor must be the home galaxy's", on = "2026-10-17")
+    @RedWitness(verdict = "reserved", member = "XMLPlanetLoader#readAllPlanets",
+            at = "if (!coupling.declaredGalaxies.isEmpty())",
+            replacedBy = "if (coupling.declaredGalaxies.isEmpty())",
+            fails = "an unqualified anchor must be the home galaxy's", on = "2026-10-17")
     @Test
     public void aStarsAnchorIsDeclaredAgainstTheHomeGalaxyUnlessItNamesAnother() throws Exception {
         Reply sol = probe("stellurgytest star get " + STAR_SOL);
@@ -794,13 +796,18 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins ADDR-24 (an authored system holds what its pack declares and nothing else).
      */
     @Pins("ADDR-24")
-    @LegacyWitness(prose = "2026-10-03, three inversions, one run each: with"
-            + " {@code UniverseRegistry#withDerivedRetinue} at {@code if (asked <= 0 || generator == null)}"
-            + " always true, this fails with {@code Counted=… majors=0}; with"
-            + " {@code int asked = star.getMaxRetinueBodies();} reading {@code Math.max(1, …)}, with"
-            + " {@code Faraway=… majors=1}; with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);} dropping"
-            + " the giants, with {@code Counted=… majors=2}.")
+    @RedWitness(verdict = "derived", member = "UniverseRegistry#withDerivedRetinue",
+            at = "if (asked <= 0 || generator == null)",
+            replacedBy = "if (true)",
+            fails = "an authored system holds its declared bodies and the count its pack asked for", on = "2026-10-17")
+    @RedWitness(verdict = "nothing else", member = "UniverseRegistry#withDerivedRetinue",
+            at = "int asked = star.getMaxRetinueBodies();",
+            replacedBy = "int asked = Math.max(1, star.getMaxRetinueBodies());",
+            fails = "an authored system holds its declared bodies and the count its pack asked for", on = "2026-10-17")
+    @RedWitness(verdict = "the giants counted", member = "DimensionManager#createAndLoadDimensions",
+            at = "int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);",
+            replacedBy = "int retinue = loader.getMaxNumPlanets(star);",
+            fails = "an authored system holds its declared bodies and the count its pack asked for", on = "2026-10-17")
     @Test
     public void anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse() throws Exception {
         Reply counted = probe("stellurgytest star get " + STAR_COUNTED);

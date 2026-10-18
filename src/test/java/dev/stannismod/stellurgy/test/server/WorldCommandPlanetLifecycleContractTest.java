@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -67,11 +67,10 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
      * method generates itself, so its bulk is the derivation's and not whatever another method of this
      * group left on a shared world; both are printed.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, on the code as it stood before the fix — {@code PlanetGenerateCommand#execute}"
-            + " at {@code orbit = dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator.moonOrbitOf(seed, anchor,}"
-            + " written as the star-level {@code derivation.orbitalDistanceOf(…)} for a moon too: \"a generated moon"
-            + " at 2.7574061E7 units must orbit above its parent's surface (145.4505985111664) and inside the"
-            + " parent's sphere of influence (356579.08867974044)\".")
+    @RedWitness(member = "PlanetGenerateCommand#execute",
+            at = "orbit = dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator.moonOrbitOf(seed, anchor, moonIndex, parent.getRadius());",
+            replacedBy = "orbit = derivation.orbitalDistanceOf(seed, anchor, moonIndex, Math.max(1, moonIndex + 1), star);",
+            fails = "a generated moon at", on = "2026-10-18")
     @Test
     public void aGeneratedMoonOrbitsInsideItsParentsSphereOfInfluence() throws Exception {
         Set<Integer> before = dimIds();

@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import org.junit.Test;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
@@ -53,14 +53,18 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @LegacyWitness(prose = "with {@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}'s automatic path made to return before"
-            + " {@code launch}, this fails with \"a gun with a target, a charge and no network never fired — no"
-            + " `turret_fired` carrying pos = 9400,80,9400 was recorded within 600 ticks\". 2026-09-30.")
-    @LegacyWitness(prose = "with {@code GunSpec.getMuzzleSpeed} ({@code GunSpec#getMuzzleSpeed} at {@code return muzzleSpeed;}) answering 0 (the"
-            + " operability test reads the field, so the gun still counts itself a gun), this fails at \"a built"
-            + " gun must have a muzzle speed: {...operable:true...muzzleSpeed:0.0...}\"; with"
-            + " {@code TileTurret#launch} at {@code lastShotId = id;} ({@code lastShotId = id}) removed, it fails at \"a gun that fired must"
-            + " name the round it fired: {...shot:-1...}\". 2026-09-30.")
+    @RedWitness(verdict = "fires", member = "TileTurret#update",
+            at = "if (!onTarget || isHoldingFire() || !canFireNow())",
+            replacedBy = "if (!onTarget || isHoldingFire() || !canFireNow() || world != null)",
+            fails = "a gun with a target, a charge and no network never fired", on = "2026-10-18")
+    @RedWitness(verdict = "a muzzle speed", member = "GunSpec#getMuzzleSpeed",
+            at = "return muzzleSpeed;",
+            replacedBy = "return 0.0D;",
+            fails = "a built gun must have a muzzle speed", on = "2026-10-18")
+    @RedWitness(verdict = "names the round", member = "TileTurret#launch",
+            at = "lastShotId = id;",
+            replacedBy = "",
+            fails = "a gun that fired must name the round it fired", on = "2026-10-18")
     @Test
     public void aGunWithNoNetworkFiresAtWhatItWasPointedAt() throws Exception {
         int bx = X;
@@ -96,12 +100,14 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * ticks of gravity and reds the first of them, so only an upward angle shallower than
      * gravity * age / muzzle speed reaches this line, which depends on the age at the read.</p>
      */
-    @LegacyWitness(prose = "with {@code TurretFireControl.fire} ({@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),}) made"
-            + " to admit the round at half the spec's impact energy, this fails at \"the round is not worth what"
-            + " the build says it is worth ... expected:&lt;44&gt; but was:&lt;22&gt;\" (2026-09-29).")
-    @LegacyWitness(prose = "with {@code TileTurret#launch} at {@code lastShotId = id;} ({@code lastShotId = id}) removed, this fails"
-            + " at \"the gun reported a shot the substrate does not have: {ok:true,present:false...}\" — the fired"
-            + " record names round -1 (2026-09-30).")
+    @RedWitness(verdict = "worth", member = "TurretFireControl#fire",
+            at = "spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),",
+            replacedBy = "spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy() / 2,",
+            fails = "the round is not worth what the build says it is worth", on = "2026-10-18")
+    @RedWitness(verdict = "the round it reports", member = "TileTurret#launch",
+            at = "lastShotId = id;",
+            replacedBy = "",
+            fails = "the gun reported a shot the substrate does not have", on = "2026-10-18")
     @Test
     public void theRoundItFiresIsTheRoundItsBuildDescribes() throws Exception {
         int bx = X + 100;
@@ -147,12 +153,14 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * A controller with nothing built around it is not a gun and does not fire — and the same
      * controller, given its parts, does, which is what makes its silence evidence.
      */
-    @LegacyWitness(prose = "with {@code GunSpec.isOperable} ({@code GunSpec#isOperable} at {@code if (partCount <= 0)}) answering true"
-            + " for a build of no parts, this fails at \"a bare controller reports itself operable\" on a"
-            + " {@code turret_assembled} reading {@code operable:true, parts:0} (2026-09-29).")
-    @LegacyWitness(prose = "with the {@code spec.isOperable()} conjunct deleted from"
-            + " {@code TileTurret.canFireNow} ({@code TileTurret#canFireNow} at {@code && spec.isOperable()}), this fails at \"a bare controller, on"
-            + " its target, was permitted to fire: {...permitted:true...operable:false...}\" (2026-09-30).")
+    @RedWitness(verdict = "not operable", member = "GunSpec#isOperable",
+            at = "if (partCount <= 0) { return false; }",
+            replacedBy = "if (partCount <= 0) { return true; }",
+            fails = "a bare controller reports itself operable", on = "2026-10-18")
+    @RedWitness(verdict = "not permitted", member = "TileTurret#canFireNow",
+            at = "&& spec.isOperable()",
+            replacedBy = "",
+            fails = "a bare controller, on its target, was permitted to fire", on = "2026-10-18")
     @Test
     public void anUnbuiltControllerIsNotAGunAndFiresNothing() throws Exception {
         int bx = X + 200;
@@ -206,9 +214,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * assembled and charged, is the subject; the same gun given its drive back is the control, and
      * the only thing the two legs differ in is the drive.</p>
      */
-    @LegacyWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
-            + " made to answer true, this fails at \"a gun with a dead drive fired, on target and charged\", on a"
-            + " decision reading {@code permitted:true, drive:DEAD, energy:20000} (2026-09-29).")
+    @RedWitness(member = "TurretDriveState#permitsFiring",
+            at = "return this != DEAD;",
+            replacedBy = "return true;",
+            fails = "a gun with a dead drive fired, on target and charged", on = "2026-10-18")
     @Test
     public void aDeadDriveStopsTheGunFiring() throws Exception {
         int bx = X + 300;
@@ -270,9 +279,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * round at a time. The hold is read off the gun's own launch being REFUSED after it was permitted
      * — on target, charged — and the same gun with the wall taken away fires.</p>
      */
-    @LegacyWitness(prose = "with the line-of-fire refusal in {@code TurretFireControl.muzzleOf}"
-            + " ({@code TurretFireControl#muzzleOf} at {@code if (StructureCrossing.isBlocked(world, worldMuzzle,}) disabled, this fails at \"a gun fired into the structure it"
-            + " is built into\" (2026-09-29).")
+    @RedWitness(member = "TurretFireControl#muzzleOf",
+            at = "if (StructureCrossing.isBlocked(world, worldMuzzle,",
+            replacedBy = "if (worldMuzzle == null && StructureCrossing.isBlocked(world, worldMuzzle,",
+            fails = "a gun fired into the structure it is built into", on = "2026-10-18")
     @Test
     public void aGunWithItsOwnHullInFrontOfTheBarrelHoldsFire() throws Exception {
         int bx = X + 400;
@@ -318,9 +328,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * coordinates: the same eight blocks, placed the same way, assemble and fire — which is also what
      * proves the assembly and fire recorders were live for the silence at the shipyard.</p>
      */
-    @LegacyWitness(prose = "with the {@code VSIntegration.isOnUnnamedShip} wait in {@code TileTurret.update}"
-            + " ({@code TileTurret#update} at {@code if (VSIntegration.isOnUnnamedShip(world, pos))}) skipped, this fails at \"a gun aboard an unnamed ship counted its"
-            + " build\" (2026-09-29).")
+    @RedWitness(member = "TileTurret#update",
+            at = "if (VSIntegration.isOnUnnamedShip(world, pos))",
+            replacedBy = "if (VSIntegration.isOnUnnamedShip(world, pos) && world == null)",
+            fails = "a gun aboard an unnamed ship counted its build", on = "2026-10-18")
     @Test
     public void aGunAboardAnUnnamedShipDoesNothingAtAll() throws Exception {
         int bx = SHIPYARD_X;
@@ -365,19 +376,22 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * to be an addition rather than a rewrite. It is pinned now, while there is nothing driving it,
      * because a seam nobody exercises is a seam that quietly stops working.</p>
      */
-    @LegacyWitness(prose = "with a launch inserted in {@code TileTurret#update} at {@code mechanism.tick(spec.getTraverseDegreesPerTick());}'s manual branch whenever"
-            + " the mount is on its bearing (a gun under a hand firing on its own), this fails with \"the trigger"
-            + " did nothing: {fired:false} state: {...shots:1...manual:true...}\" — the gun had already fired by"
-            + " itself and was cooling down when the trigger was pulled. The later \"fired by itself\" verdict was"
-            + " therefore not reached on that run, and the return-to-automatic verdicts were not witnessed."
-            + " 2026-09-30.")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.java:422}"
-            + " commanding the mount 30 degrees off the bearing it was handed, this fails at \"the mount ignored"
-            + " the bearing it was handed: {...yaw:-60.0...} expected:&lt;-90.0&gt;\"; with {@code fireOnce}"
-            + " ({@code TileTurret.java:434}) clearing the hand around its own launch, at \"the round that left"
-            + " was not the trigger's: [{...manual:false}]\"; with the automatic launch"
-            + " ({@code TileTurret.java:191}) made under a hand, at \"the round after the hand let go was still a"
-            + " manual one: {...manual:true}\".")
+    @RedWitness(verdict = "fires only when told", member = "TileTurret#update",
+            at = "mechanism.tick(spec.getTraverseDegreesPerTick()); syncCommandIfChanged(); // Nothing",
+            replacedBy = "boolean onBearing = mechanism.tick(spec.getTraverseDegreesPerTick()); syncCommandIfChanged(); if (onBearing && canFireNow()) { launch(TurretFireControl.shipIdAt(world, pos)); } // Nothing",
+            fails = "the trigger did nothing", on = "2026-10-18")
+    @RedWitness(verdict = "the bearing", member = "TileTurret#commandManualBearing",
+            at = "mechanism.commandBearing(yaw, pitch);",
+            replacedBy = "mechanism.commandBearing(yaw + 30.0D, pitch);",
+            fails = "the mount ignored the bearing it was handed", on = "2026-10-18")
+    @RedWitness(verdict = "the trigger's round", member = "TileTurret#fireOnce",
+            at = "return launch(TurretFireControl.shipIdAt(world, pos));",
+            replacedBy = "manualControl = false; boolean fired = launch(TurretFireControl.shipIdAt(world, pos)); manualControl = true; return fired;",
+            fails = "the round that left was not the trigger's", on = "2026-10-18")
+    @RedWitness(verdict = "back to automatic", member = "TileTurret#update",
+            at = "launch(shipId);",
+            replacedBy = "manualControl = true; launch(shipId); manualControl = false;",
+            fails = "the round after the hand let go was still a manual one", on = "2026-10-18")
     @Test
     public void aGunUnderManualControlIgnoresItsTargetAndFiresOnlyWhenTold() throws Exception {
         int bx = X + 500;

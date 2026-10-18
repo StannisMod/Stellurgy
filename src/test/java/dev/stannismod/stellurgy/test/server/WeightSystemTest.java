@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -131,11 +131,10 @@ public class WeightSystemTest extends AbstractSharedServerTest {
      * when held content is not weighed at all (the default leg finds nothing in a full chest), or when
      * the scale reaches the block itself (the block part moves between legs).</p>
      */
-    @LegacyWitness(prose = "with {@code WeightEngine#getTEWeight} at {@code heldWeight(te) *"
-            + " StellurgyConfiguration.getCurrentConfig().contentMassScale} reduced to {@code heldWeight(te)},"
-            + " this fails on the scale-0 leg — \"expected:&lt;750.0&gt; but was:&lt;320750.0&gt;\"; and with"
-            + " {@code WeightEngine#getWeight} at {@code return weight + getTEWeight(te)} scaling {@code weight}"
-            + " as well, it fails on the same leg — \"expected:&lt;750.0&gt; but was:&lt;0.0&gt;\" (2026-10-03).")
+    @RedWitness(member = "WeightEngine#getTEWeight",
+            at = "return (float) (heldWeight(te) * StellurgyConfiguration.getCurrentConfig().contentMassScale);",
+            replacedBy = "return (float) heldWeight(te);",
+            fails = "expected:<750.0> but was:<320750.0>", on = "2026-10-18")
     @Test
     public void contentMassScaleReachesHeldContentAndNothingElse() throws Exception {
         reset();

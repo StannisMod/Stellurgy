@@ -6,6 +6,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
@@ -91,20 +92,21 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * would drop it before the restart too and leave the comparison equal; that is not this test's
      * contract.)</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}"
-            + " not re-registering a duct restored from the save: \"the ventilation graph must come back with the"
-            + " same cable count … \\\"cables\\\":0\". SOURCES — the same in {@code TileLifeSupportPlant#onLoad} at"
-            + " {@code SubsystemNetworkManager.of(world).register(this);}: \"and the same source count: … \\\"sources\\\":0\"."
-            + " SINKS — the same in {@code TileVentilationPort#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}:"
-            + " \"and the same sink count: … \\\"sinks\\\":0\". PRIORITY — {@code TileVentilationPort#readFromNBT} at {@code zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger(\"zonePriority\")));} not reading the priority back: \"the vent's zone priority must survive the"
-            + " restart … expected:&lt;1&gt; but was:&lt;0&gt;\". (SINKS and PRIORITY were taken while the zone's"
-            + " sink was the oxygen vent; both lines moved unchanged to the port on 2026-10-05.) BIAS — {@code TileEntityShieldConsole#readFromNBT} at {@code shieldEnergyResistanceBias = compound.hasKey(\"shieldEnergyResistanceBias\")} not"
-            + " reading the bias back: \"the console's resistance bias must survive the restart … expected:&lt;0.75&gt;"
-            + " but was:&lt;0.5&gt;\". The first boot's premises are arrangements and are not witnessed. (CABLES,"
-            + " SOURCES and SINKS were recorded against each {@code onLoad}'s declaration line; the quoted call"
-            + " is the one their prose names, supplied when the records were converted to symbols on 2026-09-30."
-            + " All three were taken on the pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the"
-            + " same registration made through the static registry; the quote is today's spelling of it.)")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at"
+            + " {@code SubsystemNetworkManager.of(world).register(this);} not re-registering a duct restored from the"
+            + " save: \"the ventilation graph must come back with the same cable count … \\\"cables\\\":0\". SOURCES —"
+            + " the same in {@code TileLifeSupportPlant#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}:"
+            + " \"and the same source count: … \\\"sources\\\":0\". SINKS — the same in {@code TileVentilationPort#onLoad}"
+            + " at {@code SubsystemNetworkManager.of(world).register(this);}: \"and the same sink count: …"
+            + " \\\"sinks\\\":0\". (Taken on the pre-merge form {@code SubsystemNetworkRegistry.register(this)}.)")
+    @RedWitness(verdict = "priority", member = "TileVentilationPort#readFromNBT",
+            at = "zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger(\"zonePriority\")));",
+            replacedBy = "zonePriority = zonePriority;",
+            fails = "the port's zone priority must survive the restart", on = "2026-10-18")
+    @RedWitness(verdict = "bias", member = "TileEntityShieldConsole#readFromNBT",
+            at = "shieldEnergyResistanceBias = compound.hasKey(\"shieldEnergyResistanceBias\")",
+            replacedBy = "shieldEnergyResistanceBias = false",
+            fails = "the console's resistance bias must survive the restart", on = "2026-10-18")
     @Test
     public void theNetworkIsRebuiltFromTheWorldWhileItsSettingsAreRestoredFromTheirBlocks()
             throws Exception {
@@ -191,15 +193,14 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * Pins INV-HEAT-06 (A loop's energy survives a server restart, and comes back OFF THE BLOCKS).
      */
     @Pins("INV-HEAT-06")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code TileHeatLoopBlock#readFromNBT} at {@code storedHeat = nbt.getLong(NBT_STORED_HEAT);} not reading the stored heat back: \"every heat unit must come back off the"
-            + " blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;\". REBUILT —"
-            + " {@code TileHeatLoopBlock#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);} not"
-            + " re-registering a block restored from the save: \"the loop must be REBUILT with the same membership"
-            + " — nothing persisted it: … \\\"members\\\":0\". The first boot's premises are arrangements and are not"
-            + " witnessed. (REBUILT was recorded against {@code onLoad}'s declaration line; the quoted call is the"
-            + " one its prose names, supplied when the record was converted to symbols on 2026-09-30. Taken on the"
-            + " pre-merge form {@code SubsystemNetworkRegistry.register(this)}, the same registration made through"
-            + " the static registry; the quote is today's spelling of it.)")
+    @RedWitness(verdict = "off the blocks", member = "TileHeatLoopBlock#readFromNBT",
+            at = "storedHeat = nbt.getLong(NBT_STORED_HEAT);",
+            replacedBy = "storedHeat = 0L;",
+            fails = "every heat unit must come back off the blocks", on = "2026-10-18")
+    @LegacyWitness(prose = "REBUILT — {@code TileHeatLoopBlock#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}"
+            + " not re-registering a block restored from the save: \"the loop must be REBUILT with the same membership"
+            + " — nothing persisted it: … \\\"members\\\":0\", 2026-09-30 (taken on the pre-merge form"
+            + " {@code SubsystemNetworkRegistry.register(this)}).")
     @Test
     public void aCoolantLoopsEnergyComesBackFromItsBlocks() throws Exception {
         // ─────── Boot 1: a loop, and some energy in it ───────
@@ -267,23 +268,26 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * PLAYER not being engaged, which needs a player; what is asserted instead is the code the gun
      * judges a body by, read off the gun, which is that decision's only input from the network.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-10-05. The HOLD, CODE and RULE breaks are made"
-            + " where the orders come OFF THE SAVE, because the same adoption also runs on every in-session"
-            + " rebuild and a break there already fails boot 1's premise. ALL (the defect as filed) —"
-            + " {@code TileWeaponConsole#readFromNBT} at {@code savedOrders = nbt.getCompoundTag(NBT_ORDERS);}"
-            + " made {@code savedOrders = null;}: \"the gun told to hold fire before the restart never held after"
-            + " it — no `turret_hold_decided` carrying pos = 4802,151,4802 and held = true was recorded within"
-            + " 600 ticks\". HOLD — the same line followed by {@code savedOrders.setBoolean(\"holdFire\", false);}:"
-            + " the same message. CODE — followed by {@code savedOrders.setString(\"accessCode\", \"\");}: \"the"
-            + " network's access code must survive the restart … expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;\"."
-            + " RULE — followed by {@code savedOrders.removeTag(\"hullAllegiance\");}: \"and its hull rule …"
-            + " expected:&lt;[NONE]&gt; but was:&lt;[CODE_ON_WEAPONS]&gt;\". GUN'S CODE —"
-            + " {@code TileTurret#getEffectiveAccessCode} at {@code return state.getAccessCode();} made"
-            + " {@code return accessCode;}: \"the gun must judge a body by the network's code after the restart …"
-            + " expected:&lt;[w636-code]&gt; but was:&lt;[]&gt;\". The TARGET verdict was not separately witnessed:"
-            + " a gun without its target never reaches the hold record, which stops the chain first. The"
-            + " \"fired while holding\" verdict was not separately witnessed either: under HOLD the chain stops"
-            + " at the hold record before it.")
+    @RedWitness(verdict = "held", member = "TileWeaponConsole#readFromNBT",
+            at = "savedOrders = nbt.getCompoundTag(NBT_ORDERS);",
+            replacedBy = "savedOrders = null;",
+            fails = "the gun told to hold fire before the restart never held after it", on = "2026-10-18")
+    @RedWitness(verdict = "held", member = "TileWeaponConsole#readFromNBT",
+            at = "savedOrders = nbt.getCompoundTag(NBT_ORDERS);",
+            replacedBy = "savedOrders = nbt.getCompoundTag(NBT_ORDERS); savedOrders.setBoolean(\"holdFire\", false);",
+            fails = "the gun told to hold fire before the restart never held after it", on = "2026-10-18")
+    @RedWitness(verdict = "code", member = "TileWeaponConsole#readFromNBT",
+            at = "savedOrders = nbt.getCompoundTag(NBT_ORDERS);",
+            replacedBy = "savedOrders = nbt.getCompoundTag(NBT_ORDERS); savedOrders.setString(\"accessCode\", \"\");",
+            fails = "the network's access code must survive the restart", on = "2026-10-18")
+    @RedWitness(verdict = "rule", member = "TileWeaponConsole#readFromNBT",
+            at = "savedOrders = nbt.getCompoundTag(NBT_ORDERS);",
+            replacedBy = "savedOrders = nbt.getCompoundTag(NBT_ORDERS); savedOrders.removeTag(\"hullAllegiance\");",
+            fails = "and its hull rule", on = "2026-10-18")
+    @RedWitness(verdict = "the gun's code", member = "TileTurret#getEffectiveAccessCode",
+            at = "return state.getAccessCode();",
+            replacedBy = "return accessCode;",
+            fails = "the gun must judge a body by the network's code after the restart", on = "2026-10-18")
     @Test
     public void aWeaponNetworksOrdersComeBackFromItsConsolesAndTheBatteryObeysThem() throws Exception {
         // ─────── Boot 1: a gun between two consoles, ordered through one of them ───────

@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -34,17 +35,17 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
     /**
      * A recipe machine — the branch of the hierarchy under {@code TileWasteHeatMachine}.
      */
-    @LegacyWitness(prose = "with {@code TileWasteHeatMachine#getCapability} at {@code if (capability == CapabilityHeatEmitter.HEAT_EMITTER)} no longer answering the heat"
-            + " capability: \"stellurgy:electrolyser must offer a coolant loop its waste heat … \\\"present\\\":false\","
-            + " 2026-09-30. The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "TileWasteHeatMachine#getCapability", at = "if (capability == CapabilityHeatEmitter.HEAT_EMITTER)",
+            replacedBy = "if (false)", fails = "stellurgy:electrolyser must offer a coolant loop its waste heat",
+            on = "2026-10-17")
     @Test
     public void anElectrolyserOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:electrolyser");
     }
 
-    @LegacyWitness(prose = "with {@code TileWasteHeatMachine#getCapability} at {@code if (capability == CapabilityHeatEmitter.HEAT_EMITTER)} no longer answering the heat capability:"
-            + " \"stellurgy:arcfurnace must offer a coolant loop its waste heat … \\\"present\\\":false\", 2026-09-30."
-            + " The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "TileWasteHeatMachine#getCapability", at = "if (capability == CapabilityHeatEmitter.HEAT_EMITTER)",
+            replacedBy = "if (false)", fails = "stellurgy:arcfurnace must offer a coolant loop its waste heat",
+            on = "2026-10-17")
     @Test
     public void anArcFurnaceOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:arcfurnace");
@@ -53,17 +54,17 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
     /**
      * A plain power consumer — the other branch, under {@code TileWasteHeatPowerConsumer}.
      */
-    @LegacyWitness(prose = "with {@code TileWasteHeatPowerConsumer#getCapability} at {@code if (capability == CapabilityHeatEmitter.HEAT_EMITTER)} no longer answering the heat"
-            + " capability: \"stellurgy:observatory must offer a coolant loop its waste heat …"
-            + " \\\"present\\\":false\", 2026-09-30. The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "TileWasteHeatPowerConsumer#getCapability", at = "if (capability == CapabilityHeatEmitter.HEAT_EMITTER)",
+            replacedBy = "if (false)", fails = "stellurgy:observatory must offer a coolant loop its waste heat",
+            on = "2026-10-17")
     @Test
     public void anObservatoryOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:observatory");
     }
 
-    @LegacyWitness(prose = "with {@code TileWasteHeatPowerConsumer#getCapability} at {@code if (capability == CapabilityHeatEmitter.HEAT_EMITTER)} no longer answering the heat"
-            + " capability: \"stellurgy:railgun must offer a coolant loop its waste heat … \\\"present\\\":false\","
-            + " 2026-09-30. The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "TileWasteHeatPowerConsumer#getCapability", at = "if (capability == CapabilityHeatEmitter.HEAT_EMITTER)",
+            replacedBy = "if (false)", fails = "stellurgy:railgun must offer a coolant loop its waste heat",
+            on = "2026-10-17")
     @Test
     public void aRailgunOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:railgun");
@@ -74,9 +75,9 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
      * others so that all three cases — both bases and the hand-written one — answer to one rule
      * rather than to one rule and one habit.
      */
-    @LegacyWitness(prose = "with {@code TileLifeSupportPlant#getCapability} at {@code if (capability == CapabilityHeatEmitter.HEAT_EMITTER)} no longer answering the heat"
-            + " capability: \"stellurgy:lifeSupportPlant must offer a coolant loop its waste heat …"
-            + " \\\"present\\\":false\", 2026-09-30. The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "TileLifeSupportPlant#getCapability", at = "if (capability == CapabilityHeatEmitter.HEAT_EMITTER)",
+            replacedBy = "if (false)", fails = "stellurgy:lifeSupportPlant must offer a coolant loop its waste heat",
+            on = "2026-10-17")
     @Test
     public void theLifeSupportPlantOffersItsWasteHeatToo() throws Exception {
         assertOffersWasteHeat("stellurgy:lifeSupportPlant");
@@ -109,9 +110,10 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
      * {@code present:false} from its own no-tile branch without consulting the capability at all. A
      * chest is a tile entity that does no work, so its {@code false} is the capability's answer.</p>
      */
-    @LegacyWitness(prose = "with {@code CapabilityHeatEmitter#get} at {@code return te.getCapability(HEAT_EMITTER, null);} handing a default emitter to a tile"
-            + " that offers none: \"a chest does no work and so has no waste heat to offer: … \\\"present\\\":true\","
-            + " 2026-09-30. The tile premise is an arrangement and is not witnessed.")
+    @RedWitness(member = "CapabilityHeatEmitter#get", at = "return te.getCapability(HEAT_EMITTER, null);",
+            replacedBy = "return te.getCapability(HEAT_EMITTER, null) != null ? te.getCapability(HEAT_EMITTER, null)"
+                    + " : new DefaultHeatEmitter();",
+            fails = "a chest does no work and so has no waste heat to offer", on = "2026-10-17")
     @Test
     public void aTileThatIsNotAMachineOffersNothing() throws Exception {
         String at = standAlone("minecraft:chest");

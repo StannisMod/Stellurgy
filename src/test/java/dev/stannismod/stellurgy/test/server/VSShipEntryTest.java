@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
@@ -80,9 +80,10 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * overworld is read as the server holds it (its radius from the reply, never assumed), then given a
      * stated line, then cleared again so the body's own applies.</p>
      */
-    @LegacyWitness(prose = "2026-10-05, with {@code DimensionProperties#orbitLine} at {@code return OptionalInt.of(orbitHeight);}"
-            + " replaced by the body's line (the stated line ignored), this fails with \"a stated line must be"
-            + " the line the world answers\".")
+    @RedWitness(member = "DimensionProperties#orbitLine",
+            at = "if (orbitHeight != ORBIT_HEIGHT_UNSET)",
+            replacedBy = "if (orbitHeight != ORBIT_HEIGHT_UNSET && radius <= BULK_UNSET)",
+            fails = "a stated line must be the line the world answers", on = "2026-10-18")
     @Test
     public void aWorldsTakeoffLineIsItsBodysAtmosphereUnlessItsFileStatesOne() throws Exception {
         OrbitLine asHeld = OrbitLine.of(c -> read(c).raw(), 0);

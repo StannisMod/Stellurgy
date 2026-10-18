@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -66,17 +67,18 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * the 1.03 of margin is the bound's own gravity term, 0.03 * 8 * 9 / 2 = 1.08, which is the most a
      * fall can lengthen the path, not the displacement it adds.</p>
      */
-    @LegacyWitness(prose = "with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} leaving the muzzle in the ship's frame,"
-            + " this fails with \"the round is at x=1.9200042387784544E7, which is a shipyard address\"; with the"
-            + " same line offsetting the mapped muzzle 200 blocks along Z, it fails with \"the round is"
-            + " 204.62225954356157 blocks from the hull that fired it, more than the hull's reach (64.0) plus the"
-            + " 25.32623553276062 blocks it has flown\". 2026-09-30. (That bound was the fixture's unmeasured"
-            + " reach; it has since been replaced by the derived one below.)")
-    @LegacyWitness(prose = "2026-09-30: with {@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),} admitting the round with a"
-            + " lifetime of 0, this fails at \"the round this gun just fired is no longer in the air:"
-            + " {...present:false,ended:EXPIRED...}\"; with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} placing the mapped"
-            + " muzzle 20 blocks along Z, at \"the round is 25.707357260698444 blocks from the gun that fired it,"
-            + " more than the gun's standoff (5.5) plus the most it can have flown in 3 steps (10.98)\".")
+    @RedWitness(verdict = "into the world", member = "TurretFireControl#muzzleOf",
+            at = "worldMuzzle = new Vec3d(point[0], point[1], point[2]);",
+            replacedBy = "worldMuzzle = localMuzzle;",
+            fails = "which is a shipyard address", on = "2026-10-18")
+    @RedWitness(verdict = "in the air", member = "TurretFireControl#fire",
+            at = "spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),",
+            replacedBy = "spec.getProjectileMass(), 0, spec.getImpactEnergy(),",
+            fails = "the round this gun just fired is no longer in the air", on = "2026-10-18")
+    @RedWitness(verdict = "near the gun", member = "TurretFireControl#muzzleOf",
+            at = "worldMuzzle = new Vec3d(point[0], point[1], point[2]);",
+            replacedBy = "worldMuzzle = new Vec3d(point[0], point[1], point[2] + 20.0D);",
+            fails = "blocks from the gun that fired it, more than the gun's standoff", on = "2026-10-18")
     @Test
     public void aGunOnAShipFiresIntoTheWorldRatherThanIntoTheShipyard() throws Exception {
         arrange("stellurgytest shot clear 0").requireOk("clear the air");
@@ -167,11 +169,10 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * compared with the hull's own displacement per tick, measured from its position over a window just
      * before the shot.</p>
      */
-    @LegacyWitness(prose = "with {@code VSBridge#shipVelocityAtPointFor} at"
-            + " {@code (vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,} answering the X component per"
-            + " second again, this fails at \"a round from a moving hull does not carry the hull's motion: it"
-            + " carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio"
-            + " 17.746478873207156)\" (2026-10-05).")
+    @RedWitness(member = "VSBridge#shipVelocityAtPointFor",
+            at = "(vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,",
+            replacedBy = "(vLin.x() + (w.y() * rz - w.z() * ry)),",
+            fails = "a round from a moving hull does not carry the hull's motion", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advanceObserved(client(), GameTicks.server(), SETTLE_TICKS);",
             why = "how long the velocity command stands before the hull's motion is measured. No record announces"
@@ -335,10 +336,10 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * A battery told to engage a SHIP aims at that hull — wherever the hull is now, not where it was
      * when the order was given — and fires on it.
      */
-    @LegacyWitness(prose = "with {@code TileTurret#shipIntercept} at"
-            + " {@code net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);}"
-            + " reading the hull's SHIPYARD bounds instead, this fails at \"the battery is aimed"
-            + " 1.9191751436964057E7 blocks from the ship it was told to engage — not at its hull\" (2026-10-05).")
+    @RedWitness(member = "TileTurret#shipIntercept",
+            at = "net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);",
+            replacedBy = "net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipyardBoundsOf(world, uuid);",
+            fails = "blocks from the ship it was told to engage", on = "2026-10-18")
     @Test
     public void aBatteryToldToEngageAShipAimsAtItsHullWhereverItIs() throws Exception {
         Engagement engagement = arrangeEngagement(0, "NONE");

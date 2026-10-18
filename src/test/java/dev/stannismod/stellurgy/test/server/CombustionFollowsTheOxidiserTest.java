@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -44,14 +45,19 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
      * Pins INV-ATM-21 (fire and lungs are two different questions about the same gas).
      */
     @Pins("INV-ATM-21")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. THIN REFUSES — {@code AtmosphereHandler#allowsCombustionAt} at {@code return air.allowsCombustion();} answering the label's flag instead of the air's: \"nothing may light in"
-            + " air this thin … \\\"combustible\\\":true\". LABEL — the {@code Atmosphere#LOWOXYGEN} at {@code new Atmosphere(true, false, true, \"lowO2\")} constant building {@code lowO2}"
-            + " non-combustible: \"the label's own flag is unchanged, and it is WRONG … \\\"labelCombustible\\\":false\"."
-            + " ORDINARY BURNS — {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion everywhere: \"ordinary air burns: …"
-            + " \\\"combustible\\\":false\". BREATHABLE — {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breathability everywhere:"
-            + " \"and is breathable: … \\\"breathableAir\\\":false\". The premises (the composition arrived, it is"
-            + " not breathable, the label is {@code lowO2}, the room was refilled) are arrangements and are"
-            + " not witnessed.")
+    @RedWitness(verdict = "thin refuses", member = "AtmosphereHandler#allowsCombustionAt",
+            at = "return air != null && air.allowsCombustion();",
+            replacedBy = "return getAtmosphereType(pos).allowsCombustion();",
+            fails = "nothing may light in air this thin", on = "2026-10-17")
+    @RedWitness(verdict = "ordinary burns", member = "AirState#allowsCombustion",
+            at = "return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;", replacedBy = "return false;",
+            fails = "ordinary air burns", on = "2026-10-17")
+    @RedWitness(verdict = "breathable", member = "AirState#isBreathableAir",
+            at = "return config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2"
+                    + " || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;",
+            replacedBy = "return false;", fails = "and is breathable", on = "2026-10-17")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. LABEL — the {@code Atmosphere#LOWOXYGEN} at {@code new Atmosphere(true, false, true, \"lowO2\")} constant building {@code lowO2}"
+            + " non-combustible: \"the label's own flag is unchanged, and it is WRONG … \\\"labelCombustible\\\":false\".")
     @Test
     public void aRoomTooThinToBurnRefusesFireWhileItsLabelStillSaysOtherwise() throws Exception {
         buildRoomWithVent();

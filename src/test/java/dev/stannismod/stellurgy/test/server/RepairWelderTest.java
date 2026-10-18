@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -42,11 +43,8 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * Pins REPAIR-3 (material and charge leave on a repair and neither leaves on a refusal).
      */
     @Pins({"REPAIR-1", "REPAIR-3"})
-    @LegacyWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);} (the real material withdrawal) removed,"
-            + " this fails with \"the repair took no material — nothing may be created from nothing:"
-            + " {...materialBefore:64,materialAfter:64...}\". The stage and charge verdicts were not separately"
-            + " witnessed. 2026-09-30, taken on the pre-change form {@code RepairCost.consume(player, cost, false);},"
-            + " which is now the instance call named above.")
+    @RedWitness(member = "ItemRepairWelder#weld", at = "cost.consume(player, false);", replacedBy = "",
+            fails = "the repair took no material", on = "2026-10-17")
     @Test
     public void oneUseTakesOneStageAndIsPaidForTwice() throws Exception {
         int x = X, y = Y, z = Z;
@@ -70,10 +68,9 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * Pins REPAIR-7 (a bay that cannot work says why: every refusal is its own answer).
      */
     @Pins({"REPAIR-3", "REPAIR-7"})
-    @LegacyWitness(prose = "with a charge withdrawal inserted before {@code ItemRepairWelder#weld} at {@code return Outcome.NO_MATERIALS;}'s"
-            + " NO_MATERIALS return, this fails with \"a refused repair spent charge: {...outcome:NO_MATERIALS,"
-            + " energyBefore:100000,energyAfter:98000...}\". The later refusals' verdicts were not separately"
-            + " witnessed. 2026-09-30.")
+    @RedWitness(member = "ItemRepairWelder#weld", at = "return Outcome.NO_MATERIALS;",
+            replacedBy = "setStoredEnergy(tool, storedEnergy(tool) - energyCost); return Outcome.NO_MATERIALS;",
+            fails = "a refused repair spent charge", on = "2026-10-17")
     @Test
     public void everyRefusalIsItsOwnAnswerAndCostsNothing() throws Exception {
         // Each case gets its own block: a refusal that quietly consumed something would otherwise be
@@ -116,15 +113,11 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * lists {@code minecraft:planks} data 0..5, oak first), and a player carrying only spruce
      * (data 1) can weld one.
      */
-    @LegacyWitness(prose = "with {@code RepairCost#consume} at {@code !wanted.accepts.apply(inSlot)}"
-            + " replaced by a match against the slot's first variant only"
-            + " ({@code !OreDictionary.itemMatches(wanted.accepts.getMatchingStacks()[0], inSlot, false)} — the"
-            + " shape it shipped with), this fails at \"a player carrying spruce planks could not pay for a"
-            + " crafting table, whose slots accept every plank: {...outcome:NO_MATERIALS,...materialBefore:64,"
-            + " materialAfter:64...} expected:&lt;[REPAIRED]&gt; but was:&lt;[NO_MATERIALS]&gt;\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);}"
-            + " removed, this fails at \"the repair was granted but no spruce left the inventory:"
-            + " {...outcome:REPAIRED,...materialBefore:64,materialAfter:64...}\" (2026-10-06).")
+    @RedWitness(verdict = "any of them pays", member = "RepairCost#consume", at = "!wanted.accepts.apply(inSlot)",
+            replacedBy = "!net.minecraftforge.oredict.OreDictionary.itemMatches(wanted.accepts.getMatchingStacks()[0], inSlot, false)",
+            fails = "a player carrying spruce planks could not pay for a crafting table", on = "2026-10-17")
+    @RedWitness(verdict = "it is spent", member = "ItemRepairWelder#weld", at = "cost.consume(player, false);",
+            replacedBy = "", fails = "the repair was granted but no spruce left the inventory", on = "2026-10-17")
     @Test
     public void aSlotAcceptingSeveralItemsIsPaidWithAnyOfThem() throws Exception {
         int x = X + 20;

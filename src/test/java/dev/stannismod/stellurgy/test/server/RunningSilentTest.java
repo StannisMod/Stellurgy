@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -66,26 +67,47 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * Pins HEAT-16 (silence is never invisibility: a shut ship still radiates its hull).
      */
     @Pins({"INV-HEAT-29", "HEAT-16"})
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody#setSinksClosed} at {@code changed++;}"
-            + " stopping after the first cell it shuts: \"silencing failed: … \\\"changed\\\":1,\\\"silent\\\":false\"."
-            + " NOT WORKING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the shut flag: \"a shut cell is not"
-            + " working surface: … expected:&lt;0&gt; but was:&lt;3&gt;\". MOST OF IT — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),}"
-            + " counting every radiator, shut or not, at the loop's temperature: \"shutting the sinks must take"
-            + " most of what the ship radiates away … lit=6504393 silent=6557149\". A FLOOR — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),} leaving a hundredth of a cell per shut radiator at the loop's temperature:"
-            + " \"with every sink shut, what a ship shows may not depend on how much heat it is carrying … hot=919598"
-            + " cold=863715\". RANGE FALLS — {@code ThermalSignature#detectionRangeBlocks} at {@code return sensorRangeAtReference * Math.sqrt(radiatedPower / reference);} answering the sensor's own range for"
-            + " any power: \"and the range must fall with it … lit=2000000 silent=2000000\". STILL FOUND — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: \"but the hull is still warmer than space, so a silent"
-            + " ship is found CLOSER and never not at all: … \\\"radiatedPowerMilli\\\":0\". SHEDS NOTHING — {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, ((IHeatExchanger) node).getExchangeCells());} and {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, exchanger.getExchangeCells());} rejecting through every exchanger, shut or not: \"a shut array"
-            + " may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;\". STILL ABOARD — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one unit a tick outside rejection: \"so the heat that used to leave is"
-            + " still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;\". COMES BACK — {@code TileHeatRadiator#setClosed} at {@code if (this.closed == closed)} refusing to open a shut cell: \"a ship that went dark must be able to come"
-            + " back: … \\\"rejected\\\":0 … \\\"silent\\\":true\"."
-            + " The three premises at its head are arrangements and are not witnessed.")
-    @LegacyWitness(prose = "the same run, continued. LOCKABLE — {@code ThermalSignature#plus} at"
-            + " {@code Math.max(peakKelvin, other.peakKelvin));} taking the added surface's peak instead of the"
-            + " hotter one, so the shut loop's zero wins over the hull: \"and a seeker still has a warm surface to"
-            + " lock on, the hull's: … \\\"radianceMilli\\\":0\". NOT SILENT ONCE OPENED —"
-            + " {@code ThermalBody#isRunningSilent} at {@code if (!radiator.isClosed())} removed, so any body"
-            + " with radiators reads silent: \"an opened array is not running silent: … \\\"silent\\\":true\".")
+    @RedWitness(verdict = "silenced", member = "ThermalBody#setSinksClosed",
+            at = "changed++;",
+            replacedBy = "changed++; break;",
+            fails = "silencing failed", on = "2026-10-17")
+    @RedWitness(verdict = "not working surface", member = "TileHeatRadiator#getExchangeCells",
+            at = "return !closed && getObstruction() == 0 ? 1 : 0;",
+            replacedBy = "return getObstruction() == 0 ? 1 : 0;",
+            fails = "a shut cell is not working surface", on = "2026-10-17")
+    @RedWitness(verdict = "most of it", member = "ThermalBody#signature",
+            at = "signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),",
+            replacedBy = "signature = signature.plus(ThermalSignature.surface(radiators().size(),",
+            fails = "shutting the sinks must take most of what the ship radiates away", on = "2026-10-17")
+    @RedWitness(verdict = "a floor", member = "ThermalBody#signature",
+            at = "signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),",
+            replacedBy = "signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells() + 0.01D * radiators().size(),",
+            fails = "with every sink shut, what a ship shows may not depend on how much heat it is carrying", on = "2026-10-17")
+    @RedWitness(verdict = "range falls", member = "ThermalSignature#detectionRangeBlocks",
+            at = "return sensorRangeAtReference * Math.sqrt(radiatedPower / reference);",
+            replacedBy = "return sensorRangeAtReference;",
+            fails = "and the range must fall with it", on = "2026-10-17")
+    @RedWitness(verdict = "still found", member = "ThermalBody#signature",
+            at = "ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());",
+            replacedBy = "ThermalSignature signature = ThermalSignature.surface(0, skinKelvin());",
+            fails = "but the hull is still warmer than space, so a silent ship is found CLOSER and never not at all", on = "2026-10-17")
+    @RedWitness(verdict = "still aboard", member = "HeatNetwork#tickThermodynamics",
+            at = "stored = Math.max(0L, stored - rejected);",
+            replacedBy = "stored = Math.max(0L, stored - rejected - 1L);",
+            fails = "so the heat that used to leave is still on the ship", on = "2026-10-17")
+    @RedWitness(verdict = "comes back", member = "TileHeatRadiator#setClosed",
+            at = "if (this.closed == closed)",
+            replacedBy = "if (this.closed == closed || !closed)",
+            fails = "an opened array is not running silent", on = "2026-10-17")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SHEDS NOTHING — {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, ((IHeatExchanger) node).getExchangeCells());} and {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, exchanger.getExchangeCells());} rejecting through every exchanger, shut or not: \"a shut array may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;\".")
+    @RedWitness(verdict = "lockable", member = "ThermalSignature#plus",
+            at = "Math.max(peakKelvin, other.peakKelvin));",
+            replacedBy = "other.peakKelvin);",
+            fails = "and a seeker still has a warm surface to lock on, the hull's", on = "2026-10-17")
+    @RedWitness(verdict = "not silent once opened", member = "ThermalBody#isRunningSilent",
+            at = "if (!radiator.isClosed()) { return false; }",
+            replacedBy = "",
+            fails = "an opened array is not running silent", on = "2026-10-17")
     @Test
     public void aShipRunningSilentIsFoundCloserAndIsStillFound() throws Exception {
         buildLoop();
@@ -167,13 +189,18 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-30 (A hotter cabin is a hotter skin and a brighter ship, and two loops threading one sealed room are ONE body).
      */
     @Pins("INV-HEAT-30")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody#loopsOf} at {@code if (shipId == null && (hull == null || hull.isEmpty()))}"
-            + " never looking past the loop asked about: \"two loops in one sealed room are ONE body … expected:&lt;2&gt;"
-            + " but was:&lt;1&gt;\". HOTTER SKIN — {@code ThermalBody#skinKelvin} at {@code return environmentKelvin + skinFraction() * above;} holding the skin at the environment's"
-            + " temperature: \"a hotter cabin must show a hotter skin … cool=286000 hot=286000\". FOUND FURTHER"
-            + " — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: \"so a ship that cooks itself while hiding is"
-            + " found further away the longer it hides: cool=0 hot=0\". The three premises are arrangements and"
-            + " are not witnessed.")
+    @RedWitness(verdict = "one body", member = "ThermalBody#loopsOf",
+            at = "if (shipId == null && (hull == null || hull.isEmpty()))",
+            replacedBy = "if (true)",
+            fails = "two loops in one sealed room are ONE body", on = "2026-10-17")
+    @RedWitness(verdict = "hotter skin", member = "ThermalBody#skinKelvin",
+            at = "return environmentKelvin + skinFraction() * above;",
+            replacedBy = "return environmentKelvin;",
+            fails = "a hotter cabin must show a hotter skin", on = "2026-10-17")
+    @RedWitness(verdict = "found further", member = "ThermalBody#signature",
+            at = "ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());",
+            replacedBy = "ThermalSignature signature = ThermalSignature.surface(0, skinKelvin());",
+            fails = "so a ship that cooks itself while hiding is found further away the longer it hides", on = "2026-10-17")
     @Test
     public void theHullGlowsWithTheAirItEncloses() throws Exception {
         buildSealedRoomWithTwoLoops();

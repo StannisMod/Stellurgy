@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
@@ -270,11 +270,10 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
      * Pins INV-STN-17 (a same-star warp is priced by the in-plane separation in AU).
      */
     @Pins("INV-STN-17")
-    @LegacyWitness(prose = "2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by"
-            + " the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: \"a warp"
-            + " from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced"
-            + " 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:"
-            + " &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;\".")
+    @RedWitness(member = "TileWarpController#intraSystemCost",
+            at = "double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU",
+            replacedBy = "double auPerUnit = 1d / 100d",
+            fails = "a warp from WarpPriceOrigin", on = "2026-10-18")
     @Test
     public void aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu() throws Exception {
         DimList.Probe probe = command -> ok(client().read(command));

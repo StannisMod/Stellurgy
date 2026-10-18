@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -69,9 +70,9 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * be the same. Priced off the wall rather than asserted as a number: what is claimed is that
      * boiling material away costs more per joule than pushing through it, not by how much.
      */
-    @LegacyWitness(prose = "(taken on the pre-merge form, where the table was reached through a static instance): with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})"
-            + " pricing every kind from the kinetic column, this fails at \"a beam dug as deep as a slug carrying the"
-            + " same energy (beam=10 slug=10, budget=20000)\" (2026-09-29).")
+    @RedWitness(member = "WeightEngine#getResistance", at = "if (kind == null || !isThermalChannel(kind))",
+            replacedBy = "if (true)", fails = "a beam dug as deep as a slug carrying the same energy",
+            on = "2026-10-17")
     @Test
     public void aBeamBuysFarLessDepthThanASlugOfTheSameEnergy() throws Exception {
         prepare(SLUG_Z);
@@ -142,9 +143,9 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * the threshold that beam does not warm the hull, it passes clean through it carrying everything
      * it arrived with.</p>
      */
-    @LegacyWitness(prose = "with {@code StructureDamageEngine.tooFaintToDrill} ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))})"
-            + " answering false for every kind, this fails at \"a beam below the intensity threshold removed material"
-            + " anyway\" (2026-09-29).")
+    @RedWitness(member = "StructureDamageEngine#tooFaintToDrill", at = "if (!WeightEngine.isThermalChannel(kind))",
+            replacedBy = "if (true)", fails = "a beam below the intensity threshold removed material anyway",
+            on = "2026-10-17")
     @Test
     public void aBeamBelowTheIntensityThresholdRemovesNothingWhileAStrongerOneDigs() throws Exception {
         prepare(FAINT_Z);
@@ -189,9 +190,9 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * something fills it. Panes and solid glass are the same material — the same row of the same
      * table — so the only thing separating these two walls is that one of them is mostly air.</p>
      */
-    @LegacyWitness(prose = "with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0"
-            + " for every block, this fails with \"a wall of panes cost the same to bore as a wall of solid glass"
-            + " (panes=3 solid=3)\". 2026-09-30.")
+    @RedWitness(member = "StructureDamageEngine#occupancyOf", at = "if (world == null || pos == null)",
+            replacedBy = "if (true)", fails = "a wall of panes cost the same to bore as a wall of solid glass",
+            on = "2026-10-17")
     @Test
     public void aRoundGoesFurtherThroughWhatIsMostlyAir() throws Exception {
         prepare(SOLID_Z);
@@ -223,14 +224,17 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * <p>The evidence is the contact seam's own ricochet decision at each plate — not the plate being
      * unmarked, which a round that missed it entirely would also leave.</p>
      */
-    @LegacyWitness(prose = "(taken on the pre-merge form, where the table was reached through a static instance): with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos()))})"
-            + " disabled, this fails at \"the same round at the same angle skipped off WOOD\" (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ContactResolver.ricochet}'s"
-            + " deflection ({@code ContactResolver.java:142}) answering null, this fails at \"a round grazing a"
-            + " steel plate never skipped ... {...incidence:82.4...skipped:false}\"; with the skip at"
-            + " {@code ContactResolver.java:106-110} also spending the round into the plate through the default"
-            + " law, at \"the steel plate took damage from a round that skipped off it: [{...pos:1703,70,1090,"
-            + " from:0,to:4...}]\".")
+    @RedWitness(verdict = "digs into wood", member = "ContactResolver#ricochet",
+            at = "if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos()))",
+            replacedBy = "if (false)", fails = "the same round at the same angle skipped off WOOD", on = "2026-10-17")
+    @RedWitness(verdict = "skips off steel", member = "ContactResolver#ricochet",
+            at = "return worldVelocity == null ? null : ContactResult.deflected(worldVelocity, body.getEnergy());",
+            replacedBy = "return null;", fails = "a round grazing a steel plate never skipped", on = "2026-10-17")
+    @RedWitness(verdict = "a skip leaves the plate whole", member = "ContactResolver#resolve",
+            at = "return new Resolution(skipped, 1.0D, true);",
+            replacedBy = "defaultLaw(world, body, contact, reachBlocks, resumingBore);"
+                    + " return new Resolution(skipped, 1.0D, true);",
+            fails = "the steel plate took damage from a round that skipped off it", on = "2026-10-17")
     @Test
     public void aGrazingRoundSkipsOffSteelAndDigsIntoWood() throws Exception {
         prepare(STEEL_Z);

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -49,15 +50,16 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
      * now DECLINES, and declining hands the meeting to the ordinary law: the film is priced off the
      * table and the eighth of a voxel it fills, and it breaks like the glass it is.</p>
      */
-    @LegacyWitness(prose = "with {@code BlockMirrorPlating.onContact} ({@code BlockMirrorPlating#onContact} at {@code if (!isRadiant(contact.getKind()))})"
-            + " declining beams as it declines solid rounds, this fails at \"a beam fired at a mirror was never sent"
-            + " back\" on an answer reading {@code NO_OPINION} (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with the kind gate at"
-            + " {@code BlockMirrorPlating.java:71} taken out (a solid round answered optically), this fails at \"a"
-            + " solid round bounced off glass and foil ... {...kind:KINETIC...answer:DEFLECTED...}\"; with the"
-            + " solid round's decline at {@code BlockMirrorPlating.java:78} answering \"passed through, carrying"
-            + " everything\" instead, at \"the film is still standing after a solid round crossed it ..."
-            + " film={...stage:0...block:stellurgy:mirrorplatingaluminium...}\".")
+    @RedWitness(verdict = "returns a beam", member = "BlockMirrorPlating#onContact",
+            at = "if (!isRadiant(contact.getKind()))", replacedBy = "if (true)",
+            fails = "a beam fired at a mirror was never sent back", on = "2026-10-17")
+    @RedWitness(verdict = "a solid round is not bounced", member = "BlockMirrorPlating#onContact",
+            at = "if (!isRadiant(contact.getKind()))", replacedBy = "if (false)",
+            fails = "a solid round bounced off glass and foil", on = "2026-10-17")
+    @RedWitness(verdict = "smashed by a solid round", member = "BlockMirrorPlating#onContact",
+            at = "return ContactResult.noOpinion();",
+            replacedBy = "return ContactResult.passedThrough(contact.getEnergy());",
+            fails = "the film is still standing after a solid round crossed it", on = "2026-10-17")
     @Test
     public void aMirrorReturnsABeamAndIsSmashedByASolidRound() throws Exception {
         prepare(MIRROR_Z);
@@ -98,9 +100,10 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
      * A mirror dies by what it ABSORBS. Two tiers, the same beam: the worse one lets more of it into
      * its film and is gone; the better one lets less in and survives.
      */
-    @LegacyWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code int absorbed = (int) Math.ceil(contact.getEnergy() * (1.0D - reflectance));} absorbing as the aluminium tier whatever"
-            + " the plate's own reflectance, this fails with \"a gold mirror died to the same beam that killed an"
-            + " aluminium one\". 2026-09-30.")
+    @RedWitness(member = "BlockMirrorPlating#onContact",
+            at = "int absorbed = (int) Math.ceil(contact.getEnergy() * (1.0D - reflectance));",
+            replacedBy = "int absorbed = (int) Math.ceil(contact.getEnergy() * (1.0D - 0.90D));",
+            fails = "a gold mirror died to the same beam that killed an aluminium one", on = "2026-10-17")
     @Test
     public void aBetterMirrorSurvivesWhatKillsAWorseOne() throws Exception {
         prepare(BETTER_Z);
@@ -147,9 +150,8 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
      * A reactive plate stops one shot and is gone; the second through the same spot is not stopped.
      * That is a property of the thing rather than a counter somebody keeps.
      */
-    @LegacyWitness(prose = "with {@code BlockReactivePlating#onContact} at {@code detonate(world, contact.getPos());}'s detonation removed, this fails with"
-            + " \"the charge is still standing after eating a round\". The two verdicts after it were not"
-            + " separately witnessed. 2026-09-30.")
+    @RedWitness(member = "BlockReactivePlating#onContact", at = "detonate(world, contact.getPos());",
+            replacedBy = "", fails = "the charge is still standing after eating a round", on = "2026-10-17")
     @Test
     public void aReactivePlateStopsOneShotAndIsThenNotThere() throws Exception {
         prepare(REACTIVE_Z);
@@ -175,9 +177,9 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
     /**
      * Twice the plating eats more of the same impact — the ordering the volume rule exists for.
      */
-    @LegacyWitness(prose = "with {@code BlockReactivePlating#onContact} at {@code int eaten = Math.min(contact.getEnergy(), capacity);} eating the whole contact regardless of"
-            + " capacity, this fails with \"a round bigger than one plate can swallow was stopped by it anyway\"."
-            + " The full-block verdict was not separately witnessed. 2026-09-30.")
+    @RedWitness(member = "BlockReactivePlating#onContact",
+            at = "int eaten = Math.min(contact.getEnergy(), capacity);", replacedBy = "int eaten = contact.getEnergy();",
+            fails = "a round bigger than one plate can swallow was stopped by it anyway", on = "2026-10-17")
     @Test
     public void twiceTheReactiveVolumeEatsMoreOfTheSameImpact() throws Exception {
         prepare(REACTIVE_TWICE_Z);
@@ -213,9 +215,9 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
      * the same thickness and the same declared material, with NO row of its own — so a difference in
      * price can come from exactly one place. Only the ORDERING is claimed.</p>
      */
-    @LegacyWitness(prose = "with {@code WeightEngine#defaultToughnessByRegex} at {@code m.put(\"stellurgy:mirrorplating.*\", 1.0);}'s mirror-plating row removed, this fails with"
-            + " \"a mirror film costs what the identically shaped plating beside it costs (film=55 reactive=55)\"."
-            + " 2026-09-30.")
+    @RedWitness(member = "WeightEngine#defaultToughnessByRegex", at = "m.put(\"stellurgy:mirrorplating.*\", 1.0);",
+            replacedBy = "", fails = "a mirror film costs what the identically shaped plating beside it costs",
+            on = "2026-10-17")
     @Test
     public void aMirrorFilmCostsLessToBreakThanTheMetalItsMaterialClaims() throws Exception {
         prepare(PRICE_Z);

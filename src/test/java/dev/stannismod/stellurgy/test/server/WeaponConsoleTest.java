@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -43,13 +43,14 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * one network out of three nodes. No cable is involved: two touching nodes are one network, and
      * a cable is a reach tool rather than a requirement.</p>
      */
-    @LegacyWitness(prose = "with {@code TileTurret#getEffectiveTarget} at {@code if (state != null && state.getTarget() != null)} taking the network's target only when a"
-            + " console stands directly east of the gun (the nearest gun alone commanded), this fails with \"the"
-            + " second gun never fired on the console's target: one console must point the whole battery, not"
-            + " the nearest gun\". 2026-09-30.")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole.getGunCount} ({@code TileWeaponConsole#getGunCount} at {@code return state == null ? 0 : state.getSinkCount();})"
-            + " counting at most one gun, this fails at \"the console is not commanding both guns ..."
-            + " {...guns:1...} expected:&lt;2&gt; but was:&lt;1&gt;\" (2026-09-30).")
+    @RedWitness(verdict = "every gun", member = "TileTurret#getEffectiveTarget",
+            at = "if (state != null && state.getTarget() != null)",
+            replacedBy = "if (state != null && state.getTarget() != null && world.getTileEntity(pos.east()) instanceof TileWeaponConsole)",
+            fails = "the second gun never fired on the console's target", on = "2026-10-18")
+    @RedWitness(verdict = "both guns", member = "TileWeaponConsole#getGunCount",
+            at = "return state == null ? 0 : state.getSinkCount();",
+            replacedBy = "return state == null ? 0 : Math.min(1, state.getSinkCount());",
+            fails = "the console is not commanding both guns", on = "2026-10-18")
     @Test
     public void aConsolePointsEveryGunOnItsNetwork() throws Exception {
         int base = X;
@@ -79,14 +80,18 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
     /**
      * Hold fire stops the shooting without losing the target.
      */
-    @LegacyWitness(prose = "with the hold's answer ignored in {@code TileTurret.update}'s fire gate"
-            + " ({@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}, {@code isHoldingFire()} still asked), this fails at \"the battery"
-            + " kept firing while holding fire\" (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.isHoldingFire}"
-            + " ({@code TileTurret.java:619}) letting go of the hold one tick in seven, this fails at \"the gun"
-            + " stopped holding inside the hold window ... {...held:true},{...held:false}...\"; with"
-            + " {@code TileWeaponConsole.getTarget} ({@code TileWeaponConsole.java:191}) answering nothing while the"
-            + " network holds fire, at \"holding fire lost the target ... {...holdFire:true...hasTarget:false}\".")
+    @RedWitness(verdict = "stops", member = "TileTurret#update",
+            at = "if (!onTarget || isHoldingFire() || !canFireNow())",
+            replacedBy = "if (!onTarget || (isHoldingFire() && world == null) || !canFireNow())",
+            fails = "the battery kept firing while holding fire", on = "2026-10-18")
+    @RedWitness(verdict = "holds", member = "TileTurret#isHoldingFire",
+            at = "return state != null && state.isHoldFire();",
+            replacedBy = "return state != null && state.isHoldFire() && world.getTotalWorldTime() % 7L != 0L;",
+            fails = "the gun stopped holding inside the hold window", on = "2026-10-18")
+    @RedWitness(verdict = "keeps the target", member = "TileWeaponConsole#getTarget",
+            at = "return state == null ? null : state.getTarget();",
+            replacedBy = "return state == null || state.isHoldFire() ? null : state.getTarget();",
+            fails = "holding fire lost the target", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "int interval = read(base).integer(\"fireInterval\");",
             why = "while it holds, nothing is decided per tick that a record could close — the hold returns before"
@@ -151,15 +156,14 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * Breaking the last console clears the target rather than leaving the battery firing at a point
      * nobody can retract — the one failure a player cannot fix by breaking something.
      */
-    @LegacyWitness(prose = "with {@code WeaponNetworkDomain#onComponentRebuilt} at {@code if (controllers.isEmpty())}'s clear of a console-less network's"
-            + " target disabled, this fails with \"the gun still holds the command of a console that no longer"
-            + " exists — no `turret_aim` carrying ... commanded = false was recorded within 600 ticks\" while the"
-            + " gun went on firing. 2026-09-30.")
-    @LegacyWitness(prose = "with {@code TileTurret.update} ({@code TileTurret#update} at {@code Vec3d target = getEffectiveTarget();}) taking back the"
-            + " last target it had once it had held none for five ticks, this fails at \"the battery fired after"
-            + " it lost the command of a console that no longer exists (marks 1851..1916, 21 ticks past the"
-            + " recharge): [{...shot:2...},{...shot:3...}]\" (2026-09-30). The \"took a command again\" verdict after"
-            + " it is not reached by that inversion and was not separately witnessed.")
+    @RedWitness(verdict = "cleared", member = "WeaponNetworkDomain#onComponentRebuilt",
+            at = "if (controllers.isEmpty())",
+            replacedBy = "if (controllers.isEmpty() && controllers == null)",
+            fails = "the gun still holds the command of a console that no longer exists", on = "2026-10-18")
+    @RedWitness(verdict = "stops firing", member = "TileTurret#update",
+            at = "mechanism.clearCommand();",
+            replacedBy = "mechanism.clearCommand(); if (shotsFired > 0 && canFireNow()) { launch(TurretFireControl.shipIdAt(world, pos)); }",
+            fails = "the battery fired after it lost the command of a console that no longer exists", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "int interval = gun.integer(\"fireInterval\");",
             why = "a gun with no target takes no fire decision at all — it returns before the question is asked —"
@@ -230,10 +234,10 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * exact consoles of one row; the code is then read once from the console that joined them, which
      * holds no order of its own.</p>
      */
-    @LegacyWitness(prose = "with {@code WeaponNetworkDomain#seedFromLatestOrders} at"
-            + " {@code stamp >= latestStamp} made {@code stamp <= latestStamp} (the earliest order wins), this"
-            + " fails at \"the joined battery in the first row must take the order given last — the east"
-            + " console's: … expected:&lt;w636-[la]st&gt; but was:&lt;w636-[fir]st&gt;\" (2026-10-05).")
+    @RedWitness(member = "WeaponNetworkDomain#seedFromLatestOrders",
+            at = "stamp >= latestStamp",
+            replacedBy = "stamp <= latestStamp",
+            fails = "the joined battery in the first row must take the order given last", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), 1);",
             why = "one tick is the dose — an order is stamped with the tick it was given, so the second pair of"

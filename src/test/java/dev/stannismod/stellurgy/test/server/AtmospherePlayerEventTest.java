@@ -5,6 +5,8 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -150,18 +152,13 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     /**
      * The overworld is breathable, and the gate says so for a player standing in it.
      */
-    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType} at"
-            + " {@code HashedBlockPosition pos = new HashedBlockPosition(pos2);} preceded by a return of"
-            + " VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28 — taken on the form"
-            + " before the atmosphere on/off switch was removed (2026-10-06), when the return sat in front of"
-            + " that switch's {@code if}; the method's first line is now the one quoted. Removing the handler's own"
-            + " dimension check instead stays GREEN — no other world's handler exists in this scenario to"
-            + " answer for the overworld.")
-    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType(Entity)} at"
-            + " {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}"
-            + " answering VACUUM for dimension 0: \"overworld baseline: cache must be empty or non-Stellurgy;"
-            + " hasCached=true atmos=vacuum\", 2026-09-28 (taken on the other line of this test before the two"
-            + " were merged).")
+    @NotYetRed(prose = "AtmosphereHandler#getAtmosphereType (the BlockPos overload, the first of the name) at"
+            + " `HashedBlockPosition pos = new HashedBlockPosition(pos2);` -> preceded by `if (dimId == 0) { return"
+            + " Atmosphere.VACUUM; }`: the verdict stayed green -- the player gate reads the Entity overload, which the"
+            + " replay cannot address; the verdict is witnessed through DimensionProperties#getAtmosphere below, 2026-10-17")
+    @RedWitness(verdict = "the world's own air", member = "DimensionProperties#getAtmosphere",
+            at = "if (!hasAtmosphere())", replacedBy = "if (getId() == 0 || !hasAtmosphere())",
+            fails = "the overworld must resolve as breathable for a player standing in it", on = "2026-10-17")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES +"
             + " TICK_SLACK);",
@@ -207,9 +204,10 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}."
             + " SOMETHING BEFORE — answering nothing for an unbreathable dimension: \"the airless planet must"
             + " resolve to SOMETHING before the move\". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:"
-            + " \"the airless planet must resolve as unbreathable before the move: … \\\"breathable\\\":true\"."
-            + " BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: \"the breathable planet must"
-            + " resolve as breathable after the move: … \\\"NoO2\\\"\".")
+            + " \"the airless planet must resolve as unbreathable before the move: … \\\"breathable\\\":true\".")
+    @RedWitness(verdict = "breathable after", member = "DimensionProperties#getAtmosphere",
+            at = "boolean oxygen = hasOxygen();", replacedBy = "boolean oxygen = false;",
+            fails = "the breathable planet must resolve as breathable after the move", on = "2026-10-17")
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         startFromTheOverworld();

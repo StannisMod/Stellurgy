@@ -5,6 +5,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
@@ -434,18 +435,18 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * Pins INV-NAV-05 (a planet and its own moon are within-system, another planet and its moon are not).
      */
     @Pins("INV-NAV-05")
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict"
-            + " with \"expected:<error.rocket.outsidePlanetarySystem> but was:<null>\" (2026-10-02).")
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —"
-            + " the moon branch's sibling loop — made to match every moon, this fails at the far-moon verdict with"
-            + " \"expected:<error.rocket.outsidePlanetarySystem> but was:<null>\" while the far planet is still"
-            + " refused (2026-10-02).")
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code isPlanetMoonSystem = (destinationDimensionID == launchworldProperties.getParentPlanet())}"
-            + " made false, this fails at the own-moon verdict, the launch refused with"
-            + " error.rocket.outsidePlanetarySystem (2026-10-02).")
+    @RedWitness(verdict = "far planet", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "return isPlanetMoonSystem;",
+            replacedBy = "return true;",
+            fails = "another planet of the same star lies outside this world's planetary system", on = "2026-10-17")
+    @RedWitness(verdict = "far moon", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets()) { if (destinationDimensionID == moonDimID) {",
+            replacedBy = "for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets()) { if (true) {",
+            fails = "the moon of another planet lies outside this world's planetary system", on = "2026-10-17")
+    @RedWitness(verdict = "own moon", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "isPlanetMoonSystem = (destinationDimensionID == launchworldProperties.getParentPlanet());",
+            replacedBy = "isPlanetMoonSystem = false;",
+            fails = "the same craft must be accepted for this world's own moon", on = "2026-10-17")
     @Test
     public void aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon() throws Exception {
         int luna = theOverworldsMoon();
@@ -502,17 +503,18 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * ({@code Plot#inDimension}); they are removed from it when the scenario ends, as are the far
      * planet and the sibling moon minted for it.</p>
      */
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict, the"
-            + " launch accepted where error.rocket.outsidePlanetarySystem was expected (2026-10-02).")
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code for (int moonDimID : launchworldProperties.getChildPlanets())} — the planet branch — made"
-            + " to match none, this fails at the parent-planet verdict, the launch refused with"
-            + " error.rocket.outsidePlanetarySystem (2026-10-02).")
-    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
-            + " {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —"
-            + " the moon branch's sibling loop — made to match none, this fails at the sibling-moon verdict,"
-            + " the launch refused with error.rocket.outsidePlanetarySystem (2026-10-02).")
+    @RedWitness(verdict = "far planet", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "return isPlanetMoonSystem;",
+            replacedBy = "return true;",
+            fails = "another planet lies outside the moon's planetary system", on = "2026-10-17")
+    @RedWitness(verdict = "its planet", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "for (int moonDimID : launchworldProperties.getChildPlanets()) { if (destinationDimensionID == moonDimID) {",
+            replacedBy = "for (int moonDimID : launchworldProperties.getChildPlanets()) { if (false) {",
+            fails = "a craft on a moon must be accepted for the planet that moon orbits", on = "2026-10-17")
+    @RedWitness(verdict = "sibling moon", member = "PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem",
+            at = "for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets()) { if (destinationDimensionID == moonDimID) {",
+            replacedBy = "for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets()) { if (false) {",
+            fails = "a craft on a moon must be accepted for another moon of the same planet", on = "2026-10-17")
     @Test
     public void aRocketOnAMoonMayGoToItsPlanetAndASiblingMoonButNotToAnotherPlanet()
             throws Exception {
@@ -576,15 +578,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * of the placement, not a verdict: a ratio that moved between calls means the threshold was set
      * against a number the gate no longer reads, and the scenario says so as an arrangement failure.</p>
      */
-    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
-            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
-            + " given a tolerance (compared against {@code minLaunchTWR - 1e-3}), this fails at the"
-            + " just-above verdict, \"a threshold one ulp above the craft's ratio must refuse it as too heavy\""
-            + " (re-taken 2026-10-03 on the gravity-taking gate; first taken 2026-10-02).")
-    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
-            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
-            + " made strict ({@code >} for {@code >=}), this fails at the at-the-threshold verdict, \"a ratio"
-            + " EQUAL to minLaunchTWR must be let go\" (re-taken 2026-10-03).")
+    @RedWitness(verdict = "just above", member = "StatsRocket#canLaunch",
+            at = "return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;",
+            replacedBy = "return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR - 1e-3;",
+            fails = "a threshold one ulp above the craft's ratio must refuse it as too heavy", on = "2026-10-17")
+    @RedWitness(verdict = "exactly at", member = "StatsRocket#canLaunch",
+            at = "return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;",
+            replacedBy = "return getThrustToWeightRatio(gravitationalMultiplier) > StellurgyConfiguration.getCurrentConfig().minLaunchTWR;",
+            fails = "a ratio EQUAL to minLaunchTWR must be let go", on = "2026-10-17")
     @Test
     public void theWeightGateLetsACraftGoAtExactlyMinLaunchTwrAndRefusesItJustAbove()
             throws Exception {
@@ -641,14 +642,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
     @Pins("INV-API-08")
-    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
-            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
-            + " made to answer true, this fails at the system-on verdict, \"with the weight system on, a"
-            + " threshold no finite ratio reaches must refuse the craft as too heavy\" (re-taken 2026-10-03).")
-    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
-            + " {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)} never taken, this"
-            + " fails at the system-off verdict, \"with the weight system off the same craft, under the same"
-            + " threshold, must be let go\" (re-taken 2026-10-03).")
+    @RedWitness(verdict = "system on", member = "StatsRocket#canLaunch",
+            at = "return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;",
+            replacedBy = "return true;",
+            fails = "with the weight system on, a threshold no finite ratio reaches must refuse", on = "2026-10-17")
+    @RedWitness(verdict = "system off", member = "StatsRocket#canLaunch",
+            at = "if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)",
+            replacedBy = "if (false)",
+            fails = "with the weight system off the same craft, under the same threshold, must", on = "2026-10-17")
     @Test
     public void turningTheWeightSystemOffLiftsTheWeightGate() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -686,15 +687,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * used because {@code (int) (thrust * 2.0)} is exact for any engine thrust, so the doubled thrust
      * is a prediction and not a tolerance.</p>
      */
-    @LegacyWitness(prose = "with {@code StatsRocket#getThrust} at"
-            + " {@code (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier)} made"
-            + " {@code thrust}, this fails at the doubled-thrust verdict with the gate reading the multiplier-1"
-            + " thrust again (re-taken 2026-10-03).")
-    @LegacyWitness(prose = "with {@code StatsRocket#getThrustToWeightRatio} at"
-            + " {@code return getThrust() / localWeight} reading the raw {@code thrust} field instead, the"
-            + " doubled-thrust verdict holds and this fails at the let-go verdict, \"with the thrust doubled the"
-            + " craft clears a threshold of 1.5x its multiplier-1 ratio and must be let go\" (re-taken"
-            + " 2026-10-03).")
+    @RedWitness(verdict = "scaled", member = "StatsRocket#getThrust",
+            at = "(long) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier)",
+            replacedBy = "(long) thrust",
+            fails = "the thrust the gate compares must be the engines' thrust times the", on = "2026-10-17")
+    @RedWitness(verdict = "let go", member = "StatsRocket#getThrustToWeightRatio",
+            at = "return getThrust() / localWeight;",
+            replacedBy = "return thrust / localWeight;",
+            fails = "with the thrust doubled the craft clears a threshold of 1.5x its", on = "2026-10-17")
     @Test
     public void theThrustTheWeightGateComparesIsScaledByTheThrustMultiplier() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -763,12 +763,10 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
     @Pins("INV-API-08")
-    @LegacyWitness(prose = "with {@code StatsRocket#getThrustToWeightRatio} at"
-            + " {@code float localWeight = getWeightNewtons(gravitationalMultiplier);} weighing at one gee instead,"
-            + " this fails at the verdict, the craft refused at one gee (2026-10-03,"
-            + " {@code logs/bugs-a-601-red1.log}) — taken on the pre-merge form of that line, which multiplied"
-            + " the craft's weight by the effective gravity itself; it now asks the SI weight of the mass, which"
-            + " applies the same multiplier.")
+    @RedWitness(verdict = "the ratio's weight", member = "StatsRocket#getThrustToWeightRatio",
+            at = "float localWeight = getWeightNewtons(gravitationalMultiplier);",
+            replacedBy = "float localWeight = getWeightNewtons(1f);",
+            fails = "a craft whose ratio at the moon's gravity (", on = "2026-10-17")
     @LegacyWitness(prose = "with {@code EntityRocket#launch} at"
             + " {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the"
             + " world's gravity, this fails at the verdict the same way (2026-10-03,"
@@ -843,11 +841,10 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * <p>What this does NOT see: the flight model's half of the flag ({@code StatsRocket#getAcceleration}
      * at one gee) — a craft that is let go is gone, and nothing on this tier reads its climb.</p>
      */
-    @LegacyWitness(prose = "with {@code StatsRocket#effectiveGravityMultiplier} at"
-            + " {@code return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;}"
-            + " answering the multiplier whatever the flag says, this fails at the verdict — the craft let go"
-            + " with a one-gee ratio of 13.99 under a threshold of 49.12 (local ratio 84.25, g 0.166),"
-            + " 2026-10-04.")
+    @RedWitness(member = "StatsRocket#effectiveGravityMultiplier",
+            at = "return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;",
+            replacedBy = "return gravitationalMultiplier;",
+            fails = "with gravityAffectsFuel off the gate must judge the craft at one gee wherever", on = "2026-10-17")
     @Test
     public void turningGravityOffTheLaunchJudgesACraftOnTheMoonAtOneGee() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -923,11 +920,10 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * the gate refusing it as too heavy (2026-10-02, {@code logs/bugs-a-repro-final.log}: dry ratio
      * 13.986 (weight 7.15), wet ratio 7.605 (weight 13.15), threshold at their midpoint 10.795).</p>
      */
-    @LegacyWitness(prose = "with {@code TileRocketAssemblingMachine#canLaunchFullFromHere} at"
-            + " {@code return stats.withTanksFull().canLaunch(getGravityMultiplier())} asking the scanned"
-            + " stats as they are (tanks empty) instead, this fails at the refusal verdict,"
-            + " \"expected:<[NOENGINES]> but was:<[ALREADY_ASSEMBLED]>\" (2026-10-03,"
-            + " {@code logs/bugs-a-601-red4.log}).")
+    @RedWitness(member = "TileRocketAssemblingMachine#canLaunchFullFromHere",
+            at = "return stats.withTanksFull().canLaunch(getGravityMultiplier());",
+            replacedBy = "return stats.canLaunch(getGravityMultiplier());",
+            fails = "a craft that cannot launch with its tanks full from the world it is", on = "2026-10-17")
     @NotYetRed(prose = "NOT YET for the agreement verdict on the fixed form — once the refusal verdict"
             + " above holds, it can only go red by a launch-side break the measured ratios do not see, and the"
             + " one attempted, {@code EntityRocket#launch} at {@code this.stats.canLaunch(DimensionManager.getInstance()}"

@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
@@ -74,13 +75,13 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
         if (harness != null) harness.close();
     }
 
-    @LegacyWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
-            + " replaced by {@code return false;}, this fails after the trace is added with"
-            + " {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).")
-    @LegacyWitness(prose = "with {@code DimensionProperties#copyData} lacking"
-            + " {@code this.air = props.air.copy();}, this fails after the restart with"
-            + " {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as"
-            + " Earth's mix (2026-10-01, the first run of this test, before that line existed).")
+    @RedWitness(verdict = "too little, not none", member = "DimensionProperties#hasOxygen",
+            at = "return air.getOxygen() > 0L;", replacedBy = "return false;",
+            fails = "a trace of oxygen outdoors must read as too little oxygen, not as none", on = "2026-10-17")
+    @RedWitness(verdict = "still there after a restart", member = "DimensionProperties#copyData",
+            at = "this.air = props.air.copy();", replacedBy = "",
+            fails = "after a restart the world must still hold its trace, and read it the same way",
+            on = "2026-10-17")
     @Test
     public void aTraceOfOxygenReadsAsTooLittleOutdoorsAndIsStillThereAfterARestart() throws Exception {
         harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);

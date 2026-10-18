@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
@@ -85,15 +86,18 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
-            + " inverted so no body is ever aboard, this fails with \"the sensor holds the creeper standing on"
-            + " its own deck ... tracks:[{entityId:2102,distance:1.35...,quality:1.0},{entityId:2103,"
-            + " distance:20.018...}]\"; with {@code TileFireControlSensor.worldPosition}"
-            + " ({@code TileFireControlSensor#worldPosition} at {@code return TurretFireControl.worldPositionOf(world, pos, shipId());}) passing no ship, so the sweep looks out from the"
-            + " block's shipyard address, it fails with \"the sensor aboard the hull never held the creeper in"
-            + " open air beside it ... within 200 ticks\"; and with that line's result moved two blocks along Z,"
-            + " it fails with \"the sensor reports the open-air creeper at 20.1177... blocks, and it stands"
-            + " 20.0180... blocks from where the hull puts the sensor\". 2026-09-30.")
+    @RedWitness(verdict = "never its own deck", member = "TacticalScan#isAboard", at = "if (ownShipId == null)",
+            replacedBy = "if (ownShipId == null || true)",
+            fails = "the sensor holds the creeper standing on its own deck", on = "2026-10-17")
+    @RedWitness(verdict = "holds what is off it", member = "TileFireControlSensor#worldPosition",
+            at = "return TurretFireControl.worldPositionOf(world, pos, shipId());",
+            replacedBy = "return TurretFireControl.worldPositionOf(world, pos, null);",
+            fails = "the sensor aboard the hull never held the creeper in open air beside it", on = "2026-10-17")
+    @RedWitness(verdict = "at its true range", member = "TileFireControlSensor#worldPosition",
+            at = "return TurretFireControl.worldPositionOf(world, pos, shipId());",
+            replacedBy = "Vec3d p = TurretFireControl.worldPositionOf(world, pos, shipId());"
+                    + " return p == null ? null : p.addVector(0.0D, 0.0D, 2.0D);",
+            fails = "the sensor reports the open-air creeper at", on = "2026-10-17")
     @Test
     public void aSensorOnAShipHoldsWhatIsOffItAndNeverItsOwnDeck() throws Exception {
         // The sensor's update refuses to sweep unless its switch is on

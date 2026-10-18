@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -49,15 +49,18 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @LegacyWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
-            + " made to refuse {@code JAMMED} as well as {@code DEAD}, this fails at \"a seized gun stopped"
-            + " firing — then JAMMED is just a slower way of saying DEAD\" (2026-09-29).")
-    @LegacyWitness(prose = "with {@code TurretDriveState#fromDamage} at {@code if (damageFraction >= Math.max(derateAt, jamAt))} jamming at the LOWER of the two"
-            + " thresholds (no derated rung), the ladder verdict fails with \"a damaged mount went straight from"
-            + " turning to seizing without ever turning slowly ... [JAMMED]\" (2026-09-30).")
-    @LegacyWitness(prose = "with {@code TileTurret.launch} ({@code TileTurret#launch} at {@code markDirty();}) setting the mount's"
-            + " drive back to WORKING as a round leaves, this fails at \"the round left, but not from a seized"
-            + " mount: {...drive:WORKING...} expected:&lt;[JAMMED]&gt;\" (2026-09-30).")
+    @RedWitness(verdict = "still fires", member = "TurretDriveState#permitsFiring",
+            at = "return this != DEAD;",
+            replacedBy = "return this != DEAD && this != JAMMED;",
+            fails = "a seized gun stopped firing", on = "2026-10-18")
+    @RedWitness(verdict = "turns slowly", member = "TurretDriveState#fromDamage",
+            at = "if (damageFraction >= Math.max(derateAt, jamAt))",
+            replacedBy = "if (damageFraction >= Math.min(derateAt, jamAt))",
+            fails = "a damaged mount went straight from turning to seizing", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "seizes — TileTurret#launch setting the mount's drive back to WORKING as a round leaves,"
+            + " at markDirty(); and then before String stamped = …: the verdict stayed green under both,"
+            + " 2026-10-18 (w2b-replay-7, -11). The fired record likely reads the drive from the damage stage"
+            + " rather than from the mechanism's state, so a reset on the mechanism does not reach it.")
     @Test
     public void aGunShotUpTurnsSlowlyThenSeizesAndStillFires() throws Exception {
         int base = X;

@@ -64,9 +64,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-01 (A machine's waste heat ends up in the loop touching it, and raises its temperature above ambient).
      */
     @Pins("INV-HEAT-01")
-    @LegacyWitness(prose = "with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: \"the"
-            + " plant's waste heat must end up in the loop it touches (stored=0)\", 2026-09-30. The three"
-            + " premises at its head are arrangements and are not witnessed.")
+    @RedWitness(member = "HeatNetwork#collectGeneration", at = "if (pending > 0)", replacedBy = "if (false)",
+            fails = "the plant's waste heat must end up in the loop it touches", on = "2026-10-17")
     @RedWitness(member = "WasteHeat#spend", at = "if (pending < cap) pending = (int) Math.min(cap, pending + made);",
             replacedBy = "pending = (int) Math.max(0L, Math.min(cap, pending + made));",
             fails = "the plant's waste heat must end up in the loop it touches (stored=0", on = "2026-10-06")
@@ -109,10 +108,10 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins HEAT-3 (one connected network is one thermodynamic object: the same heat in a longer loop is a lower temperature).
      */
     @Pins({"INV-HEAT-02", "HEAT-3"})
-    @LegacyWitness(prose = "with {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(stored, capacity, temperature(stored, capacity),} publishing the temperature against one block's"
-            + " capacity instead of the loop's: \"a loop with twice the thermal mass must warm markedly less on"
-            + " the same heat (short rose 226500 milliK, long rose 226500)\", 2026-09-30. The four premises"
-            + " before it are arrangements and are not witnessed.")
+    @RedWitness(member = "HeatNetwork#tickThermodynamics",
+            at = "state.setThermalState(stored, capacity, temperature(stored, capacity),",
+            replacedBy = "state.setThermalState(stored, capacity, temperature(stored, (long) mass.get(0).getHeatCapacity()),",
+            fails = "a loop with twice the thermal mass must warm markedly less on the same heat", on = "2026-10-17")
     @Test
     public void theSameHeatInALongerLoopIsALowerTemperature() throws Exception {
         int cxShort = stand("two plant rigs side by side, one loop twice the other's length");
@@ -168,14 +167,16 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-03 (With shipHeat off nothing stores heat, no loop reports capacity, and every loop reads ambient).
      */
     @Pins("INV-HEAT-03")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code HeatNetwork#enabled} at {@code return StellurgyConfiguration.getCurrentConfig().shipHeat;} ignoring the flag: \"with the thermal system off a loop must store no heat: …"
-            + " \\\"heatStored\\\":4530\". NO CAPACITY — {@code HeatNetwork#tickThermodynamics} at {@code if (!enabled())} and {@code TileHeatPipe#getHeatCapacity} at {@code if (!HeatNetwork.enabled())} both"
-            + " ignoring the flag, the waste-heat guard left standing: \"and must report no capacity to store it"
-            + " in: … \\\"heatCapacity\\\":60\". HEATS AGAIN — {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's"
-            + " pending heat: \"the same rig with the flag back on must heat, or the assertions above measured"
-            + " nothing: … \\\"heatStored\\\":0\". AT AMBIENT — {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(0L, 0L, ambientKelvin(), 0);} writing"
-            + " 0 K instead of the ambient for a switched-off loop: \"and must read the cabin's ambient, not a"
-            + " number of its own: … expected:&lt;293000&gt; but was:&lt;0&gt;\".")
+    @RedWitness(verdict = "stores no heat", member = "HeatNetwork#enabled",
+            at = "return StellurgyConfiguration.getCurrentConfig().shipHeat;", replacedBy = "return true;",
+            fails = "with the thermal system off a loop must store no heat", on = "2026-10-17")
+    @RedWitness(verdict = "heats again", member = "HeatNetwork#collectGeneration", at = "if (pending > 0)", replacedBy = "if (false)",
+            fails = "the same rig with the flag back on must heat", on = "2026-10-17")
+    @RedWitness(verdict = "at ambient", member = "HeatNetwork#tickThermodynamics",
+            at = "if (!enabled()) { state.setThermalState(0L, 0L, ambientKelvin(), 0);",
+            replacedBy = "if (!enabled()) { state.setThermalState(0L, 0L, 0.0D, 0);",
+            fails = "and must read the cabin's ambient, not a number of its own", on = "2026-10-17")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NO CAPACITY — {@code HeatNetwork#tickThermodynamics} at {@code if (!enabled())} and {@code TileHeatPipe#getHeatCapacity} at {@code if (!HeatNetwork.enabled())} both ignoring the flag, the waste-heat guard left standing: \"and must report no capacity to store it in: … \\\"heatCapacity\\\":60\".")
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {
         int cxOff = stand("a plant rig driven with the thermal system switched off, then on");
@@ -220,9 +221,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "it warms" is the stored verdict read through a division.</p>
      */
-    @LegacyWitness(prose = "with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's"
-            + " neighbour changes: \"a machine placed against a finished loop must be found by it (stored=0)\","
-            + " 2026-09-30, taken on the pre-merge static form {@code SubsystemNetworkManager.markDirty(DOMAIN, world)}. The premise at its head is an arrangement and is not witnessed.")
+    @RedWitness(member = "HeatNetwork#onLoopNeighbourChanged", at = "SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);",
+            replacedBy = "", fails = "a machine placed against a finished loop must be found by it", on = "2026-10-17")
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {
         int cxLate = stand("a coolant loop that settles before its machine is built");

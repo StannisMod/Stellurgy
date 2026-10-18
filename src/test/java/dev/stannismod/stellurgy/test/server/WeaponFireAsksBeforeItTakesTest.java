@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -39,13 +39,14 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @LegacyWitness(prose = "with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}"
-            + " ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at \"a guarded block was destroyed"
-            + " by weapon fire anyway\" (2026-09-29).")
-    @LegacyWitness(prose = "with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}"
-            + " ({@code StructureDamageEngine#visit} at {@code if (axisRemovalRefused)}) disabled, this fails at"
-            + " \"a claimed block let the round through: the block behind it was reached\" on a"
-            + " {@code block_stage_set} at 9804,82,9800 from 0 to 4 and that block gone to air (2026-10-04).")
+    @RedWitness(verdict = "survives", member = "StructureDamageEngine#spendInto",
+            at = "if (!mayRemove(world, pos, state))",
+            replacedBy = "if (!mayRemove(world, pos, state) && state == null)",
+            fails = "a guarded block was destroyed by weapon fire anyway", on = "2026-10-18")
+    @RedWitness(verdict = "stops the round", member = "Walk#visit",
+            at = "if (axisRemovalRefused)",
+            replacedBy = "if (axisRemovalRefused && result == null)",
+            fails = "a claimed block let the round through", on = "2026-10-18")
     @Test
     public void aGuardedBlockSurvivesTheHitThatTakesTheUnguardedOneBesideIt() throws Exception {
         prepare();

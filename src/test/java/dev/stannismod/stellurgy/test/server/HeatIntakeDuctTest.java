@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -51,14 +52,13 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-20 (A powered chiller breathing a room cools it and heats its loop, and the loop receives exactly what left the air PLUS the work).
      */
     @Pins("INV-HEAT-20")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}"
-            + " crediting the heat without taking it out of the air: \"the room must actually get colder …"
-            + " (before=400000 after=400000)\". REPORTED — {@code HeatNetwork#runAirCooledPumps} at {@code state.addPumpedIn(delivered);} not recording the delivery"
-            + " as pumped in: \"what the loop received must be reported as arriving from a pump: …"
-            + " expected:&lt;6240&gt; but was:&lt;0&gt;\". PLUS THE WORK — {@code HeatNetwork#runAirCooledPumps} at {@code delivered += taken + workPaid;} delivering"
-            + " the air's heat without the work: \"the hot loop must receive what left the room PLUS the work"
-            + " (air=6000 work=240 gained=6000)\". The two premises at its head and the three before REPORTED"
-            + " are arrangements and are not witnessed.")
+    @RedWitness(verdict = "colder", member = "HeatNetwork#runAirCooledPumps", at = "long taken = air.removeHeat(moved, volume);",
+            replacedBy = "long taken = moved;", fails = "the room must actually get colder", on = "2026-10-17")
+    @RedWitness(verdict = "reported", member = "HeatNetwork#runAirCooledPumps", at = "state.addPumpedIn(delivered);",
+            replacedBy = "", fails = "what the loop received must be reported as arriving from a pump", on = "2026-10-17")
+    @RedWitness(verdict = "plus the work", member = "HeatNetwork#runAirCooledPumps", at = "delivered += taken + workPaid;",
+            replacedBy = "delivered += taken;",
+            fails = "the hot loop must receive what left the room PLUS the work", on = "2026-10-17")
     @Test
     public void aChillerBreathingARoomCoolsItAndHeatsItsLoop() throws Exception {
         int cx = stand("a hot room with a powered chiller breathing it through a duct");
@@ -113,9 +113,9 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-21 (An unpowered chiller leaves the room exactly where it was, with the same rig powered afterwards as the control).
      */
     @Pins("INV-HEAT-21")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller must"
-            + " move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;\". WITH POWER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);} crediting the heat without taking it out of the air: \"the same rig with power"
-            + " must cool the room, or nothing above was measured: … \\\"airTempMilliK\\\":400000\".")
+    @RedWitness(verdict = "with power", member = "HeatNetwork#runAirCooledPumps", at = "long taken = air.removeHeat(moved, volume);",
+            replacedBy = "long taken = moved;", fails = "the same rig with power must cool the room", on = "2026-10-17")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller must move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;\".")
     @Test
     public void anUnpoweredChillerLeavesTheRoomAlone() throws Exception {
         int cx = stand("a hot room with an unpowered chiller breathing it through a duct");

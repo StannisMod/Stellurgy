@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -24,10 +24,10 @@ public class TheShippedGalaxyTest extends AbstractSharedServerTest {
 
     private static final int SUN = 0;
 
-    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults()} (the no-file branch) replaced by"
-            + " {@code GalaxyGenConfig.nonProcedural()}, this fails with \"a server with no planetDefs.xml must run"
-            + " the procedural galaxy: {\"generator\":\"EmptyGalaxyGenerator\",\"config\":null}\", 2026-10-05.")
+    @RedWitness(member = "DimensionManager#createAndLoadDimensions",
+            at = "dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults()",
+            replacedBy = "dev.stannismod.stellurgy.universe.GalaxyGenConfig.nonProcedural()",
+            fails = "a server with no planetDefs.xml must run the procedural galaxy", on = "2026-10-18")
     @Test
     public void aFreshInstallRunsTheShippedProceduralGalaxy() throws Exception {
         Reply inForce = read("stellurgytest space gen-config");
@@ -36,10 +36,10 @@ public class TheShippedGalaxyTest extends AbstractSharedServerTest {
                 "ClusteredGalaxyGenerator", inForce.text("generator"));
     }
 
-    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
-            + " {@code dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults()} (the no-file branch) replaced by"
-            + " {@code GalaxyGenConfig.nonProcedural()}, this fails with \"the Sun asks for 10 worlds and must hold"
-            + " derived ones beside Earth and the Moon, not the authored bodies alone: … \"systemBodies\":3\", 2026-10-05.")
+    @RedWitness(member = "DimensionManager#createAndLoadDimensions",
+            at = "dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults()",
+            replacedBy = "dev.stannismod.stellurgy.universe.GalaxyGenConfig.nonProcedural()",
+            fails = "the Sun asks for 10 worlds and must hold derived ones beside Earth and the Moon", on = "2026-10-18")
     @Test
     public void aFreshInstallsSunHoldsDerivedWorldsBesideItsAuthoredOnes() throws Exception {
         Reply sun = read("stellurgytest star get " + SUN);

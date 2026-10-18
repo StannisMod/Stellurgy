@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.ShipBirth;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Test;
@@ -108,9 +109,10 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
      * Pins INV-RASM-13 (The burn-distance NOFUEL ("can its tanks carry it to orbit", hasEnoughFuel) is asked of a ROCKET only).
      */
     @Pins("INV-RASM-13")
-    @LegacyWitness(prose = "2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}"
-            + " dropped from the NOFUEL branch (the reach check asked of every build), this fails with \"a ship must assemble with"
-            + " fuel required even though its tanks cannot reach orbit\".")
+    @LegacyWitness(prose = "2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at"
+            + " {@code scannedFlightComputerPos == null} dropped from the NOFUEL branch (the reach check asked of every"
+            + " build), this fails with \"a ship must assemble with fuel required even though its tanks cannot reach"
+            + " orbit\".")
     @Test
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
         try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {

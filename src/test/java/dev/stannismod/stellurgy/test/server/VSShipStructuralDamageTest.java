@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -54,13 +54,14 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
-            + " instead), this fails with \"an impact at the ship's world position struck nothing — the world"
-            + " point was not mapped into the frame the ship's blocks live in: {...outcome:NOTHING_STRUCK...}\";"
-            + " with {@code ShipDamageService#toWorld} at {@code if (shipId == null)} returning the report's points unmapped, it fails with"
-            + " \"the entry point came back at (1.9200001E7,130.0,51200.0), 1.9192845083520055E7 blocks off the"
-            + " vertical line it was fired down through\". The \"subspace block damaged\" verdict was not separately"
-            + " witnessed. 2026-09-30.")
+    @RedWitness(verdict = "struck the ship", member = "ShipDamageService#apply",
+            at = "String shipId = shipAt(world, point, request.getDirection());",
+            replacedBy = "String shipId = null;",
+            fails = "an impact at the ship's world position struck nothing", on = "2026-10-18")
+    @RedWitness(verdict = "mapped back", member = "ShipDamageService#toWorld",
+            at = "if (shipId == null)",
+            replacedBy = "if (shipId == null || shipId != null)",
+            fails = "the entry point came back at", on = "2026-10-18")
     @Test
     public void aBlockOfAMovedShipIsDamagedThroughItsWorldPosition() throws Exception {
         Reply.of(arrange("stellurgytest damage clear-impacts").raw()).requireOk("forget earlier impacts");

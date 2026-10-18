@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -45,9 +45,10 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @LegacyWitness(prose = "with {@code ShotSubstrate.bodyRadius} ({@code ShotSubstrate#bodyRadius} at {@code return Math.min(shot.getRadius(), StellurgyConfiguration.getCurrentConfig().shotBodyRadiusCap);}) sweeping every"
-            + " body as the reference quarter-block, this fails at \"the wide round left the same one-block channel a"
-            + " ray leaves (beside=0)\" (2026-09-29).")
+    @RedWitness(member = "ShotSubstrate#step",
+            at = "shot.getImpactEnergy(), shot.getRadius());",
+            replacedBy = "shot.getImpactEnergy(), 0.25D);",
+            fails = "the wide round left the same one-block channel a ray leaves", on = "2026-10-18")
     @Test
     public void aWideRoundTakesTheBlocksBesideItsLineAndANarrowOneDoesNot() throws Exception {
         prepare(NARROW_X);

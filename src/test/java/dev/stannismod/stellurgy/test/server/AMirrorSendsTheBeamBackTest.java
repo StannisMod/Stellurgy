@@ -60,12 +60,12 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
                     + " return new Emission(contact, travelled, hitShield, true, 0, path); } if (answer.isDeflected()) {",
             fails = "the gun that fired into a mirror took nothing at all",
             on = "2026-10-16")
-    @LegacyWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering \"passed through, carrying"
-            + " everything\" on nineteen ticks in twenty and deflecting on the twentieth, this fails at \"the iron"
-            + " BEHIND the mirror was damaged before the reflection reached the gun ... [{...pos:9713,84,9560,"
-            + " from:0,to:1...}...]\" (2026-09-30). One tick in four was not enough: the gun's controller was"
-            + " staged by the reflected quarter before the iron by the rest, and the run stayed green — so this"
-            + " verdict catches a mirror that leaks most of a beam, not one that leaks some of it.")
+    @RedWitness(verdict = "nothing behind the mirror is reached first", member = "BlockMirrorPlating#onContact",
+            at = "return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));",
+            replacedBy = "return world.getTotalWorldTime() % 20L != 0L ? ContactResult.passedThrough(contact.getEnergy())"
+                    + " : ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));",
+            fails = "the iron BEHIND the mirror was damaged before the reflection reached the gun",
+            on = "2026-10-17")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "String hitHome = events.awaitMatching(held, \"block_stage_set\",",
             why = "the gun burns its buffer to hold the beam, and a player's power line keeps refilling it while"

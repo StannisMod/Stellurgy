@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.SortedMap;
@@ -55,16 +56,16 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
      * Before penetration-over-time the whole bore resolved inside ONE step and the round ended there;
      * that history has at most one paying tick, and it is the ending tick.
      */
-    @LegacyWitness(prose = "with the still-inside branch of {@code ShotSubstrate.step}"
-            + " ({@code ShotSubstrate#step} at {@code else if (!contact.leftTheStructure)}) made to end the round at the contact tick, this fails at \"the"
-            + " round paid for depth on fewer than two ticks before it ended (paying ticks [23], ended at 23)\""
-            + " (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with both of {@code ShotSubstrate.step}'s"
-            + " come-to-rest returns ({@code ShotSubstrate.java:283} and {@code :320}) answering EXPIRED, this"
-            + " fails at \"the round ended, but not by coming to rest in what it was drilling ... but"
-            + " was:&lt;[EXPIRED]&gt;\"; with {@code StructureDamageEngine.java:367} charging a stage 1/2.7 of its"
-            + " price (the probe's quoted price unchanged, so the budget is still \"3.5 blocks\" by it), at \"the"
-            + " round reached the far side of a wall it could not afford: {...stage:2...block:minecraft:stone...}\".")
+    @RedWitness(verdict = "pays on more than one tick", member = "ShotSubstrate#step",
+            at = "else if (!contact.leftTheStructure) {",
+            replacedBy = "else if (!contact.leftTheStructure) { shot.setPosition(structure.point); shot.setVelocity(new Vec3d(0.0D, 0.0D, 0.0D)); return ShotEndReason.STRUCTURE_IMPACT; } else if (shot == null) {",
+            fails = "the round paid for depth on fewer than two ticks before it ended", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "far side — StructureDamageEngine#spendInto at left -= stageCost; -> left -= (int)"
+            + " Math.ceil(stageCost / 2.7D);, then left -= stageCost; spent += stageCost; -> both charged 1/2.7 of the"
+            + " price: the verdict stayed green under both, 2026-10-18 (w2b-replay-3, -11). The 2026-09-30 prose"
+            + " broke an older line of the engine; the walk's per-layer allowance still bounds what a cheapened"
+            + " stage can buy.")
+    @LegacyWitness(prose = "2026-09-30: with both of {@code ShotSubstrate#step}'s come-to-rest returns ({@code return ShotEndReason.STRUCTURE_IMPACT;}, the one after {@code contact.result.isStopped()} and the one under the penetration speed floor) answering EXPIRED, this fails at \"the round ended, but not by coming to rest in what it was drilling ... but was:&lt;[EXPIRED]&gt;\".")
     @Test
     public void aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface() throws Exception {
         int wallX = 1400;
@@ -114,9 +115,10 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
      * The one body ordering the law makes by itself: energy buys depth against the material's
      * resistance ACROSS THE BODY'S FACE, so the same energy through a narrower round goes further.
      */
-    @LegacyWitness(prose = "with {@code ContactResolver.areaOf} ({@code ContactResolver#areaOf} at {@code return r <= 0.0D ? ImpactRequest.REFERENCE_AREA : Math.PI * r * r;}) answering"
-            + " the reference area for every radius, this fails at \"the narrow round must bore deeper than the wide"
-            + " one on the same energy (narrow=4 wide=4)\" (2026-09-29).")
+    @RedWitness(member = "ContactResolver#areaOf",
+            at = "return r <= 0.0D ? ImpactRequest.REFERENCE_AREA : Math.PI * r * r;",
+            replacedBy = "return ImpactRequest.REFERENCE_AREA;",
+            fails = "the narrow round must bore deeper than the wide one on the same energy", on = "2026-10-18")
     @Test
     public void aNarrowerRoundOutrunsAWiderOneOnTheSameEnergy() throws Exception {
         int narrowX = 1440, wideX = 1470;
@@ -154,15 +156,14 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
      * the tick they happened on, and the claim is that a LATER tick before the round's end reached
      * deeper than the first one did.
      */
-    @LegacyWitness(prose = "with the still-inside branch of {@code ShotSubstrate.step}"
-            + " ({@code ShotSubstrate#step} at {@code else if (!contact.leftTheStructure)}) made to end the round at the contact tick, this fails at \"the bore"
-            + " reached 1 blocks on its first tick and never deeper on a later one ... (deepest by tick {102=1},"
-            + " ended at 102)\" (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with both come-to-rest returns"
-            + " ({@code ShotSubstrate.java:283} and {@code :320}) answering EXPIRED, this fails at \"the round"
-            + " stopped, but not by coming to rest in what it was drilling ... but was:&lt;[EXPIRED]&gt;\"; with"
-            + " {@code StructureDamageEngine.java:367} charging a stage 1/2.7 of its price, at \"a round with a"
-            + " fraction of the wall's price came out the far side: {...stage:2...}\".")
+    @RedWitness(verdict = "grows", member = "ShotSubstrate#step",
+            at = "else if (!contact.leftTheStructure) {",
+            replacedBy = "else if (!contact.leftTheStructure) { shot.setPosition(structure.point); shot.setVelocity(new Vec3d(0.0D, 0.0D, 0.0D)); return ShotEndReason.STRUCTURE_IMPACT; } else if (shot == null) {",
+            fails = "blocks on its first tick and never deeper on a later one", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "far side — StructureDamageEngine#spendInto at left -= stageCost; -> left -= (int)"
+            + " Math.ceil(stageCost / 2.7D);, then left -= stageCost; spent += stageCost; -> both charged 1/2.7 of the"
+            + " price: the verdict stayed green under both, 2026-10-18 (w2b-replay-3, -11).")
+    @LegacyWitness(prose = "2026-09-30: with both of {@code ShotSubstrate#step}'s come-to-rest returns ({@code return ShotEndReason.STRUCTURE_IMPACT;}, the one after {@code contact.result.isStopped()} and the one under the penetration speed floor) answering EXPIRED, this fails at \"the round stopped, but not by coming to rest in what it was drilling ... but was:&lt;[EXPIRED]&gt;\".")
     @Test
     public void aRoundThatCannotGetThroughRestsInsideAndItsCraterGrowsWhileItDoes() throws Exception {
         int wallX = 1500;
@@ -223,20 +224,18 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
      * three blocks of travel against the one block it has to cover to reach the column, so a round
      * that went through instead ends in open air past the far face, by expiry.</p>
      */
-    @LegacyWitness(prose = "with {@code Walk#armourHeld} at"
-            + " {@code return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));}"
-            + " answering false (the pass-through shape this replaces), this fails with \"a round with half a"
-            + " stage's worth was not stopped at the near face of a one-block column: it ended 2.000099997018424"
-            + " blocks past that face (more than half its 0.2-a-tick travel either way; the far face is 1 past):"
-            + " the armour did not hold | {...ended:EXPIRED...}\" (2026-10-03).")
-    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code return ShotEndReason.STRUCTURE_IMPACT;}"
-            + " (the come-to-rest return after {@code contact.result.isStopped()}) answering EXPIRED, this fails"
-            + " at \"the round ended at the column, but not by meeting it: {...reason:EXPIRED} expected:&lt;[STRUCTURE_IMPACT]&gt;"
-            + " but was:&lt;[EXPIRED]&gt;\" (2026-10-03).")
-    @LegacyWitness(prose = "with {@code StructureDamageEngine#spendInto} at"
-            + " {@code while (stage < maxStage && left >= stageCost)} buying a stage for half its price"
-            + " ({@code left * 2 >= stageCost}), this fails at \"a round that could not afford a stage damaged the"
-            + " block anyway: {...stage:1...} expected:&lt;0&gt; but was:&lt;1&gt;\" (2026-10-03).")
+    @RedWitness(verdict = "stopped at the near face", member = "Walk#armourHeld",
+            at = "return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));",
+            replacedBy = "return false;",
+            fails = "a round with half a stage's worth was not stopped at the near face", on = "2026-10-18")
+    @RedWitness(verdict = "by meeting it", member = "ShotSubstrate#step",
+            at = "return ShotEndReason.STRUCTURE_IMPACT; } shot.setImpactEnergy(contact.result.getResidualEnergy());",
+            replacedBy = "return ShotEndReason.EXPIRED; } shot.setImpactEnergy(contact.result.getResidualEnergy());",
+            fails = "the round ended at the column, but not by meeting it", on = "2026-10-18")
+    @RedWitness(verdict = "damaged the block", member = "StructureDamageEngine#spendInto",
+            at = "while (stage < maxStage && left >= stageCost)",
+            replacedBy = "while (stage < maxStage && left * 2 >= stageCost)",
+            fails = "a round that could not afford a stage damaged the block anyway", on = "2026-10-18")
     @Test
     public void aRoundTooPoorForAStageIsStoppedByTheBlockItMeets() throws Exception {
         int colX = 1600;
@@ -281,14 +280,18 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
      * memory keyed on the shot rather than on the impact would let the first plate be hit and silently
      * drop everything the same round did afterwards, and no single-plate test can tell.
      */
-    @LegacyWitness(prose = "with the contact identity in {@code ShotSubstrate.step} ({@code ShotSubstrate#step} at {@code TravellingBody body = new TravellingBody(ShotRegistry.get(world).nextImpactId(),})"
-            + " taken from the SHOT rather than from the world's impact counter, this fails at \"the SECOND plate was"
-            + " never staged by a round that flew past it with budget in hand\" (2026-09-29).")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ShotSubstrate.java:286}'s"
-            + " energy write skipped for a round that left the structure, this fails at \"the round left the"
-            + " plates with everything it arrived with (6000 of 6000)\"; with {@code ShotSubstrate.java:310}'s"
-            + " slowing skipped on the same branch, at \"the round left the plates at its muzzle speed (2.0 of"
-            + " 2.0)\".")
+    @RedWitness(verdict = "the second plate", member = "ShotSubstrate#step",
+            at = "TravellingBody body = new TravellingBody(ShotRegistry.get(world).nextImpactId(),",
+            replacedBy = "TravellingBody body = new TravellingBody(shot.getId(),",
+            fails = "the SECOND plate was never staged", on = "2026-10-18")
+    @RedWitness(verdict = "less energy", member = "ShotSubstrate#step",
+            at = "shot.setImpactEnergy(contact.result.getResidualEnergy());",
+            replacedBy = "if (!contact.leftTheStructure) { shot.setImpactEnergy(contact.result.getResidualEnergy()); }",
+            fails = "the round left the plates with everything it arrived with", on = "2026-10-18")
+    @RedWitness(verdict = "slower", member = "ShotSubstrate#step",
+            at = "velocity = slowedByWorkDone(velocity, energyBefore, shot.getImpactEnergy(), shot.getKind()); endedInsideHull = null;",
+            replacedBy = "endedInsideHull = null;",
+            fails = "the round left the plates at its muzzle speed", on = "2026-10-18")
     @Test
     public void aRoundThroughAThinHullLeavesSlowerAndItsOwnContinuationIsNotRefused() throws Exception {
         int firstX = 1540;

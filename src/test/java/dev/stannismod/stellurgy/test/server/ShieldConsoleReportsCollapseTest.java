@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
@@ -37,14 +38,14 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
      * Pins INV-NET-04 (a component with no source reports DISCONNECTED to controllers).
      */
     @Pins("INV-NET-04")
-    @LegacyWitness(prose = "with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}"
-            + " once it has been true: \"a console whose network lost its last source must stop reporting it as"
-            + " live: … \\\"networkConnected\\\":true\", 2026-09-30, re-run under the battery arrangement."
-            + " STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous"
-            + " status once the network is no longer connected: \"and must report the disconnected status"
-            + " rather than the previous one (2): … \\\"networkStatus\\\":2 … expected:&lt;1&gt; but"
-            + " was:&lt;2&gt;\", 2026-09-30. The two premises at its head are arrangements and are not"
-            + " witnessed.")
+    @RedWitness(verdict = "stop reporting it as live", member = "TileEntityShieldConsole#applyNetworkState",
+            at = "networkConnected = shieldState.isConnected();",
+            replacedBy = "networkConnected = networkConnected || shieldState.isConnected();",
+            fails = "a console whose network lost its last source must stop reporting it as live", on = "2026-10-18")
+    @RedWitness(verdict = "the disconnected status", member = "TileEntityShieldConsole#applyNetworkState",
+            at = "networkStatus = shieldState.getStatus();",
+            replacedBy = "if (shieldState.isConnected()) { networkStatus = shieldState.getStatus(); }",
+            fails = "and must report the disconnected status rather than the previous one", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), 2);",
             why = "two server ticks are the dose, not a wait: one for the battery to feed the generator and the"

@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -124,19 +124,18 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * branch; and the two other consumers of this decision, the solar array and the microwave
      * receiver.</p>
      */
-    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
-            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
-            + " made to dereference the planet unguarded, this fails at the tick step: the world's own tick of"
-            + " the panel threw, the shared server went down, and the force-tick exchange failed with \"Server"
-            + " bridge exchange failed\" (2026-10-02).")
-    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
-            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
-            + " answering 1.0 on its unresolved branch, this fails at the made-nothing verdict with \"expected:<0> but was:<10>\""
-            + " (2026-10-02).")
-    @LegacyWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
-            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
-            + " answering 0.0 on its resolved branch, this fails at the"
-            + " control verdict, the panel on the overworld's station storing 0 (2026-10-02).")
+    @RedWitness(verdict = "without throwing", member = "SpaceStationObject#getInsolationMultiplier",
+            at = "return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0;",
+            replacedBy = "return orbiting.getPeakInsolationMultiplierWithoutAtmosphere();",
+            fails = "Server bridge exchange failed", on = "2026-10-18")
+    @RedWitness(verdict = "makes nothing", member = "SpaceStationObject#getInsolationMultiplier",
+            at = "return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0;",
+            replacedBy = "return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 1.0;",
+            fails = "a station with no resolved planet receives no sunlight", on = "2026-10-18")
+    @RedWitness(verdict = "the control", member = "SpaceStationObject#getInsolationMultiplier",
+            at = "return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0;",
+            replacedBy = "return (orbiting != null) ? 0.0 : 0.0;",
+            fails = "a panel on a station orbiting the overworld must make power", on = "2026-10-18")
     @Test
     public void aSolarPanelOnAStationWithNoResolvedPlanetTicksWithoutThrowingAndMakesNothing()
             throws Exception {
@@ -182,11 +181,10 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * this shared server a sibling scenario may have put a station orbiting the overworld into the
      * neighbouring cell, and then a regressed lookup would still hand the panel sunlight.</p>
      */
-    @LegacyWitness(prose = "2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at"
-            + " {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its"
-            + " pre-fix form without the offset, this fails with \"the +X perimeter sliver (worldX=-1020) must map"
-            + " back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …"
-            + " expected:&lt;1&gt; but was:&lt;null&gt;\".")
+    @RedWitness(member = "SpaceObjectManager#getSpaceStationFromBlockCoords",
+            at = "int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));",
+            replacedBy = "int x = Math.round(pos.getX() / (2f * stationSize));",
+            fails = "the +X perimeter sliver", on = "2026-10-18")
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
         client().arrange("stellurgytest dim load " + SPACE_DIM);

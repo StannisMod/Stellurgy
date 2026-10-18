@@ -45,10 +45,10 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      * Earth was quoted the interstellar price for a planet of its own star, and an edit to star 0 does
      * not reach the star Earth is lit by.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}"
-            + " at {@code overworldProperties.setStar(sol)} written as"
-            + " {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:"
-            + " \"Earth's star must be the registered star 0 itself, not a copy with its id: {… \"starIsRegistered\":false …}\".")
+    @RedWitness(member = "DimensionManager#createAndLoadDimensions",
+            at = "overworldProperties.setStar(sol)",
+            replacedBy = "sol.addPlanet(overworldProperties)",
+            fails = "Earth's star must be the registered star 0 itself", on = "2026-10-18")
     @Test
     public void earthBelongsToTheRegisteredSolNotToACopyOfIt() throws Exception {
         Reply earth = Reply.of(read("stellurgytest planet info 0").raw());

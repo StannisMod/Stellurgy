@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
@@ -55,13 +56,16 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * Pins INV-SHD-19 (damage never moves the declared radius nor the cycle cost).
      */
     @Pins({"INV-SHD-18", "INV-SHD-19"})
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#refreshEffectiveRadius} at {@code int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);} deriving the effective radius as"
-            + " the declared one, this fails with \"a damaged emitter must project a SMALLER field than it did"
-            + " pristine (4 vs 4)\"; with {@code TileEntityFieldGenerator#protects} at {@code return distanceSqToCenter(target.getX() + 0.5D, target.getY() + 0.5D, target.getZ() + 0.5D) <= getFieldRadiusSq();}'s {@code protects} measured"
-            + " against the declared radius, it fails with \"the shell drew in and the hull it uncovered is still"
-            + " reported as covered: {...covered:true...}\"; with {@code TileEntityFieldGenerator#getShieldCycleCost} at {@code return estimateShieldCost(radius);}"
-            + " pricing the cycle off the effective radius, it fails with \"a shrunken emitter was billed less"
-            + " than the field it declared (12060 -> 6780)\". 2026-09-30.")
+    @RedWitness(verdict = "SMALLER field", member = "TileEntityFieldGenerator#refreshEffectiveRadius",
+            at = "int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);",
+            replacedBy = "int derived = radius;",
+            fails = "a damaged emitter must project a SMALLER field than it did pristine", on = "2026-10-18")
+    @RedWitness(verdict = "uncovered", member = "TileEntityFieldGenerator#protects", at = "<= getFieldRadiusSq();",
+            replacedBy = "<= (radius + 0.5D) * (radius + 0.5D);",
+            fails = "the shell drew in and the hull it uncovered is still reported as covered", on = "2026-10-18")
+    @RedWitness(verdict = "billed for what it declared", member = "TileEntityFieldGenerator#getShieldCycleCost",
+            at = "return estimateShieldCost(radius);", replacedBy = "return estimateShieldCost(getRadius());",
+            fails = "a shrunken emitter was billed less than the field it declared", on = "2026-10-18")
     @Test
     public void aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared() throws Exception {
         int gx = 1200, ex = 1201;
@@ -118,15 +122,12 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * Pins INV-SHD-20 (a neighbour that still reaches closes a shrunken emitter's hole).
      */
     @Pins("INV-SHD-20")
-    @LegacyWitness(prose = "one inversion per line, 2026-09-30: with {@code ForceFieldExplosionHandler.java:41}"
-            + " (each emitter's {@code filterAffectedBlocks}) removed, this fails at \"a hole left by a damaged"
-            + " emitter must be closed by the neighbour that still reaches it ... the blast took the block there:"
-            + " {...destroyed:[...,\"1234,64,830\",...]} | as heard: {...emitters:[{pos:1238,64,830,powered:true,"
-            + " radius:4},{pos:1230,64,830,powered:true,radius:3}]}\"; with {@code TileEntityFieldGenerator.java:327}'s"
-            + " {@code protects} measured against the declared radius, it fails at \"the far side, which only the"
-            + " damaged emitter ever reached, is still protected from a blast while that emitter is lit and"
-            + " shrunk ... {...destroyed:[\"1225,64,830\"]}\" — the emitter at 1230 read powered:true, radius:3 in"
-            + " the same handler call.")
+    @RedWitness(verdict = "closed by the neighbour", member = "ForceFieldExplosionHandler#onExplosionDetonate",
+            at = "filterAffectedBlocks(event, generator);", replacedBy = "",
+            fails = "a hole left by a damaged emitter must be closed by the neighbour that still reaches it", on = "2026-10-18")
+    @RedWitness(verdict = "the far side", member = "TileEntityFieldGenerator#protects", at = "<= getFieldRadiusSq();",
+            replacedBy = "<= (radius + 0.5D) * (radius + 0.5D);",
+            fails = "the far side, which only the damaged emitter ever reached, is still protected", on = "2026-10-18")
     @Test
     public void aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt() throws Exception {
         // Two independent single-emitter shields eight blocks apart, so their fields just meet.
@@ -255,12 +256,18 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * Pins INV-SHD-21 (a generator, a cable and an accumulator each deliver less when damaged).
      */
     @Pins("INV-SHD-21")
-    @LegacyWitness(prose = "one inversion per block: {@code TileEntityShieldGenerator.java:159} returning the"
-            + " rated conversion fails this with \"a damaged shield generator must convert less than an intact one"
-            + " (4000 vs 4000)\"; {@code TileEntityShieldCable.java:109} returning the rated throughput fails it"
-            + " with \"a damaged cable must carry less than an intact one (20000 vs 20000)\";"
-            + " {@code TileEntityShieldAccumulator.java:141} returning the full capacity fails it with \"a damaged"
-            + " accumulator must hold less than an intact one (500000 vs 500000)\". 2026-09-30.")
+    @RedWitness(verdict = "generator", member = "TileEntityShieldGenerator#getConversionPerTick",
+            at = "return ShieldCondition.derate(world, pos, CONVERSION_PER_TICK);", replacedBy = "return CONVERSION_PER_TICK;",
+            fails = "a damaged shield generator must convert less than an intact one", on = "2026-10-18")
+    @RedWitness(verdict = "cable", member = "TileEntityShieldCable#getThroughputPerTick",
+            at = "return dev.stannismod.stellurgy.affs.world.shield.ShieldCondition.derate(world, pos,"
+                    + " dev.stannismod.stellurgy.affs.config.ModConfig.cableThroughputPerTick);",
+            replacedBy = "return dev.stannismod.stellurgy.affs.config.ModConfig.cableThroughputPerTick;",
+            fails = "a damaged cable must carry less than an intact one", on = "2026-10-18")
+    @RedWitness(verdict = "accumulator", member = "TileEntityShieldAccumulator#getEffectiveMaxShieldStored",
+            at = "return dev.stannismod.stellurgy.affs.world.shield.ShieldCondition.derate(world, pos,"
+                    + " storage.getMaxEnergyStored());",
+            replacedBy = "return storage.getMaxEnergyStored();", fails = "a damaged accumulator must hold less than an intact one", on = "2026-10-18")
     @Test
     public void aDamagedGeneratorCableAndAccumulatorEachDeliverLess() throws Exception {
         int genX = 1260, cableX = 1268, accX = 1276;

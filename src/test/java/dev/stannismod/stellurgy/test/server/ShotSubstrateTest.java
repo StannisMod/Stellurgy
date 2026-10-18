@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -39,17 +40,25 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
     /** The emitter's mid-shell radius, as the shield tests use it — the face a round bounces off. */
     private static final double SHELL_RADIUS = 4.0D;
 
-    @LegacyWitness(prose = "with a loop inserted at {@code StructureCrossing#worldFrameHit} at {@code if (maxY < 0.0D || minY > world.getHeight())} (before the build-height"
-            + " skip) loading every chunk along each step's segment, this fails with \"the flight loaded the world"
-            + " under it at chunk 2500,2500: {...loaded:true,count:756}\". A first attempt that loaded only the"
-            + " chunk at each step's END stayed green — it never touched the four chunks this test samples."
-            + " The motion verdicts were not separately witnessed. 2026-09-30.")
-    @LegacyWitness(prose = "one inversion per verdict, each at {@code ShotSubstrate#step} at {@code position = segmentEnd;} (the open-air"
-            + " step's {@code position = segmentEnd}), 2026-09-30: with a block added along X per step, this fails"
-            + " at \"a shot must move by its velocity once per tick of its own age ... expected:&lt;41050.5&gt; but"
-            + " was:&lt;41071.5&gt;\"; with 0.001 added along Y, at \"nothing acts on it out there, so it must not"
-            + " have been deflected ... but was:&lt;2000064.5209999986&gt;\"; with 0.001 along Z, at \"expected:&lt;"
-            + " 40000.5&gt; but was:&lt;40000.52099999993&gt;\".")
+    @RedWitness(verdict = "loads no world", member = "StructureCrossing#worldFrameHit",
+            at = "if (maxY < 0.0D || minY > world.getHeight())",
+            replacedBy = "int n = (int) Math.ceil(length / 8.0D) + 1; for (int i = 0; i <= n; i++) {"
+                    + " double t = (double) i / n; world.getChunkFromBlockCoords(new net.minecraft.util.math.BlockPos("
+                    + "from.x + (to.x - from.x) * t, 64.0D, from.z + (to.z - from.z) * t)); }"
+                    + " if (maxY < 0.0D || minY > world.getHeight())",
+            fails = "the flight loaded the world under it at chunk", on = "2026-10-18")
+    @RedWitness(verdict = "moves by its velocity", member = "ShotSubstrate#step",
+            at = "position = segmentEnd;",
+            replacedBy = "position = segmentEnd.addVector(1.0D, 0.0D, 0.0D);",
+            fails = "a shot must move by its velocity once per tick of its own age", on = "2026-10-18")
+    @RedWitness(verdict = "not deflected, Y", member = "ShotSubstrate#step",
+            at = "position = segmentEnd;",
+            replacedBy = "position = segmentEnd.addVector(0.0D, 0.001D, 0.0D);",
+            fails = "nothing acts on it out there, so it must not have been deflected", on = "2026-10-18")
+    @RedWitness(verdict = "not deflected, Z", member = "ShotSubstrate#step",
+            at = "position = segmentEnd;",
+            replacedBy = "position = segmentEnd.addVector(0.0D, 0.0D, 0.001D);",
+            fails = "expected:<40000.5> but was:<40000.52", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int tick = 0; tick < 10; tick++) {",
             why = "ten steps of the substrate, each one the dose; nothing is awaited.")
@@ -96,12 +105,14 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code return ShotEndReason.EXPIRED;}'s expiry reported as STRUCTURE_IMPACT, this"
-            + " fails with \"a shot that timed out must say so ... expected:&lt;[EXPIRED]&gt; but"
-            + " was:&lt;[STRUCTURE_IMPACT]&gt;\". 2026-09-30.")
-    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code if (shot.getAge() > shot.getLifetimeTicks())} letting a round outlive its lifetime by ten"
-            + " steps, this fails at \"a shot with a three-tick lifetime was still up after five: {...present:true"
-            + " ...age:11,lifetime:3...}\" (2026-09-30).")
+    @RedWitness(verdict = "says so", member = "ShotSubstrate#step",
+            at = "return ShotEndReason.EXPIRED;",
+            replacedBy = "return ShotEndReason.STRUCTURE_IMPACT;",
+            fails = "a shot that timed out must say so", on = "2026-10-18")
+    @RedWitness(verdict = "ends at its lifetime", member = "ShotSubstrate#step",
+            at = "if (shot.getAge() > shot.getLifetimeTicks())",
+            replacedBy = "if (shot.getAge() > shot.getLifetimeTicks() + 10)",
+            fails = "a shot with a three-tick lifetime was still up after five", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int tick = 0; tick < 5; tick++) {",
             why = "five steps against a three-tick lifetime.")
@@ -120,9 +131,10 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
                 + " cannot report either: " + gone, "EXPIRED", gone.text("ended"));
     }
 
-    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false, this"
-            + " fails with \"the shot flew straight through a solid wall ... {...present:true,x:9380.5...}\"."
-            + " 2026-09-30.")
+    @RedWitness(verdict = "stopped by the wall", member = "ShotSubstrate#step",
+            at = "boolean structureFirst = first.isStructure();",
+            replacedBy = "boolean structureFirst = false;",
+            fails = "the shot flew straight through a solid wall", on = "2026-10-18")
     @Test
     public void aFastShotCannotPassThroughAOneBlockWall() throws Exception {
         arrange("stellurgytest shot clear 0").requireOk("clear the air");
@@ -151,14 +163,17 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
                 wall.integer("stage") > 0 || wall.bool("wasDestroyed"));
     }
 
-    @LegacyWitness(prose = "with {@code ShotRegistry#get} at {@code MapStorage storage = world.getPerWorldStorage();} reading the server-wide map storage instead of"
-            + " the world's own, this fails with \"a shot fired in one world turned up in another:"
-            + " {...count:1...} expected:&lt;0&gt; but was:&lt;1&gt;\". 2026-09-30.")
-    @LegacyWitness(prose = "with {@code ShotSubstrate.tick} ({@code ShotSubstrate#tick} at {@code ShotRegistry registry = ShotRegistry.get(world);}) ending the"
-            + " overworld's rounds when the nether is stepped by the probe, this fails at \"ticking the other world"
-            + " stepped this world's shot: {...present:false,ended:SUBSTRATE_DISABLED...}\" (2026-09-30). That is"
-            + " the only cross-world effect this verdict can see: it reads PRESENCE, so a step that merely moved"
-            + " this world's round from the other world's tick would leave it green.")
+    @RedWitness(verdict = "not in another world", member = "ShotRegistry#get",
+            at = "MapStorage storage = world.getPerWorldStorage();",
+            replacedBy = "MapStorage storage = net.minecraftforge.common.DimensionManager.getWorld(0).getPerWorldStorage();",
+            fails = "a shot fired in one world turned up in another", on = "2026-10-18")
+    @RedWitness(verdict = "not stepped by another world", member = "ShotSubstrate#tick",
+            at = "ShotRegistry registry = ShotRegistry.get(world);",
+            replacedBy = "ShotRegistry registry = ShotRegistry.get(world); if (world.provider.getDimension() != 0) {"
+                    + " ShotRegistry home = ShotRegistry.get(net.minecraftforge.common.DimensionManager.getWorld(0));"
+                    + " for (Shot other : home.snapshot()) { home.end(other.getId(), ShotEndReason.EXPIRED,"
+                    + " other.getPosition()); } }",
+            fails = "ticking the other world stepped this world's shot", on = "2026-10-18")
     @Test
     public void aShotIsOnlyEverInTheWorldItWasFiredIn() throws Exception {
         // The isolation is structural — one registry per world, with no reference between them — so
@@ -183,10 +198,10 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
         arrange("stellurgytest chunk release -1 0 0").requireOk("release the nether");
     }
 
-    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code if (result.isReflected())}'s reflected branch disabled (the shell's"
-            + " answer ignored), this fails with \"a shell that could afford the round consumed it instead of"
-            + " mirroring it ... {...present:false,ended:FIELD_ABSORBED...}\". The direction and speed verdicts"
-            + " were not separately witnessed. 2026-09-30.")
+    @RedWitness(verdict = "mirrored", member = "ShotSubstrate#step",
+            at = "if (result.isReflected())",
+            replacedBy = "if (result.isReflected() && shot == null)",
+            fails = "a shell that could afford the round consumed it instead of mirroring it", on = "2026-10-18")
     @Test
     public void aShotThatMeetsAChargedShellBouncesOffItAndStaysUp() throws Exception {
         // The one place the substrate calls the shield and reads a velocity back. The shell owns the

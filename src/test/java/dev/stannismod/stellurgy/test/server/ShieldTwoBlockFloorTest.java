@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
@@ -95,19 +96,16 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      *
      * <p>One inversion per verdict, 2026-10-03:</p>
      */
-    @LegacyWitness(prose = "with {@code SubsystemNetworkRegistry#nodesIn} at"
-            + " {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,"
-            + " this fails at \"the overworld does not answer for exactly its own emitter"
-            + " expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]\".")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#loadedIn} at"
-            + " {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is"
-            + " given, this fails at \"the nether does not answer for exactly its own emitter"
-            + " expected:[4022,151,4020] but was:[4020,151,4020]\".")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#onChunkUnload} at"
-            + " {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at \"after its chunk"
-            + " unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry\" with no"
-            + " {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}"
-            + " WAS recorded in the window (2026-10-04).")
+    @RedWitness(verdict = "the overworld", member = "SubsystemNetworkRegistry#nodesIn",
+            at = "if (type.isInstance(node) && node.getNodeWorld() == world)", replacedBy = "if (type.isInstance(node))",
+            fails = "the overworld does not answer for exactly its own emitter", on = "2026-10-18")
+    @RedWitness(verdict = "the nether", member = "TileEntityFieldGenerator#loadedIn",
+            at = "nodesIn(ShieldNetworkManager.DOMAIN, world,",
+            replacedBy = "nodesIn(ShieldNetworkManager.DOMAIN, net.minecraftforge.common.DimensionManager.getWorld(0),",
+            fails = "the nether does not answer for exactly its own emitter", on = "2026-10-18")
+    @RedWitness(verdict = "after its chunk unloaded", member = "TileEntityFieldGenerator#onChunkUnload",
+            at = "SubsystemNetworkManager.of(world).unregister(this);", replacedBy = "",
+            fails = "after its chunk unloaded, the emitter at", on = "2026-10-18")
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
         FixtureSite here = site();
@@ -177,14 +175,14 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
     @Pins("INV-SHD-25")
-    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
-            + " VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}"
-            + " answering the world frame whatever the position, this fails at \"an emitter in the shipyard that no"
-            + " ship claims projected a shell over its shipyard address\".")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
-            + " (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at \"an emitter in the"
-            + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
-            + " was:&lt;10453&gt;\".")
+    @RedWitness(verdict = "projected a shell", member = "FieldFrames#forBlock",
+            at = "return VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;",
+            replacedBy = "return WorldFieldFrame.INSTANCE;",
+            fails = "an emitter in the shipyard that no ship claims projected a shell over its shipyard address", on = "2026-10-18")
+    @RedWitness(verdict = "spent its coil", member = "TileEntityFieldGenerator#update",
+            at = "if (VSIntegration.isOnUnnamedShip(world, pos))",
+            replacedBy = "if (VSIntegration.isOnUnnamedShip(world, pos) && world == null)",
+            fails = "an emitter in the shipyard that no ship claims spent its coil on a shell over nothing", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(),"
             + " MAINTENANCE_WINDOW_TICKS);",

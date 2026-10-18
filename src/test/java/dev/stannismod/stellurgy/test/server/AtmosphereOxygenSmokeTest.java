@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -57,13 +58,16 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
      * sample powers the block; re-targeted to "vacuum", the next forced sample unpowers it. Both
      * samples go through the handler branch — the detector's no-handler branch is not reached here.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, for the three verdicts this branch"
-            + " rewrote. DEFAULT — {@code TileAtmosphereDetector#TileAtmosphereDetector} at {@code assertionToDetect = AtmosphereAssertion.BREATHABLE;} starting on {@code VACUUM}: \"detector"
-            + " should default to watching for breathable air: … expected:&lt;[BREATHABLE]&gt; but"
-            + " was:&lt;[VACUUM]&gt;\". BREATHABLE — {@code AtmosphereAssertions#holdsAt} at {@code return breathable(air, published);} never holding: \"overworld"
-            + " air must satisfy \\\"breathable\\\": … \\\"detected\\\":false\". NOT VACUUM — {@code AtmosphereAssertions#holdsAt} at {@code return air != null ? air.getTotalPressure() <= 0L : published == Atmosphere.VACUUM;} calling any air without a zone vacuum: \"overworld air must not satisfy"
-            + " \\\"vacuum\\\": … \\\"detected\\\":true\". Both of the last two reds came through the handler branch:"
-            + " the overworld has an atmosphere handler.")
+    @RedWitness(verdict = "default", member = "TileAtmosphereDetector#TileAtmosphereDetector",
+            at = "assertionToDetect = AtmosphereAssertion.BREATHABLE;",
+            replacedBy = "assertionToDetect = AtmosphereAssertion.VACUUM;",
+            fails = "detector should default to watching for breathable air", on = "2026-10-17")
+    @RedWitness(verdict = "breathable", member = "AtmosphereAssertions#holdsAt", at = "return breathable(air, published);",
+            replacedBy = "return false;", fails = "overworld air must satisfy", on = "2026-10-17")
+    @RedWitness(verdict = "not vacuum", member = "AtmosphereAssertions#holdsAt",
+            at = "return air != null ? air.getTotalPressure() <= 0L : published == Atmosphere.VACUUM;",
+            replacedBy = "return air != null ? air.getTotalPressure() <= 0L : true;",
+            fails = "overworld air must not satisfy", on = "2026-10-17")
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
         FixtureSite s = site();

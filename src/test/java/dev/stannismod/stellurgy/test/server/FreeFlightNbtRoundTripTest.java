@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Test;
@@ -142,11 +143,9 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
      * Pins INV-API-10 (writeToNBT wraps in rocketStats).
      */
     @Pins("INV-API-10")
-    @LegacyWitness(prose = "with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}"
-            + " handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this"
-            + " fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and"
-            + " {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},"
-            + " {@code weight:7.049999f} and the seat (2026-10-02).")
+    @RedWitness(member = "StatsRocket#createFromNBT", at = "statsRocket.readFromNBT(nbt);",
+            replacedBy = "statsRocket.readFromNBT(nbt.getCompoundTag(TAGNAME));",
+            fails = "StatsRocket.createFromNBT must give back the stats the rocket wrote", on = "2026-10-17")
     @Test
     public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {
         int rocket = rockets.assembleAt(site(), cmd -> ok(client().act(cmd)),

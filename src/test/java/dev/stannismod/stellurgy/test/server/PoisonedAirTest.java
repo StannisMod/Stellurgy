@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -38,12 +39,11 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     /** EXPERIMENT: how long the golem breathes each air — the dose is this time. Ten seconds. */
     private static final int EXPOSURE_TICKS = 200;
 
-    @LegacyWitness(prose = "with {@code Poisoning#tick} at {@code if (toxic && damage > 0.0F)} made unreachable"
-            + " (the dose kept, the harm never dealt): \"health 100.0 -> 100.0\" — taken before 2026-10-06, when the"
-            + " line had no {@code toxic &&}, which {@code enableToxicity}'s default leaves true; with"
-            + " {@code AtmosphereAssertions#holdsAt} at {@code return around != null && around.isToxic();} reading"
-            + " the zone's air only: \"air with carbon monoxide past its limit is said to be poisonous, outdoors"
-            + " too\". Run apart: the statement is asserted first and would have hidden the harm.")
+    @RedWitness(verdict = "hurt", member = "Poisoning#tick", at = "if (toxic && damage > 0.0F)", replacedBy = "if (false)",
+            fails = "the same golem, the same time, in poisoned air is hurt", on = "2026-10-17")
+    @RedWitness(verdict = "said to be poisonous outdoors", member = "AtmosphereAssertions#holdsAt",
+            at = "return around != null && around.isToxic();", replacedBy = "return air != null && air.isToxic();",
+            fails = "air with carbon monoxide past its limit is said to be poisonous, outdoors too", on = "2026-10-17")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "long cleanTicks = GameTicks.advanceObserved(",
             why = "the CONTROL's dose: EXPOSURE_TICKS of the world's clean air, and the verdict is that this much"

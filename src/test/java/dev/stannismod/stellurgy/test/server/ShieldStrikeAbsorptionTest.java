@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -87,10 +88,10 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-08 (a strike the shield cannot fully pay for is partially absorbed and leaves a residual).
      */
     @Pins("INV-SHD-08")
-    @LegacyWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));}'s short-pay residual forced to 0, this"
-            + " fails with \"an overmatching strike was reported fully absorbed — the shield cannot afford it:"
-            + " {...fullyAbsorbed:true,residual:0...}\"; the charged-shield method stayed green on that run."
-            + " 2026-09-30.")
+    @RedWitness(verdict = "fully absorbed", member = "ShieldStrikeService#absorb",
+            at = "return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));",
+            replacedBy = "return ShieldStrikeResult.intercepted(hitPoint, spent, 0);",
+            fails = "an overmatching strike was reported fully absorbed", on = "2026-10-18")
     @Test
     public void strikeGracefullyPenetratesAShieldItOutmatches() throws Exception {
         int gx = 1010, gz = 822;
@@ -131,19 +132,24 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-16 (a reflected body leaves along the outward normal and never faster than it arrived).
      */
     @Pins({"INV-SHD-15", "INV-SHD-16"})
-    @LegacyWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())}'s reflection branch disabled, this fails"
-            + " with \"a fully absorbed kinetic strike carrying a travelling body was not reflected ..."
-            + " {...reflected:false...}\". The bodiless half and the equal-bill verdict were not separately"
-            + " witnessed. 2026-09-30.")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ShieldStrikeService#absorb} at {@code Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());}"
-            + " handing the body back its own velocity, this fails at \"the reflected body still travels inward"
-            + " (newVz=-2.0, it arrived at -2.0)\"; with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, 0);}'s full pay answering a"
-            + " residual of 1, at \"an abstract kinetic source with no travelling body was not fully absorbed ..."
-            + " {...fullyAbsorbed:false...residual:1...}\"; with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())} reflecting"
-            + " every fully paid kinetic strike, a bodiless one along its own ray, at \"a strike with no travelling"
-            + " body was reflected ... {...declaredBody:false...reflected:true...}\". A first attempt at the last"
-            + " — dropping only the {@code hasBody()} test — stayed green: the shell mirrors a null velocity to"
-            + " null and the result then reads unreflected.")
+    @RedWitness(verdict = "body reflected", member = "ShieldStrikeService#absorb",
+            at = "if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())",
+            replacedBy = "if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody() && spent < 0)",
+            fails = "a fully absorbed kinetic strike carrying a travelling body was not reflected", on = "2026-10-18")
+    @RedWitness(verdict = "turned around", member = "ShieldStrikeService#absorb",
+            at = "Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());",
+            replacedBy = "Vec3d newVelocity = strike.getBodyVelocity();",
+            fails = "the reflected body still travels inward", on = "2026-10-18")
+    @RedWitness(verdict = "bodiless fully absorbed", member = "ShieldStrikeService#absorb",
+            at = "return ShieldStrikeResult.intercepted(hitPoint, spent, 0);",
+            replacedBy = "return ShieldStrikeResult.intercepted(hitPoint, spent, 1);",
+            fails = "an abstract kinetic source with no travelling body was not fully absorbed", on = "2026-10-18")
+    @RedWitness(verdict = "bodiless not reflected", member = "ShieldStrikeService#absorb",
+            at = "if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())",
+            replacedBy = "if (strike.getKind() == ShieldStrikeKind.KINETIC && !strike.hasBody()) {"
+                    + " return ShieldStrikeResult.reflected(hitPoint, spent, Vec3d.ZERO); }"
+                    + " if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())",
+            fails = "a strike with no travelling body was reflected", on = "2026-10-18")
     @Test
     public void aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped() throws Exception {
         int gx = 1010, gz = 834;
@@ -203,9 +209,13 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-17 (a short pay never reflects).
      */
     @Pins("INV-SHD-17")
-    @LegacyWitness(prose = "with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any"
-            + " body on a SHORT pay, this fails with \"an overmatching strike was reported fully absorbed ..."
-            + " {...reflected:true,newVz:2.0...}\". 2026-09-30.")
+    @RedWitness(verdict = "never reflects on a short pay", member = "ShieldStrikeService#absorb",
+            at = "double fractionStopped = (double) spent / (double) cost;",
+            replacedBy = "if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody()) {"
+                    + " return ShieldStrikeResult.reflected(hitPoint, spent,"
+                    + " generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity())); }"
+                    + " double fractionStopped = (double) spent / (double) cost;",
+            fails = "an overmatching strike was reported fully absorbed", on = "2026-10-18")
     @Test
     public void aBodyThatOutmatchesTheShieldPenetratesInsteadOfBouncing() throws Exception {
         int gx = 1010, gz = 846;

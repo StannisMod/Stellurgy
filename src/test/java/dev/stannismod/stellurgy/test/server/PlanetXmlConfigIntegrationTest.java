@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -81,13 +82,17 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
      * The fixture's fields as the running server holds them, and — its last verdicts — that a file
      * stating no {@code <galaxyGen>} runs the shipped procedural galaxy.
      */
-    @LegacyWitness(prose = "the last two verdicts (the field reads above predate the record form): with"
+    @RedWitness(verdict = "built from the shipped configuration", member = "UniverseSchemaV0#generator",
+            at = "new ClusteredGalaxyGenerator(reports, config, new BodyDerivationV0(types), laws())",
+            replacedBy = "new ClusteredGalaxyGenerator(reports, new GalaxyGenConfig(config.minSpacing, config.density / 2.0D,"
+                    + " config.galaxySpacing, config.galaxyDensity, config.starTypes, config.galaxyTypes,"
+                    + " config.reservedGalaxies), new BodyDerivationV0(types), laws())",
+            fails = "built from the shipped configuration", on = "2026-10-17")
+    @LegacyWitness(prose = "with"
             + " {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced"
             + " by {@code GalaxyGenConfig.nonProcedural()}, it fails"
             + " with \"a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:"
-            + " {\"generator\":\"EmptyGalaxyGenerator\",\"config\":null}\"; with {@code UniverseSchemaV0#generator}'s"
-            + " {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with"
-            + " \"built from the shipped configuration: … \"density\":0.175\", 2026-10-05.")
+            + " {\"generator\":\"EmptyGalaxyGenerator\",\"config\":null}\", 2026-10-05.")
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
 

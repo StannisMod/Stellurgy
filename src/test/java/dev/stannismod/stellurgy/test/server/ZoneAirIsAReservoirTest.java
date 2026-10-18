@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
@@ -60,9 +60,10 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-17 (Gas arriving at a different temperature mixes by how much of each there is).
      */
     @Pins("INV-HEAT-17")
-    @LegacyWitness(prose = "with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two"
-            + " temperatures: \"the room must end up at the enthalpy-weighted mean … expected 314.648… K …"
-            + " measured 293.001 K\", 2026-09-30. The four premises are arrangements and are not witnessed.")
+    @RedWitness(member = "AirState#mixIn",
+            at = "double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin) / ((double) here + (double) amountArriving);",
+            replacedBy = "double mixed = (getTemperatureKelvin() + incomingKelvin) / 2.0D;",
+            fails = "the room must end up at the enthalpy-weighted mean", on = "2026-10-18")
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
         int cx = stand("a hot room with a combining separator in it");
@@ -141,10 +142,10 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-18 (Drawing gas out leaves the temperature alone and lowers the capacity).
      */
     @Pins("INV-HEAT-18")
-    @LegacyWitness(prose = "with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on"
-            + " every draw: \"what is left is the same gas at the same temperature — removing part of a body"
-            + " does not cool the rest: … \\\"airTempMilliK\\\":361749\", 2026-09-30. The three premises are"
-            + " arrangements and are not witnessed.")
+    @RedWitness(member = "AirState#draw",
+            at = "set(gas, partialPressure(gas) - taken);",
+            replacedBy = "set(gas, partialPressure(gas) - taken); temperatureMilliK = (int) (temperatureMilliK * 0.99D);",
+            fails = "what is left is the same gas at the same temperature", on = "2026-10-18")
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
         int cx = stand("a hot room with a splitting separator in it");
@@ -182,12 +183,14 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-19 (A zone holding no gas reports ambient and no capacity, rather than the temperature it was at when it still had air).
      */
     @Pins("INV-HEAT-19")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: \"a zone"
-            + " holding nothing must read ambient, not what it was at when it still had air: … \\\"airO2\\\":0 …"
-            + " expected:&lt;293000&gt; but was:&lt;400000&gt;\". NO HEAT — {@code AirState#getHeatCapacity} at {@code return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;} giving air a"
-            + " heat capacity whatever its pressure: \"and must hold no heat at all: … \\\"airO2\\\":0 …"
-            + " expected:&lt;0&gt; but was:&lt;760&gt;\". The hot-room and empty-room premises are arrangements"
-            + " and are not witnessed.")
+    @RedWitness(verdict = "ambient", member = "AirState#getTemperatureMilliK",
+            at = "return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;",
+            replacedBy = "return temperatureMilliK;",
+            fails = "a zone holding nothing must read ambient", on = "2026-10-18")
+    @RedWitness(verdict = "no heat", member = "AirState#getHeatCapacity",
+            at = "return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;",
+            replacedBy = "return Math.max(1L, getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L);",
+            fails = "and must hold no heat at all", on = "2026-10-18")
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {
         int cx = stand("a hot room pumped down to vacuum");
