@@ -186,8 +186,8 @@ public class PropulsionLawsTest {
      */
     @Pins({"STAT-31", "STAT-37"})
     @Regions(of = "STAT-31", value = {"vacuum", "one atmosphere", "past separation"})
-    @RedWitness(member = "EngineRegime#thrustAt", at = "Math.max(0, thrust(powerWatts) - Math.max(0, ambientPascals) * exitArea)",
-            replacedBy = "thrust(powerWatts)", fails = "STAT-31 one atmosphere", on = "2026-10-17")
+    @RedWitness(member = "PropellantDemand#forceAt", at = "Math.max(0, vacuumForce - Math.max(0, ambientPascals) * exitArea)",
+            replacedBy = "vacuumForce", fails = "STAT-31 one atmosphere", on = "2026-10-17")
     @Test
     public void theOutsidePressureMovesTheForceAndNeverTheFlow() {
         Random r = new Random(SEED + 2);
@@ -222,8 +222,8 @@ public class PropulsionLawsTest {
      * regimes, and each regime still declares its own flow and power.
      */
     @Pins("STAT-37")
-    @RedWitness(member = "ChemicalMotor#fromRegimes", at = "force = Math.min(force, regime.thrustAt(powerWatts, ambientPascals));",
-            replacedBy = "force = regime.thrustAt(powerWatts, ambientPascals);", fails = "STAT-37 least", on = "2026-10-17")
+    @RedWitness(member = "Actuator#leastForce", at = "force = Math.min(force, d.forceAt(ambientPascals));",
+            replacedBy = "force = d.forceAt(ambientPascals);", fails = "STAT-37 least", on = "2026-10-17")
     @Test
     public void aNozzleWhoseFluidIsUndecidedOffersTheLeastOfItsRegimes() {
         Random r = new Random(SEED + 3);
@@ -452,5 +452,400 @@ public class PropulsionLawsTest {
             }
         }
         assertTrue("arrangement: both regions visited", reached == 200 && short_ == 200);
+    }
+
+    // ─── Tier-2 consumption, boost columns and pressure bands: STAT-38..43 ───────────────────────
+
+    /** A constant: one block of the test deck, kg — an input of the experiment, not a fact about production. */
+    private static final double DECK_KG = 1_000.0;
+    /**
+     * A constant: one physics step, SI seconds — an input of the experiment; the law holds for any step,
+     * and this is the order of the substrate's own (a sixtieth of an engine second times 1.806).
+     */
+    private static final double STEP_SECONDS = 0.03;
+    /**
+     * A constant: STAT-16's residual tolerance, relative to the largest column, as ship-flight-model
+     * INV-SFM-01 states it ("1e-6 of the largest column"); STAT-43's band is defined against it.
+     */
+    private static final double RESIDUAL = 1.0e-6;
+
+    /**
+     * Six deck blocks about the origin, one on each axis at one metre: the centre of mass at the origin
+     * and the same inertia about every axis, so two drives mirrored across it balance at equal force.
+     */
+    private static dev.stannismod.stellurgy.ship.mass.ShipMassFrame deck() {
+        dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder b = new dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder();
+        for (int s = -1; s <= 1; s += 2) {
+            b.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(s, 0, 0, DECK_KG,
+                    dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.STRUCTURAL));
+            b.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(0, s, 0, DECK_KG,
+                    dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.STRUCTURAL));
+            b.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(0, 0, s, DECK_KG,
+                    dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.STRUCTURAL));
+        }
+        return b.build();
+    }
+
+    private static org.joml.Vector3dc forward() {
+        return dev.stannismod.stellurgy.ship.control.ControlFrame.HELM.axis(dev.stannismod.stellurgy.ship.control.ControlAxis.SURGE);
+    }
+
+    private static org.joml.Vector3dc up() {
+        return dev.stannismod.stellurgy.ship.control.ControlFrame.HELM.axis(dev.stannismod.stellurgy.ship.control.ControlAxis.HEAVE);
+    }
+
+    /** A drive at {@code side} metres along the helm's up, pushing forward, at {@code pascals} outside. */
+    private static Actuator driveAt(int index, int side, List<PropellantDemand> demands, double pascals) {
+        org.joml.Vector3d at = new org.joml.Vector3d(up()).mul(side);
+        return Actuator.reactionDrive(new dev.stannismod.stellurgy.ship.control.ActuatorId(0, side, 0, index), at,
+                forward(), demands, pascals);
+    }
+
+    private static PropellantDemand demand(dev.stannismod.stellurgy.ship.control.Propellant p, double force, double area,
+                                           double ve) {
+        return new PropellantDemand(p, force, area, force / ve, 0);
+    }
+
+    private static int indexOf(dev.stannismod.stellurgy.ship.control.ShipCapability cap, Actuator a) {
+        for (int i = 0; i < cap.actuators().size(); i++) {
+            if (cap.actuators().get(i).id().equals(a.id())) {
+                return i;
+            }
+        }
+        throw new AssertionError("arrangement: " + a + " is not in the capability");
+    }
+
+    /**
+     * STAT-38: a drive is fed by a regime ALL of whose fluids are aboard; among the fed regimes it runs the
+     * one with the least force, and that one alone; a drive none of whose regimes is fed is idle. Its
+     * DESIGN — the least over every regime — is not moved by what is aboard.
+     */
+    @Pins("STAT-38")
+    @Regions(of = "STAT-38", value = {"fed", "one of two fed", "none fed"})
+    @RedWitness(verdict = "STAT-38 none fed", member = "Actuator#fedBy", at = "fed &= aboard.test(fluid);",
+            replacedBy = "fed &= true;", fails = "STAT-38 none fed", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-38 both fed least", member = "Actuator#fedBy", at = "f < chosenForce",
+            replacedBy = "f > chosenForce", fails = "STAT-38 both fed least", on = "2026-10-17")
+    @Test
+    public void aDriveRunsOnlyOnWhatIsAboard() {
+        Random r = new Random(SEED + 8);
+        int fed = 0, oneOfTwo = 0, none = 0;
+        for (int i = 0; i < DESIGNS; i++) {
+            double fMono = logUniform(r, 1e4, 1e7);
+            double fPair = fMono * (1.5 + r.nextDouble());
+            double ratio = 1 + 7 * r.nextDouble();
+            dev.stannismod.stellurgy.ship.control.Propellant mono = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+            dev.stannismod.stellurgy.ship.control.Propellant pair = dev.stannismod.stellurgy.ship.control.Propellant.pair("f", "o", ratio);
+            List<PropellantDemand> two = new ArrayList<>();
+            two.add(demand(mono, fMono, 0, 2_000));
+            two.add(demand(pair, fPair, 0, 4_000));
+            Actuator drive = driveAt(0, 1, two, 0);
+            String at = "F_mono=" + fMono + " F_pair=" + fPair;
+
+            Actuator single = driveAt(1, -1, java.util.Collections.singletonList(demand(mono, fMono, 0, 2_000)), 0);
+            assertTrue("STAT-38 none fed: half a pair feeds nothing, " + at,
+                    drive.fedBy(java.util.Collections.singleton("o")::contains) == null);
+            assertTrue("STAT-38 none fed: nothing aboard, " + at,
+                    single.fedBy(java.util.Collections.<String>emptySet()::contains) == null);
+            none++;
+
+            Actuator fedSingle = single.fedBy(java.util.Collections.singleton("m")::contains);
+            assertTrue("STAT-38 fed, " + at, fedSingle != null && fedSingle.feed() != null
+                    && "m".equals(fedSingle.feed().propellant()));
+            assertClose("STAT-38 fed pushes its regime's force, " + at, fMono, fedSingle.maxForce().length());
+            fed++;
+
+            Actuator strongOnly = drive.fedBy(new java.util.HashSet<>(java.util.Arrays.asList("f", "o"))::contains);
+            assertTrue("STAT-38 one of two fed, " + at, strongOnly != null && "f+o".equals(strongOnly.feed().propellant()));
+            assertClose("STAT-38 one of two fed runs the fed one, " + at, fPair, strongOnly.maxForce().length());
+            assertClose("STAT-38 design is the least of all regimes, untouched, " + at, fMono, drive.maxForce().length());
+            Actuator both = drive.fedBy(new java.util.HashSet<>(java.util.Arrays.asList("m", "f", "o"))::contains);
+            assertTrue("STAT-38 both fed least, " + at, both != null && "m".equals(both.feed().propellant()));
+            oneOfTwo++;
+
+        }
+        assertTrue("arrangement: every region visited", fed == DESIGNS && oneOfTwo == DESIGNS && none == DESIGNS);
+    }
+
+    /**
+     * STAT-39: two drives mirrored across the centre — one on a monopropellant, one on a pair — asked for
+     * half their clean surge. Covered: each runs at half throttle and the command ejects, per fluid, the
+     * declared flow times throttle times the step, a pair split by its O/F. Bites: the scarcest fluid
+     * holds the whole command to what it can give, says so, and no fluid is ejected past what was
+     * available. Empty: nothing moves and nothing is ejected.
+     */
+    @Pins("STAT-39")
+    @Regions(of = "STAT-39", value = {"covered", "bites", "empty", "pair"})
+    @RedWitness(verdict = "STAT-39 bites", member = "CleanAxisScheme#allocate", at = "u[i] *= Math.max(0.0D, afford);",
+            replacedBy = "", fails = "STAT-39 bites", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-39 pair", member = "PropellantBudget#ejected",
+            at = "kg.merge(share.getKey(), mass * share.getValue(), Double::sum);",
+            replacedBy = "kg.merge(share.getKey(), mass, Double::sum);", fails = "STAT-39 pair", on = "2026-10-17")
+    @Test
+    public void aStepEjectsWhatItsThrottlesBurnAndNeverMoreThanIsAboard() {
+        Random r = new Random(SEED + 9);
+        int covered = 0, bites = 0, empty = 0;
+        for (int i = 0; i < 200; i++) {
+            double force = logUniform(r, 1e4, 1e6);
+            double veMono = logUniform(r, 1.5e3, 3e3);
+            double vePair = logUniform(r, 3e3, 4.5e3);
+            double ratio = 1 + 7 * r.nextDouble();
+            dev.stannismod.stellurgy.ship.control.Propellant mono = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+            dev.stannismod.stellurgy.ship.control.Propellant pair = dev.stannismod.stellurgy.ship.control.Propellant.pair("f", "o", ratio);
+            Actuator a = driveAt(0, 1, java.util.Collections.singletonList(demand(mono, force, 0, veMono)), 0);
+            Actuator b = driveAt(0, -1, java.util.Collections.singletonList(demand(pair, force, 0, vePair)), 0);
+            dev.stannismod.stellurgy.ship.mass.ShipMassFrame mass = deck();
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap = dev.stannismod.stellurgy.ship.control.ShipCapability.solve(
+                    java.util.Arrays.asList(a, b), mass, dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
+            org.joml.Vector3d want = new org.joml.Vector3d(forward()).mul(force / mass.getTotalMass());
+            double eM = 0.5 * force / veMono * STEP_SECONDS;
+            double eF = 0.5 * force / vePair * STEP_SECONDS / (1 + ratio);
+            double eO = 0.5 * force / vePair * STEP_SECONDS * ratio / (1 + ratio);
+            String at = "F=" + force + " ve=" + veMono + "/" + vePair + " O/F=" + ratio;
+
+            Map<String, Double> plenty = new java.util.HashMap<>();
+            plenty.put("m", 1e9);
+            plenty.put("f", 1e9);
+            plenty.put("o", 1e9);
+            dev.stannismod.stellurgy.ship.control.ActuatorCommand c = allocate(cap, want, plenty);
+            assertFalse("STAT-39 covered is not saturated, " + at, c.isSaturated());
+            assertClose("STAT-39 covered pushes what was asked, " + at, force, c.force().dot(forward()));
+            assertClose("STAT-39 covered ejects flow x throttle x step, " + at, eM, c.ejectedKg().get("m"));
+            assertClose("STAT-39 pair fuel share, " + at, eF, c.ejectedKg().get("f"));
+            assertClose("STAT-39 pair oxidizer share, " + at, eO, c.ejectedKg().get("o"));
+            covered++;
+
+            double scarce = 0.1 + 0.8 * r.nextDouble();
+            Map<String, Double> short_ = new java.util.HashMap<>(plenty);
+            short_.put("o", eO * scarce);
+            c = allocate(cap, want, short_);
+            assertTrue("STAT-39 bites and says so, " + at, c.isSaturated());
+            assertTrue("STAT-39 bites: never more than available, " + at + " ejected " + c.ejectedKg().get("o")
+                    + " of " + eO * scarce, c.ejectedKg().get("o") <= eO * scarce * (1 + DOUBLE_ROUNDING));
+            assertClose("STAT-39 bites: one factor for the whole command, " + at, eM * scarce, c.ejectedKg().get("m"));
+            assertClose("STAT-39 bites: the force falls by the same factor, " + at, force * scarce,
+                    c.force().dot(forward()));
+            bites++;
+
+            Map<String, Double> none = new java.util.HashMap<>(plenty);
+            none.put("m", 0.0);
+            c = allocate(cap, want, none);
+            assertTrue("STAT-39 empty is saturated, " + at, c.isSaturated());
+            assertEquals("STAT-39 empty pushes nothing, " + at, 0.0, c.force().length(), 0.0);
+            double ejected = 0;
+            for (double kg : c.ejectedKg().values()) {
+                ejected += kg;
+            }
+            assertEquals("STAT-39 empty ejects nothing, " + at, 0.0, ejected, 0.0);
+            empty++;
+        }
+        assertTrue("arrangement: every region visited", covered == 200 && bites == 200 && empty == 200);
+    }
+
+    private static dev.stannismod.stellurgy.ship.control.ActuatorCommand allocate(
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap, org.joml.Vector3dc want, Map<String, Double> pool) {
+        return dev.stannismod.stellurgy.ship.control.ControlScheme.cleanAxes().allocate(cap, want, new org.joml.Vector3d(),
+                new dev.stannismod.stellurgy.ship.control.MomentumStore(), STEP_SECONDS,
+                dev.stannismod.stellurgy.ship.control.StepConditions.of(
+                        dev.stannismod.stellurgy.ship.control.PropellantBudget.of(pool), Double.NaN, false));
+    }
+
+    /**
+     * STAT-40: what a step ejects is owed at once — the next budget is the pool net of it — until a drain
+     * settles it; and the body a drain leaves is exactly the body built without what it took, mass,
+     * centre and tensor, even a body millions of metres from the origin (the subspace frame's case).
+     */
+    @Pins("STAT-40")
+    @Regions(of = "STAT-40", value = {"net of what was ejected", "drained", "the record"})
+    @RedWitness(verdict = "STAT-40 net", member = "PropellantLedger#budget",
+            at = "available.put(e.getKey(), Math.max(0.0D, e.getValue() - owed));",
+            replacedBy = "available.put(e.getKey(), e.getValue());", fails = "STAT-40 net", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-40 the record", member = "ShipMassFrameBuilder#remove", at = "ixy += m * x * y;",
+            replacedBy = "ixy -= m * x * y;", fails = "STAT-40 the record", on = "2026-10-17")
+    @Test
+    public void whatAStepEjectsIsOwedUntilDrainedAndLeavesTheBodyExactly() {
+        dev.stannismod.stellurgy.ship.control.PropellantLedger ledger = new dev.stannismod.stellurgy.ship.control.PropellantLedger();
+        Map<String, Double> pool = new java.util.HashMap<>();
+        pool.put("m", 10.0);
+        ledger.settle(java.util.Collections.<String, Double>emptyMap(), pool);
+        Map<String, Double> step = new java.util.HashMap<>();
+        step.put("m", 3.0);
+        ledger.book(step);
+        assertEquals("STAT-40 net of what was ejected", 7.0, ledger.budget().available("m"), 0.0);
+        Map<String, Double> drained = new java.util.HashMap<>();
+        drained.put("m", 2.0);
+        Map<String, Double> left = new java.util.HashMap<>();
+        left.put("m", 8.0);
+        ledger.settle(drained, left);
+        assertEquals("STAT-40 drained: what is still owed", 1.0, ledger.undrained().get("m"), 0.0);
+        assertEquals("STAT-40 net after the drain", 7.0, ledger.budget().available("m"), 0.0);
+        ledger.unmetered();
+        assertFalse("STAT-40 unmetered owes nothing", ledger.budget().isMetered());
+
+        Random r = new Random(SEED + 10);
+        int bodies = 0;
+        for (int i = 0; i < 300; i++) {
+            double ox = 5.12e6 * r.nextDouble(), oy = 64 * r.nextDouble(), oz = 1e5 * (r.nextDouble() - 0.5);
+            List<dev.stannismod.stellurgy.ship.mass.MassContributor> kept = new ArrayList<>();
+            List<dev.stannismod.stellurgy.ship.mass.MassContributor> taken = new ArrayList<>();
+            List<dev.stannismod.stellurgy.ship.mass.MassContributor> takenFar = new ArrayList<>();
+            int n = 2 + r.nextInt(30);
+            for (int k = 0; k < n; k++) {
+                double x = r.nextInt(12) + 0.5, y = r.nextInt(6) + 0.5, z = r.nextInt(12) + 0.5;
+                double kg = logUniform(r, 1, 1e4);
+                dev.stannismod.stellurgy.ship.mass.MassContributor.Kind kind = k % 3 == 0
+                        ? dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.REACTION
+                        : dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.STRUCTURAL;
+                if (kind == dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.REACTION && r.nextBoolean()) {
+                    taken.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(x, y, z, kg, kind));
+                    takenFar.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(x + ox, y + oy, z + oz, kg, kind));
+                } else {
+                    kept.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(x, y, z, kg, kind));
+                }
+            }
+            if (taken.isEmpty() || kept.isEmpty()) {
+                continue;
+            }
+            List<dev.stannismod.stellurgy.ship.mass.MassContributor> all = new ArrayList<>(kept);
+            all.addAll(taken);
+            dev.stannismod.stellurgy.ship.mass.ShipMassFrame whole =
+                    new dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder().addAll(all).build().translated(ox, oy, oz);
+            dev.stannismod.stellurgy.ship.mass.ShipMassFrame rest =
+                    new dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder().addAll(kept).build().translated(ox, oy, oz);
+            double[] got = dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder.remove(whole.getTotalMass(),
+                    whole.getCentreOfMass(), whole.getInertia(), takenFar);
+            String at = "body " + i + " far by " + ox;
+            assertTrue("STAT-40 the record: something is left, " + at, got != null);
+            double scale = rest.getTotalMass();
+            assertClose("STAT-40 the record: mass, " + at, rest.getTotalMass(), got[0]);
+            org.joml.Vector3dc c = rest.getCentreOfMass();
+            double centreError = new org.joml.Vector3d(got[1], got[2], got[3]).distance(c);
+            assertTrue("STAT-40 the record: centre off by " + centreError + ", " + at, centreError < 1e-6);
+            org.joml.Matrix3dc t = rest.getInertia();
+            double[] expect = {t.m00(), t.m11(), t.m22(), t.m10(), t.m20(), t.m21()};
+            // Removing is a subtraction from the WHOLE body's moments, so its rounding is on the whole body's
+            // scale: a few ulps of positions millions of metres out, times the masses taken, is ~1e-10 of it.
+            org.joml.Matrix3dc w = whole.getInertia();
+            double tensorScale = Math.max(Math.abs(w.m00()), Math.max(Math.abs(w.m11()), Math.abs(w.m22())));
+            for (int k = 0; k < 6; k++) {
+                assertTrue("STAT-40 the record: tensor component " + k + " " + got[4 + k] + " vs " + expect[k] + ", " + at,
+                        Math.abs(got[4 + k] - expect[k]) <= 1e-8 * tensorScale);
+            }
+            bodies++;
+        }
+        assertTrue("arrangement: enough bodies drained, " + bodies, bodies >= 100);
+    }
+
+    /**
+     * STAT-42 on an asymmetric pair: drive A (up) has only a cruise column of 100 kN; drive B (down) a
+     * cruise column of 60 kN and a boost column of 150 kN. Clean surge needs equal forces, so cruise
+     * authority is 2·60 and boost authority 2·min(100, 150): the solver boosts B, the drive that limits,
+     * and raises A to full. Switch off, a command past cruise uses no boost; switch on, a command inside
+     * cruise uses none; past cruise it is delivered, and B's two columns never exceed one capacity.
+     */
+    @Pins("STAT-42")
+    @Regions(of = "STAT-42", value = {"switch off", "within cruise", "past cruise", "asymmetric"})
+    @RedWitness(verdict = "STAT-42 switch off", member = "CleanAxisScheme#allocate",
+            at = "if (amount > recipe.authority && conditions.boost()) {", replacedBy = "if (amount > recipe.authority) {",
+            fails = "STAT-42 switch off", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-42 within cruise", member = "CleanAxisScheme#allocate",
+            at = "if (amount > recipe.authority && conditions.boost()) {", replacedBy = "if (conditions.boost()) {",
+            fails = "STAT-42 within cruise", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-42 asymmetric", member = "ShipCapability#solve",
+            at = "Recipe boostSustained = massless ? sustained : solveOne(fixed, mass, frame, d, true, true);",
+            replacedBy = "Recipe boostSustained = sustained;", fails = "STAT-42 asymmetric", on = "2026-10-17")
+    @Test
+    public void boostIsASecondColumnUnderOneCapacityTakenOnlyPastCruise() {
+        dev.stannismod.stellurgy.ship.control.Propellant p = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+        Actuator a = driveAt(0, 1, java.util.Collections.singletonList(demand(p, 100e3, 0, 4e3)), 0);
+        Actuator bCruise = driveAt(0, -1, java.util.Collections.singletonList(demand(p, 60e3, 0, 4e3)), 0);
+        Actuator bBoost = Actuator.boostOf(bCruise, java.util.Collections.singletonList(demand(p, 150e3, 0, 1.5e3)));
+        dev.stannismod.stellurgy.ship.mass.ShipMassFrame mass = deck();
+        dev.stannismod.stellurgy.ship.control.ShipCapability cap = dev.stannismod.stellurgy.ship.control.ShipCapability.solve(
+                java.util.Arrays.asList(a, bCruise, bBoost), mass, dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
+        dev.stannismod.stellurgy.ship.control.ControlDirection surge = dev.stannismod.stellurgy.ship.control.ControlDirection.SURGE_POSITIVE;
+        dev.stannismod.stellurgy.ship.control.Endurance sustained = dev.stannismod.stellurgy.ship.control.Endurance.SUSTAINED;
+        assertClose("STAT-42 asymmetric: cruise authority", 2 * 60e3, cap.authority(surge, sustained));
+        assertClose("STAT-42 asymmetric: boost authority", 2 * 100e3, cap.boostAuthority(surge, sustained));
+        int ia = indexOf(cap, a), ic = indexOf(cap, bCruise), ib = indexOf(cap, bBoost);
+        double m = mass.getTotalMass();
+
+        dev.stannismod.stellurgy.ship.control.ActuatorCommand off = boostAllocate(cap, 180e3 / m, false);
+        assertEquals("STAT-42 switch off: no boost column runs", 0.0, off.throttle(ib), 0.0);
+        assertTrue("STAT-42 switch off: past cruise is short and said so", off.isSaturated()
+                && off.force().dot(forward()) <= 120e3 * (1 + DOUBLE_ROUNDING));
+
+        dev.stannismod.stellurgy.ship.control.ActuatorCommand inside = boostAllocate(cap, 100e3 / m, true);
+        assertEquals("STAT-42 within cruise: no boost column runs", 0.0, inside.throttle(ib), 0.0);
+        assertClose("STAT-42 within cruise: delivered", 100e3, inside.force().dot(forward()));
+
+        dev.stannismod.stellurgy.ship.control.ActuatorCommand past = boostAllocate(cap, 180e3 / m, true);
+        assertFalse("STAT-42 past cruise: delivered whole", past.isSaturated());
+        assertClose("STAT-42 past cruise: delivered", 180e3, past.force().dot(forward()));
+        assertTrue("STAT-42 past cruise: the limiting drive is boosted", past.throttle(ib) > 0);
+        assertTrue("STAT-42 past cruise: one capacity, " + past.throttle(ic) + " + " + past.throttle(ib),
+                past.throttle(ic) + past.throttle(ib) <= 1 + DOUBLE_ROUNDING);
+        assertTrue("STAT-42 past cruise: the clean axis holds, torque " + past.torque().length(),
+                past.torque().length() <= RESIDUAL * 100e3);
+        assertClose("STAT-42 past cruise: the other drive is raised to carry its half", 90e3 / 100e3, past.throttle(ia));
+    }
+
+    private static dev.stannismod.stellurgy.ship.control.ActuatorCommand boostAllocate(
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap, double accel, boolean boost) {
+        return dev.stannismod.stellurgy.ship.control.ControlScheme.cleanAxes().allocate(cap,
+                new org.joml.Vector3d(forward()).mul(accel), new org.joml.Vector3d(),
+                new dev.stannismod.stellurgy.ship.control.MomentumStore(), STEP_SECONDS,
+                dev.stannismod.stellurgy.ship.control.StepConditions.of(
+                        dev.stannismod.stellurgy.ship.control.PropellantBudget.unmetered(), Double.NaN, boost));
+    }
+
+    /**
+     * STAT-43 on two mirrored drives with different bells, solved at 50 kPa: the band's half-width is the
+     * contract's — STAT-16's tolerance on the largest column over the recipe's pressure slope — inside it
+     * the force is each drive's affine law at the step's pressure and the off-axis torque stays inside the
+     * tolerance; outside it the capability says it no longer holds.
+     */
+    @Pins("STAT-43")
+    @Regions(of = "STAT-43", value = {"inside", "outside"})
+    @RedWitness(verdict = "STAT-43 outside", member = "ShipCapability#holdsAt",
+            at = "Math.abs(pascals - ambientPascals) <= bandHalfWidth", replacedBy = "true",
+            fails = "STAT-43 outside", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-43 inside", member = "Actuator#wrenchAtPressure",
+            at = "return wrenchOf(new Vector3d(direction).mul(leastForce(demands, ambientPascals)), centre);",
+            replacedBy = "return wrenchAbout(centre);", fails = "STAT-43 inside", on = "2026-10-17")
+    @Test
+    public void aRecipeHoldsOverItsPressureBandAndFollowsTheAffineLawInside() {
+        double p0 = 50e3, vac = 100e3, areaA = 0.1, areaB = 0.3;
+        dev.stannismod.stellurgy.ship.control.Propellant p = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+        Actuator a = driveAt(0, 1, java.util.Collections.singletonList(demand(p, vac, areaA, 3e3)), p0);
+        Actuator b = driveAt(0, -1, java.util.Collections.singletonList(demand(p, vac, areaB, 3e3)), p0);
+        dev.stannismod.stellurgy.ship.mass.ShipMassFrame mass = deck();
+        dev.stannismod.stellurgy.ship.control.ShipCapability cap = dev.stannismod.stellurgy.ship.control.ShipCapability.solve(
+                java.util.Arrays.asList(a, b), mass, dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
+        double fA = vac - p0 * areaA, fB = vac - p0 * areaB;
+        // The only recipe that runs a drive is clean surge: B full, A held to B's force. The arms are one metre.
+        double uA = fB / fA, uB = 1;
+        // Both arms are one metre and perpendicular to the push, so the largest force column and the largest
+        // torque column are both fA, and the force and torque slopes are equal: one bound.
+        double largest = fA;
+        double slope = uA * areaA + uB * areaB;
+        double w = RESIDUAL * largest / slope;
+        assertClose("STAT-43 the band is the contract's", w, cap.bandHalfWidth());
+
+        double pIn = p0 + 0.5 * w;
+        assertTrue("STAT-43 inside holds", cap.holdsAt(pIn) && cap.holdsAt(p0 - 0.5 * w));
+        dev.stannismod.stellurgy.ship.control.ActuatorCommand c = dev.stannismod.stellurgy.ship.control.ControlScheme.cleanAxes()
+                .allocate(cap, new org.joml.Vector3d(forward()).mul(fB / mass.getTotalMass()), new org.joml.Vector3d(),
+                        new dev.stannismod.stellurgy.ship.control.MomentumStore(), STEP_SECONDS,
+                        dev.stannismod.stellurgy.ship.control.StepConditions.of(
+                                dev.stannismod.stellurgy.ship.control.PropellantBudget.unmetered(), pIn, false));
+        double ua = c.throttle(indexOf(cap, a)), ub = c.throttle(indexOf(cap, b));
+        double affine = ua * (vac - pIn * areaA) + ub * (vac - pIn * areaB);
+        assertClose("STAT-43 inside: the force is the affine law at the step's pressure", affine, c.force().dot(forward()));
+        assertTrue("STAT-43 inside: off-axis torque " + c.torque().length() + " within the tolerance",
+                c.torque().length() <= RESIDUAL * largest);
+
+        assertFalse("STAT-43 outside", cap.holdsAt(p0 + 1.01 * w));
+        assertFalse("STAT-43 outside", cap.holdsAt(p0 - 1.01 * w));
     }
 }

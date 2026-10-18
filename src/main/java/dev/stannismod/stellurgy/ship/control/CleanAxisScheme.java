@@ -11,7 +11,7 @@ import java.util.List;
  * axis's cached clean recipe, and scale the whole command down together when the recipes, summed,
  * ask some actuator for more than it has.
  *
- * <p>Four decisions live here and nowhere else:</p>
+ * <p>Six decisions live here and nowhere else:</p>
  * <ul>
  *   <li><b>Per axis, the wanted amount becomes a fraction of that axis's authority</b> and is clipped
  *       at one. The flight law asks in physical units; the recipes are per unit of authority.</li>
@@ -22,6 +22,11 @@ import java.util.List;
  *       scaled by the single factor that brings the worst one back inside, which keeps the requested
  *       proportions. Priority between axes (attitude before translation, say) would be a different
  *       scheme, not a change to this one.</li>
+ *   <li><b>Cruise before boost.</b> With the ship-wide switch on, an axis the cruise columns cannot
+ *       meet takes the recipe that may use boost columns, and only then a burst (C10 STAT-42).</li>
+ *   <li><b>The propellant budget is the last factor.</b> What the composed command would eject is
+ *       held inside what the step may eject by one more common factor (STAT-18, STAT-39), and the
+ *       command reports the mass it ejects.</li>
  *   <li><b>Idle wheels are given back.</b> A wheel the command does not use is run toward empty while
  *       the sustained devices cancel its moment, in whatever room the command left — see
  *       {@link #desaturate}.</li>
@@ -31,8 +36,8 @@ final class CleanAxisScheme implements ControlScheme {
 
     @Override
     public ActuatorCommand allocate(ShipCapability capability, Vector3dc acceleration,
-                                    Vector3dc angularAcceleration, MomentumStore momentum,
-                                    double dt) {
+                                    Vector3dc angularAcceleration, MomentumStore momentum, double dt,
+                                    StepConditions conditions) {
         int n = capability.actuators().size();
         double[] u = new double[n];
         boolean saturated = false;
@@ -47,6 +52,9 @@ final class CleanAxisScheme implements ControlScheme {
             ControlDirection direction = ControlDirection.of(axis, want > 0.0D);
             double amount = Math.abs(want);
             Recipe recipe = capability.recipe(direction, Endurance.SUSTAINED);
+            if (amount > recipe.authority && conditions.boost()) {
+                recipe = capability.boostRecipe(direction, Endurance.SUSTAINED);
+            }
             if (amount > recipe.authority) {
                 recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);
             }
@@ -72,6 +80,10 @@ final class CleanAxisScheme implements ControlScheme {
             } else if (u[i] < min) {
                 lambda = Math.min(lambda, min / u[i]);
             }
+            int twin = capability.twin(i);
+            if (twin > i && u[i] + u[twin] > 1.0D) {
+                lambda = Math.min(lambda, 1.0D / (u[i] + u[twin]));
+            }
         }
         if (lambda < 1.0D) {
             saturated = true;
@@ -92,7 +104,18 @@ final class CleanAxisScheme implements ControlScheme {
 
         desaturate(capability, u, momentum, dt);
 
-        ActuatorCommand command = new ActuatorCommand(u, capability.wrench(u), saturated);
+        double afford = conditions.budget().scale(capability.actuators(), u, dt);
+        if (afford < 1.0D) {
+            saturated = true;
+            for (int i = 0; i < n; i++) {
+                u[i] *= Math.max(0.0D, afford);
+            }
+        }
+
+        double ambient = Double.isNaN(conditions.ambientPascals()) ? capability.ambientPascals()
+                : conditions.ambientPascals();
+        ActuatorCommand command = new ActuatorCommand(u, capability.wrenchAt(u, ambient), saturated,
+                PropellantBudget.ejected(capability.actuators(), u, dt));
         momentum.absorb(capability.actuators(), command, dt);
         return command;
     }
@@ -150,7 +173,8 @@ final class CleanAxisScheme implements ControlScheme {
         double scale = 1.0D;
         for (int i = 0; i < n; i++) {
             if (delta[i] > 0.0D) {
-                scale = Math.min(scale, (1.0D - u[i]) / delta[i]);
+                int twin = capability.twin(i);
+                scale = Math.min(scale, (1.0D - u[i] - (twin < 0 ? 0.0D : u[twin])) / delta[i]);
             } else if (delta[i] < 0.0D) {
                 scale = Math.min(scale, (actuators.get(i).minThrottle() - u[i]) / delta[i]);
             }
@@ -211,7 +235,7 @@ final class CleanAxisScheme implements ControlScheme {
     private static Recipe burstIfItCanDeliver(ShipCapability capability, ControlDirection direction,
                                               Recipe sustained, double amount, double[] committed,
                                               double[][] live) {
-        Recipe burst = capability.recipe(direction, Endurance.BURST);
+        Recipe burst = capability.burstOf(direction, sustained);
         if (!(burst.authority > 0.0D)) {
             return burst;
         }

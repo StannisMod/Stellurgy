@@ -86,6 +86,38 @@ public final class ShipInertiaWriter {
     }
 
     /**
+     * Take {@code taken} out of {@code record} — the DELTA path for mass that leaves without a block
+     * changing: the propellant a burn drained this tick, at the holders it left (C10 STAT-24, STAT-40).
+     * Mass, centre and tensor move together, exactly as a frame built without those contributors would
+     * have them ({@link ShipMassFrameBuilder#remove}). Refused, and said so, when nothing would be left
+     * or the tensor would stop being invertible; the record then keeps its numbers until the next
+     * authoritative round.
+     */
+    public static boolean removeFrom(ShipInertiaData record, java.util.List<dev.stannismod.stellurgy.ship.mass.MassContributor> taken,
+                                     String shipName) {
+        if (taken.isEmpty()) {
+            return true;
+        }
+        double[] left = dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder.remove(record.getGameTickMass(),
+                record.getGameTickCenterOfMass(), record.getGameMoITensor(), taken);
+        if (left == null) {
+            LOG.error("refusing to drain ship " + shipName + " to no mass at all; " + taken.size()
+                    + " drained holders left its record as it was");
+            return false;
+        }
+        Matrix3d tensor = new Matrix3d(left[4], left[7], left[8], left[7], left[5], left[9], left[8], left[9], left[6]);
+        if (!isInvertible(tensor)) {
+            LOG.error("refusing a singular inertia tensor for ship " + shipName + " after a drain; the record"
+                    + " keeps its numbers until the next authoritative round");
+            return false;
+        }
+        record.setGameTickMass(left[0]);
+        record.setGameTickCenterOfMass(new Vector3d(left[1], left[2], left[3]));
+        record.setGameMoITensor(tensor);
+        return true;
+    }
+
+    /**
      * The comparison, against the record rather than against a world, and WITHOUT reporting: returns
      * the drift or {@code null} when there is none. Reporting is the caller's, so the tolerances can
      * be pinned by a test that is not also asserting how loudly a build complains about them.

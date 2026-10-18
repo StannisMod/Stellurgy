@@ -16,12 +16,22 @@ public final class ActuatorCommand {
     private final Vector3dc force;
     private final Vector3dc torque;
     private final boolean saturated;
+    private final java.util.Map<String, Double> ejectedKg;
 
-    ActuatorCommand(double[] throttles, double[] wrench, boolean saturated) {
+    ActuatorCommand(double[] throttles, double[] wrench, boolean saturated, java.util.Map<String, Double> ejectedKg) {
         this.throttles = throttles;
         this.force = new Vector3d(wrench[0], wrench[1], wrench[2]);
         this.torque = new Vector3d(wrench[3], wrench[4], wrench[5]);
         this.saturated = saturated;
+        this.ejectedKg = java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(ejectedKg));
+    }
+
+    /**
+     * The mass this command ejects over the step it was allocated for, kg per fluid (C10 STAT-39): what
+     * the drain must take out of the pool when consumption is metered.
+     */
+    public java.util.Map<String, Double> ejectedKg() {
+        return ejectedKg;
     }
 
     /** The throttle of the {@code index}-th actuator of the capability this command was allocated over. */

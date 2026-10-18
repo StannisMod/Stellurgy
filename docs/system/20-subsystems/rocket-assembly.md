@@ -57,7 +57,8 @@ fuel family, engine & seat locations, drilling power, mass in kg (via `WeightEng
 `invalidBlock` and fire `PacketInvalidLocationNotify`. `TileRocketAssemblingMachine.java:336`.
 
 **MECH-RASM-03 — Error-code gating.** After accumulation, a single if/else ladder picks the
-verdict: `INVALIDBLOCK` → `COMBINEDTHRUST` (engines of more than one tank role) → `NOGUIDANCE` →
+verdict: `INVALIDBLOCK` → `FLUIDINFUELTANKS` (a rocket's fuel tank holds fluid, INV-RASM-15; the UV
+variant checks it in the same place) → `COMBINEDTHRUST` (engines of more than one tank role) → `NOGUIDANCE` →
 `NOENGINES` (no thrust at all, or the launch gate says no — below) → `NOFUEL` (biprop needs both
 tanks; a rocket whose engines have no tank of their role at all — INV-RASM-13) → `UNKNOWNPROPELLANTPAIR`
 (a bipropellant craft while the configured fuels and oxidizers contain a pair with no row, C10 STAT-32;
@@ -208,6 +209,16 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
   order the parts arrive in; a thrust in newtons or a mass in kilograms wider than a short reads as the
   server computed it. `util/ShortWireParts`, `TileRocketAssemblingMachine` (the sync slots);
   `ShortWirePartsTest#aValueArrivesWholeThroughASixteenBitWireInAnyOrder`.
+- **INV-RASM-15 [T][BEH]** A ROCKET whose fuel tanks hold fluid is refused `FLUIDINFUELTANKS` ("Empty the
+  fuel tanks"), by both assemblers, whatever `rocketRequireFuel` says. A rocket fuel tank is a real holder
+  (C10 STAT-44) because a SHIP burns from it, but a rocket burns its stats' propellant, loaded at the
+  fuelling station; fluid left in a tank block would ride as weight no engine draws and come back when the
+  rocket is taken apart. Refused rather than moved into the stats: the stats hold one fluid per role and a
+  move would need a rule for tanks holding different ones; nothing poured is lost or weighed twice. For the
+  same reason a rocket's fuel tanks are not its cargo tanks — a gas harvest never fills them and the
+  unmanned assembler's `NOTANK` check does not count them (`StorageChunk#isLiquidContainerBlock`,
+  `TileUnmannedVehicleAssembler#scanRocket`). A ship is not refused. `TileRocketAssemblingMachine#scanRocket`;
+  `RocketRequireFuelDisableAssemblesTest#aRocketWhoseFuelTanksHoldFluidIsRefused`.
 
 ## Failure modes & edge cases
 

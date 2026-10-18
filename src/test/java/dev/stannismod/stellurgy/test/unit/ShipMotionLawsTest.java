@@ -279,7 +279,7 @@ public class ShipMotionLawsTest {
         double yaw = cap.authority(ControlDirection.YAW_POSITIVE, Endurance.SUSTAINED);
         Vector3d accel = new Vector3d(0, 0, 0.8D * surge / m).add(new Vector3d(-0.8D * sway / m, 0, 0));
         Vector3d alpha = new Vector3d(0, 0.8D * yaw, 0);
-        ActuatorCommand cmd = ControlScheme.cleanAxes().allocate(cap, accel, alpha, new MomentumStore(), 0.05D);
+        ActuatorCommand cmd = ControlScheme.cleanAxes().allocateUnmeteredCruiseAsSolved(cap, accel, alpha, new MomentumStore(), 0.05D);
         for (int i = 0; i < hull.size(); i++) {
             assertTrue("no device past full: #" + i + " at " + cmd.throttle(i), cmd.throttle(i) <= 1.0D + EPS);
         }
@@ -311,13 +311,13 @@ public class ShipMotionLawsTest {
         MomentumStore store = new MomentumStore();
         ControlScheme scheme = ControlScheme.cleanAxes();
         Vector3d wantYaw = new Vector3d(0, cap.authority(ControlDirection.YAW_POSITIVE, Endurance.BURST), 0);
-        ActuatorCommand first = scheme.allocate(cap, new Vector3d(), wantYaw, store, 0.1D);
+        ActuatorCommand first = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), wantYaw, store, 0.1D);
         assertEquals("fresh, the wheel gives its full torque", torque, first.torque().y(), torque * EPS);
-        scheme.allocate(cap, new Vector3d(), wantYaw, store, 0.1D); // now full: 0.2 s at 5000
-        ActuatorCommand full = scheme.allocate(cap, new Vector3d(), wantYaw, store, 0.1D);
+        scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), wantYaw, store, 0.1D); // now full: 0.2 s at 5000
+        ActuatorCommand full = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), wantYaw, store, 0.1D);
         assertEquals("a full wheel turns nothing more", 0.0D, full.torque().y(), torque * EPS);
         assertTrue("and says it delivered less than asked", full.isSaturated());
-        ActuatorCommand back = scheme.allocate(cap, new Vector3d(), wantYaw.negate(new Vector3d()), store, 0.1D);
+        ActuatorCommand back = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), wantYaw.negate(new Vector3d()), store, 0.1D);
         assertEquals("but it can unwind", -torque, back.torque().y(), torque * EPS);
     }
 
@@ -401,7 +401,7 @@ public class ShipMotionLawsTest {
                     accel.set(axis).mul(authority / mass.getTotalMass());
                 }
                 MomentumStore unlimited = new MomentumStore();
-                ActuatorCommand cmd = ControlScheme.cleanAxes().allocate(cap, accel, alpha, unlimited, 0.0D);
+                ActuatorCommand cmd = ControlScheme.cleanAxes().allocateUnmeteredCruiseAsSolved(cap, accel, alpha, unlimited, 0.0D);
                 for (int i = 0; i < cap.actuators().size(); i++) {
                     double u = cmd.throttle(i);
                     double min = cap.actuators().get(i).minThrottle();
@@ -498,7 +498,7 @@ public class ShipMotionLawsTest {
         double want = 2.0D * T / mass.getTotalMass();
         ControlScheme scheme = ControlScheme.cleanAxes();
 
-        ActuatorCommand fresh = scheme.allocate(cap, new Vector3d(0, 0, want), new Vector3d(), new MomentumStore(), 0.05D);
+        ActuatorCommand fresh = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(0, 0, want), new Vector3d(), new MomentumStore(), 0.05D);
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "the control leg: a fresh wheel lets the burst recipe push 2T (got " + fresh.force().z() + ")",
                 Math.abs(fresh.force().z() - 2.0D * T) < T * EPS && fresh.torque().length() < T * EPS);
@@ -510,7 +510,7 @@ public class ShipMotionLawsTest {
                 full.restore(a.id(), a.momentumCapacity()); // full in the positive sense on every axis
             }
         }
-        ActuatorCommand spent = scheme.allocate(cap, new Vector3d(0, 0, want), new Vector3d(), full, 0.05D);
+        ActuatorCommand spent = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(0, 0, want), new Vector3d(), full, 0.05D);
         assertEquals("a spent wheel leaves the push clean", 0.0D, spent.torque().length(), T * EPS);
         assertEquals("and delivers the sustained figure: the centred engine alone",
                 cap.authority(ControlDirection.SURGE_POSITIVE, Endurance.SUSTAINED), spent.force().z(), T * EPS);
@@ -581,7 +581,7 @@ public class ShipMotionLawsTest {
         double before = held;
         boolean emptied = false;
         for (int step = 0; step < 1000 && !emptied; step++) {
-            ActuatorCommand idle = scheme.allocate(cap, new Vector3d(), new Vector3d(), store, 0.05D);
+            ActuatorCommand idle = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), new Vector3d(), store, 0.05D);
             double now = store.given(yawWheel);
             assertEquals("step " + step + ": the hull is pushed nowhere while the wheel unloads",
                     0.0D, idle.force().length(), T * EPS);
@@ -599,7 +599,7 @@ public class ShipMotionLawsTest {
         ShipCapability wheelsOnly = ShipCapability.solve(wheel(0, 1, 0, torque, 10.0D * T), slab(), HELM);
         MomentumStore kept = new MomentumStore();
         kept.restore(yawWheel, held);
-        ActuatorCommand alone = scheme.allocate(wheelsOnly, new Vector3d(), new Vector3d(), kept, 0.05D);
+        ActuatorCommand alone = scheme.allocateUnmeteredCruiseAsSolved(wheelsOnly, new Vector3d(), new Vector3d(), kept, 0.05D);
         assertEquals("a wheel nothing can hold the hull against keeps what it holds",
                 held, kept.given(yawWheel), 0.0D);
         assertEquals("and the hull is left alone", 0.0D, alone.torque().length(), 0.0D);
@@ -637,12 +637,12 @@ public class ShipMotionLawsTest {
                 "the command must be past the sustained yaw, or it does not use the wheel",
                 burstYaw.y > cap.authority(ControlDirection.YAW_POSITIVE, Endurance.SUSTAINED));
 
-        ActuatorCommand fromEmpty = scheme.allocate(cap, new Vector3d(), burstYaw, new MomentumStore(), 0.05D);
+        ActuatorCommand fromEmpty = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), burstYaw, new MomentumStore(), 0.05D);
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "the burst must lean on the yaw wheel", fromEmpty.throttle(wheelIndex) != 0.0D);
         MomentumStore halfFull = new MomentumStore();
         halfFull.restore(yawWheel, half);
-        ActuatorCommand fromHalf = scheme.allocate(cap, new Vector3d(), burstYaw, halfFull, 0.05D);
+        ActuatorCommand fromHalf = scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), burstYaw, halfFull, 0.05D);
         for (int i = 0; i < cap.actuators().size(); i++) {
             assertEquals("device #" + i + " gets the same throttle whatever the wheel already holds",
                     fromEmpty.throttle(i), fromHalf.throttle(i), EPS);
@@ -651,7 +651,7 @@ public class ShipMotionLawsTest {
         // POSITIVE HALF: the same half-full wheel, nothing commanded, IS unloaded.
         MomentumStore idle = new MomentumStore();
         idle.restore(yawWheel, half);
-        scheme.allocate(cap, new Vector3d(), new Vector3d(), idle, 0.05D);
+        scheme.allocateUnmeteredCruiseAsSolved(cap, new Vector3d(), new Vector3d(), idle, 0.05D);
         assertTrue("with nothing commanded the same wheel is unloaded: " + idle.given(yawWheel),
                 idle.given(yawWheel) < half);
     }
@@ -748,7 +748,7 @@ public class ShipMotionLawsTest {
                     if (ShipMotionCases.aWheelIsFull(cap, momentum)) {
                         fullWheelCalls++;
                     }
-                    ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
+                    ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, lin, ang, momentum, ShipMotionCases.DT);
                     try {
                         CleanCommandLaw.requireHonest(hull.name + ", command " + k + " (" + asked + "), step " + s,
                                 hull, cap, lin, ang, c, momentum);
@@ -855,7 +855,7 @@ public class ShipMotionLawsTest {
                         .mul((d.isPositive() ? 1.0D : -1.0D) * fraction * newtons / mass);
                 Vector3d ang = new Vector3d();
                 for (int s = 0; s < LIVENESS_HOLD_STEPS; s++) {
-                    ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
+                    ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, lin, ang, momentum, ShipMotionCases.DT);
                     String where = hull.name + ", " + d + " at " + fraction + " of the geometric "
                             + newtons + " N, command " + k + ", step " + s;
                     CleanCommandLaw.requireHonest(where, hull, cap, lin, ang, c, momentum);
@@ -911,7 +911,7 @@ public class ShipMotionLawsTest {
         boolean running = true;
         int phase1 = (int) Math.ceil(seconds / ShipMotionCases.DT) + 60;
         for (int s = 0; s < phase1; s++) {
-            ActuatorCommand c = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
+            ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, surge, none, momentum, ShipMotionCases.DT);
             CleanCommandLaw.requireHonest(hull.name + ", the first burst, step " + s, hull, cap, surge, none, c, momentum);
             double got = c.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE));
             assertTrue("step " + s + ": an over-demand never gets less than the sustained figure "
@@ -929,7 +929,7 @@ public class ShipMotionLawsTest {
         double held = CleanCommandLaw.wheelMomentum(cap, momentum);
         requireArranged("the burst must have left the wheel holding momentum: " + held, held > 0.0D);
         for (int s = 0; s < phase2 && held > 0.0D; s++) {
-            ActuatorCommand c = scheme.allocate(cap, none, none, momentum, ShipMotionCases.DT);
+            ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, none, none, momentum, ShipMotionCases.DT);
             CleanCommandLaw.requireHonest(hull.name + ", the idle wheel, step " + s, hull, cap, none, none, c, momentum);
             double now = CleanCommandLaw.wheelMomentum(cap, momentum);
             assertTrue("step " + s + ": an idle wheel is only ever given back: " + held + " -> " + now,
@@ -938,7 +938,7 @@ public class ShipMotionLawsTest {
         }
         assertEquals("an idle wheel is given back completely within 30 s", 0.0D, held, 0.0D);
 
-        ActuatorCommand again = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
+        ActuatorCommand again = scheme.allocateUnmeteredCruiseAsSolved(cap, surge, none, momentum, ShipMotionCases.DT);
         CleanCommandLaw.requireHonest(hull.name + ", the second burst", hull, cap, surge, none, again, momentum);
         assertEquals("with the wheel bought back the burst is there again", burst,
                 again.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE)), tol);
@@ -963,7 +963,7 @@ public class ShipMotionLawsTest {
             Vector3d lin = new Vector3d();
             Vector3d ang = new Vector3d();
             (d.axis().isRotation() ? ang : lin).set(ShipMotionCases.HELM.axis(d.axis())).mul(d.isPositive() ? 1.0D : -1.0D);
-            ActuatorCommand c = scheme.allocate(bareCap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
+            ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(bareCap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
             assertEquals(bare.name + ": " + d + " pushes nothing", 0.0D, c.force().length(), 0.0D);
             assertEquals(bare.name + ": " + d + " turns nothing", 0.0D, c.torque().length(), 0.0D);
             assertTrue(bare.name + ": " + d + " says it delivered less", c.isSaturated());
@@ -999,7 +999,7 @@ public class ShipMotionLawsTest {
                 Vector3d ang = new Vector3d(ShipMotionCases.HELM.axis(axis)).mul(positive ? 1.0D : -1.0D)
                         .mul(wheelCap.authority(ControlDirection.of(axis, positive), Endurance.BURST));
                 Vector3d lin = new Vector3d();
-                ActuatorCommand c = scheme.allocate(wheelCap, lin, ang, full, ShipMotionCases.DT);
+                ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(wheelCap, lin, ang, full, ShipMotionCases.DT);
                 CleanCommandLaw.requireHonest(wheel.name + ", " + axis + (positive ? "+" : "-") + " from a full wheel",
                         wheel, wheelCap, lin, ang, c, full);
                 delivered = Math.max(delivered, c.torque().length());

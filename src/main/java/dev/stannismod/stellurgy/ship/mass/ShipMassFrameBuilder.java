@@ -28,6 +28,7 @@ public final class ShipMassFrameBuilder {
     private double structuralMass;
     private double contentMass;
     private double crewMass;
+    private double reactionMass;
 
     // Mass-weighted position sum, about the origin.
     private double sx;
@@ -57,6 +58,9 @@ public final class ShipMassFrameBuilder {
                 break;
             case CONTENT:
                 contentMass += m;
+                break;
+            case REACTION:
+                reactionMass += m;
                 break;
             case CREW:
             default:
@@ -95,7 +99,7 @@ public final class ShipMassFrameBuilder {
     }
 
     public ShipMassFrame build() {
-        double total = structuralMass + contentMass + crewMass;
+        double total = structuralMass + contentMass + crewMass + reactionMass;
         if (total <= 0.0D) {
             return ShipMassFrame.empty();
         }
@@ -119,7 +123,52 @@ public final class ShipMassFrameBuilder {
                 dxy, dyy, dyz,
                 dxz, dyz, dzz);
 
-        return new ShipMassFrame(structuralMass, contentMass, crewMass,
+        return new ShipMassFrame(structuralMass, contentMass, crewMass, reactionMass,
                 new Vector3d(cx, cy, cz), inertia);
+    }
+
+    /**
+     * The body left when {@code taken} leaves a body of {@code mass} kilograms whose centre is
+     * {@code centre} and whose inertia about that centre is {@code inertia} — exactly the body built
+     * without them, by the same box rule {@link #add} uses (C10 STAT-40). It is how a burn moves the
+     * physics record by the mass it drained, every tick, without re-walking the hull.
+     *
+     * <p>Worked about the old centre, so a centre millions of blocks out loses no precision.</p>
+     *
+     * @return {@code {mass, cx, cy, cz, Ixx, Iyy, Izz, Ixy, Ixz, Iyz}}; {@code null} when nothing would be
+     *         left
+     */
+    public static double[] remove(double mass, org.joml.Vector3dc centre, org.joml.Matrix3dc inertia,
+                                  Iterable<MassContributor> taken) {
+        // Second moments about the OLD centre: the frame's own tensor, then each removal's own box and arm.
+        double ixx = inertia.m00(), iyy = inertia.m11(), izz = inertia.m22();
+        double ixy = inertia.m10(), ixz = inertia.m20(), iyz = inertia.m21();
+        double left = mass;
+        double sx = 0, sy = 0, sz = 0;
+        for (MassContributor c : taken) {
+            double m = c.getMass();
+            if (m <= 0.0D) {
+                continue;
+            }
+            double x = c.getX() - centre.x(), y = c.getY() - centre.y(), z = c.getZ() - centre.z();
+            double own = m * (c.getExtent() * c.getExtent()) / 6.0D;
+            ixx -= own + m * (y * y + z * z);
+            iyy -= own + m * (x * x + z * z);
+            izz -= own + m * (x * x + y * y);
+            ixy += m * x * y;
+            ixz += m * x * z;
+            iyz += m * y * z;
+            sx -= m * x;
+            sy -= m * y;
+            sz -= m * z;
+            left -= m;
+        }
+        if (!(left > 0.0D)) {
+            return null;
+        }
+        double cx = sx / left, cy = sy / left, cz = sz / left;
+        return new double[] {left, centre.x() + cx, centre.y() + cy, centre.z() + cz,
+                ixx - left * (cy * cy + cz * cz), iyy - left * (cx * cx + cz * cz), izz - left * (cx * cx + cy * cy),
+                ixy + left * cx * cy, ixz + left * cx * cz, iyz + left * cy * cz};
     }
 }

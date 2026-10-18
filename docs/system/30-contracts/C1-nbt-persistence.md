@@ -217,7 +217,8 @@ mass for may not be undone by a chunk reload).
 helpers): `name`, `meta`, `minX`/`Y`/`Z`, `maxX`/`Y`/`Z`. `NBTStorableListList`: `list`, `dim`, `loc`.
 
 **misc / TE-misc** — `TileForceFieldProjector`: `ext`. `TilePump`: `tank`. `TileWearable`:
-`stage`, `maxStage`, `transitionProb`. `TileStationAssembler`: `storedID`. `TileDockingPort`:
+`stage`, `maxStage`, `transitionProb`. `TileFuelTank` (a `TileWearable`, C10 STAT-44): `role` (its
+`FuelType` name), `capacity` (mB), `tank` (Forge `FluidTank` compound). `TileStationAssembler`: `storedID`. `TileDockingPort`:
 `myId`, `targetId`. `TileSpaceElevator`: `dstDimId`, `dstPos`, `tether`. `TilePlanetSelector`:
 `visiblePlanets`. `TileHolographicPlanetSelector`: `state`, `scale`. `Stellurgy` root:
 `ResetOnlyOnce`, `resetPlanetsFromXML`.

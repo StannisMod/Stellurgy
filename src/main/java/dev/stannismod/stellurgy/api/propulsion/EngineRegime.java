@@ -71,14 +71,6 @@ public final class EngineRegime {
         return Math.min(flowLimited, 2 * jetEfficiency * powerWatts / exhaustVelocity);
     }
 
-    /**
-     * The force at an outside pressure of {@code ambientPascals}: the vacuum thrust less the pressure
-     * on the bell's exit, and never below zero — a nozzle whose flow has separated pushes nothing.
-     */
-    public double thrustAt(double powerWatts, double ambientPascals) {
-        return Math.max(0, thrust(powerWatts) - Math.max(0, ambientPascals) * exitArea);
-    }
-
     /** The mass flow at a vacuum thrust of {@code thrust}, kg/s: {@code F / v_e}. */
     public double massFlow(double thrust) {
         return Math.max(0, thrust) / exhaustVelocity;

@@ -86,7 +86,7 @@ public class ShipMotionJointsTest {
                     Vector3d lin = new Vector3d();
                     Vector3d ang = new Vector3d();
                     (d.axis().isRotation() ? ang : lin).set(new Vector3d(axis).mul(figure));
-                    ActuatorCommand c = scheme.allocate(cap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
+                    ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
                     double delivered;
                     double tol;
                     if (d.axis().isRotation()) {
@@ -139,7 +139,7 @@ public class ShipMotionJointsTest {
                 Vector3d lin = new Vector3d();
                 Vector3d ang = new Vector3d();
                 (d.axis().isRotation() ? ang : lin).set(signedAxis(d));
-                ActuatorCommand c = scheme.allocate(cap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
+                ActuatorCommand c = scheme.allocateUnmeteredCruiseAsSolved(cap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
                 double got = d.axis().isRotation() ? c.torque().length() : c.force().length();
                 double tol = CleanCommandLaw.RESIDUAL
                         * (d.axis().isRotation() ? CleanCommandLaw.torqueScale(cap) : CleanCommandLaw.forceScale(cap));

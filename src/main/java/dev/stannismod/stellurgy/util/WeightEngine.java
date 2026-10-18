@@ -470,6 +470,81 @@ public final class WeightEngine {
         return (float) (heldWeight(te) * StellurgyConfiguration.getCurrentConfig().contentMassScale);
     }
 
+    /**
+     * The densest fluid the fuel registry accepts as {@code type}, or {@code null} when it accepts none —
+     * the fluid a tank whose fluid is not chosen yet is weighed full of (C10 STAT-29).
+     */
+    @javax.annotation.Nullable
+    public Fluid heaviestFluidOf(dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType type) {
+        Fluid heaviest = null;
+        float heaviestPerMb = -1;
+        for (Fluid fluid : dev.stannismod.stellurgy.api.fuel.FuelRegistry.instance.getFluids(type)) {
+            float perMb = getWeight(fluid, 1);
+            if (perMb > heaviestPerMb) {
+                heaviestPerMb = perMb;
+                heaviest = fluid;
+            }
+        }
+        return heaviest;
+    }
+
+    /** The mass of one millibucket of {@code fluid}, kilograms, in full double precision (INV-WGT-09). */
+    public double massPerMillibucket(Fluid fluid) {
+        return fluidMass(fluid, 1.0F);
+    }
+
+    /**
+     * A tier-2 craft's CARGO in {@code te}: what it holds, less the fluids {@code isPropellant} accepts,
+     * times {@code contentMassScale}. The propellant is {@link #reactionWeight}, never scaled (C10 STAT-41).
+     */
+    public double cargoWeight(TileEntity te, java.util.function.Predicate<Fluid> isPropellant) {
+        return heldWeight(te, isPropellant.negate()) * StellurgyConfiguration.getCurrentConfig().contentMassScale;
+    }
+
+    /**
+     * The REACTION mass in {@code te}: the fluids {@code isPropellant} accepts that its fluid capability
+     * holds, at their real mass whatever {@code contentMassScale} is (C10 STAT-24, STAT-41). Items are never
+     * reaction mass — a fluid inside an item is not in the pool.
+     */
+    public double reactionWeight(TileEntity te, java.util.function.Predicate<Fluid> isPropellant) {
+        double weight = 0;
+        if (te == null) {
+            return weight;
+        }
+        IFluidHandler fluidHandler = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+        if (fluidHandler != null) {
+            for (IFluidTankProperties info : fluidHandler.getTankProperties()) {
+                if (info != null && info.getContents() != null && isPropellant.test(info.getContents().getFluid())) {
+                    weight += fluidMass(info.getContents().getFluid(), info.getContents().amount);
+                }
+            }
+        }
+        return weight;
+    }
+
+    /** {@link #heldWeight} counting only the fluids {@code countFluid} accepts; every item counts. */
+    private double heldWeight(TileEntity te, java.util.function.Predicate<Fluid> countFluid) {
+        double weight = 0;
+        if (te == null) {
+            return weight;
+        }
+        IItemHandler capability = te.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+        if (capability != null) {
+            for (int i = 0; i < capability.getSlots(); i++) {
+                weight += getWeight(capability.getStackInSlot(i));
+            }
+        }
+        IFluidHandler fluidHandler = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+        if (fluidHandler != null) {
+            for (IFluidTankProperties info : fluidHandler.getTankProperties()) {
+                if (info != null && info.getContents() != null && countFluid.test(info.getContents().getFluid())) {
+                    weight += fluidMass(info.getContents().getFluid(), info.getContents().amount);
+                }
+            }
+        }
+        return weight;
+    }
+
     private float heldWeight(TileEntity te) {
         float weight = 0;
 

@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.api.propulsion.NuclearThermal;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.ship.control.Actuator;
 import dev.stannismod.stellurgy.ship.control.ChemicalMotor;
+import dev.stannismod.stellurgy.ship.control.Propellant;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -45,18 +46,19 @@ final class ChemicalMotorActuators {
     static void add(World world, BlockPos pos, IBlockState state, EngineDesign design, FuelType role,
                     List<Actuator> out) {
         WeightEngine table = Stellurgy.weights();
-        Map<String, EngineRegime> regimes = new LinkedHashMap<>();
+        Map<Propellant, EngineRegime> regimes = new LinkedHashMap<>();
         if (role == FuelType.LIQUID_BIPROPELLANT) {
             for (Fluid fuel : FuelRegistry.instance.getFluids(FuelType.LIQUID_BIPROPELLANT)) {
                 for (Fluid ox : FuelRegistry.instance.getFluids(FuelType.LIQUID_OXIDIZER)) {
-                    table.pairOf(fuel, ox).ifPresent(pair -> regimes.put(fuel.getName() + "+" + ox.getName(),
+                    table.pairOf(fuel, ox).ifPresent(pair -> regimes.put(
+                            Propellant.pair(fuel.getName(), ox.getName(), pair.mixtureRatio),
                             design.regimeFor(pair.exhaustVelocity)));
                 }
             }
         } else {
             for (Fluid fluid : FuelRegistry.instance.getFluids(role)) {
                 table.monopropellantExhaustVelocityOf(fluid)
-                        .ifPresent(ve -> regimes.put(fluid.getName(), design.regimeFor(ve)));
+                        .ifPresent(ve -> regimes.put(Propellant.of(fluid.getName()), design.regimeFor(ve)));
             }
         }
         emit(world, pos, state, regimes, 0, out);
@@ -81,24 +83,23 @@ final class ChemicalMotorActuators {
             cores++;
             at = at.offset(nozzle.getOpposite());
         }
-        Map<String, EngineRegime> regimes = new LinkedHashMap<>();
+        Map<Propellant, EngineRegime> regimes = new LinkedHashMap<>();
         if (cores > 0) {
             double temperature = temperatureSum / cores;
             WeightEngine table = Stellurgy.weights();
             for (Fluid fluid : FuelRegistry.instance.getFluids(FuelType.NUCLEAR_WORKING_FLUID)) {
-                table.molarMassOf(fluid).ifPresent(m -> regimes.put(fluid.getName(),
+                table.molarMassOf(fluid).ifPresent(m -> regimes.put(Propellant.of(fluid.getName()),
                         design.regimeFor(NuclearThermal.exhaustVelocity(temperature, m))));
             }
         }
         emit(world, pos, state, regimes, power, out);
     }
 
-    private static void emit(World world, BlockPos pos, IBlockState state, Map<String, EngineRegime> regimes,
+    private static void emit(World world, BlockPos pos, IBlockState state, Map<Propellant, EngineRegime> regimes,
                              double power, List<Actuator> out) {
         Vec3i d = facing(world, pos, state).getDirectionVec();
-        double ambient = AtmosphereDensity.inAtmospheres(world) * EngineDesign.STANDARD_ATMOSPHERE_PA;
-        out.add(ChemicalMotor.fromRegimes(pos.getX(), pos.getY(), pos.getZ(), d.getX(), d.getY(), d.getZ(),
-                regimes, power, ambient));
+        out.add(ChemicalMotor.fromPropellants(pos.getX(), pos.getY(), pos.getZ(), d.getX(), d.getY(), d.getZ(),
+                regimes, power, AtmosphereDensity.pascals(world)));
     }
 
     private static EnumFacing facing(World world, BlockPos pos, IBlockState state) {

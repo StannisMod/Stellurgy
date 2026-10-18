@@ -15,11 +15,16 @@ import org.joml.Vector3dc;
  * questions players care about — why a loaded ship is sluggish, why an unevenly loaded one pulls to
  * one side, and why a long ship rolls more readily than it yaws.</p>
  *
- * <p>The split into structural, content and crew is not decoration: structure changes only when the
- * hull is built on or broken, while content and crew change constantly and without any block ever
- * changing. Keeping them apart is what lets the expensive half be recomputed rarely and the cheap
+ * <p>The split into structural, content, reaction and crew is not decoration: structure changes only
+ * when the hull is built on or broken, while content and crew change constantly and without any block
+ * ever changing. Keeping them apart is what lets the expensive half be recomputed rarely and the cheap
  * half often, and it is also what the pre-flight readout shows — "1000 t of ship, 500 t of cargo" is
  * a sentence a player can act on in a way that "1500 t" is not.</p>
+ *
+ * <p>REACTION mass is the propellant the drives can burn (C10 STAT-24, STAT-41). It is its own term
+ * because it is the one part of the load the ship throws away: it is weighed at its real mass whatever
+ * the content scale says — a drive ejects real kilograms, and a frame that lost fewer than were ejected
+ * would hand out momentum for free — and it is the term a burn moves every tick.</p>
  *
  * <p>The frame is <b>derived</b>: it is computed from the hull and its contents and is never saved.
  * A saved characteristic goes stale the moment somebody welds a plate on, and a stale ship
@@ -32,21 +37,23 @@ public final class ShipMassFrame {
     private final double structuralMass;
     private final double contentMass;
     private final double crewMass;
+    private final double reactionMass;
     private final Vector3dc centreOfMass;
     private final Matrix3dc inertia;
 
-    ShipMassFrame(double structuralMass, double contentMass, double crewMass,
+    ShipMassFrame(double structuralMass, double contentMass, double crewMass, double reactionMass,
                   Vector3dc centreOfMass, Matrix3dc inertia) {
         this.structuralMass = structuralMass;
         this.contentMass = contentMass;
         this.crewMass = crewMass;
+        this.reactionMass = reactionMass;
         this.centreOfMass = centreOfMass;
         this.inertia = inertia;
     }
 
     /** A ship with nothing in it: no mass, origin centre, zero inertia. */
     public static ShipMassFrame empty() {
-        return new ShipMassFrame(0.0D, 0.0D, 0.0D, new Vector3d(), new Matrix3d().zero());
+        return new ShipMassFrame(0.0D, 0.0D, 0.0D, 0.0D, new Vector3d(), new Matrix3d().zero());
     }
 
     /** Kilograms of hull. */
@@ -54,7 +61,7 @@ public final class ShipMassFrame {
         return structuralMass;
     }
 
-    /** Kilograms of fluids, items and machine contents. */
+    /** Kilograms of cargo: items and machine contents that are not propellant. */
     public double getContentMass() {
         return contentMass;
     }
@@ -64,9 +71,14 @@ public final class ShipMassFrame {
         return crewMass;
     }
 
-    /** Kilograms, all three categories. Never negative. */
+    /** Kilograms of propellant in the holders the drives draw from, never scaled. */
+    public double getReactionMass() {
+        return reactionMass;
+    }
+
+    /** Kilograms, all four categories. Never negative. */
     public double getTotalMass() {
-        return structuralMass + contentMass + crewMass;
+        return structuralMass + contentMass + crewMass + reactionMass;
     }
 
     /**
@@ -105,13 +117,14 @@ public final class ShipMassFrame {
      * and is worth pinning rather than assuming.</p>
      */
     public ShipMassFrame translated(double dx, double dy, double dz) {
-        return new ShipMassFrame(structuralMass, contentMass, crewMass,
+        return new ShipMassFrame(structuralMass, contentMass, crewMass, reactionMass,
                 new Vector3d(centreOfMass).add(dx, dy, dz), inertia);
     }
 
     @Override
     public String toString() {
         return "ShipMassFrame{total=" + getTotalMass() + "kg (structural=" + structuralMass
-                + ", content=" + contentMass + ", crew=" + crewMass + "), com=" + centreOfMass + "}";
+                + ", content=" + contentMass + ", reaction=" + reactionMass + ", crew=" + crewMass + "), com="
+                + centreOfMass + "}";
     }
 }

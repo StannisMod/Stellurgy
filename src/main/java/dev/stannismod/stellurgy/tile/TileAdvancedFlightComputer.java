@@ -1289,6 +1289,26 @@ public class TileAdvancedFlightComputer extends TileEntity
     /** Whether the last physics step delivered less than it was asked for; the HUD says so. */
     private volatile boolean lastSaturated = false;
 
+    /**
+     * This craft's propellant account between the step that ejects it and the tick that drains it
+     * (C10 STAT-39, STAT-40). Written by both threads, through its own lock only.
+     */
+    private final dev.stannismod.stellurgy.ship.control.PropellantLedger propellantLedger =
+            new dev.stannismod.stellurgy.ship.control.PropellantLedger();
+
+    /**
+     * The pressure outside, Pa, as the game tick last read it: written on the game thread every tick,
+     * read by the physics step; one primitive, so {@code volatile} makes each read whole. NaN until the
+     * first tick, which the step reads as "the pressure the model was solved at".
+     */
+    private volatile double ambientPascals = Double.NaN;
+
+    /** Game thread only: the pool's holders, the drives idle for want of propellant, and what was aboard, as the current model was surveyed. */
+    private dev.stannismod.stellurgy.integration.vs.ShipPropellant surveyedPropellant = null;
+    private java.util.List<String> surveyedStarved = java.util.Collections.emptyList();
+    private boolean surveyedMetered = false;
+    private java.util.Set<String> surveyedFed = java.util.Collections.emptySet();
+
     /** Per player: the model revision and the tick of the last readout pushed to them. */
     private final java.util.Map<java.util.UUID, long[]> readoutSent = new java.util.HashMap<>();
 
@@ -1315,9 +1335,10 @@ public class TileAdvancedFlightComputer extends TileEntity
         boolean hullChanged = construction != surveyedConstruction;
         long phase = Math.floorMod(uuid.getLeastSignificantBits(), MASS_ROUND_TICKS);
         boolean loadRound = Math.floorMod(now + phase, MASS_ROUND_TICKS) == 0L;
+        boolean liveMoved = tickPropellant(uuid);
         boolean due = flightModel == null
                 || loadRound
-                || (hullChanged && now - lastSurveyTick >= SURVEY_MIN_TICKS);
+                || ((hullChanged || liveMoved) && now - lastSurveyTick >= SURVEY_MIN_TICKS);
         if (due) {
             rebuildFlightModel(uuid, now);
         }
@@ -1350,6 +1371,15 @@ public class TileAdvancedFlightComputer extends TileEntity
                 momentum.restore(id, 0.0D);
             }
         }
+        surveyedPropellant = survey.propellant();
+        surveyedStarved = survey.starved();
+        surveyedMetered = survey.metered();
+        surveyedFed = fedFluids(survey.poolKg());
+        if (survey.metered()) {
+            propellantLedger.settle(java.util.Collections.<String, Double>emptyMap(), survey.poolKg());
+        } else {
+            propellantLedger.unmetered();
+        }
         dev.stannismod.stellurgy.ship.control.ShipFlightModel model =
                 dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(++flightModelRevision,
                         survey.mass(), survey.design(), survey.live(),
@@ -1358,7 +1388,76 @@ public class TileAdvancedFlightComputer extends TileEntity
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
                 new dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent(world,
                         shipId == null ? null : shipId.toString(), getPos(),
-                        model.readout(localGravity(world))));
+                        readoutOf(model)));
+    }
+
+    private static java.util.Set<String> fedFluids(java.util.Map<String, Double> poolKg) {
+        java.util.Set<String> fed = new java.util.TreeSet<>();
+        for (java.util.Map.Entry<String, Double> e : poolKg.entrySet()) {
+            if (e.getValue() > 0.0D) {
+                fed.add(e.getKey());
+            }
+        }
+        return fed;
+    }
+
+    /**
+     * The game tick's half of consumption (C10 STAT-38..40, STAT-43): read the pressure outside; when
+     * metered, take what the physics steps ejected out of the holders as whole millibuckets — the
+     * physics record losing the same mass at the same holders — and settle what the holders now hold.
+     *
+     * @return whether the LIVE capability is stale: the set of fluids aboard changed (a pool ran dry or
+     *         was filled), the flag changed since the survey, or the pressure left the band the model
+     *         was solved over
+     */
+    private boolean tickPropellant(java.util.UUID physicsId) {
+        double pascals = dev.stannismod.stellurgy.api.AtmosphereDensity.pascals(world);
+        ambientPascals = pascals;
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        if (model == null) {
+            return false;
+        }
+        boolean bandLeft = !model.live().holdsAt(pascals) || !model.design().holdsAt(pascals);
+        if (!dev.stannismod.stellurgy.integration.vs.ShipPropellant.metered()) {
+            propellantLedger.unmetered();
+            return surveyedMetered || bandLeft;
+        }
+        if (!surveyedMetered || surveyedPropellant == null) {
+            return true;
+        }
+        dev.stannismod.stellurgy.integration.vs.ShipPropellant.Drained drained =
+                surveyedPropellant.drainFromShip(world, physicsId, propellantLedger.undrained());
+        java.util.Map<String, Double> before = propellantLedger.aboard();
+        java.util.Map<String, Double> pool = surveyedPropellant.measure(world);
+        propellantLedger.settle(drained.kg, pool);
+        if (grew(before, drained.kg, pool)) {
+            // A fill: the record has not been given this mass, and the next drain would take it off.
+            dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, physicsId);
+        }
+        return !fedFluids(pool).equals(surveyedFed) || bandLeft;
+    }
+
+    /**
+     * Whether some fluid of the pool holds more than it held at the last settle less what was just drained
+     * — by more than a millibucket's worth of rounding, which a drain's own arithmetic never reaches.
+     */
+    private boolean grew(java.util.Map<String, Double> before, java.util.Map<String, Double> drained,
+                         java.util.Map<String, Double> now) {
+        for (java.util.Map.Entry<String, Double> e : now.entrySet()) {
+            double expected = before.getOrDefault(e.getKey(), 0.0D) - drained.getOrDefault(e.getKey(), 0.0D);
+            net.minecraftforge.fluids.Fluid fluid = net.minecraftforge.fluids.FluidRegistry.getFluid(e.getKey());
+            double perMb = fluid == null ? 0.0D : dev.stannismod.stellurgy.Stellurgy.weights().massPerMillibucket(fluid);
+            if (e.getValue() - expected > 0.5D * perMb) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The readout of {@code model} with what is aboard now and what idles for want of it. */
+    private dev.stannismod.stellurgy.ship.control.ShipReadout readoutOf(
+            dev.stannismod.stellurgy.ship.control.ShipFlightModel model) {
+        return model.readout(localGravity(world)).withPropellant(propellantLedger.aboard(), surveyedStarved);
     }
 
     private void writeWheelsBack() {
@@ -1420,7 +1519,7 @@ public class TileAdvancedFlightComputer extends TileEntity
      */
     public dev.stannismod.stellurgy.ship.control.ShipReadout readout() {
         dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
-        return model == null ? null : model.readout(localGravity(world));
+        return model == null ? null : readoutOf(model);
     }
 
     /**
@@ -1456,7 +1555,7 @@ public class TileAdvancedFlightComputer extends TileEntity
                     readoutSent.put(player.getUniqueID(), new long[] {model.revision(), now});
                     dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
                             new dev.stannismod.stellurgy.network.PacketShipReadout(getPos(),
-                                    model.readout(localGravity(world)), lastSaturated, wheelFill()),
+                                    readoutOf(model), lastSaturated, wheelFill()),
                             player);
                 }
             }
@@ -1863,8 +1962,14 @@ public class TileAdvancedFlightComputer extends TileEntity
                     : new Vector3d(angAccel[0], angAccel[1], angAccel[2]).div(k);
             physicsPose.transformDirection(a, TransformType.GLOBAL_TO_SUBSPACE);
             physicsPose.transformDirection(alpha, TransformType.GLOBAL_TO_SUBSPACE);
+            // The SI seconds of this step: the clock the force is integrated over, so the mass booked is
+            // the mass the delivered impulse carried (C10 STAT-24). No engine has a boost regime yet, so
+            // the ship-wide boost switch is not built and the step runs on cruise columns.
+            double seconds = dt * dev.stannismod.stellurgy.integration.vs.PhysicsUnits.SECONDS;
             dev.stannismod.stellurgy.ship.control.ActuatorCommand command = scheme.allocate(model.live(), a,
-                    alpha, momentum, dt * dev.stannismod.stellurgy.integration.vs.PhysicsUnits.SECONDS);
+                    alpha, momentum, seconds, dev.stannismod.stellurgy.ship.control.StepConditions.of(
+                            propellantLedger.budget(), ambientPascals, false));
+            propellantLedger.book(command.ejectedKg());
             force.set(command.force()).mul(k);
             torque.set(command.torque()).mul(k);
             physicsPose.transformDirection(force, TransformType.SUBSPACE_TO_GLOBAL);

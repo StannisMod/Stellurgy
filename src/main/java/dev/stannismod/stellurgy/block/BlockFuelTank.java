@@ -2,18 +2,23 @@ package dev.stannismod.stellurgy.block;
 
 import dev.stannismod.stellurgy.api.IFuelTank;
 import dev.stannismod.stellurgy.api.IRocketEngine;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.tile.TileFuelTank;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyEnum;
 import net.minecraft.block.state.BlockStateContainer;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.IStringSerializable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
+import net.minecraftforge.fluids.FluidUtil;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -194,9 +199,17 @@ public class BlockFuelTank extends BlockFullyRotatable implements IFuelTank {
     }
 
 
+    /** What every rocket fuel tank holds, millibuckets: one cubic metre of its role's fluid. */
+    public static final int CAPACITY_MB = 1000;
+
     @Override
     public int getMaxFill(World world, BlockPos pos, IBlockState state) {
-        return 1000;
+        return CAPACITY_MB;
+    }
+
+    /** The fuel registry type of the fluid this tank holds: a monopropellant. */
+    public FuelRegistry.FuelType role() {
+        return FuelRegistry.FuelType.LIQUID_MONOPROPELLANT;
     }
 
     @Override
@@ -209,8 +222,17 @@ public class BlockFuelTank extends BlockFullyRotatable implements IFuelTank {
     public net.minecraft.tileentity.TileEntity createTileEntity(World worldIn, IBlockState state) {
         // Wear lives only in the tile (no meta overload, no breaking render):
         // a worn tank may leak/explode on launch; replacing the block resets wear.
-        return new dev.stannismod.stellurgy.tile.TileWearable(
+        return new TileFuelTank(role(), CAPACITY_MB,
                 10, (float) dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().increaseWearIntensityProb);
+    }
+
+    @Override
+    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand,
+                                    EnumFacing side, float hitX, float hitY, float hitZ) {
+        if (FluidUtil.interactWithFluidHandler(player, hand, world, pos, side)) {
+            return true;
+        }
+        return super.onBlockActivated(world, pos, state, player, hand, side, hitX, hitY, hitZ);
     }
 
     public enum TankStates implements IStringSerializable {

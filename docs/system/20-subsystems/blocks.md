@@ -1,6 +1,6 @@
 ---
 id: blocks
-owns: [block/, tile/TileNuclearCore.java]
+owns: [block/, tile/TileNuclearCore.java, tile/TileFuelTank.java]
 entrypoints: [Stellurgy#registerBlocks (owner: misc-oddities), Block#createTileEntity, Block#onBlockActivated, Block#getStateFromMeta]
 depends-on: [atmosphere-oxygen, dimension-planets, space-stations, rocket-assembly, api-public, client-render, world-gen]
 depended-by: [rocket-assembly, multiblock-machines, infrastructure-tiles, satellite, client-render]
@@ -48,10 +48,10 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
 | 4 | BlockBipropellantRocketMotor | BlockFullyRotatable · IRocketEngine,IBrokenPartBlock | bi-prop engine; chemical, F_max 490 500 N, cycle 421/452.3 (gas generator), Merlin-1D bell; same broken-part flow | MECH-BLK-01 |
 | 5 | BlockAdvancedBipropellantRocketMotor | ↳ BlockBipropellantRocketMotor | chemical, F_max 2 452 500 N, cycle 1.0 (staged combustion), RS-25 bell | MECH-BLK-01 |
 | 6 | BlockNuclearCore | Block · IRocketNuclearCore | 1.1·10⁹ W × `nuclearCorePowerRatio` at 2700 K while fuelled; `TileNuclearCore` holds one fuel element | MECH-BLK-02 |
-| 7 | BlockFuelTank | BlockFullyRotatable · IFuelTank | rocket fuel tank; `TANKSTATES{top,bottom,middle}` auto from vertical/horizontal neighbours; `getMaxFill 1000` `tunable`; `TileWearable`; meta = `tankstate + rotation×3` | MECH-BLK-03 |
-| 8 | BlockBipropellantFuelTank | ↳ BlockFuelTank | `getMaxFill 1000` | MECH-BLK-03 |
-| 9 | BlockOxidizerFuelTank | ↳ BlockFuelTank | `getMaxFill 1000` | MECH-BLK-03 |
-| 10 | BlockNuclearFuelTank | ↳ BlockFuelTank | `getMaxFill 1000` | MECH-BLK-03 |
+| 7 | BlockFuelTank | BlockFullyRotatable · IFuelTank | rocket fuel tank; `TANKSTATES{top,bottom,middle}` auto from vertical/horizontal neighbours; `getMaxFill` = `CAPACITY_MB` 1000, a cubic metre (C10 STAT-44, the volume the tank masses are 10 % of); `TileFuelTank` (wear + the fluid it holds), role monopropellant; meta = `tankstate + rotation×3` | MECH-BLK-03 |
+| 8 | BlockBipropellantFuelTank | ↳ BlockFuelTank | role: a pair's fuel | MECH-BLK-03 |
+| 9 | BlockOxidizerFuelTank | ↳ BlockFuelTank | role: oxidizer | MECH-BLK-03 |
+| 10 | BlockNuclearFuelTank | ↳ BlockFuelTank | role: nuclear working fluid | MECH-BLK-03 |
 | 11 | BlockPressurizedFluidTank | Block | standalone fluid tank; `TileFluidTank(64000×blockTankCapacity)` `tunable`; fluid-cap interaction then GUI; column-aware neighbour updates; drops via `ItemBlockFluidTank.fill` carrying contents | MECH-BLK-04 |
 | 12 | BlockPump | BlockTile | `FluidUtil.interactWithFluidHandler` first, else super | MECH-BLK-15 |
 | 13 | BlockFluid | BlockFluidClassic | generic fluid source wrapper | — |
@@ -118,7 +118,12 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   mass table. No test pins that pairing; C10 STAT-6 carries the full table as arithmetic.
 - **MECH-BLK-03 Fuel-tank stacking state.** `TANKSTATES` derived each tick from same-axis neighbours (tank or
   engine) → top/bottom/middle for seamless column render; placement normalizes DOWN→UP, NORTH→SOUTH, WEST→EAST
-  and copies a uniform neighbour facing. `BlockFuelTank.java:71,150`
+  and copies a uniform neighbour facing. `BlockFuelTank.java:78,155`. **Its tile holds fluid** (`TileFuelTank`,
+  a `TileWearable`): up to `CAPACITY_MB` (1000 mB, a cubic metre) of the fluids its `role()` accepts —
+  monopropellant for the base block, the pair's fuel, oxidizer or nuclear working fluid for the three that
+  extend it — exposed as the fluid capability on every face; a bucket fills or empties it through
+  `onBlockActivated` (`:230`); what it holds lives in the tile's NBT and is lost when the block is broken
+  (C10 STAT-44) `[T]`.
 - **MECH-BLK-04 Pressurized fluid tank.** Right-click routes through the tile's FLUID capability
   (`FluidUtil.interactWithFluidHandler`), else opens MODULAR GUI; drops/harvest emit one `blockPressureTank`
   item pre-filled from `getOwnContentsCopy`; `setRemoving(true)` blocks cross-tile moves during teardown.
@@ -192,7 +197,7 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
 
 ## State & persistence (contractual, C1)
 Blocks store no NBT of their own; the on-disk contract is the **metadata↔blockstate encoding**:
-- Fuel tank meta = `TANKSTATES.ordinal() + rotation×3` (rotation 0/1/2 = UP/SOUTH/EAST). [V] `BlockFuelTank.java:52`
+- Fuel tank meta = `TANKSTATES.ordinal() + rotation×3` (rotation 0/1/2 = UP/SOUTH/EAST). [V] `BlockFuelTank.java:58`
 - Redstone/atmosphere emitter `POWERED` = meta bit8. [V] `BlockRedstoneEmitter.java:52`
 - Transceiver meta = `FACING.index | (STATE?8:0)`. [V] `BlockTransceiver.java:80`
 - Terraformer meta = `FACING.index | (STATE?8:0)`. [V] `BlockTileTerraformer.java:70`
@@ -223,7 +228,7 @@ Config: see `C4-config-surface`.
   from the world on add and never persisted; never a map on the block object keyed by
   bare position, which every dimension would share).
 - **INV-BLK-02 [V]** Fuel-tank meta round-trips only 3 rotations (UP/SOUTH/EAST); DOWN/NORTH/WEST are
-  normalized to their opposite at place-time, so no lossy meta exists on disk. `BlockFuelTank.java:150,52`
+  normalized to their opposite at place-time, so no lossy meta exists on disk. `BlockFuelTank.java:155,58`
 - **INV-BLK-03 [V][BEH]** Broken-part engines carry their wear stage into the dropped item via the tile, and
   suppress the default block drop. `BlockRocketMotor.java:106,126`
 - **INV-BLK-04 [V]** GUI-opening `onBlockActivated` handlers are server-guarded (`!world.isRemote`).

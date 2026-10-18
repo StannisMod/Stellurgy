@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.api.propulsion.EngineRegime;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,28 +29,36 @@ public final class ChemicalMotor {
     }
 
     /**
-     * The motor at {@code (x, y, z)} that can run each of {@code regimes} (propellant name → regime),
+     * The motor at {@code (x, y, z)} that can run each of {@code regimes} (what feeds it → the regime),
      * fed {@code powerWatts} (ignored by a chemical regime), in air at {@code ambientPascals}
      * (C10 STAT-30, STAT-31, STAT-37).
      *
-     * <p>It declares, per regime, the mass flow and power of its full-throttle vacuum thrust. Its force
-     * is the LEAST any of its regimes gives at that pressure: until something aboard decides which
-     * propellant feeds it, the authority it offers is one it has whichever it is fed. A motor with no
-     * regime has no propellant it can burn and pushes nothing.</p>
+     * <p>It declares, per regime, its vacuum thrust and the mass flow and power of it, and the bell's exit
+     * area; its force is the least of those regimes' at that pressure ({@link Actuator#reactionDrive}).</p>
      */
+    public static Actuator fromPropellants(int x, int y, int z, int nozzleX, int nozzleY, int nozzleZ,
+                                           Map<Propellant, EngineRegime> regimes, double powerWatts,
+                                           double ambientPascals) {
+        List<PropellantDemand> demands = new ArrayList<>();
+        for (Map.Entry<Propellant, EngineRegime> e : regimes.entrySet()) {
+            EngineRegime regime = e.getValue();
+            double vacuum = regime.thrust(powerWatts);
+            demands.add(new PropellantDemand(e.getKey(), vacuum, regime.exitArea(), regime.massFlow(vacuum),
+                    regime.powerDrawn(vacuum)));
+        }
+        return Actuator.reactionDrive(new ActuatorId(x, y, z, 0),
+                new Vector3d(x + 0.5D, y + 0.5D, z + 0.5D), new Vector3d(-nozzleX, -nozzleY, -nozzleZ), demands,
+                Math.max(0, ambientPascals));
+    }
+
+    /** {@link #fromPropellants} for regimes each fed by one fluid, keyed by the fluid's name. */
     public static Actuator fromRegimes(int x, int y, int z, int nozzleX, int nozzleY, int nozzleZ,
                                        Map<String, EngineRegime> regimes, double powerWatts,
                                        double ambientPascals) {
-        double force = regimes.isEmpty() ? 0 : Double.POSITIVE_INFINITY;
-        List<PropellantDemand> demands = new ArrayList<>();
+        Map<Propellant, EngineRegime> byPropellant = new LinkedHashMap<>();
         for (Map.Entry<String, EngineRegime> e : regimes.entrySet()) {
-            EngineRegime regime = e.getValue();
-            double vacuum = regime.thrust(powerWatts);
-            force = Math.min(force, regime.thrustAt(powerWatts, ambientPascals));
-            demands.add(new PropellantDemand(e.getKey(), regime.massFlow(vacuum), regime.powerDrawn(vacuum)));
+            byPropellant.put(Propellant.of(e.getKey()), e.getValue());
         }
-        return Actuator.reactionForce(new ActuatorId(x, y, z, 0),
-                new Vector3d(x + 0.5D, y + 0.5D, z + 0.5D),
-                new Vector3d(-nozzleX * force, -nozzleY * force, -nozzleZ * force), demands);
+        return fromPropellants(x, y, z, nozzleX, nozzleY, nozzleZ, byPropellant, powerWatts, ambientPascals);
     }
 }

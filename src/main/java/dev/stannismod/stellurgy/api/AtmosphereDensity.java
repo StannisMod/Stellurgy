@@ -43,4 +43,13 @@ public final class AtmosphereDensity {
                 .getDimensionPropertiesOrNull(world.provider.getDimension());
         return properties == null ? VACUUM : properties.getAtmosphereDensity() / 100.0;
     }
+
+    /**
+     * The pressure outside a craft in {@code world}, Pa: {@link #inAtmospheres} times one standard
+     * atmosphere. What a drive's bell pushes against (C10 STAT-31); the survey that solves a ship's model
+     * and the flight computer that holds it against its pressure band (STAT-43) read this one function.
+     */
+    public static double pascals(World world) {
+        return inAtmospheres(world) * dev.stannismod.stellurgy.api.propulsion.EngineDesign.STANDARD_ATMOSPHERE_PA;
+    }
 }

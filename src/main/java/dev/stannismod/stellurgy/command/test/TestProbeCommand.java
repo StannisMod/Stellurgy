@@ -11017,12 +11017,15 @@ public class TestProbeCommand extends CommandBase {
             dev.stannismod.stellurgy.ship.control.ShipReadout scanReadout = builder.tier2Readout();
             String tier2 = "null";
             if (scanReadout != null) {
+                // The view the assembler gates on: everything aboard, tanks full.
                 double twr = scanReadout.thrustToWeight(
-                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE);
-                tier2 = "{\"twrLIVE\":" + (Double.isInfinite(twr) ? "null" : String.valueOf(twr))
-                        + ",\"twrLIVEInfinite\":" + Double.isInfinite(twr)
-                        + ",\"canHoverLIVE\":" + scanReadout.canHover(
-                                dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)
+                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN);
+                tier2 = "{\"twrDESIGN\":" + (Double.isInfinite(twr) ? "null" : String.valueOf(twr))
+                        + ",\"twrDESIGNInfinite\":" + Double.isInfinite(twr)
+                        + ",\"canHoverDESIGN\":" + scanReadout.canHover(
+                                dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN)
+                        + ",\"totalKg\":" + scanReadout.totalMass()
+                        + ",\"reactionKg\":" + scanReadout.reactionMass()
                         + ",\"gravity\":" + scanReadout.gravity() + "}";
             }
             send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
@@ -17947,6 +17950,18 @@ public class TestProbeCommand extends CommandBase {
                 + (at.getZ() - origin.getZ()) + "]";
     }
 
+    /** {@code [[x,y,z],…]} of {@code positions}, in their order; {@code []} for none. */
+    private static String blockPosArrayJson(java.util.List<BlockPos> positions) {
+        StringBuilder out = new StringBuilder("[");
+        for (BlockPos p : positions) {
+            if (out.length() > 1) {
+                out.append(',');
+            }
+            out.append('[').append(p.getX()).append(',').append(p.getY()).append(',').append(p.getZ()).append(']');
+        }
+        return out.append(']').toString();
+    }
+
     private static void placeMotor(net.minecraft.world.WorldServer world, net.minecraft.block.Block motor,
                                    BlockPos at, net.minecraft.util.EnumFacing nozzle) {
         world.setBlockState(at, motor.getDefaultState()
@@ -18061,6 +18076,8 @@ public class TestProbeCommand extends CommandBase {
             //                               chest would, as a tank fluid can be poured into after
             //                               assembly; the reply names where it sits relative to the
             //                               flight computer.
+            //   with-pilot-deck-and-fuel-tank — the same, with an EMPTY monopropellant ROCKET fuel tank
+            //                               in that cell instead: a holder only its role's fluid enters.
             // And one jump craft too TALL for its generator's own window:
             //   with-jump-drive-and-mast  — with-jump-drive plus an iron mast standing on the deck's
             //                               north-west corner, rising past the top of the cube the
@@ -18079,7 +18096,8 @@ public class TestProbeCommand extends CommandBase {
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
-            boolean includeDeckTank = "with-pilot-deck-and-tank".equals(variant);
+            boolean deckFuelTank = "with-pilot-deck-and-fuel-tank".equals(variant);
+            boolean includeDeckTank = "with-pilot-deck-and-tank".equals(variant) || deckFuelTank;
             boolean seatHullVariant = bareHull || wheelOnlyHull;
             boolean includeEngines = !"invalid-no-engine".equals(variant) && !bareHull && !wheelOnlyHull;
             boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
@@ -18331,11 +18349,15 @@ public class TestProbeCommand extends CommandBase {
             // below override two of the y+1 slots back to nuclearCore for
             // the stack variant.
             net.minecraft.block.Block fuelTankBlock = replaceEnginesWithNuclear ? nuclearFuelTank : fuelTank;
+            // Where the fuel tanks stand, in world coordinates, as laid; a later variant step may replace
+            // one (with-fluid-cargo, the nuclear cores), so a caller asks the block what it is.
+            java.util.List<BlockPos> fuelTanksLaid = new java.util.ArrayList<>();
             if (includeFuelTanks) {
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = 1; dy <= 2; dy++) {
-                        world.setBlockState(new BlockPos(rocketX + dx, rocketY + dy, rocketZ),
-                                fuelTankBlock.getDefaultState());
+                        BlockPos at = new BlockPos(rocketX + dx, rocketY + dy, rocketZ);
+                        world.setBlockState(at, fuelTankBlock.getDefaultState());
+                        fuelTanksLaid.add(at);
                     }
                 }
             }
@@ -18555,7 +18577,7 @@ public class TestProbeCommand extends CommandBase {
                 // and of the seat's column.
                 BlockPos tank = new BlockPos(rocketX + 1, rocketY + 4, rocketZ);
                 BlockPos computer = new BlockPos(rocketX - 1, rocketY + 4, rocketZ);
-                world.setBlockState(tank, liquidTank.getDefaultState());
+                world.setBlockState(tank, (deckFuelTank ? fuelTank : liquidTank).getDefaultState());
                 tankFromComputer = offsetJson(tank, computer);
             }
             // Where the pilot seat stands relative to the flight computer, for every craft that has
@@ -18582,6 +18604,7 @@ public class TestProbeCommand extends CommandBase {
                     + builderPos.getY() + "," + builderPos.getZ() + "]"
                     + ",\"holdFromFlightComputer\":" + holdFromComputer
                     + ",\"tankFromFlightComputer\":" + tankFromComputer
+                    + ",\"fuelTanks\":" + blockPosArrayJson(fuelTanksLaid)
                     + ",\"pilotSeatFromFlightComputer\":" + seatFromComputer
                     + ",\"jumpBayFromFlightComputer\":" + jumpBayFromComputer
                     + ",\"wheelPos\":" + (wheel == null ? "null"
@@ -20863,8 +20886,11 @@ public class TestProbeCommand extends CommandBase {
         mass.put("structuralKg", r.structuralMass());
         mass.put("contentKg", r.contentMass());
         mass.put("crewKg", r.crewMass());
+        mass.put("reactionKg", r.reactionMass());
         mass.put("totalKg", r.totalMass());
         m.put("mass", mass);
+        m.put("propellantKg", new java.util.LinkedHashMap<String, Object>(r.propellantAboard()));
+        m.put("starvedFor", new java.util.ArrayList<Object>(r.starvedFor()));
         m.put("gravity", r.gravity());
         for (dev.stannismod.stellurgy.ship.control.ShipReadout.View view
                 : dev.stannismod.stellurgy.ship.control.ShipReadout.View.values()) {

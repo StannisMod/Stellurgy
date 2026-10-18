@@ -149,6 +149,11 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     }
 
     private static boolean isLiquidContainerBlock(TileEntity tile) {
+        // A rocket fuel tank is the rocket's own propellant tank, sized into its stats, never a hold for
+        // cargo fluid: a gas harvest must not pour into it.
+        if (tile instanceof dev.stannismod.stellurgy.tile.TileFuelTank) {
+            return false;
+        }
         // Prefer real sides for compatibility
         for (EnumFacing f : EnumFacing.VALUES) {
             if (tile.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, f)) {
@@ -1031,12 +1036,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
     @Nullable
     private static FuelType tankFuelType(Block b) {
-        // Subclasses first — Oxidizer/Bipropellant/Nuclear all extend BlockFuelTank.
-        if (b instanceof BlockOxidizerFuelTank) return FuelType.LIQUID_OXIDIZER;
-        if (b instanceof BlockBipropellantFuelTank) return FuelType.LIQUID_BIPROPELLANT;
-        if (b instanceof BlockNuclearFuelTank) return FuelType.NUCLEAR_WORKING_FLUID;
-        if (b instanceof BlockFuelTank) return FuelType.LIQUID_MONOPROPELLANT;
-        return null;
+        return b instanceof BlockFuelTank ? ((BlockFuelTank) b).role() : null;
     }
 
     /** Worn fuel tanks (stage &gt; 0) with their fuel type and wear fraction. */

@@ -4,6 +4,8 @@ import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.After;
@@ -1243,7 +1245,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Read off the press itself: the probe answers whether a press built the craft — the
      * assembler's own FINISHED ({@code built}; until 2026-10-06 {@code shipCut}, read off the pad) —
-     * beside the scan's own verdict on it ({@code scanReadout.canHoverLIVE}). The
+     * beside the scan's own verdict on it ({@code scanReadout.canHoverDESIGN}). The
      * hover-capable craft is the CONTROL — without it a gate that refused everything would pass the
      * first half. The build the second press made is then named like any craft, which is the record
      * that it became one.</p>
@@ -1277,7 +1279,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 hoverFixture.blockPos("builderPos")));
         owned(hoverPress);
         requireArranged("the control's scan must say it can hover: " + hoverPress,
-                hoverPress.ok() && Reply.of(hoverPress.object("scanReadout")).bool("canHoverLIVE"));
+                hoverPress.ok() && Reply.of(hoverPress.object("scanReadout")).bool("canHoverDESIGN"));
         assertTrue("a craft that can hover must be built on the FIRST press: " + hoverPress,
                 hoverPress.bool("built"));
 
@@ -1285,7 +1287,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         int[] builder = heavyFixture.blockPos("builderPos");
         Reply first = Reply.of(RocketFixture.assembleBuilt(heavySite, c -> act(c).raw(), builder));
         requireArranged("the heavy build's scan must say it cannot hover: " + first,
-                first.ok() && !Reply.of(first.object("scanReadout")).bool("canHoverLIVE"));
+                first.ok() && !Reply.of(first.object("scanReadout")).bool("canHoverDESIGN"));
         assertTrue("a ship that cannot hold its weight here must NOT be built on the first press: "
                 + first, !first.bool("built"));
 
@@ -1298,6 +1300,163 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         events.awaitRecordWithFields(mark, "ship_lifecycle",
                 "the build the second press made must become a named ship", LINK_BUDGET_TICKS,
                 "durable", second.text("shipId"), "edge", "named");
+    }
+
+    /** One cubic metre in millibuckets: what C10 STAT-44 says every rocket fuel tank holds. */
+    private static final int CUBIC_METRE_MB = 1000;
+
+    /** A pour half a cubic metre past a tank's volume, so what the tank took is its capacity and not the pour. */
+    private static final int OVERFILL_MB = CUBIC_METRE_MB + CUBIC_METRE_MB / 2;
+
+    /** Stand one rocket fuel tank block at {@code at}, and require its tile holds fluid. */
+    private void standTank(int[] at, String block, String what) throws Exception {
+        Reply placed = arrange("stellurgytest fill " + DIM + " " + at[0] + " " + at[1] + " " + at[2] + " " + at[0]
+                + " " + at[1] + " " + at[2] + " " + block);
+        requireArranged(what + " must stand at " + java.util.Arrays.toString(at) + ": " + placed, placed.ok());
+        Reply stored = read("stellurgytest fluid stored " + DIM + " " + at[0] + " " + at[1] + " " + at[2]);
+        requireArranged(what + " must be a rocket fuel tank answering the fluid capability: " + stored,
+                stored.text("tileClass").endsWith(".TileFuelTank") && stored.bool("hasFluid"));
+    }
+
+    /** Offer {@code mb} of {@code fluid} to the tank at {@code at} through its fluid capability; what it took. */
+    private int offer(int[] at, String fluid, int mb) throws Exception {
+        Reply fill = arrange("stellurgytest fluid inject " + DIM + " " + at[0] + " " + at[1] + " " + at[2] + " " + fluid
+                + " " + mb);
+        requireArranged("the tank at " + java.util.Arrays.toString(at) + " must answer the offer of " + fluid + ": "
+                + fill, fill.ok() && fill.has("filled"));
+        return fill.integer("filled");
+    }
+
+    /**
+     * A rocket fuel tank holds the fluids of its role and no other, and at most a cubic metre of them (C10
+     * STAT-44). Four lone tanks, each offered one fluid once, so no offer is answered by what an earlier one
+     * left: a monopropellant tank and an oxidizer tank are each offered their own role's fluid past their
+     * volume, and the other's.
+     *
+     * <p>Seen through the fluid capability a pipe or a bucket fills by — the amount it answers it took.
+     * Not seen: the bucket's own path through {@code onBlockActivated} (Forge's interaction helper on the
+     * same capability), and the tanks of the other two roles, which differ only in the role they name.</p>
+     */
+    @Pins("STAT-44")
+    @Regions(of = "STAT-44", value = {"its role", "another role", "past its capacity"})
+    @RedWitness(verdict = "STAT-44 another role", member = "TileFuelTank#accepts",
+            at = "return role != null && fluid != null && role.isFuel(fluid);", replacedBy = "return fluid != null;",
+            fails = "STAT-44 another role", on = "2026-10-18")
+    @RedWitness(verdict = "STAT-44 past its capacity", member = "BlockFuelTank#createTileEntity",
+            at = "return new TileFuelTank(role(), CAPACITY_MB,", replacedBy = "return new TileFuelTank(role(), 2 * CAPACITY_MB,",
+            fails = "STAT-44 past its capacity", on = "2026-10-18")
+    @Test
+    public void aRocketFuelTankHoldsOnlyItsRolesFluidAndACubicMetreOfIt() throws Exception {
+        FixtureSite site = clearedSite(0, 1, "four lone rocket fuel tanks");
+        int[] monoOwn = {site.x, site.y, site.z};
+        int[] monoOther = {site.x + 2, site.y, site.z};
+        int[] oxOwn = {site.x, site.y, site.z + 2};
+        int[] oxOther = {site.x + 2, site.y, site.z + 2};
+        standTank(monoOwn, "stellurgy:fueltank", "a monopropellant tank");
+        standTank(monoOther, "stellurgy:fueltank", "a second monopropellant tank");
+        standTank(oxOwn, "stellurgy:oxidizerfueltank", "an oxidizer tank");
+        standTank(oxOther, "stellurgy:oxidizerfueltank", "a second oxidizer tank");
+
+        int hydrazineIntoMono = offer(monoOwn, "hydrazine", OVERFILL_MB);
+        int oxygenIntoMono = offer(monoOther, "oxygen", CUBIC_METRE_MB);
+        int oxygenIntoOx = offer(oxOwn, "oxygen", OVERFILL_MB);
+        int hydrazineIntoOx = offer(oxOther, "hydrazine", CUBIC_METRE_MB);
+        measured("fuel tank roles", "hydrazineIntoMono=" + hydrazineIntoMono, "oxygenIntoMono=" + oxygenIntoMono,
+                "oxygenIntoOx=" + oxygenIntoOx, "hydrazineIntoOx=" + hydrazineIntoOx);
+
+        assertTrue("STAT-44 its role: each tank takes its own role's fluid — monopropellant took "
+                + hydrazineIntoMono + " mB of hydrazine, oxidizer " + oxygenIntoOx + " mB of oxygen",
+                hydrazineIntoMono > 0 && oxygenIntoOx > 0);
+        assertTrue("STAT-44 another role: neither tank takes the other's fluid — the monopropellant tank took "
+                + oxygenIntoMono + " mB of oxygen, the oxidizer tank " + hydrazineIntoOx + " mB of hydrazine",
+                oxygenIntoMono == 0 && hydrazineIntoOx == 0);
+        assertTrue("STAT-44 past its capacity: offered " + OVERFILL_MB + " mB, each tank takes a cubic metre — "
+                + hydrazineIntoMono + " and " + oxygenIntoOx + " mB",
+                hydrazineIntoMono == CUBIC_METRE_MB && oxygenIntoOx == CUBIC_METRE_MB);
+    }
+
+    /**
+     * The assembler judges a ship FULL and as BUILT (C10 STAT-12): a metered ship whose tanks are empty —
+     * so nothing aboard is live — is built on the first press when everything it is built with holds it up
+     * with its tanks full; and the same ship laid again in a field it would hold itself up in with its tanks
+     * empty, but not full, is not.
+     *
+     * <p>How the second field is chosen without the decision under test: the first ship's own console,
+     * once it is built, gives its design thrust-to-weight EMPTY and its mass; the mass full is that plus its
+     * six rocket fuel tanks' cubic metre of hydrazine each — the only monopropellant the shipped config
+     * names, so the heaviest — weighed by the probe's own table. The field is midway between the
+     * accelerations the two masses get from that thrust, so it is chosen from the contract and the as-built
+     * ship, never from the scan the verdict is about. The scan's own figures are read only after the verdict,
+     * as the placement: its full ratio under one, and the empty one over it.</p>
+     *
+     * <p>Not seen: the warning a player gets (a chat line to whoever pressed, and nobody did); the screen's
+     * figure, which reads the same view on the client.</p>
+     */
+    @Pins("STAT-12")
+    @Regions(of = "STAT-12", value = {"clears full", "clears only empty"})
+    @RedWitness(verdict = "STAT-12 clears full", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN)) {",
+            replacedBy = "dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)) {",
+            fails = "STAT-12 clears full", on = "2026-10-18")
+    @RedWitness(verdict = "STAT-12 clears only empty", member = "TileRocketAssemblingMachine#scanRocket",
+            at = "full, survey.design(), survey.live(),", replacedBy = "survey.mass(), survey.design(), survey.live(),",
+            fails = "STAT-12 clears only empty", on = "2026-10-18")
+    @Test
+    public void theAssemblerJudgesAShipFullAndAsBuilt() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            FixtureSite firstSite = plot().site();
+            FixtureSite heavySite = plot().siteAt(Plot.FIXTURE_INSET + Plot.SIZE / 2, Plot.FIXTURE_INSET);
+            Reply first = lay(firstSite, "with-pilot-seat", "a metered ship laid with empty tanks");
+            int[][] tanks = first.blockPosArray("fuelTanks");
+            requireArranged("the ship must be laid with rocket fuel tanks: " + first, tanks.length > 0);
+            for (int[] tank : tanks) {
+                Reply stored = read("stellurgytest fluid stored " + DIM + " " + tank[0] + " " + tank[1] + " " + tank[2]);
+                requireArranged("every tank must stand empty before the press: " + stored,
+                        stored.text("tileClass").endsWith(".TileFuelTank")
+                                && !Reply.of(stored.objectArray("tanks")[0]).has("amount"));
+            }
+
+            long mark = events.mark();
+            Reply press = Reply.of(RocketFixture.assembleBuilt(firstSite, c -> act(c).raw(), first.blockPos("builderPos")));
+            owned(press);
+            requireArranged("the press must answer whether it built the ship: " + press, press.ok() && press.has("built"));
+            assertTrue("STAT-12 clears full: a ship that holds itself up full is built on the FIRST press, its tanks"
+                    + " empty and nothing aboard live — " + press, press.bool("built"));
+
+            AssembledCraft craft = AssembledCraft.ofPress(firstSite, events, mark, press, "the ship the press built");
+            Reply asBuilt = readout(craft, "the ship as built, its tanks empty");
+            requireArranged("nothing aboard the ship as built may be live, or the press proved nothing about the live"
+                    + " view: " + asBuilt, asBuilt.number("twrLIVE") == 0.0 && asBuilt.textArray("starvedFor").length > 0);
+            double gravity = asBuilt.number("gravity");
+            double emptyKg = Reply.of(asBuilt.object("mass")).number("totalKg");
+            double thrustN = asBuilt.number("twrDESIGN") * emptyKg * gravity;
+            double hydrazineKgPerCubicMetre = read("stellurgytest weight fluid hydrazine " + CUBIC_METRE_MB).number("weight");
+            double fullKg = emptyKg + tanks.length * hydrazineKgPerCubicMetre;
+            double field = (thrustN / emptyKg + thrustN / fullKg) / 2.0;
+            requireArranged("the field must sit between what the ship holds full and empty: " + field + " m/s² for "
+                    + thrustN + " N on " + emptyKg + " / " + fullKg + " kg", thrustN / fullKg < field && field < thrustN / emptyKg);
+            // The multiplier is a float property, so it is written at float precision.
+            arrange("ar planet set " + DIM + " gravitationalMultiplier " + (float) (field / gravity));
+
+            Reply heavy = lay(heavySite, "with-pilot-seat", "the same ship in a field it holds only empty");
+            Reply heavyPress = Reply.of(RocketFixture.assembleBuilt(heavySite, c -> act(c).raw(),
+                    heavy.blockPos("builderPos")));
+            owned(heavyPress);
+            requireArranged("the press must answer whether it built the ship: " + heavyPress,
+                    heavyPress.ok() && heavyPress.has("built"));
+            Reply heavyScan = Reply.of(heavyPress.object("scanReadout"));
+            double judgedIn = heavyScan.number("gravity");
+            requireArranged("the second ship must be judged in a field it holds only empty — between "
+                    + thrustN / fullKg + " and " + thrustN / emptyKg + " m/s²: " + heavyScan,
+                    thrustN / fullKg < judgedIn && judgedIn < thrustN / emptyKg);
+            measured("full and as built", "thrustN=" + thrustN, "emptyKg=" + emptyKg, "fullKg=" + fullKg,
+                    "field=" + field, "firstScan=" + press.object("scanReadout"), "heavyScan=" + heavyScan);
+            assertTrue("STAT-12 clears only empty: in a field the ship holds itself up in only with its tanks empty, the"
+                    + " first press must NOT build it — " + heavyPress, !heavyPress.bool("built"));
+            assertTrue("STAT-12 clears only empty: the scan judged the ship full — its design ratio "
+                    + heavyScan.number("twrDESIGN") + " under one, on " + heavyScan.number("totalKg") + " kg",
+                    heavyScan.number("twrDESIGN") < 1.0 && heavyScan.number("totalKg") > emptyKg);
+        }
     }
 
     /** How many iron blocks are stowed as cargo; see the scenario for why this many. */
@@ -1676,6 +1835,240 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 "the flight computer must weigh the water poured into the craft's tank — the readout's"
                         + " mass must GROW by it", LINK_BUDGET_TICKS);
         measured("tank", "emptyKg=" + emptyKg, "pour=" + pour, full);
+    }
+
+    // ---- 4. consumption: a burn drains the craft's tanks, and the frame loses what it ejected -------
+
+    /**
+     * EXPERIMENT dose of the propellant poured for a burn, mB: a cubic metre — the tank's own unit — so
+     * the burn lasts several physics steps at two motors' flow and runs the tank dry well inside
+     * {@link #DRIVE_DOSE_TICKS}.
+     */
+    private static final int PROPELLANT_MB = 1000;
+
+    /** The millibuckets a holder of this craft holds now, summed over its tanks, read through the holder's own capability. */
+    private int storedMb(AssembledCraft craft, int[] tank, String what) throws Exception {
+        Reply stored = Reply.of(read("stellurgytest fluid stored " + DIM + " " + (craft.afcX + tank[0]) + " "
+                + (craft.afcY + tank[1]) + " " + (craft.afcZ + tank[2])).raw());
+        requireArranged(what + " — the tank must answer what it holds: " + stored,
+                stored.has("hasFluid") && stored.bool("hasFluid"));
+        int mb = 0;
+        for (Reply t : stored.elements("tanks")) {
+            mb += t.has("amount") ? t.integer("amount") : 0;
+        }
+        return mb;
+    }
+
+    /** Pour {@code mb} of {@code fluid} into the craft's tank, and require all of it went in. */
+    private void pour(AssembledCraft craft, int[] tank, String fluid, int mb, String what) throws Exception {
+        Reply pour = Reply.of(arrange("stellurgytest fluid inject " + DIM + " " + (craft.afcX + tank[0]) + " "
+                + (craft.afcY + tank[1]) + " " + (craft.afcZ + tank[2]) + " " + fluid + " " + mb).raw());
+        requireArranged(what + " — the tank must take all of it: " + pour, pour.ok() && pour.integer("filled") == mb);
+    }
+
+    /** The surge figures of a readout's model: {@code {design sustained, live sustained}}, N. */
+    private static double[] surge(Reply model) {
+        Reply dir = Reply.of(Reply.of(model.object("directions")).object("SURGE_POSITIVE"));
+        return new double[] {Reply.of(dir.object("design")).number("sustained"),
+                Reply.of(dir.object("live")).number("sustained")};
+    }
+
+    /**
+     * A craft with its rocket fuel tank (a monopropellant one), laid and built in a weightless vacuum, so a
+     * burn is the only thing that moves it.
+     */
+    private AssembledCraft tankCraft(FixtureSite site, int[][] tankOut, String what) throws Exception {
+        standInVacuum();
+        arrange("ar planet set " + DIM + " gravitationalMultiplier 0");
+        requireArranged(what + " — the overworld must be weightless, so no hover burns propellant: ",
+                Reply.of(read("stellurgytest planet info " + DIM).raw()).number("gravity") == 0.0);
+        Reply fixture = lay(site, "with-pilot-deck-and-fuel-tank", what);
+        int[] tank = fixture.intArray("tankFromFlightComputer");
+        requireArranged(what + " — the fixture must say where its tank stands: " + fixture, tank != null && tank.length == 3);
+        tankOut[0] = tank;
+        AssembledCraft craft = assembleLaid(site, fixture, what);
+        removePad(site, what);
+        return craft;
+    }
+
+    /**
+     * A metered craft with an EMPTY rocket fuel tank has motors in its design and none in its live set, and
+     * says which propellant it waits for (STAT-38); poured through the tank's fluid capability (STAT-44), its
+     * motors go live; driven, it burns the tank dry —
+     * leaving under a millibucket — and its physics record loses exactly the mass the tank lost, which
+     * is all the propellant it had (STAT-40, STAT-24); dry, its live surge is zero again and its design
+     * surge what it was (STAT-22).
+     *
+     * <p>Seen on the server: the readout of the flight computer, the tank's own capability, the physics
+     * record's mass at the first and last physics step of the burn's window (the controller mixin's
+     * {@code PhysicsStepWindow}), and its velocity. Not seen: how much each STEP ejected — the
+     * allocator's books are the unit tier's (`PropulsionLawsTest`), and here the burn runs to empty, so
+     * what was ejected is everything that was aboard. Regions of STAT-38 visited: `fed` and `none fed`
+     * (the regime choice among two fed is the unit tier's).</p>
+     */
+    @Pins({"STAT-38", "STAT-40"})
+    @RedWitness(verdict = "STAT-38 none fed", member = "HullSurvey#HullSurvey",
+            at = "Actuator fed = a.fedBy(fluid -> poolKg.getOrDefault(fluid, 0.0D) > 0.0D);",
+            replacedBy = "Actuator fed = a;", fails = "STAT-38 none fed", on = "2026-10-17")
+    @RedWitness(verdict = "STAT-40 drained", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "propellantLedger.book(command.ejectedKg());", replacedBy = "", fails = "STAT-40 drained",
+            on = "2026-10-17")
+    @RedWitness(verdict = "STAT-40 the record", member = "ShipPropellant#drainFromShip",
+            at = "ShipInertiaWriter.removeFrom(ship.getInertiaData(), out.removed, String.valueOf(physicsId));",
+            replacedBy = "", fails = "STAT-40 the record", on = "2026-10-17")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = drive(craft, \"force-vel-by-id\", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,",
+            why = "the dose of the burn: the window must stay open long enough for the tank to run dry (the hull's"
+                    + " surge recipe empties a cubic metre in about ten physics steps, the dose is over a hundred); what"
+                    + " is read after it is the tank and the record, which no further record would announce")
+    @Test
+    public void aBurnDrainsWhatItEjectsAndAnEmptyTankIdlesTheDrive() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            int[][] tankOut = new int[1][];
+            AssembledCraft craft = tankCraft(site(), tankOut, "a metered craft with an empty tank");
+            int[] tank = tankOut[0];
+            requireArranged("the tank must start empty", storedMb(craft, tank, "the empty tank") == 0);
+
+            Reply dry = readout(craft, "the craft with nothing aboard");
+            double[] drySurge = surge(dry);
+            String[] waitsFor = dry.textArray("starvedFor");
+            requireArranged("the craft must have motors in its design to idle: " + dry, drySurge[0] > 0);
+            assertEquals("STAT-38 none fed: no propellant aboard, no live surge — " + dry, 0.0, drySurge[1], 0.0);
+            assertTrue("STAT-38 none fed: the readout names what the motors wait for — " + dry,
+                    waitsFor.length == 1 && !waitsFor[0].contains("+"));
+            String propellant = waitsFor[0];
+
+            long pourMark = events.mark();
+            pour(craft, tank, propellant, PROPELLANT_MB, "the craft's propellant");
+            String fed = events.awaitRecordWithFields(pourMark, "flight_model_changed",
+                    "the craft's flight model must be solved again once its tank holds propellant", LINK_BUDGET_TICKS,
+                    "ship", craft.durable);
+            assertTrue("STAT-38 fed: poured, the motors are live — " + fed, Events.number(fed, "liveSurgeN") > 0);
+            // The physics record learns the poured mass on its own round; the burn is measured on it.
+            events.awaitRecordWithFields(pourMark, "ship_mass_measured",
+                    "the craft must be weighed with its propellant aboard before it burns", LINK_BUDGET_TICKS,
+                    "ship", craft.physicsId, "path", "round");
+            Reply full = readout(craft, "the craft with its tank full");
+            double perMb = full.object("mass") == null ? Double.NaN
+                    : Reply.of(full.object("mass")).number("reactionKg") / PROPELLANT_MB;
+            requireArranged("the poured propellant must be weighed as reaction mass: " + full, perMb > 0);
+            int before = storedMb(craft, tank, "the full tank");
+
+            long burnMark = events.mark();
+            String window = drive(craft, "force-vel-by-id", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,
+                    "a burn until the tank runs dry");
+            int after = storedMb(craft, tank, "the tank after the burn");
+            double lost = Events.number(window, "firstMassKg") - Events.number(window, "lastMassKg");
+            double drainedKg = (before - after) * perMb;
+            measured("burn", "before=" + before, "after=" + after, "perMb=" + perMb, "lostKg=" + lost, window);
+            assertTrue("the burn must have pushed the craft forward: " + window,
+                    Events.number(window, "v1Z") - Events.number(window, "v0Z") > 0);
+            assertTrue("STAT-40 drained: the burn runs the tank dry, leaving under a millibucket — " + after + " mB",
+                    after <= 1);
+            assertEquals("STAT-40 the record loses exactly what the tank lost, " + drainedKg + " kg", drainedKg, lost,
+                    perMb);
+
+            long dryMark = events.mark();
+            events.awaitRecordWithFields(dryMark, "flight_model_changed",
+                    "the craft's flight model must be solved again after its tank ran dry", LINK_BUDGET_TICKS,
+                    "ship", craft.durable);
+            Reply empty = readout(craft, "the craft with its tank run dry");
+            double[] emptySurge = surge(empty);
+            assertEquals("STAT-38 none fed: dry, no live surge — " + empty, 0.0, emptySurge[1], 0.0);
+            assertEquals("STAT-38 none fed: the design is what it was — " + empty, drySurge[0], emptySurge[0], 0.0);
+        }
+    }
+
+    /**
+     * With consumption switched off ({@code rocketRequireFuel} false) a burn takes nothing out of the
+     * tank and nothing off the physics record, and an empty-tanked craft's motors are live as designed —
+     * the switch disables the mechanic and every consequence of it (STAT-22). The burn's own push is the
+     * positive half: the motors fired.
+     */
+    @Pins({"STAT-38", "STAT-40"})
+    @RedWitness(verdict = "STAT-22 off drains nothing", member = "ShipPropellant#metered",
+            at = "return dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().rocketRequireFuel;",
+            replacedBy = "return true;", fails = "STAT-22 off", on = "2026-10-17")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = drive(craft, \"force-vel-by-id\", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,",
+            why = "the dose of the burn: as long as the metered burn's, so a drain would have had the same time to"
+                    + " take the whole tank; nothing is published when nothing is drained")
+    @Test
+    public void withConsumptionSwitchedOffABurnTakesNothing() throws Exception {
+        try (ConfigFlag unmetered = ConfigFlag.set(commands(), "rocketRequireFuel", false)) {
+            int[][] tankOut = new int[1][];
+            AssembledCraft craft = tankCraft(site(), tankOut, "an unmetered craft with a tank");
+            int[] tank = tankOut[0];
+            Reply dry = readout(craft, "the unmetered craft with nothing aboard");
+            double[] drySurge = surge(dry);
+            assertTrue("STAT-22 off: an empty tank idles nothing — " + dry, drySurge[1] > 0 && drySurge[1] == drySurge[0]);
+            long pourMark = events.mark();
+            pour(craft, tank, "hydrazine", PROPELLANT_MB, "the unmetered craft's propellant");
+            events.awaitRecordWithFields(pourMark, "ship_mass_measured",
+                    "the craft must be weighed with its propellant aboard before it burns", LINK_BUDGET_TICKS,
+                    "ship", craft.physicsId, "path", "round");
+            String window = drive(craft, "force-vel-by-id", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,
+                    "an unmetered burn");
+            int after = storedMb(craft, tank, "the tank after the unmetered burn");
+            measured("unmetered burn", "after=" + after, window);
+            assertTrue("the motors must have fired: " + window, Events.number(window, "v1Z") - Events.number(window, "v0Z") > 0);
+            assertEquals("STAT-22 off: the tank keeps every millibucket", PROPELLANT_MB, after);
+            assertEquals("STAT-22 off: the physics record keeps its mass", Events.number(window, "firstMassKg"),
+                    Events.number(window, "lastMassKg"), 0.0);
+        }
+    }
+
+    /**
+     * Propellant is weighed at its real mass whatever {@code contentMassScale} is, while cargo follows the
+     * scale (STAT-41). One craft carrying hydrazine, weighed at scale one and again at scale zero: its
+     * reaction mass and its whole mass do not move. That the scale took is read back from the running
+     * config, the value the frame reads. (One craft: two of this fixture laid in one scenario stand in
+     * each other's plots — measured 2026-10-17, 57 and 8 blocks.)
+     */
+    @Pins("STAT-41")
+    @Regions(of = "STAT-41", value = {"scale one", "scale zero"})
+    @RedWitness(verdict = "STAT-41 scale zero", member = "WeightEngine#reactionWeight",
+            at = "weight += fluidMass(info.getContents().getFluid(), info.getContents().amount);",
+            replacedBy = "weight += fluidMass(info.getContents().getFluid(), info.getContents().amount)"
+                    + " * StellurgyConfiguration.getCurrentConfig().contentMassScale;",
+            fails = "STAT-41 scale zero", on = "2026-10-17")
+    @Test
+    public void propellantWeighsItsRealMassWhateverTheContentScale() throws Exception {
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck-and-fuel-tank", "a craft carrying propellant");
+        int[] tank = fixture.intArray("tankFromFlightComputer");
+        requireArranged("the fixture must say where its tank stands: " + fixture, tank != null && tank.length == 3);
+        AssembledCraft fuel = assembleLaid(site, fixture, "a craft carrying propellant");
+        long pourMark = events.mark();
+        pour(fuel, tank, "hydrazine", PROPELLANT_MB, "the propellant");
+        events.awaitRecordWithFields(pourMark, "flight_model_changed", "the craft must be weighed loaded",
+                LINK_BUDGET_TICKS, "ship", fuel.durable);
+        Reply fuelAtOne = Reply.of(readout(fuel, "the craft at scale one").object("mass"));
+        assertTrue("STAT-41 scale one: the hydrazine is reaction mass and not cargo — " + fuelAtOne,
+                fuelAtOne.number("reactionKg") > 0 && fuelAtOne.number("contentKg") == 0);
+        Reply heldAtOne = Reply.of(read("stellurgytest weight te " + DIM + " " + (fuel.afcX + tank[0]) + " "
+                + (fuel.afcY + tank[1]) + " " + (fuel.afcZ + tank[2])).raw());
+        requireArranged("at scale one the tile's held content must weigh something: " + heldAtOne,
+                heldAtOne.number("content") > 0.0);
+        try {
+            Reply scaled = Reply.of(arrange("stellurgytest weight content-scale 0").raw());
+            requireArranged("the content scale must be set to zero: " + scaled, scaled.ok());
+            // The tile's held mass under the running scale — the generic content weighing, which scales
+            // everything a tile holds — is the control that the scale took.
+            Reply held = Reply.of(read("stellurgytest weight te " + DIM + " " + (fuel.afcX + tank[0]) + " "
+                    + (fuel.afcY + tank[1]) + " " + (fuel.afcZ + tank[2])).raw());
+            requireArranged("at scale zero a tile's held content must weigh nothing — the scale took: " + held,
+                    held.number("content") == 0.0);
+            long scaleMark = events.mark();
+            String reFuel = events.awaitRecordWithFields(scaleMark, "flight_model_changed",
+                    "the craft must be weighed again", LINK_BUDGET_TICKS, "ship", fuel.durable);
+            Reply fuelAtZero = Reply.of(readout(fuel, "the craft at scale zero").object("mass"));
+            measured("scale", reFuel, fuelAtOne, fuelAtZero);
+            assertEquals("STAT-41 scale zero: the propellant keeps its real mass", fuelAtOne.number("reactionKg"),
+                    fuelAtZero.number("reactionKg"), 0.0);
+            assertEquals("STAT-41 scale zero: and so does the whole craft", fuelAtOne.number("totalKg"),
+                    fuelAtZero.number("totalKg"), 0.0);
+        } finally {
+            arrange("stellurgytest weight reset");
+        }
     }
 
     /**

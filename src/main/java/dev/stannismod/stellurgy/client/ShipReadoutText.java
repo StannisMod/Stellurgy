@@ -29,7 +29,12 @@ public final class ShipReadoutText {
             return lines;
         }
         lines.add(I18n.format("msg.ship.readout.mass", tonnes(r.totalMass()), tonnes(r.structuralMass()),
-                tonnes(r.contentMass()), tonnes(r.crewMass())));
+                tonnes(r.contentMass()), tonnes(r.reactionMass()), tonnes(r.crewMass())));
+        lines.add(r.propellantAboard().isEmpty() ? I18n.format("msg.ship.readout.nopropellant")
+                : I18n.format("msg.ship.readout.propellant", aboard(r)));
+        if (!r.starvedFor().isEmpty()) {
+            lines.add(I18n.format("msg.ship.warn.starved", String.join(", ", r.starvedFor())));
+        }
         lines.add(twrLine(r, View.LIVE));
         lines.add(I18n.format("msg.ship.readout.header"));
         for (ControlDirection d : ControlDirection.values()) {
@@ -67,7 +72,22 @@ public final class ShipReadoutText {
         if (wheelFill > 0.0D) {
             lines.add(I18n.format("msg.ship.hud.wheel", String.format(Locale.ROOT, "%.0f", wheelFill * 100.0D)));
         }
+        if (!r.starvedFor().isEmpty()) {
+            lines.add(I18n.format("msg.ship.hud.starved", String.join(", ", r.starvedFor())));
+        }
+        if (!r.propellantAboard().isEmpty()) {
+            lines.add(I18n.format("msg.ship.readout.propellant", aboard(r)));
+        }
         return lines;
+    }
+
+    /** Each propellant aboard with its mass, in kilograms. */
+    private static String aboard(ShipReadout r) {
+        List<String> parts = new ArrayList<>();
+        for (java.util.Map.Entry<String, Double> e : r.propellantAboard().entrySet()) {
+            parts.add(e.getKey() + " " + String.format(Locale.ROOT, "%.0f kg", e.getValue()));
+        }
+        return String.join(", ", parts);
     }
 
     private static String twrLine(ShipReadout r, View view) {

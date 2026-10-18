@@ -146,6 +146,57 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         }
     }
 
+    /** What is poured into one of the rocket's tanks, millibuckets: any amount at all is fluid in a tank. */
+    private static final int POURED_MB = 1;
+
+    /**
+     * A ROCKET whose fuel tank holds fluid is refused, by name, and nothing is built: a rocket burns its
+     * stats' propellant, loaded at the fuelling station, so a tank block's contents would ride as weight no
+     * engine draws (INV-RASM-15). The control is the same rocket laid with its tanks as they come, which
+     * builds — so the refusal is the poured millibucket's, not the fixture's.
+     *
+     * <p>Seen: the press's own verdict and the assembler's {@code rocket_born} records at its address. Not
+     * seen: the unmanned-vehicle assembler's copy of the same check.</p>
+     */
+    @Pins("INV-RASM-15")
+    @RedWitness(member = "TileRocketAssemblingMachine#scanRocket",
+            at = "} else if (scannedFlightComputerPos == null && fluidInFuelTanks) {",
+            replacedBy = "} else if (scannedFlightComputerPos == null && false) {",
+            fails = "INV-RASM-15 a rocket whose tank holds fluid", on = "2026-10-18")
+    @Test
+    public void aRocketWhoseFuelTanksHoldFluidIsRefused() throws Exception {
+        FixtureSite controlSite = plot().site();
+        int[] controlBuilder = RocketFixture.placeAt(controlSite, c -> String.join("\n", client().arrange(c)),
+                "simple", 2, 10, "the control rocket is built in this volume");
+        long controlMark = rockets.mark();
+        String control = RocketFixture.assembleBuilt(controlSite, c -> String.join("\n", client().act(c)),
+                controlBuilder);
+        java.util.List<String> controlBorn = rockets.allBornAt(controlMark, controlBuilder);
+        assertTrue("control: the rocket with its tanks as laid must build, or the refusal below proves nothing: "
+                + control + " " + controlBorn, Reply.of(control).ok() && controlBorn.size() == 1);
+
+        FixtureSite site = plot().siteAt(dev.stannismod.stellurgy.test.Plot.FIXTURE_INSET
+                + dev.stannismod.stellurgy.test.Plot.SIZE / 2, dev.stannismod.stellurgy.test.Plot.FIXTURE_INSET);
+        site.makeRoom(c -> arrange(c).raw(), 2, 10, "the poured rocket is built in this volume");
+        Reply fixture = arrange("stellurgytest fixture rocket " + site.dim + " " + site.x + " " + site.y + " "
+                + site.z + " simple");
+        int[][] tanks = fixture.blockPosArray("fuelTanks");
+        int[] builder = fixture.blockPos("builderPos");
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the rocket must be laid with its fuel tanks: " + fixture, fixture.ok() && tanks.length > 0 && builder != null);
+        Reply pour = arrange("stellurgytest fluid inject " + site.dim + " " + tanks[0][0] + " " + tanks[0][1] + " "
+                + tanks[0][2] + " hydrazine " + POURED_MB);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "one tank must take the poured hydrazine: " + pour, pour.ok() && pour.integer("filled") == POURED_MB);
+
+        long mark = rockets.mark();
+        String refused = RocketFixture.assembleBuilt(site, c -> String.join("\n", client().act(c)), builder);
+        java.util.List<String> born = rockets.allBornAt(mark, builder);
+        assertTrue("INV-RASM-15 a rocket whose tank holds fluid is refused by name: " + refused,
+                !Reply.of(refused).ok() && "FLUIDINFUELTANKS".equals(status(refused)));
+        assertTrue("INV-RASM-15 a rocket whose tank holds fluid is not built: " + born, born.isEmpty());
+    }
+
     /** Pins INV-RASM-06 (with rocketRequireFuel off a valid structure still assembles). */
     @Pins("INV-RASM-06")
     @Test

@@ -101,6 +101,16 @@ public final class AssembledCraft {
             requireArranged(what + " — a second press on the same build must build it: " + press,
                     press.ok() && press.bool("built"));
         }
+        return ofPress(site, events, mark, press, what);
+    }
+
+    /**
+     * The craft a press the caller already made has built — {@code press} its reply, {@code mark} taken
+     * before it — once the same two records name it. For a scenario whose subject is the press itself.
+     */
+    public static AssembledCraft ofPress(FixtureSite site, Events events, long mark, Reply press, String what)
+            throws Exception {
+        requireArranged(what + " — the press must have built the ship: " + press, press.ok() && press.bool("built"));
         String durable = press.text("shipId");
         String named = events.awaitRecordWithFields(mark, "ship_lifecycle",
                 what + " — the craft must be named once it is assembled", LINK_BUDGET_TICKS,

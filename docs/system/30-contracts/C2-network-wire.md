@@ -205,8 +205,10 @@ who is told.
 
 S→C only. Wire: the addressed tile's `BlockPos` as a long, the live slice (`saturated` boolean,
 `wheelFill` double), then `ShipReadout.write` — revision, three masses, the field, and per view ×
-endurance × twelve directions an authority and a torque, then per view the twelve burst endurances
-(`ship/control/ShipReadout.java:190-206`, `network/PacketShipReadout.java`) `[V]`. An infinite endurance
+endurance × twelve directions an authority and a torque, then per view the twelve burst endurances,
+then the reaction mass (double), the propellant aboard (an int count, then per fluid its name as UTF
+and its kilograms) and the propellants idle drives wait for (an int count, then each name as UTF)
+(`ship/control/ShipReadout#write`, `network/PacketShipReadout.java`) `[V]`. An infinite endurance
 or TWR travels as a double infinity; that is fine on this wire and is why the JSON probe spells it
 differently.
 

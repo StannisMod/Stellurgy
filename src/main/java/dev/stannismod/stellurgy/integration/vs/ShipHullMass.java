@@ -48,7 +48,8 @@ import java.util.UUID;
  *
  * <h2>All three halves, in one pass</h2>
  *
- * <p>Structure, CONTENT (fluids and inventories, which no block state reveals) and CREW (the people
+ * <p>Structure, CONTENT and REACTION mass (inventories and fluids, which no block state reveals —
+ * propellant apart from cargo, C10 STAT-41) and CREW (the people
  * the deck is carrying, with what they carry). They are measured together because the engine's record
  * holds ONE mass: the moment the written number includes content, a structure-only recompute compared
  * against it would report the fuel in the tanks as drift, every time. One composition, written and
@@ -121,6 +122,21 @@ final class ShipHullMass {
      */
     @Nullable
     static ShipMassFrame frameOfBox(World world, BlockPos min, BlockPos max) {
+        return frameOfBox(world, min, max, false);
+    }
+
+    /**
+     * {@link #frameOfBox} with every rocket fuel tank on the pad weighed FULL — the craft the assembler
+     * judges (C10 STAT-12, STAT-29): each tank's room is filled with the fluid it already holds, or, when
+     * it holds none, with the heaviest fluid its role accepts.
+     */
+    @Nullable
+    static ShipMassFrame frameOfBoxWithTanksFull(World world, BlockPos min, BlockPos max) {
+        return frameOfBox(world, min, max, true);
+    }
+
+    @Nullable
+    private static ShipMassFrame frameOfBox(World world, BlockPos min, BlockPos max, boolean tanksFull) {
         final double ox = min.getX(), oy = min.getY(), oz = min.getZ();
         ShipMassFrameBuilder builder = new ShipMassFrameBuilder();
         for (BlockPos p : BlockPos.getAllInBoxMutable(min, max)) {
@@ -133,12 +149,9 @@ final class ShipHullMass {
                         p.getZ() + 0.5 - oz, mass, MassContributor.Kind.STRUCTURAL));
             }
             TileEntity tile = world.getTileEntity(p);
-            if (tile != null) {
-                double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);
-                if (held > 0.0) {
-                    builder.add(MassContributor.ofBlock(p.getX() + 0.5 - ox, p.getY() + 0.5 - oy,
-                            p.getZ() + 0.5 - oz, held, MassContributor.Kind.CONTENT));
-                }
+            addHeld(tile, p.getX() + 0.5 - ox, p.getY() + 0.5 - oy, p.getZ() + 0.5 - oz, builder);
+            if (tanksFull) {
+                addRoom(tile, p.getX() + 0.5 - ox, p.getY() + 0.5 - oy, p.getZ() + 0.5 - oz, builder);
             }
         }
         ShipMassFrame local = builder.build();
@@ -162,17 +175,46 @@ final class ShipHullMass {
      */
     private static void addContents(World world, IBlockPosSet blocks,
                                     double ox, double oy, double oz, ShipMassFrameBuilder builder) {
-        blocks.forEach((x, y, z) -> {
-            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (tile == null) {
-                return;
-            }
-            double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);
-            if (held > 0.0) {
-                builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,
-                        held, MassContributor.Kind.CONTENT));
-            }
-        });
+        blocks.forEach((x, y, z) -> addHeld(world.getTileEntity(new BlockPos(x, y, z)),
+                x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz, builder));
+    }
+
+    /**
+     * What one tile holds, at the centre of its block: its propellant as REACTION mass at its real mass,
+     * the rest as CONTENT under the content scale (C10 STAT-41). The propellant counted here is exactly
+     * the pool the drives draw from ({@link ShipPropellant}), so a burn can only ever eject mass this
+     * frame had.
+     */
+    private static void addHeld(TileEntity tile, double x, double y, double z, ShipMassFrameBuilder builder) {
+        if (tile == null) {
+            return;
+        }
+        dev.stannismod.stellurgy.util.WeightEngine table = dev.stannismod.stellurgy.Stellurgy.weights();
+        double cargo = table.cargoWeight(tile, ShipPropellant::isPropellant);
+        if (cargo > 0.0) {
+            builder.add(MassContributor.ofBlock(x, y, z, cargo, MassContributor.Kind.CONTENT));
+        }
+        double reaction = table.reactionWeight(tile, ShipPropellant::isPropellant);
+        if (reaction > 0.0) {
+            builder.add(MassContributor.ofBlock(x, y, z, reaction, MassContributor.Kind.REACTION));
+        }
+    }
+
+    /** What a rocket fuel tank's empty room would hold full, at the centre of its block, as reaction mass. */
+    private static void addRoom(TileEntity tile, double x, double y, double z, ShipMassFrameBuilder builder) {
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.TileFuelTank)) {
+            return;
+        }
+        dev.stannismod.stellurgy.tile.TileFuelTank tank = (dev.stannismod.stellurgy.tile.TileFuelTank) tile;
+        dev.stannismod.stellurgy.util.WeightEngine table = dev.stannismod.stellurgy.Stellurgy.weights();
+        net.minecraftforge.fluids.FluidStack in = tank.contents();
+        int room = tank.capacityMb() - (in == null ? 0 : in.amount);
+        net.minecraftforge.fluids.Fluid fluid = in != null ? in.getFluid()
+                : tank.role() == null ? null : table.heaviestFluidOf(tank.role());
+        if (room > 0 && fluid != null) {
+            builder.add(MassContributor.ofBlock(x, y, z, room * table.massPerMillibucket(fluid),
+                    MassContributor.Kind.REACTION));
+        }
     }
 
     /**

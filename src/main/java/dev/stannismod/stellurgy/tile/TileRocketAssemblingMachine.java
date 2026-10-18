@@ -530,6 +530,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         boolean hasSatellite = false;
         boolean hasGuidance = false;
         boolean invalidBlock = false;
+        boolean fluidInFuelTanks = false;
         // Tier-2 control blocks are counted, not just located: a craft may carry at most ONE
         // Advanced Flight Computer and ONE pilot seat (the "last scanned wins" slot assignment
         // below would otherwise silently pick one and leave the others as live hazards — a second
@@ -600,6 +601,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                             }
 
                             TileEntity tile = world.getTileEntity(currBlockPos);
+                            if (tile instanceof TileFuelTank && ((TileFuelTank) tile).contents() != null) {
+                                fluidInFuelTanks = true;
+                            }
                             if (tile instanceof TileSatelliteHatch) {
                                 hasSatellite = true;
                                 if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
@@ -662,6 +666,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             if (invalidBlock) {
                 status = ErrorCodes.INVALIDBLOCK;
 
+            } else if (scannedFlightComputerPos == null && fluidInFuelTanks) {
+                // A rocket burns its stats' propellant, loaded at the fuelling station; what a fuel tank
+                // block holds would ride as dead weight that no engine draws. Refused rather than moved,
+                // so nothing the player poured is lost or weighed twice. A ship burns from its tanks.
+                status = ErrorCodes.FLUIDINFUELTANKS;
+
             } else if (scannedFlightComputerPos == null
                     && (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
                     || (fuelCapacityMonopropellant > 0 && totalFuel > fuelCapacityMonopropellant)
@@ -682,8 +692,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 status = ErrorCodes.MULTIPLEPILOTSEATS;
 
             } else if (scannedFlightComputerPos != null) {
-                // A SHIP is not gated by a rocket's thrust and fuel checks. Its engines consume
-                // nothing yet, and whether it can lift itself is a soft verdict, not a refusal: a
+                // A SHIP is not gated by a rocket's thrust and fuel checks. Whether it can lift itself
+                // with its tanks full is a soft verdict, not a refusal: a
                 // ship is finished in place, so an under-thrusted one is a craft to build onto. The
                 // readout below says so, and assembly asks for a second press (assembleRocket).
                 status = ErrorCodes.SUCCESS;
@@ -735,17 +745,22 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         int maxYi = Math.max(actualMaxY, actualMinY);
         int maxZi = Math.max(actualMinZ, actualMaxZ);
 
-        // A ship's readout: the flight model of the blocks on the pad, exactly as the assembled ship
-        // will be surveyed, in the field of the world it stands in. Sent to whoever asked for the scan.
+        // A ship's readout: the flight model of the blocks on the pad as the assembled ship will be
+        // surveyed, in the field of the world it stands in, but weighed with its rocket fuel tanks FULL —
+        // the craft the gate judges (C10 STAT-12). Sent to whoever asked for the scan.
         if (scannedFlightComputerPos != null && status == ErrorCodes.SUCCESS && !world.isRemote) {
+            BlockPos padMin = new BlockPos(minXi, minYi, minZi);
+            BlockPos padMax = new BlockPos(maxXi, maxYi, maxZi);
             dev.stannismod.stellurgy.integration.vs.HullSurvey survey =
-                    dev.stannismod.stellurgy.integration.vs.HullSurvey.ofBox(world,
-                            new BlockPos(minXi, minYi, minZi), new BlockPos(maxXi, maxYi, maxZi));
-            if (survey != null) {
+                    dev.stannismod.stellurgy.integration.vs.HullSurvey.ofBox(world, padMin, padMax);
+            dev.stannismod.stellurgy.ship.mass.ShipMassFrame full =
+                    dev.stannismod.stellurgy.integration.vs.HullSurvey.padMassWithTanksFull(world, padMin, padMax);
+            if (survey != null && full != null) {
                 tier2Readout = dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(0L,
-                        survey.mass(), survey.design(), survey.live(),
+                        full, survey.design(), survey.live(),
                         dev.stannismod.stellurgy.ship.control.ControlFrame.HELM)
-                        .readout(TileAdvancedFlightComputer.localGravity(world));
+                        .readout(TileAdvancedFlightComputer.localGravity(world))
+                        .withPropellant(survey.poolKg(), survey.starved());
                 sendTier2Readout();
             }
         }
@@ -818,13 +833,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // the blocks itself — so a craft resting on its pad takes neither the pad nor
         // anything touching it.
         if (scannedFlightComputerPos != null) {
-            // A ship that cannot hold itself up here is built only when asked twice. Not refused: a
-            // ship is finished in place, and an extra engine is one block away. The first press
-            // warns and remembers what it warned about; a press on the same build assembles it.
+            // A ship that could not hold itself up here with its tanks full, on everything it is built
+            // with, is built only when asked twice. Not refused: a ship is finished in place, and an
+            // extra engine is one block away. The first press warns and remembers what it warned about;
+            // a press on the same build assembles it. Empty tanks are not the question (C10 STAT-12).
             if (tier2Readout != null && !tier2Readout.canHover(
-                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)) {
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN)) {
                 double twr = tier2Readout.thrustToWeight(
-                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE);
+                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN);
                 if (Double.compare(twr, warnedThrustToWeight) != 0) {
                     warnedThrustToWeight = twr;
                     warnRequesterLowThrust(twr);
@@ -1301,12 +1317,13 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
         if (tier2Readout != null && !isScanning()) {
             // A ship's figures are its flight model's, not a rocket's: thrust-to-weight from the
-            // holdable upward authority of the actuators on the pad, in this world's field.
-            dev.stannismod.stellurgy.ship.control.ShipReadout.View live =
-                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE;
+            // holdable upward authority of everything on the pad, tanks full, in this world's field —
+            // the figure the build is gated on.
+            dev.stannismod.stellurgy.ship.control.ShipReadout.View design =
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.DESIGN;
             accelerationText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.shiptwr")
-                    + String.format(java.util.Locale.ROOT, " %.2f", tier2Readout.thrustToWeight(live)));
-            if (!tier2Readout.canHover(live)) {
+                    + String.format(java.util.Locale.ROOT, " %.2f", tier2Readout.thrustToWeight(design)));
+            if (!tier2Readout.canHover(design)) {
                 errorText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.lowtwr.gui"));
             }
         }
@@ -1709,7 +1726,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats"),
         // Appended, never inserted: the status travels and saves as its ordinal.
         SHIP_TOO_LARGE("msg.rocketbuilder.shiptoolarge"),
-        UNKNOWNPROPELLANTPAIR("msg.rocketbuilder.unknownpropellantpair");
+        UNKNOWNPROPELLANTPAIR("msg.rocketbuilder.unknownpropellantpair"),
+        FLUIDINFUELTANKS("msg.rocketbuilder.fluidinfueltanks");
 
         /** Effectively final, process lifetime: set once when the object is built. */
         private final String translationKey;

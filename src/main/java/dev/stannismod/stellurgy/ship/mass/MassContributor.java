@@ -25,10 +25,15 @@ public final class MassContributor {
     public enum Kind {
         /** Blocks. Changes only when the hull is built on or broken. */
         STRUCTURAL,
-        /** Fluids, items, anything held inside a machine. Changes without a block ever changing. */
+        /** Items, and fluids that are not propellant, held inside a machine. Changes without a block ever changing. */
         CONTENT,
         /** People aboard, with what they carry. */
-        CREW
+        CREW,
+        /**
+         * Propellant in a holder the drives draw from: the mass a burn throws away. Never scaled by the
+         * content scale (C10 STAT-24, STAT-41).
+         */
+        REACTION
     }
 
     /** A block fills its cell, so a contributor standing in for one is a metre on a side. */

@@ -493,16 +493,8 @@ public class StatsRocket {
     /** The name of the densest fluid the registry accepts as {@code type}, or {@code none} when it
      *  accepts no fluid of that type — a tank no fluid fits stays as empty as it was. */
     private static String heaviestFluidName(FuelType type, String none) {
-        String heaviest = none;
-        float heaviestPerMb = -1;
-        for (Fluid fluid : FuelRegistry.instance.getFluids(type)) {
-            float perMb = dev.stannismod.stellurgy.Stellurgy.weights().getWeight(fluid, 1);
-            if (perMb > heaviestPerMb) {
-                heaviestPerMb = perMb;
-                heaviest = fluid.getName();
-            }
-        }
-        return heaviest;
+        Fluid heaviest = dev.stannismod.stellurgy.Stellurgy.weights().heaviestFluidOf(type);
+        return heaviest == null ? none : heaviest.getName();
     }
 
     public List<Vector3F<Float>> getEngineLocations() {

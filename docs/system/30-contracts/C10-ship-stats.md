@@ -130,7 +130,7 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
 - **STAT-11** `[A][BEH]` The vector survives the frame-crossing paths — crossing, transit,
   relog: durable inputs ride NBT (STAT-3) and derived stats recompute on
   load (STAT-2). Nothing is lost beyond what already rides the NBT.
-- **STAT-12** `[A][BEH]` **Tier-2 warns and builds on confirmation; tier-1 refuses.** The vector + per-direction
+- **STAT-12** `[T][BEH]` **Tier-2 warns and builds on confirmation; tier-1 refuses.** The vector + per-direction
   weak-spot flags are readable BEFORE flight on two co-primary surfaces: the AFC ship-info GUI
   (`IModularInventory`, LIVE) and the rocket-assembler GUI (snapshot on the existing Scan button,
   which already runs `scanRocket` `TileRocketAssemblingMachine.java`) `[V]`. Localization is
@@ -139,7 +139,16 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
   `ErrorCode`s (a craft that did not materialise); they share the assembler surface, and the readout
   does not absorb that channel. **The gate differs by tier**: a tier-2 craft whose thrust cannot lift
   it off the body it was assembled on is built **after an explicit confirmation**; a tier-1 rocket is
-  refused outright (STAT-26..29). The asymmetry is the tiers' actual difference: a tier-2 hull can be
+  refused outright (STAT-26..29). **Both tiers judge the craft FULL and as BUILT** (maintainer ruling
+  2026-10-18, *"всё по рекомендациям"*, on the fork "the assembler judges a tier-2 craft on DESIGN with its
+  tanks full, as tier-1 already is"): the assembler's ship readout is solved on the pad's mass frame with
+  every rocket fuel tank full — its room filled with the fluid it holds, or, holding none, with the
+  heaviest its role accepts, STAT-29's choice (`HullSurvey#padMassWithTanksFull`) — and the gate, the
+  screen's thrust-to-weight and the warning all read its DESIGN view
+  (`TileRocketAssemblingMachine#assembleRocket`, `#updateText`). So whether the pad's tanks are filled
+  yet, and which drives the pool feeds now (STAT-38), never decides a build; the LIVE view is the
+  console's. `[T]` `TierTwoCraftFlightModelGroupTest#theAssemblerJudgesAShipFullAndAsBuilt`. REGIONS:
+  `clears full`, `clears only empty`. The asymmetry is the tiers' actual difference: a tier-2 hull can be
   **built onto in place** — adding a thruster is an ordinary block placement, folded into mass and
   inertia by the same hook the mass model rides — so a low-TWR ship is one you finish, not one you
   lose. A rocket has no mid-flight building and no control authority, so an under-thrusted one is
@@ -324,8 +333,8 @@ config flag disables consumption entirely, and with it every consequence that re
 BINARY — nothing is consumed — as the first stage.
 
 *Stress-test.* Falsifiable: a burn drains the pool by exactly what the allocator commanded; an empty
-pool zeroes the drive's live authority and leaves its design authority. Code: violated — availability
-is binary. Consistent with STAT-15/18. Edges: an empty pool mid-burn is a live-capability change and
+pool zeroes the drive's live authority and leaves its design authority. Code: the propellant budget is
+built (STAT-38..40); the power budgets are not — power-drawing families stay binary. Consistent with STAT-15/18. Edges: an empty pool mid-burn is a live-capability change and
 rebuilds through STAT-19's revision; the jump capacitor is never a propulsion budget.
 
 ### STAT-23 `[A]` — An engine is a PARAMETER SET, and its thrust is a law, not a constant
@@ -349,8 +358,8 @@ for both tiers.
 
 *Stress-test.* Falsifiable as properties: at fixed power, thrust falls as `v_e` rises for a
 power-limited family and does not depend on power for chemistry. Code: the law, the built-in bell and
-the families are written (STAT-30..32, `api/propulsion/`); the regime switch, boost columns, pressure
-bands and overdrive are not.
+the families are written (STAT-30..32, `api/propulsion/`); boost columns and pressure bands are
+(STAT-42, STAT-43); the regime switch and overdrive are not.
 Consistent with STAT-16 (`u ≤ 1` against `F_max`; an overdrive is an explicit command above it, still
 under STAT-7a). Edge: a regime switch is a construction-revision event (STAT-19), at most one rebuild per
 `REBUILD_MIN_TICKS`.
@@ -365,8 +374,8 @@ because the allocator already KNOWS the mass it spent; the resample stays the au
 drift.
 
 *Stress-test.* Falsifiable: across a burn, frame mass lost equals mass ejected, to the tolerance, at any
-`contentMassScale`. Code: violated — the frame is `{structural, content, crew}` and propellant sits in
-`content` (`ship/mass/ShipMassFrame.java`). Consistent with STAT-6/20 (one mass model; the resample is
+`contentMassScale`. Code: built — the frame is `{structural, content, reaction, crew}`
+(`ship/mass/ShipMassFrame.java`; STAT-40, STAT-41). Consistent with STAT-6/20 (one mass model; the resample is
 the authority). Edge: a holder the frame cannot count (NBT contents) is not in the pool at all (STAT-22),
 so the term never sees mass it did not count.
 
@@ -430,7 +439,8 @@ assembler builds can launch full from where it was built. A tank with no fluid c
 weighed full of the HEAVIEST fluid the fuel registry accepts for it
 (`StatsRocket.withTanksFull`, `:332`; `api/fuel/FuelRegistry.java`): ruling 1 says "full" and leaves the
 fluid open, and only the heaviest makes "built ⇒ launchable full" hold for every fuel the craft can
-take; every shipped fuel has its own density row (INV-WGT-09). The heaviest-fluid choice and the absence of a
+take; every shipped fuel has its own density row (INV-WGT-09). The choice is made in one place,
+`WeightEngine#heaviestFluidOf`, which the tier-2 assembler's full-tank weighing reads too (STAT-12). The heaviest-fluid choice and the absence of a
 one-gee no-arg `canLaunch()` / `getThrustToWeightRatio()` in the public API were ratified by the
 maintainer 2026-10-03 (*"всё утверждаю"*).
 `[T]` `RocketLaunchDepthTest#theAssemblerAndTheWeightGateGiveOneVerdictOnOneCraft` (refusal verdict
@@ -522,6 +532,101 @@ bell and the retired knobs (2026-10-17).
   working fluid feeds it and nothing aboard decides that yet, its force is the LEAST over its regimes
   — authority never promised on a fluid the craft may not carry. Nothing is drained on tier-2 yet
   (STAT-22's binary first stage). FOR: STAT-22. Pinned by `PropulsionLawsTest#theOutsidePressureMovesTheForceAndNeverTheFlow`, `PropulsionLawsTest#aNozzleWhoseFluidIsUndecidedOffersTheLeastOfItsRegimes`.
+  *Superseded in part by STAT-38..40*: on a metered craft the tier-2 drain is built; the sentence "nothing
+  is drained on tier-2 yet" holds only with `rocketRequireFuel` off.
+
+## Consumption on tier 2 — STAT-38..44
+
+STAT-22, STAT-23 (2)(3) and STAT-24 made concrete. **Terms.** **the pool** = per fluid, the propellant in
+the holders aboard (below). **metered** = `rocketRequireFuel` on — the one switch for both tiers; off, the
+pool is not read, nothing is booked or drained, and every working drive is LIVE as designed
+(`integration/vs/ShipPropellant#metered`). **the step** = one physics step of the substrate, `Δt` its SI
+seconds (`dt · PhysicsUnits.SECONDS`) — the duration its force is integrated over, so the mass booked for a
+step is the mass its impulse carried. **a boost column** = the second column of a drive with a variable
+exhaust velocity (`Actuator#boostOf`).
+
+Maintainer rulings these rest on: the 2026-10-02 propulsion-physics rulings (every reaction drive consumes;
+reaction mass its own term, never scaled; the pool draws only from what the frame counts; boost as a second
+column under one capacity, cruise first; recipes cached per pressure band) — the sources of STAT-22..24.
+
+- **STAT-38** `[T][SYS]` **The pool, and what feeds a drive.** The pool is, per fluid, the contents of every
+  holder aboard whose contents the mass frame counts — a tile's fluid capability on its unsided face, what
+  `WeightEngine` weighs — holding a fluid some reaction drive can burn (`FuelRegistry#isEnginePropellant`);
+  a fluid inside an item, or in NBT, is not in it. Metered, a drive is LIVE only when every fluid of one of
+  its regimes has a positive pool, and then at the ONE regime among those with the least force at the solve
+  pressure, ties by propellant name (`Actuator#fedBy`) — **an INTERIM rule** (maintainer ruling 2026-10-18):
+  it stands only until a per-engine console setting names the fluid a drive burns, and is then replaced by
+  that setting, not refined; a drive with none is absent from LIVE and stays in
+  DESIGN, and the readout names the propellants it waits for (`ShipReadout#starvedFor`). A change in which
+  fluids the pool holds, or in the switch, is a live-capability change: the model rebuilds (STAT-19), at most
+  once per `SURVEY_MIN_TICKS`. REGIONS: `fed`, `one of two fed`, `none fed`. FOR: STAT-22. Pinned by
+  `PropulsionLawsTest#aDriveRunsOnlyOnWhatIsAboard`; the survey's wiring by
+  `TierTwoCraftFlightModelGroupTest#aBurnDrainsWhatItEjectsAndAnEmptyTankIdlesTheDrive`.
+- **STAT-39** `[T][SYS]` **The budget is STAT-18's λ term.** A metered step's command — composed, scaled into
+  range, clipped to the wheels, desaturated — is scaled by one more factor
+  `min(1, min_q available_q / requested_q)`, `requested_q` the mass of fluid `q` its throttles would eject in
+  the step (each drive's full-throttle flow × throttle × `Δt` × its regime's mass share of `q`, a pair split
+  by its O/F), and is flagged saturated when that factor bites. The command reports the mass it ejects, which
+  never exceeds what was available; unmetered, there is no factor. REGIONS: `covered`, `bites`, `empty`,
+  `pair`. FOR: STAT-22, STAT-18. Pinned by `PropulsionLawsTest#aStepEjectsWhatItsThrottlesBurnAndNeverMoreThanIsAboard`.
+- **STAT-40** `[T][SYS]` **What a step ejects is drained, and the frame loses it the same tick.** A step's
+  ejection is booked at once, so the next step's budget is the pool net of everything ejected and not yet
+  drained (`PropellantLedger`). The game tick takes it out of the holders as whole millibuckets per fluid,
+  in position order, never rounded up, the fraction left owed — so over a burn the mass drained trails the
+  mass ejected by under one millibucket per fluid plus one tick's ejection. The physics record loses exactly
+  the drained mass at the holders it left, in that tick: mass, centre and tensor as the frame built without
+  it (`ShipMassFrameBuilder#remove`, `ShipInertiaWriter#removeFrom`); the slow mass round stays the
+  authority that catches drift (STAT-20). A pool that GROWS between two drains — a fill — is written to
+  the record that same tick by the authoritative pass (`ShipMassTrigger#backgroundRound`), so a drain
+  never takes off the record mass it was never given (`TileAdvancedFlightComputer#tickPropellant`; `[V]`
+  — read, not witnessed by a test). What is owed when the flight computer unloads is lost — under one
+  tick's ejection and a millibucket per fluid. REGIONS: `net of what was ejected`, `drained`, `the record`.
+  FOR: STAT-24. Pinned by `PropulsionLawsTest#whatAStepEjectsIsOwedUntilDrainedAndLeavesTheBodyExactly`; the
+  drain in the world by `TierTwoCraftFlightModelGroupTest#aBurnDrainsWhatItEjectsAndAnEmptyTankIdlesTheDrive`.
+- **STAT-41** `[T][SYS]` **Reaction mass is its own term, at its real mass.** The pool's fluids are the
+  frame's `reaction` term at their real mass for every `contentMassScale`; items and every other fluid are
+  `content`, scaled (`ShipHullMass`, `WeightEngine#reactionWeight` / `#cargoWeight`). So the frame's total
+  is `structural + k·cargo + reaction + crew`, and what a burn takes off the frame is the mass it drained,
+  whatever `k`. Propellant is never counted twice: it is in `reaction` and in no other term. REGIONS:
+  `scale one`, `scale zero`. FOR: STAT-24. Pinned by
+  `TierTwoCraftFlightModelGroupTest#propellantWeighsItsRealMassWhateverTheContentScale`.
+- **STAT-42** `[T][SYS]` **Boost columns share their engine's capacity, and cruise comes first.** A drive with
+  a boost regime is two columns, cruise and boost: every recipe and every command keeps
+  `u_cruise + u_boost ≤ 1` (a row of the programme; one more term of the range factor). The cruise tables
+  leave boost columns out; every table is solved at one rebuild. With the ship-wide switch off no boost
+  column is used; with it on an axis takes the cruise sustained recipe while that suffices, then the
+  sustained recipe that may use boost, then a burst — so an asymmetric hull boosts the drive that limits a
+  direction and raises the others to keep it clean. No engine has a boost regime yet: the switch has no key
+  or profile, and the flight computer runs cruise. REGIONS: `switch off`, `within cruise`, `past cruise`,
+  `asymmetric`. FOR: STAT-23 (2). Pinned by `PropulsionLawsTest#boostIsASecondColumnUnderOneCapacityTakenOnlyPastCruise`.
+- **STAT-43** `[T][SYS]` **Recipes hold over a pressure band.** A capability is solved at one outside pressure
+  `p₀` — the world's (`AtmosphereDensity#pascals`), which every drive aboard is evaluated at — and holds
+  over `|p − p₀| ≤ w`, `w` the largest pressure change at which every cached recipe's added off-axis wrench
+  (`|Δp|·Σ|uᵢ|Aᵢ` in force, `|Δp|·Σ|uᵢ|Aᵢ|rᵢ|` in torque) stays within STAT-16's residual tolerances, and
+  never across a regime's separation pressure. Inside the band the applied force is each drive's affine law
+  at the step's pressure (`ShipCapability#wrenchAt`); outside it the flight computer rebuilds the model. The
+  pressure is one number per world today, so a band is left only by changing worlds. REGIONS: `inside`,
+  `outside`. FOR: STAT-23 (3). Pinned by `PropulsionLawsTest#aRecipeHoldsOverItsPressureBandAndFollowsTheAffineLawInside`.
+- **STAT-44** `[T][SYS]` **A rocket fuel tank holds its role's propellant, a cubic metre of it.** Maintainer
+  ruling 2026-10-18 (*"всё по рекомендациям"*, on the fork "the rocket fuel tanks become real holders"). Every
+  rocket fuel tank — `BlockFuelTank` and the bipropellant-fuel, oxidizer and nuclear-working-fluid tanks that
+  extend it — holds up to one cubic metre, 1000 mB (`BlockFuelTank#CAPACITY_MB`, the volume the tank masses
+  were derived for, `WeightEngine`), of the fluids its ROLE accepts: the fuel registry type the block stands
+  for (`BlockFuelTank#role`), filled from the `rocketFuels` / `rocketBipropellants` / `rocketOxidizers` /
+  `rocketNuclearWorkingFluids` lists (C4). Every other fluid is refused. It answers the Forge fluid
+  capability on every face, so a pipe, a bucket (`BlockFuelTank#onBlockActivated`) and a drain reach it, and
+  keeps its contents in its tile's NBT (`TileFuelTank`, C1). What it holds the frame weighs (STAT-41), so a
+  ship's tanks are holders of its pool (STAT-38) and the tanks a ship is built with are what it burns. A
+  tier-1 rocket burns its stats' propellant instead, loaded at the fuelling station, so its assemblers refuse
+  a rocket whose tanks hold fluid and a gas harvest never fills them (rocket-assembly INV-RASM-15). REGIONS:
+  `its role`, `another role`, `past its capacity`. Pinned by
+  `TierTwoCraftFlightModelGroupTest#aRocketFuelTankHoldsOnlyItsRolesFluidAndACubicMetreOfIt`; the drain from
+  one by `TierTwoCraftFlightModelGroupTest#aBurnDrainsWhatItEjectsAndAnEmptyTankIdlesTheDrive`.
+
+**Not built, and why**: power budgets (STAT-22's second and third terms — no power allocation and no
+electric drive exist; power-drawing families stay on the binary stage); the boost switch's key, profile and
+HUD (no engine has two regimes); the readout's Δv and ascent bills (STAT-25). The feed-exit heat of C12
+HEAT-4 does not exist; when it does, it reads the drain and is off with it.
 
 ## Status of the tier-2 clauses (read with `ship-flight-model`)
 
@@ -538,7 +643,7 @@ bell and the retired knobs (2026-10-17).
 | STAT-8 / 9 shield, drive readouts | seam only: `FlightModelChangedEvent` carries the readout; no system contributes yet | C5 |
 | STAT-10 registration seam | `[V]` the event on the bus (an extension point) | C5 |
 | STAT-11 survives crossing/relog | `[A]` derived state rebuilds on the new tile; no e2e pins this yet | — |
-| STAT-12 pre-flight readout, tier-2 warns | `[V]` AFC console (DESIGN\|LIVE) + assembler Scan; TWR < 1 warns, second press builds | MECH-SFM-09/10 |
+| STAT-12 pre-flight readout, tier-2 warns | `[T]` AFC console (DESIGN\|LIVE) + assembler Scan, judged on DESIGN with the tanks full; TWR < 1 warns, second press builds | MECH-SFM-09/10 |
 | STAT-13 tunables | `SURVEY_MIN_TICKS`, `READOUT_PUSH_TICKS`, wheel `TORQUE`/`MOMENTUM_CAPACITY`, `AllocationTolerances` | — |
 | STAT-14 per-world gravity | `[V][T]` | — |
 | STAT-15 twelve signed, sustained/burst | `[T]` | INV-SFM-02/04 |
@@ -549,9 +654,12 @@ bell and the retired knobs (2026-10-17).
 | STAT-19 cached recipes, revisions | `[V]` recipes cached per model; the model's revision is the one counter | MECH-SFM-07 |
 | STAT-20 mass seam | `[V][T]` | MECH-SFM-02 |
 | STAT-21 client channels | `[V]` one packet of primitives to the pilot and console viewers only (`PacketShipReadout`) | C2 |
-| STAT-22..25 propulsion physics | `[A]` | made concrete by STAT-30..37 |
+| STAT-22..25 propulsion physics | `[A]` | made concrete by STAT-30..43 |
+| STAT-38..43 tier-2 consumption, boost columns, pressure bands | `[T]` laws in `PropulsionLawsTest`; the survey, drain and frame in `TierTwoCraftFlightModelGroupTest`; power budgets and the boost switch not built | ship-flight-model MECH-SFM-11 |
+| STAT-44 rocket fuel tanks hold their role | `[T]` `TileFuelTank`, in `TierTwoCraftFlightModelGroupTest` | blocks MECH-BLK-03 |
 | STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight and ascent drain wiring has no test | — |
 | STAT-35, STAT-36 core fuel and stack | `[A]` — built (`TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`); the tier-1 scan's `fuelled` / `empty` / column cases are exercised by `NuclearEngineRocketAssemblyTest`, burn-out, spent fuel and the tier-2 nozzle's stack are not | — |
 
-**Known not built**: gimbals (STAT-16), budgeted resources (STAT-22). The hyperdrive reads the real
+**Known not built**: gimbals (STAT-16), the power budgets of STAT-22 (the propellant budget is
+STAT-38..40). The hyperdrive reads the real
 mass (MECH-HYP-09).

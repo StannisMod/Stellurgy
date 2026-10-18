@@ -70,6 +70,17 @@ public class FuelRegistry {
         return isFuel(type, (Object) fluid);
     }
 
+    /**
+     * Whether some reaction drive can burn {@code fluid}: it is registered for a role a motor feeds from
+     * (monopropellant, bipropellant fuel, oxidizer, nuclear working fluid). Aboard a tier-2 craft such a
+     * fluid is PROPELLANT — the pool the drives draw from, weighed as reaction mass (C10 STAT-38,
+     * STAT-41); any other fluid aboard is cargo.
+     */
+    public boolean isEnginePropellant(@Nullable Fluid fluid) {
+        return fluid != null && (FuelType.LIQUID_MONOPROPELLANT.isFuel(fluid) || FuelType.LIQUID_BIPROPELLANT.isFuel(fluid)
+                || FuelType.LIQUID_OXIDIZER.isFuel(fluid) || FuelType.NUCLEAR_WORKING_FLUID.isFuel(fluid));
+    }
+
     private boolean isFuel(@Nullable FuelType type, Object obj) {
         if (type == null)
             return false;

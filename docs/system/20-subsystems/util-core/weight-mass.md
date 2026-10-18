@@ -46,7 +46,13 @@ than renaming neither. C10 STAT-6 carries the full number table.
 - **MECH-WGT-04 — tile-entity weight.** Sums `getWeight` over every item-handler slot and every
   fluid-tank content of the TE's capabilities, times `contentMassScale`, added to the TE's own block
   weight. Unconditional; the scale is the only knob and it reaches content alone
-  (`WeightEngine#getTEWeight`).
+  (`WeightEngine#getTEWeight`). A tier-2 craft splits the same holdings in two
+  (`WeightEngine#cargoWeight` / `#reactionWeight`, read by `ShipHullMass`): fluids an engine can burn
+  are reaction mass at their real mass, never scaled; the rest is cargo under the scale (C10 STAT-41).
+  `#massPerMillibucket` is the double-precision mass of one mB (INV-WGT-09), the drain's conversion.
+  `#heaviestFluidOf(FuelType)` is the densest fluid a fuel role accepts — what a tank with no fluid
+  chosen is weighed full of, by the tier-1 gate (`StatsRocket#withTanksFull`) and the tier-2 assembler
+  (`ShipHullMass#frameOfBoxWithTanksFull`) alike (C10 STAT-12, STAT-29).
 - **MECH-WGT-05 — JSON load/seed/save.** `load()` reads the five tables
   (`individual`, `byRegex` [LinkedHashMap, order preserved], `fluids` rows, `propellantPairs`, `materials`,
   scalars `fallback`/`fluidFallbackDensity`); missing file → `seedDefaults()` + `save()`; parse

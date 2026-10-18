@@ -666,6 +666,7 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileBrokenPart.class, "ARbrokenPart");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileNuclearCore.class, "ARnuclearCore");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileWearable.class, "ARwearablePart");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileFuelTank.class, "ARfuelTank");
         GameRegistry.registerTileEntity(TileRocketServiceStation.class, "ARserviceStation");
         GameRegistry.registerTileEntity(TileRocketAssemblingMachine.class, "ARrocketBuilder");
         //GameRegistry.registerTileEntity(TileModelRender.class, "ARmodelRenderer");

@@ -106,7 +106,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C7](./30-contracts/C7-lang-assets.md) | lang / asset keys | namespace table |
 | [C8](./30-contracts/C8-crew-any-attitude.md) | any-attitude crew behaviour aboard a tier-2 (VS) ship — capture, frames, camera, interaction | `CREW-C1..C17` |
 | [C9](./30-contracts/C9-ship-control.md) | tier-2 pilot control — input delivery to the linked computer, seat binding and link lifecycle, FA autopilot | `SHIPCTL-1..20` |
-| [C10](./30-contracts/C10-ship-stats.md) | the tier-2 stat surface derived from construction — mass, authority, readouts, live recompute; and the tier-1 rocket launch gate (local gravity, inclusive, off with the weight system, one decision for launch and assemblers) | `STAT-1..25`, `STAT-26..29` |
+| [C10](./30-contracts/C10-ship-stats.md) | the tier-2 stat surface derived from construction — mass, authority, readouts, live recompute; and the tier-1 rocket launch gate (local gravity, inclusive, off with the weight system, one decision for launch and assemblers) | `STAT-1..25`, `STAT-26..29`, `STAT-30..44` |
 | [C11](./30-contracts/C11-physics-substrate-port.md) | the Stellurgy↔physics-substrate boundary — who may name engine types, the port's operation inventory, ONE SHIP ONE IDENTITY, a ship is the blocks that were pasted, and a loaded ship holds its chunks | `PORT-1..15` |
 | [C12](./30-contracts/C12-ship-heat.md) | the ship thermal contract — heat as energy, rejection, the environment, the failure ladder, the signature | `HEAT-1..18` |
 | [C13](./30-contracts/C13-space-presence.md) | what survives a logout in a space cell — presence vs aboard-ness, which record wins, what a RELEASE lets go, and what survives a DEATH | `PRES-1..11` |

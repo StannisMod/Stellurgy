@@ -1,6 +1,6 @@
 ---
 id: ship-flight-model
-owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/ChemicalMotorActuators.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
+owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/ChemicalMotorActuators.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/ShipPropellant.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
 entrypoints: [TileAdvancedFlightComputer#update→tickFlightModel, TileAdvancedFlightComputer#onPhysicsTick, ShipMassTrigger.Hooks#onShipNamed, TileRocketAssemblingMachine#scanRocket (tier-2 readout)]
 depends-on: [util-core (WeightEngine), dimension-planets, network-wire, rocket-assembly]
 depended-by: [hyperdrive, client-render (HUD lines)]
@@ -26,7 +26,7 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 
 | type | role |
 |---|---|
-| `ShipMassFrame` / `ShipMassFrameBuilder` / `MassContributor` | structural/content/crew kg, CoM, body-frame inertia about CoM; order-independent, regularised tensor |
+| `ShipMassFrame` / `ShipMassFrameBuilder` / `MassContributor` | structural/content/reaction/crew kg, CoM, body-frame inertia about CoM; order-independent, regularised tensor |
 | `ShipHullMass` | authoritative pass over a ship (structure+content+crew) or a pad box (no crew), subspace frame |
 | `ShipMassSource` / `FlightComputerMassSource` | the port every mass reader asks, by durable id; today's implementation answers only for a craft that carries a flight computer |
 | `ShipInertiaWriter` / `ShipMassTrigger` | write mass+CoM+tensor together; recompute on `ShipNamed`, background round |
@@ -37,6 +37,9 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 | `ControlFrame.HELM` | the helm frame every flight model is solved in (the flight law's body basis at identity) |
 | `ShipCapability` / `BoundedSimplex` / `Recipe` | 12 directions × {sustained, burst} clean authority by LP, cached recipes |
 | `ControlScheme` / `CleanAxisScheme` / `ActuatorCommand` / `MomentumStore` | wanted accel → throttles → wrench; stored-momentum bookkeeping |
+| `Propellant` / `PropellantDemand` | what feeds one regime of a drive (a fluid, or a pair split by O/F) and what it takes and pushes at full throttle |
+| `PropellantBudget` / `PropellantLedger` / `StepConditions` | what a step may eject; the account between the step that ejects and the tick that drains; the step's budget, pressure and boost switch |
+| `ShipPropellant` | the pool's holders aboard: measured every tick, drained in whole millibuckets, the physics record moved by the drain |
 | `ShipFlightModel` / `ShipReadout` | immutable DESIGN+LIVE capability at a revision; the primitives + arithmetic all surfaces use |
 | `HullSurvey` | one visit: mass frame + design/live actuators + construction count |
 | `BlockReactionWheel` / `TileReactionWheel` | three pure-torque actuators; stored momentum in tile NBT |
@@ -89,9 +92,27 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   `PacketShipReadout` on a new revision, and the live slice at most every `READOUT_PUSH_TICKS`
   (`:1414`) `[V]`; the assembler sends its scan readout to whoever pressed Scan/Build
   (`TileRocketAssemblingMachine.java:740`) `[V]`.
+- **MECH-SFM-11 — consumption** (C10 STAT-38..44). Metered (`rocketRequireFuel`), the survey measures the
+  pool in the holders aboard — the rocket fuel tanks it was built with among them (`TileFuelTank`, STAT-44)
+  — and puts each working drive into LIVE at the one regime it is fed (the least-force regime while several
+  are fed, an interim rule until a per-engine console setting exists), or
+  leaves it out and names what it waits for (`integration/vs/HullSurvey.java`, `Actuator#fedBy`). Each
+  physics step allocates under a `StepConditions` — the ledger's budget, the pressure the game tick read,
+  the cruise columns — and books what the command ejected (`TileAdvancedFlightComputer#onPhysicsTick`,
+  `PropellantLedger`). Each game tick drains what was booked as whole millibuckets, moves the physics
+  record by the drained mass at its holders, settles the pool, and rebuilds the model when the set of
+  fluids aboard, the switch, or the pressure band changed (`#tickPropellant`, `ShipPropellant`,
+  `ShipInertiaWriter#removeFrom`) `[T]` (`PropulsionLawsTest`; in-world
+  `TierTwoCraftFlightModelGroupTest#aBurnDrainsWhatItEjectsAndAnEmptyTankIdlesTheDrive`,
+  `#withConsumptionSwitchedOffABurnTakesNothing`, `#propellantWeighsItsRealMassWhateverTheContentScale`).
+  The frame's `reaction` term is the pool's fluids at their real mass (`ShipHullMass#addHeld`). Not built:
+  power budgets, the boost switch's key.
 - **MECH-SFM-10 — tier-2 assembly gate.** A build with an AFC skips the rocket thrust/fuel checks
-  (`:697,721`); under TWR 1 in the local field the first press warns and remembers the TWR, a press on
-  the same build assembles (`:827`) `[V]`.
+  (`TileRocketAssemblingMachine#scanRocket`); its scan readout is solved on the pad's mass frame with every
+  rocket fuel tank FULL (`HullSurvey#padMassWithTanksFull`), and under a DESIGN TWR of 1 in the local field
+  the first press warns and remembers the TWR, a press on the same build assembles
+  (`#assembleRocket`) — so empty tanks and an unfed LIVE set never decide a build (C10 STAT-12) `[T]`
+  (`TierTwoCraftFlightModelGroupTest#theAssemblerJudgesAShipFullAndAsBuilt`).
 
 ## State & persistence
 
@@ -124,8 +145,8 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   touched, and one whose moment nothing sustained can cancel keeps what it holds
   (`CleanAxisScheme#desaturate`; `ShipMotionLawsTest#anIdleWheelIsGivenBackByTheThrustersWithoutTurningTheHull`,
   `…#aWheelInUseIsNotUnloadedUnderTheCommand`; in-world `TierTwoCraftFlightModelGroupTest#anIdleCraftGivesItsWheelBack`,
-  a wound fixture wheel 0.0588 → 0 of capacity in 20 ticks). Propellant is not charged for it until
-  STAT-22 lands. FOR: INV-SFM-10.
+  a wound fixture wheel 0.0588 → 0 of capacity in 20 ticks). On a metered craft the
+  thrusters' share of it is propellant like any other (C10 STAT-39). FOR: INV-SFM-10.
 - **INV-SFM-12** `[T][SYS]` A command is delivered exactly, or less and flagged saturated — never on an
   axis not asked for, never the wrong sign, never more; every throttle in range and every wheel inside
   its capacity, on every step of a held command from any wheel state, a wheel inside its last step
@@ -202,7 +223,9 @@ Packet: `PacketShipReadout` (S→C, addressed to a tile). Vendored VS edits: `Bl
 
 ## Config surface
 
-None of its own. `contentMassScale` scales content mass (util-core); `VSConfig.doGravity`
+None of its own. `rocketRequireFuel` meters consumption (MECH-SFM-11; off, nothing is drained and
+every working drive is live). `contentMassScale` scales content mass and never the reaction term
+(util-core; C10 STAT-41); `VSConfig.doGravity`
 gates the field.
 
 ## Test coverage
@@ -224,4 +247,6 @@ MECH-SFM-07..10 yet.
   `flightComputerAt` still scans.
 - The magnetic-moment form of wheel desaturation near a magnetised planet is not built (no planet
   carries a field); the thruster form is INV-SFM-11.
-- Budgeted resource availability is a seam only.
+- Budgeted POWER is a seam only; the propellant budget is MECH-SFM-11.
+- What the ledger owes when the flight computer unloads (under one tick's ejection and a millibucket
+  per fluid) is not saved; C10 STAT-40 states the bound.

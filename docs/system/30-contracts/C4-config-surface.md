@@ -43,7 +43,7 @@ deliberately absent from this matrix: find a flag's readers with a grep for its 
 
 | Flag | Type | Disk key | Gates (consumer) | Disable path | FLAG |
 |---|---|---|---|---|---|
-| rocketRequireFuel | boolean† | rocketsRequireFuel | fuel requirement for flight (MECH-RKT fuel gate) | `false` = fly without fuel (classic) | |
+| rocketRequireFuel | boolean† | rocketsRequireFuel | fuel requirement for flight, BOTH tiers: the tier-1 fuel gate and drain, and tier-2 consumption (C10 STAT-38..40) | `false` = fly without fuel (classic); a tier-2 craft's drives are live with empty tanks and nothing is drained | |
 | canBeFueledByHand | boolean | canBeFueledByHand | hand-fuelling of rockets | `false` = no manual fuel | |
 | nuclearRocketsRespectArtifactGating | boolean† | nuclearRocketsRespectArtifactGating | nuclear-rocket artifact gating (mission) | `false` = ignore gating | |
 | nuclearRocketsRequireArtifactForGatedStations | boolean† | nuclearRocketsRequireArtifactForGatedStations | station-destination artifact rule | `false` = stations exempt | |

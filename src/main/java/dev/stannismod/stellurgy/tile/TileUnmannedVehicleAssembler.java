@@ -233,6 +233,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
         boolean invalidBlock = false;
         boolean foundFluidTank = false;
+        boolean fluidInFuelTanks = false;
         int fluidCapacity = 0;
 
         if (verifyScan(bb, world)) {
@@ -306,8 +307,13 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                         }
 
                         // Generic fluid capability presence + capacity
+                        // A rocket fuel tank is the craft's propellant, sized into its stats above, not
+                        // the cargo tank a harvest fills.
                         TileEntity tile = world.getTileEntity(currPos);
-                        if (tile != null) {
+                        if (tile instanceof TileFuelTank && ((TileFuelTank) tile).contents() != null) {
+                            fluidInFuelTanks = true;
+                        }
+                        if (tile != null && !(tile instanceof TileFuelTank)) {
                             IFluidHandler handler = tile.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
                             if (handler != null) {
                                 for (IFluidTankProperties info : handler.getTankProperties()) {
@@ -339,6 +345,8 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
             if (invalidBlock) {
                 status = ErrorCodes.INVALIDBLOCK;
+            } else if (fluidInFuelTanks) {
+                status = ErrorCodes.FLUIDINFUELTANKS;
             } else if (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
                     || (fuelCapacityMonopropellant > 0 && totalFuel > fuelCapacityMonopropellant)
                     || (fuelCapacityNuclearWorkingFluid > 0 && totalFuel > fuelCapacityNuclearWorkingFluid))

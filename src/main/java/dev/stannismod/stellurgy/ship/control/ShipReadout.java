@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * What a ship's readout says: the primitives of its flight model, and the arithmetic every surface
@@ -48,7 +50,12 @@ public final class ShipReadout {
     private final double structural;
     private final double content;
     private final double crew;
+    private final double reaction;
     private final double gravity;
+    /** Propellant aboard, kg per fluid, as last measured; empty when the readout says nothing of it. */
+    private final Map<String, Double> aboardKg;
+    /** The propellants whose absence idles a drive aboard (C10 STAT-38), sorted. */
+    private final List<String> starved;
     /** [view][endurance][direction]: newtons or rad/s² */
     private final double[][][] authority;
     /** [view][endurance][direction]: N·m behind a rotational authority, 0 for a translation */
@@ -56,13 +63,19 @@ public final class ShipReadout {
     /** [view][direction]: seconds the burst figure lasts */
     private final double[][] seconds;
 
-    private ShipReadout(long revision, double structural, double content, double crew, double gravity,
-                        double[][][] authority, double[][][] torque, double[][] seconds) {
+    private ShipReadout(long revision, double structural, double content, double crew, double reaction,
+                        double gravity, double[][][] authority, double[][][] torque, double[][] seconds,
+                        Map<String, Double> aboardKg, List<String> starved) {
         this.revision = revision;
         this.structural = structural;
         this.content = content;
         this.crew = crew;
+        this.reaction = reaction;
         this.gravity = gravity;
+        this.aboardKg = Collections.unmodifiableMap(new TreeMap<>(aboardKg));
+        List<String> sortedStarved = new ArrayList<>(starved);
+        Collections.sort(sortedStarved);
+        this.starved = Collections.unmodifiableList(sortedStarved);
         this.authority = authority;
         this.torque = torque;
         this.seconds = seconds;
@@ -89,7 +102,33 @@ public final class ShipReadout {
         }
         ShipMassFrame mass = live.mass();
         return new ShipReadout(revision, mass.getStructuralMass(), mass.getContentMass(),
-                mass.getCrewMass(), gravity, a, t, s);
+                mass.getCrewMass(), mass.getReactionMass(), gravity, a, t, s,
+                Collections.<String, Double>emptyMap(), Collections.<String>emptyList());
+    }
+
+    /**
+     * This readout, saying what propellant is aboard ({@code aboardKg}, kg per fluid) and which
+     * propellants idle a drive by their absence ({@code starved}) — the reason a LIVE figure falls
+     * short of its DESIGN one for want of propellant (C10 STAT-22, STAT-38).
+     */
+    public ShipReadout withPropellant(Map<String, Double> aboardKg, List<String> starved) {
+        return new ShipReadout(revision, structural, content, crew, reaction, gravity, authority, torque, seconds,
+                aboardKg, starved);
+    }
+
+    /** Kilograms of propellant in the holders the drives draw from (C10 STAT-41). */
+    public double reactionMass() {
+        return reaction;
+    }
+
+    /** Propellant aboard, kg per fluid, sorted by name; empty when this readout says nothing of it. */
+    public Map<String, Double> propellantAboard() {
+        return aboardKg;
+    }
+
+    /** The propellants whose absence idles a drive aboard, sorted; empty when none does. */
+    public List<String> starvedFor() {
+        return starved;
     }
 
     public long revision() {
@@ -109,7 +148,7 @@ public final class ShipReadout {
     }
 
     public double totalMass() {
-        return structural + content + crew;
+        return structural + content + crew + reaction;
     }
 
     /** The local field, m/s². */
@@ -205,6 +244,16 @@ public final class ShipReadout {
                 out.writeDouble(seconds[v][d]);
             }
         }
+        out.writeDouble(reaction);
+        out.writeInt(aboardKg.size());
+        for (Map.Entry<String, Double> e : aboardKg.entrySet()) {
+            out.writeUTF(e.getKey());
+            out.writeDouble(e.getValue());
+        }
+        out.writeInt(starved.size());
+        for (String name : starved) {
+            out.writeUTF(name);
+        }
     }
 
     public static ShipReadout read(DataInput in) throws IOException {
@@ -227,6 +276,16 @@ public final class ShipReadout {
                 s[v][d] = in.readDouble();
             }
         }
-        return new ShipReadout(revision, structural, content, crew, gravity, a, t, s);
+        double reaction = in.readDouble();
+        Map<String, Double> aboard = new TreeMap<>();
+        for (int i = in.readInt(); i > 0; i--) {
+            String fluid = in.readUTF();
+            aboard.put(fluid, in.readDouble());
+        }
+        List<String> starved = new ArrayList<>();
+        for (int i = in.readInt(); i > 0; i--) {
+            starved.add(in.readUTF());
+        }
+        return new ShipReadout(revision, structural, content, crew, reaction, gravity, a, t, s, aboard, starved);
     }
 }
