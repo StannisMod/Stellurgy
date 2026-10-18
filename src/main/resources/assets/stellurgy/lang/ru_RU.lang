@@ -423,6 +423,7 @@ msg.rocketbuilder.multiplepilotseats=Только одно пилотское к
 msg.rocketbuilder.shiptoolarge=Корабль слишком велик для сборки
 msg.rocketbuilder.unknownpropellantpair=Нет данных о паре горючее/окислитель (weights.json propellantPairs)
 msg.rocketbuilder.fluidinfueltanks=Опустошите топливные баки: ракета заправляется на заправочной станции
+tooltip.stellurgy.fueltank.carried=Содержит %d mB: %s
 msg.rocketbuilder.shortoforbit=Не хватит до орбиты: подъём до Y %d из %d
 error.rocket.shortOfOrbit=Топлива не хватит до орбиты: подъём кончится на Y %d, граница на Y %d
 msg.solar.collectingEnergy=Сбор энергии:

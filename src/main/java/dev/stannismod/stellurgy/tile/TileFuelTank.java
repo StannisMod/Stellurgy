@@ -77,6 +77,19 @@ public class TileFuelTank extends TileWearable {
         return tank.getCapacity();
     }
 
+    /**
+     * Puts back what a tank item carried when it was broken full. A fluid this tank's role does not
+     * accept, or more than it holds, is not taken: the item came from this same block, so either means
+     * the stack was edited, and the tank stays as empty as a fresh one rather than guessing.
+     */
+    public void restore(@Nullable FluidStack carried) {
+        if (carried != null && carried.amount > 0 && accepts(carried.getFluid())
+                && carried.amount <= tank.getCapacity()) {
+            tank.setFluid(carried.copy());
+            markDirty(); // setFluid bypasses onContentsChanged
+        }
+    }
+
     @Override
     public boolean hasCapability(@Nonnull Capability<?> capability, @Nullable EnumFacing facing) {
         if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {

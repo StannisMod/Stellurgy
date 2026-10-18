@@ -724,6 +724,7 @@ msg.rocketbuilder.multiplepilotseats=Only one Pilot Seat per ship!
 msg.rocketbuilder.shiptoolarge=Ship too large to assemble
 msg.rocketbuilder.unknownpropellantpair=No data for a fuel/oxidizer pair (weights.json propellantPairs)
 msg.rocketbuilder.fluidinfueltanks=Empty the fuel tanks: a rocket is fuelled at the fuelling station
+tooltip.stellurgy.fueltank.carried=Holds %d mB of %s
 msg.rocketbuilder.shortoforbit=Short of orbit: climbs to Y %d of %d
 error.rocket.shortOfOrbit=Not enough propellant to reach orbit: this climb tops out at Y %d, the line is at Y %d
 msg.solar.collectingEnergy=Collecting Energy:

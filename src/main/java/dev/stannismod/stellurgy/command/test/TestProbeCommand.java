@@ -17950,6 +17950,38 @@ public class TestProbeCommand extends CommandBase {
                 + (at.getZ() - origin.getZ()) + "]";
     }
 
+    /**
+     * One item entity as data: its id, item and count, and {@code nbtFluids} — every top-level compound
+     * of its stack's NBT that reads as a fluid stack, by key, so a caller sees what the stack carries
+     * without this instrument knowing which key a block writes.
+     */
+    private static String droppedItemJson(net.minecraft.entity.item.EntityItem e) {
+        net.minecraft.item.ItemStack stack = e.getItem();
+        ResourceLocation rn = stack.getItem().getRegistryName();
+        StringBuilder fluids = new StringBuilder("[");
+        net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+        if (tag != null) {
+            for (String key : tag.getKeySet()) {
+                if (tag.getTagId(key) != net.minecraftforge.common.util.Constants.NBT.TAG_COMPOUND) {
+                    continue;
+                }
+                net.minecraftforge.fluids.FluidStack carried =
+                        net.minecraftforge.fluids.FluidStack.loadFluidStackFromNBT(tag.getCompoundTag(key));
+                if (carried == null) {
+                    continue;
+                }
+                if (fluids.length() > 1) {
+                    fluids.append(',');
+                }
+                fluids.append("{\"key\":\"").append(escapeJson(key)).append("\",\"fluid\":\"")
+                        .append(escapeJson(carried.getFluid().getName())).append("\",\"amount\":")
+                        .append(carried.amount).append('}');
+            }
+        }
+        return "{\"entityId\":" + e.getEntityId() + ",\"item\":\"" + (rn == null ? "null" : escapeJson(rn.toString()))
+                + "\",\"count\":" + stack.getCount() + ",\"nbtFluids\":" + fluids.append(']') + "}";
+    }
+
     /** {@code [[x,y,z],…]} of {@code positions}, in their order; {@code []} for none. */
     private static String blockPosArrayJson(java.util.List<BlockPos> positions) {
         StringBuilder out = new StringBuilder("[");
@@ -23234,6 +23266,33 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"posY\":" + entity.posY + "}");
             return;
         }
+        // /stellurgytest entity stamp-fluid <dim> <entityId> <key> <fluid> <amount> — EDITS an item
+        // entity's stack: writes a fluid stack under <key> of its NBT, replacing what was there. For
+        // arranging a stack nobody's play produces (a hand-edited one), never for its normal contents.
+        if (args.length >= 6 && "stamp-fluid".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + args[1] + "}");
+                return;
+            }
+            net.minecraft.entity.Entity found = world.getEntityByID(parseIntOr(args[2], -1));
+            net.minecraftforge.fluids.Fluid fluid = net.minecraftforge.fluids.FluidRegistry.getFluid(args[4]);
+            if (!(found instanceof net.minecraft.entity.item.EntityItem) || fluid == null) {
+                send(sender, "{\"error\":\"no item entity or no such fluid\",\"entityId\":" + args[2]
+                        + ",\"fluid\":\"" + escapeJson(args[4]) + "\"}");
+                return;
+            }
+            net.minecraft.entity.item.EntityItem item = (net.minecraft.entity.item.EntityItem) found;
+            net.minecraft.item.ItemStack stack = item.getItem().copy();
+            net.minecraft.nbt.NBTTagCompound tag = stack.hasTagCompound() ? stack.getTagCompound()
+                    : new net.minecraft.nbt.NBTTagCompound();
+            tag.setTag(args[3], new net.minecraftforge.fluids.FluidStack(fluid, parseIntOr(args[5], 0))
+                    .writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+            stack.setTagCompound(tag);
+            item.setItem(stack);
+            send(sender, "{\"ok\":true,\"item\":" + droppedItemJson(item) + "}");
+            return;
+        }
         // scan a box around (cx,cy,cz) for EntityItem instances
         // and emit each one's registry name + count + position. Used to
         // pin recipe outputs that spawn as world entities (e.g. PlatePress
@@ -23261,7 +23320,8 @@ public class TestProbeCommand extends CommandBase {
                 net.minecraft.entity.item.EntityItem ei = items.get(i);
                 net.minecraft.item.ItemStack stack = ei.getItem();
                 ResourceLocation rn = stack.getItem().getRegistryName();
-                b.append("{\"item\":\"").append(rn == null ? "null" : rn.toString())
+                b.append("{\"entityId\":").append(ei.getEntityId())
+                        .append(",\"item\":\"").append(rn == null ? "null" : rn.toString())
                         .append("\",\"count\":").append(stack.getCount())
                         .append(",\"meta\":").append(stack.getMetadata())
                         .append(",\"posX\":").append(ei.posX)
@@ -25521,9 +25581,108 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"fakePlayer\":" + headless + "}");
             return;
         }
+        // /stellurgytest block harvest <dim> <x> <y> <z> — a player in survival, a diamond pickaxe in his
+        // hand, breaks the block through PlayerInteractionManager#tryHarvestBlock: the call the server
+        // makes when a player's dig completes, so removedByPlayer, harvestBlock and getDrops run in
+        // production's order. Replies with every item entity that joined the world within a block of the
+        // cell during the call, each with the fluid stacks its NBT carries under any key.
+        if (args.length >= 5 && "harvest".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + args[1] + "}");
+                return;
+            }
+            BlockPos target = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            net.minecraftforge.common.util.FakePlayer digger =
+                    net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world);
+            if (digger.interactionManager.getGameType().isCreative()) {
+                send(sender, "{\"error\":\"the fake player is in creative, which harvests nothing\"}");
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB around = new net.minecraft.util.math.AxisAlignedBB(target).grow(1.0D);
+            java.util.Set<Integer> before = new java.util.HashSet<>();
+            for (net.minecraft.entity.item.EntityItem e : world.getEntitiesWithinAABB(
+                    net.minecraft.entity.item.EntityItem.class, around)) {
+                before.add(e.getEntityId());
+            }
+            net.minecraft.util.ResourceLocation broken = world.getBlockState(target).getBlock().getRegistryName();
+            boolean harvested;
+            digger.inventory.clear();
+            digger.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND,
+                    new net.minecraft.item.ItemStack(net.minecraft.init.Items.DIAMOND_PICKAXE));
+            try {
+                harvested = digger.interactionManager.tryHarvestBlock(target);
+            } finally {
+                digger.inventory.clear();
+            }
+            StringBuilder drops = new StringBuilder("[");
+            for (net.minecraft.entity.item.EntityItem e : world.getEntitiesWithinAABB(
+                    net.minecraft.entity.item.EntityItem.class, around)) {
+                if (before.contains(e.getEntityId())) {
+                    continue;
+                }
+                if (drops.length() > 1) {
+                    drops.append(',');
+                }
+                drops.append(droppedItemJson(e));
+            }
+            drops.append(']');
+            send(sender, "{\"ok\":true,\"pos\":[" + target.getX() + "," + target.getY() + "," + target.getZ() + "]"
+                    + ",\"broken\":\"" + escapeJson(broken == null ? "null" : broken.toString()) + "\""
+                    + ",\"harvested\":" + harvested
+                    + ",\"airAfter\":" + world.isAirBlock(target)
+                    + ",\"drops\":" + drops + "}");
+            return;
+        }
+        // /stellurgytest block place <dim> <itemEntityId> <x> <y> <z> <face> — a player picks the item
+        // entity up through EntityItem#onCollideWithPlayer (its pickup delay cleared first: the wait a
+        // dropped item makes, time and not a decision) and uses what he then holds on that face of the
+        // block at x y z through PlayerInteractionManager#processRightClickBlock — a right-click's server
+        // half, so the item's own placement and the placed block's onBlockPlacedBy run. Replies with the
+        // cell the face leads to and what stands there afterwards.
+        if (args.length >= 7 && "place".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + args[1] + "}");
+                return;
+            }
+            net.minecraft.entity.Entity found = world.getEntityByID(parseIntOr(args[2], -1));
+            if (!(found instanceof net.minecraft.entity.item.EntityItem) || found.isDead) {
+                send(sender, "{\"error\":\"no living item entity\",\"entityId\":" + args[2] + "}");
+                return;
+            }
+            BlockPos clicked = new BlockPos(parseIntOr(args[3], 0), parseIntOr(args[4], 0), parseIntOr(args[5], 0));
+            net.minecraft.util.EnumFacing face = net.minecraft.util.EnumFacing.byName(args[6].toLowerCase(java.util.Locale.ROOT));
+            if (face == null) {
+                send(sender, "{\"error\":\"unknown face\",\"face\":\"" + escapeJson(args[6]) + "\"}");
+                return;
+            }
+            net.minecraftforge.common.util.FakePlayer placer =
+                    net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world);
+            net.minecraft.entity.item.EntityItem item = (net.minecraft.entity.item.EntityItem) found;
+            net.minecraft.util.EnumActionResult result;
+            boolean pickedUp;
+            placer.inventory.clear();
+            try {
+                item.setNoPickupDelay();
+                item.onCollideWithPlayer(placer);
+                pickedUp = item.isDead;
+                result = !pickedUp ? net.minecraft.util.EnumActionResult.PASS
+                        : placer.interactionManager.processRightClickBlock(placer, world, placer.getHeldItemMainhand(),
+                                net.minecraft.util.EnumHand.MAIN_HAND, clicked, face, 0.5F, 0.5F, 0.5F);
+            } finally {
+                placer.inventory.clear();
+            }
+            BlockPos into = clicked.offset(face);
+            net.minecraft.util.ResourceLocation standing = world.getBlockState(into).getBlock().getRegistryName();
+            send(sender, "{\"ok\":true,\"pickedUp\":" + pickedUp + ",\"result\":\"" + result.name() + "\""
+                    + ",\"placedAt\":[" + into.getX() + "," + into.getY() + "," + into.getZ() + "]"
+                    + ",\"blockThere\":\"" + escapeJson(standing == null ? "null" : standing.toString()) + "\"}");
+            return;
+        }
         if (args.length < 5
                 || !("at".equalsIgnoreCase(args[0]) || "biome-at".equalsIgnoreCase(args[0]))) {
-            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z> | activate <dim> <x> <y> <z> [sneak]\"}");
+            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z> | activate <dim> <x> <y> <z> [sneak] | harvest <dim> <x> <y> <z> | place <dim> <itemEntityId> <x> <y> <z> <face>\"}");
             return;
         }
         boolean biomeMode = "biome-at".equalsIgnoreCase(args[0]);

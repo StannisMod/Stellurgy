@@ -684,6 +684,7 @@ enum ProbeVerbKind {
             case "weather get":
             case "weather set":
             case "weather set-marker":
+            case "entity stamp-fluid":
             case "weight content-scale":
             case "weight fuel-scale":
             case "weight reset":
@@ -692,6 +693,8 @@ enum ProbeVerbKind {
             case "worldgen create-terrain-dim":
                 return ARRANGE;
             case "block activate":
+            case "block harvest":
+            case "block place":
             case "damage impact":
             case "damage weld":
             case "drive arm":

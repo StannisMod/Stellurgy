@@ -122,8 +122,12 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   a `TileWearable`): up to `CAPACITY_MB` (1000 mB, a cubic metre) of the fluids its `role()` accepts —
   monopropellant for the base block, the pair's fuel, oxidizer or nuclear working fluid for the three that
   extend it — exposed as the fluid capability on every face; a bucket fills or empties it through
-  `onBlockActivated` (`:230`); what it holds lives in the tile's NBT and is lost when the block is broken
-  (C10 STAT-44) `[T]`.
+  `onBlockActivated`; what it holds lives in the tile's NBT (C10 STAT-44) `[T]`. **Broken, it keeps what
+  it held**: the dropped tank item carries the fluid under the stack key `carriedFluid`, shown in its
+  tooltip, and placing it puts the fluid back (`TileFuelTank#restore` — a fluid outside the role or past
+  the capacity is not taken). Removal is held until `harvestBlock` so the drop can read the tile. Silent
+  part: the item's weight does not count the carried fluid — a stack's NBT is not weighed (`weight-mass`)
+  `[V]`.
 - **MECH-BLK-04 Pressurized fluid tank.** Right-click routes through the tile's FLUID capability
   (`FluidUtil.interactWithFluidHandler`), else opens MODULAR GUI; drops/harvest emit one `blockPressureTank`
   item pre-filled from `getOwnContentsCopy`; `setRemoving(true)` blocks cross-tile moves during teardown.
@@ -239,6 +243,16 @@ Config: see `C4-config-surface`.
   behaviour of the `data>0` guard; not test-pinned. `BlockDataBusBig.java:53-56`
 - **INV-BLK-07 [V][BEH]** Landing pad registers on add and unregisters on break with its station (symmetric); the
   docking port's break path is **not** symmetric. `BlockLandingPad.java:46,71`
+- **INV-BLK-08 [T][BEH]** A rocket fuel tank a player HARVESTS keeps what it held: the tank item it drops carries
+  the tile's fluid (`BlockFuelTank#getDrops`, the removal held back by `#removedByPlayer` until `#harvestBlock`
+  so the drop can still read the tile), and placing that item gives the tank it places the same fluid
+  (`#onBlockPlacedBy` → `TileFuelTank#restore`). A carried stack the placed tank's role does not accept, or
+  more than its capacity, is not taken — that tank is placed EMPTY, never partly filled. Maintainer ruling
+  2026-10-18, option "б" (a broken tank keeps its fluid in the item). Out of this clause, unwitnessed: the
+  explosion and `World#destroyBlock` paths (they reach `getDrops` with the tile still standing, `[V]`), and a
+  harvest without the tool iron needs, which drops nothing at all. REGIONS: `broken and placed`,
+  `another role`, `past its capacity`. Pinned by
+  `TierTwoCraftFlightModelGroupTest#aHarvestedFuelTankCarriesItsFluidIntoTheTankItPlaces`.
 
 ## Failure modes & edge cases
 - Broken-part engines cast `world.getTileEntity(pos)` to `TileBrokenPart` in `onBlockPlacedBy`/`harvestBlock`
@@ -247,8 +261,8 @@ Config: see `C4-config-surface`.
   `BlockOrbitalLaserDrill.java:43`
 
 ## Test coverage
-No test in `src/test` targets `dev.stannismod.stellurgy.block.*` directly (grep: 0 hits); block behaviour is
-exercised only indirectly through rocket-assembly and atmosphere suites. All invariants above are [V]/[A], none [T].
+Block behaviour is exercised mostly indirectly through rocket-assembly and atmosphere suites; the one `[T]`
+invariant is INV-BLK-08 (the rocket fuel tank's harvest and placement), pinned in the server tier.
 
 ## Open questions
 - `BlockStellurgyHatch.createTileEntity` returns `null` for `VARIANT&7 == 7`; is variant 7 ever registered/placed?

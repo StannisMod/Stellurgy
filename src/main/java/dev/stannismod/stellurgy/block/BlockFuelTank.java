@@ -196,6 +196,67 @@ public class BlockFuelTank extends BlockFullyRotatable implements IFuelTank {
                 world.setBlockState(pos,state.withProperty(FACING, targetfacing));
         }
 
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
+        if (te instanceof TileFuelTank) {
+            ((TileFuelTank) te).restore(carriedFluid(stack));
+        }
+    }
+
+    /** The item-stack key under which a broken tank carries what it held. */
+    private static final String CARRIED_KEY = "carriedFluid";
+
+    @Nullable
+    private static net.minecraftforge.fluids.FluidStack carriedFluid(ItemStack stack) {
+        net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+        return tag != null && tag.hasKey(CARRIED_KEY)
+                ? net.minecraftforge.fluids.FluidStack.loadFluidStackFromNBT(tag.getCompoundTag(CARRIED_KEY)) : null;
+    }
+
+    // Removal is held back until harvestBlock so the drop can still read the tile's fluid; the vanilla
+    // order removes the block, and with it the tile, before the drops are made.
+    @Override
+    public boolean removedByPlayer(@Nonnull IBlockState state, World world, @Nonnull BlockPos pos,
+                                   @Nonnull EntityPlayer player, boolean willHarvest) {
+        return willHarvest || super.removedByPlayer(state, world, pos, player, false);
+    }
+
+    @Override
+    public void harvestBlock(@Nonnull World world, EntityPlayer player, @Nonnull BlockPos pos, @Nonnull IBlockState state,
+                             @Nullable net.minecraft.tileentity.TileEntity te, ItemStack tool) {
+        super.harvestBlock(world, player, pos, state, te, tool);
+        world.setBlockToAir(pos);
+    }
+
+    @Override
+    public void getDrops(@Nonnull net.minecraft.util.NonNullList<ItemStack> drops, IBlockAccess world, BlockPos pos,
+                         @Nonnull IBlockState state, int fortune) {
+        super.getDrops(drops, world, pos, state, fortune);
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
+        net.minecraftforge.fluids.FluidStack held = te instanceof TileFuelTank ? ((TileFuelTank) te).contents() : null;
+        if (held == null) {
+            return;
+        }
+        for (ItemStack drop : drops) {
+            if (net.minecraft.block.Block.getBlockFromItem(drop.getItem()) == this) {
+                net.minecraft.nbt.NBTTagCompound tag = drop.hasTagCompound()
+                        ? drop.getTagCompound() : new net.minecraft.nbt.NBTTagCompound();
+                tag.setTag(CARRIED_KEY, held.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+                drop.setTagCompound(tag);
+                return;
+            }
+        }
+    }
+
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
+    @Override
+    public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip,
+                               net.minecraft.client.util.ITooltipFlag flag) {
+        super.addInformation(stack, world, tooltip, flag);
+        net.minecraftforge.fluids.FluidStack carried = carriedFluid(stack);
+        if (carried != null) {
+            tooltip.add(net.minecraft.client.resources.I18n.format("tooltip.stellurgy.fueltank.carried",
+                    carried.amount, carried.getLocalizedName()));
+        }
     }
 
 

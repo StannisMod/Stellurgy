@@ -1375,6 +1375,119 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 hydrazineIntoMono == CUBIC_METRE_MB && oxygenIntoOx == CUBIC_METRE_MB);
     }
 
+    /** How far apart the harvested tanks stand, blocks: past the half-block reach in which dropped items merge. */
+    private static final int TANK_SPACING = 3;
+
+    /**
+     * Harvest the full tank at {@code at} as a player with a pickaxe does, and answer its one drop: a
+     * rocket fuel tank item, the block gone.
+     */
+    private Reply harvestTheOneTankAt(int[] at, String what) throws Exception {
+        Reply dug = act("stellurgytest block harvest " + DIM + " " + at[0] + " " + at[1] + " " + at[2]);
+        requireArranged(what + " — the harvest must break the tank and drop one tank item: " + dug,
+                dug.ok() && dug.bool("harvested") && dug.bool("airAfter") && dug.objectArray("drops").length == 1
+                        && "stellurgy:fueltank".equals(Reply.of(dug.objectArray("drops")[0]).text("item")));
+        return Reply.of(dug.objectArray("drops")[0]);
+    }
+
+    /** Place the dropped item {@code drop} back on top of the floor block under {@code at}; require a tank stands there. */
+    private void placeBackOnItsFloor(Reply drop, int[] at, String what) throws Exception {
+        Reply placed = act("stellurgytest block place " + DIM + " " + drop.integer("entityId") + " " + at[0] + " "
+                + (at[1] - 1) + " " + at[2] + " up");
+        requireArranged(what + " — the item must be picked up and placed as a rocket fuel tank where the tank stood: "
+                + placed, placed.ok() && placed.bool("pickedUp") && "SUCCESS".equals(placed.text("result"))
+                && "stellurgy:fueltank".equals(placed.text("blockThere"))
+                && java.util.Arrays.equals(placed.intArray("placedAt"), at));
+    }
+
+    /** What the tank at {@code at} holds, mB, read through its fluid capability; zero when empty. */
+    private int heldMb(int[] at, String fluid, String what) throws Exception {
+        Reply stored = read("stellurgytest fluid stored " + DIM + " " + at[0] + " " + at[1] + " " + at[2]);
+        requireArranged(what + " must be a rocket fuel tank: " + stored, stored.text("tileClass").endsWith(".TileFuelTank"));
+        Reply tank = Reply.of(stored.objectArray("tanks")[0]);
+        if (!tank.has("amount")) {
+            return 0;
+        }
+        requireArranged(what + " may hold only " + fluid + ": " + stored, fluid.equals(tank.text("fluid")));
+        return tank.integer("amount");
+    }
+
+    /**
+     * A rocket fuel tank a player harvests keeps what it held (blocks INV-BLK-08): its dropped item carries
+     * the fluid, and placing that item makes a tank holding it; a carried stack the role refuses, or past the
+     * tank's volume, places an EMPTY tank. Three full monopropellant tanks are broken as a survival player
+     * with a pickaxe breaks them — `PlayerInteractionManager#tryHarvestBlock`, the call his finished dig
+     * makes — and each drop is picked up and right-clicked back onto the floor it stood on; the second and
+     * third drops are first edited to carry oxygen and a cubic metre and a half of hydrazine, under the key
+     * the first drop shows production wrote, so the edit names no key of its own.
+     *
+     * <p>Server tier, not client: every decision here is the server's (the drop, the placement, the restore),
+     * and what a client would add is vanilla's dig packets and its inventory sync. Not seen: the explosion and
+     * {@code World#destroyBlock} paths, the tooltip, and a harvest by hand, which drops nothing.</p>
+     */
+    @Pins("INV-BLK-08")
+    @Regions(of = "INV-BLK-08", value = {"broken and placed", "another role", "past its capacity"})
+    @RedWitness(verdict = "INV-BLK-08 the drop carries", member = "BlockFuelTank#getDrops",
+            at = "tag.setTag(CARRIED_KEY, held.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));", replacedBy = "",
+            fails = "INV-BLK-08 broken and placed: the dropped tank item carries", on = "2026-10-18")
+    @RedWitness(verdict = "INV-BLK-08 the drop carries", member = "BlockFuelTank#removedByPlayer",
+            at = "return willHarvest || super.removedByPlayer(state, world, pos, player, false);",
+            replacedBy = "return super.removedByPlayer(state, world, pos, player, willHarvest);",
+            fails = "INV-BLK-08 broken and placed: the dropped tank item carries", on = "2026-10-18")
+    @RedWitness(verdict = "INV-BLK-08 broken and placed", member = "BlockFuelTank#onBlockPlacedBy",
+            at = "((TileFuelTank) te).restore(carriedFluid(stack));", replacedBy = "",
+            fails = "INV-BLK-08 broken and placed: placed, the tank", on = "2026-10-18")
+    @RedWitness(verdict = "INV-BLK-08 another role", member = "TileFuelTank#restore",
+            at = "&& accepts(carried.getFluid())", replacedBy = "",
+            fails = "INV-BLK-08 another role", on = "2026-10-18")
+    @RedWitness(verdict = "INV-BLK-08 past its capacity", member = "TileFuelTank#restore",
+            at = "&& carried.amount <= tank.getCapacity()", replacedBy = "",
+            fails = "INV-BLK-08 past its capacity", on = "2026-10-18")
+    @Test
+    public void aHarvestedFuelTankCarriesItsFluidIntoTheTankItPlaces() throws Exception {
+        FixtureSite site = clearedSite(0, 2, "three full rocket fuel tanks on a floor");
+        int[][] tanks = new int[3][];
+        for (int i = 0; i < tanks.length; i++) {
+            int[] tank = {site.x + i * TANK_SPACING, site.y + 1, site.z};
+            Reply floor = arrange("stellurgytest fill " + DIM + " " + tank[0] + " " + site.y + " " + tank[2] + " "
+                    + tank[0] + " " + site.y + " " + tank[2] + " minecraft:stone");
+            requireArranged("the floor under tank " + i + " must stand: " + floor, floor.ok());
+            standTank(tank, "stellurgy:fueltank", "tank " + i);
+            requireArranged("tank " + i + " must be filled with a cubic metre of hydrazine",
+                    offer(tank, "hydrazine", CUBIC_METRE_MB) == CUBIC_METRE_MB);
+            tanks[i] = tank;
+        }
+
+        Reply kept = harvestTheOneTankAt(tanks[0], "the tank kept as it was");
+        String[] carried = kept.objectArray("nbtFluids");
+        Reply carries = carried.length == 1 ? Reply.of(carried[0]) : null;
+        assertTrue("INV-BLK-08 broken and placed: the dropped tank item carries the cubic metre of hydrazine the tank"
+                + " held — " + kept, carries != null && "hydrazine".equals(carries.text("fluid"))
+                && carries.integer("amount") == CUBIC_METRE_MB);
+        String key = carries.text("key");
+
+        Reply foreign = harvestTheOneTankAt(tanks[1], "the tank whose item is edited to oxygen");
+        Reply overfull = harvestTheOneTankAt(tanks[2], "the tank whose item is edited past a cubic metre");
+        requireArranged("the oxygen edit must take", arrange("stellurgytest entity stamp-fluid " + DIM + " "
+                + foreign.integer("entityId") + " " + key + " oxygen " + CUBIC_METRE_MB / 2).ok());
+        requireArranged("the overfill edit must take", arrange("stellurgytest entity stamp-fluid " + DIM + " "
+                + overfull.integer("entityId") + " " + key + " hydrazine " + OVERFILL_MB).ok());
+
+        placeBackOnItsFloor(kept, tanks[0], "the kept tank");
+        placeBackOnItsFloor(foreign, tanks[1], "the oxygen tank");
+        placeBackOnItsFloor(overfull, tanks[2], "the overfilled tank");
+        int keptMb = heldMb(tanks[0], "hydrazine", "the kept tank");
+        int foreignMb = heldMb(tanks[1], "oxygen", "the oxygen tank");
+        int overfullMb = heldMb(tanks[2], "hydrazine", "the overfilled tank");
+        measured("harvested tanks", "key=" + key, "kept=" + keptMb, "oxygen=" + foreignMb, "overfull=" + overfullMb);
+
+        assertEquals("INV-BLK-08 broken and placed: placed, the tank holds what its item carried", CUBIC_METRE_MB, keptMb);
+        assertEquals("INV-BLK-08 another role: a carried fluid the monopropellant tank refuses places it empty", 0,
+                foreignMb);
+        assertEquals("INV-BLK-08 past its capacity: a carried stack past a cubic metre places it empty, not part-filled",
+                0, overfullMb);
+    }
+
     /**
      * The assembler judges a ship FULL and as BUILT (C10 STAT-12): a metered ship whose tanks are empty —
      * so nothing aboard is live — is built on the first press when everything it is built with holds it up
