@@ -158,7 +158,7 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   remains for "contacts happen where the rendered surface is" on the outer hull: under the substrate
   that is VS's collision against its game-tick pose, and no instrument records it.
 - **CREW-C12 (interior boarding — maintainer ruling 2026-07-16, enclosure term ruled
-  2026-07-18)** `[T]` A body INSIDE a
+  2026-07-18)** `[A]` A body INSIDE a
   ship's subspace block region **that is ENCLOSED — ship blocks overhead in the SHIP
   frame (`DeckBoarding.hasRoofAboveFor:779`) —** and has a deck below it IN THE SHIP FRAME (within a
   bounded reach — `hasDeckBelowFor:709`; the whole test is `DeckBoarding.interiorCandidate:750`,
@@ -172,14 +172,13 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   A roofed body past the deck probe's reach is likewise
   never released by `noDeckBelow` (interior-stay, `DeckBoarding.deckMayKeep:719`). The outer hull
   (C11) is a contact with NO ship-frame deck below; an enclosed body with a deck below is
-  C12's. Pinned (admission site `DeckFrameTick.java:928`): the released-interior
-  re-seat (`VSCrewInteriorBoardingTest#aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`)
-  + the POSITIVE roofed-cavity hold —
-  `aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck` on the
-  `with-roofed-deck` fixture: a body displaced UNSUPPORTED mid-cavity of the 170° ship
-  (off the deck past the support probe, under the roof) is claimed ABOARD by the
-  interior gate — never the outer-hull fallback — and deck gravity carries it back
-  AGAINST world gravity to its deck stand with the ship camera on.
+  C12's. Unpinned: the interior gate at admission (`DeckFrameTick.java:928`) replaced by `null`
+  leaves both methods this cited green (measured 2026-10-18). The released-interior re-seat
+  (`VSCrewInteriorBoardingTest#aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`) is re-seated by
+  the dismount seed, not by the gate; the body displaced mid-cavity of the 170° roofed ship
+  (`aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck`) is never released — a floor within
+  the keep probe's 6 blocks holds it — so nothing is reclaimed and the gate is never asked. Neither
+  reaches the roofed keep past that probe either.
 - **CREW-C13 (flying-aboard — maintainer ruling 2026-07-16, variant A)** `[T]`
   A creative-flying body meeting C12's interior condition (or
   standing-contact on a deck) is held ABOARD while STILL FLYING: its flight

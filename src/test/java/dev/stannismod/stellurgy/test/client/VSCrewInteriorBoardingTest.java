@@ -18,7 +18,8 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 
 /**
@@ -208,14 +209,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A pilot dismounted inside an inverted ship and moved about inside it stays held by that ship
      * with deck semantics, at his deck spot, with the ship camera engaged.
      */
-    @LegacyWitness(prose = "2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}"
-            + " at {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the inversion\". THE"
-            + " CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: \"the"
-            + " client camera must engage for the re-seated interior body (shipCamActive=false)\". The other"
-            + " verdicts the wait rewrite touched are the arrangement's: the ABOARD commit after the dismount"
-            + " (server-committed; the seed inversion left it green), the client applying the in-hull teleport"
-            + " and taking a census after it, and the region check that the teleport did not carry him out"
-            + " through the doorway.")
+    @NotYetRed(prose = "no verdict is red against the current code. The 2026-09-28 records broke the arrangement"
+            + " (the attitude hold accepting the inversion) and a dismount seed's hull-stand mode, since deleted."
+            + " The interior gate, {@code DeckFrameTick#admissionFor} at"
+            + " {@code ? DeckBoarding.interiorCandidate((EntityLivingBase) entity) : null} replaced by"
+            + " {@code ? null : null}, left it GREEN (2026-10-18): the re-seat goes through the dismount seed, not"
+            + " the interior gate.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
             why = "the same slew window the roofed-deck scenario below argues.")
@@ -432,10 +431,13 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A body unsupported mid-cavity of an enclosed, inverted cockpit is claimed by the deck below it.
      */
-    @LegacyWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
-            + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))}"
-            + " answering null: \"attitude hold must accept the inversion\", 2026-09-28 — the one verdict the wait"
-            + " rewrite touched here. The interior gate's own claim after it is not witnessed.")
+    @NotYetRed(prose = "no verdict is red against the current code; the 2026-09-28 record broke only the"
+            + " arrangement (the attitude hold accepting the inversion). The interior gate,"
+            + " {@code DeckFrameTick#admissionFor} at"
+            + " {@code ? DeckBoarding.interiorCandidate((EntityLivingBase) entity) : null} replaced by"
+            + " {@code ? null : null}, left it GREEN (2026-10-18): the displaced body is never released - a floor"
+            + " within {@code DeckBoarding.FLOOR_PROBE_DEPTH} below keeps it - so nothing is reclaimed and the gate"
+            + " this method is named for is never asked.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
             why = "then the attitude READ — the pair that replaces a fixed 200 CLIENT ticks and the re-stepping"
@@ -652,19 +654,14 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
      */
-    @LegacyWitness(prose = "re-taken on the deck frame after the hand-built flight was deleted,"
-            + " 2026-10-06, taken on the pre-2026-10-07 form, when the exclusion stood in `ShipFrameTravel`. THE"
-            + " CAPTURE IS KEPT — the exclusion's deck-frame disjunct removed, so a flyer the deck holds counts as"
-            + " excluded: \"starting flight on the deck must NOT release the capture\"; that disjunct now stands as"
-            + " the first conjunct of {@code DeckBoarding#excludedStateOf} at"
-            + " {@code !DeckFrameTick.holds(entity) && !flyCaptureEligible(entity)}. THE ROLL IS ACCEPTED —"
-            + " {@code VSIntegration#flightComputerOf} answering null: \"attitude hold must accept the roll\""
-            + " (2026-09-28, unchanged code). NOT YET for the ascent, the descent and the landing: with"
-            + " {@code DeckFrameTick#runInDeckFrame} at"
+    @RedWitness(verdict = "starting flight on the deck must NOT release the capture",
+            member = "DeckBoarding#excludedStateOf",
+            at = "!DeckFrameTick.holds(entity) && !flyCaptureEligible(entity)", replacedBy = "!flyCaptureEligible(entity)",
+            fails = "starting flight on the deck must NOT release the capture", on = "2026-10-18")
+    @NotYetRed(prose = "the ascent, the descent and the landing: with {@code DeckFrameTick#runInDeckFrame} at"
             + " {@code !isFlying(entity) && !DeckBoarding.deckMayKeep(entity, shipId, local)} applying the"
-            + " deck-keep test to a flyer as well, the method stays GREEN — its climb never leaves the reach of"
-            + " that test, so the flyer's own keep rule is not exercised here. The records taken before named the"
-            + " deleted `ShipFrameTravel.flyingAboardTravel`.")
+            + " deck-keep test to a flyer as well, the method stays GREEN (2026-10-06) - its climb never leaves the"
+            + " reach of that test, so the flyer's own keep rule is not exercised here.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);",
             why = "the slew, counted on the hull's world clock, with both ends in the gate. The gate's angle is"

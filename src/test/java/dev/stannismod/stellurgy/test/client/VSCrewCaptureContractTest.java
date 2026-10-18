@@ -441,15 +441,16 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A jump from the top deck keeps the capture and lands back on the same deck.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28, taken on the pre-2026-10-06 form against"
-            + " the travel resolver's own aboard jump (`ShipFrameTravel.jump`, deleted with the resolver) and NOT"
-            + " re-taken since: a jump on a deck is now vanilla's own, run in the deck's frame at"
-            + " {@code DeckFrameTick#runInDeckFrame} at {@code ownUpdate.run()}. THE LANDING — that jump adding"
-            + " 1.5 blocks a tick of ship-frame sideways motion to every aboard jump, flinging him off the deck:"
-            + " \"the jumper was in the air when the key came up, so he must LAND on the deck he jumped from … no"
-            + " `deck_contact` carrying ship = …\". THE JUMP LEAVES THE DECK — the same jump given no upward motion"
-            + " (`motion[1] = up`): \"the jump must actually leave the deck (apex=157.0 deckY=157.0)\"; that one"
-            + " never airs him, so the conditional landing wait is skipped on it.")
+    @RedWitness(verdict = "must survive the whole jump arc", member = "DeckBoarding#FLOOR_PROBE_DEPTH",
+            at = "FLOOR_PROBE_DEPTH = 6.0;", replacedBy = "FLOOR_PROBE_DEPTH = 0.5;",
+            fails = "the capture must survive the whole jump arc, not release mid-air", on = "2026-10-18")
+    @NotYetRed(prose = "the landing and the jump-leaves-the-deck verdicts: their 2026-09-28 inversions broke the"
+            + " travel resolver's own aboard jump (`ShipFrameTravel.jump`), since deleted; a jump on a deck is now"
+            + " vanilla's own, run in the deck's frame, and neither has been re-taken. The keep test's own"
+            + " {@code !DeckBoarding.deckMayKeep(entity, shipId, local)} replaced by {@code !entity.onGround}"
+            + " (2026-10-18) reddened the scenario's ARRANGEMENT instead - a body taken in the air while landing is"
+            + " released at once, so the capture before the jump never forms - and is not a witness of this"
+            + " method.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 10; i++) {",
             why = "the APEX of the jump is an extremum over the samples, a property of the arc rather than of any"
@@ -2083,10 +2084,12 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
      */
-    @LegacyWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
-            + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the roll\", 2026-09-28. The other wait the rewrite"
-            + " touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts"
-            + " after the roll were not touched and are not witnessed.")
+    @RedWitness(verdict = "must not move the aim off its cone about the deck normal", member = "DeckLook#turn",
+            at = "if (!sync(player)) {", replacedBy = "if (true) {",
+            fails = "a horizontal mouse move must not move the aim off its cone about the deck normal",
+            on = "2026-10-18")
+    @NotYetRed(prose = "the sweep and the two still-mouse verdicts on the further-rolled deck; the 2026-09-28"
+            + " record broke only the arrangement (the attitude hold accepting the roll).")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < DECK_LOOK_TURNS; i++) {",
             why = "the swept ANGLE is a sum over the steps, which no record could carry. What it cannot see: how"
