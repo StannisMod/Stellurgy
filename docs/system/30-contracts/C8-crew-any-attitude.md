@@ -158,7 +158,7 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   remains for "contacts happen where the rendered surface is" on the outer hull: under the substrate
   that is VS's collision against its game-tick pose, and no instrument records it.
 - **CREW-C12 (interior boarding — maintainer ruling 2026-07-16, enclosure term ruled
-  2026-07-18)** `[A]` A body INSIDE a
+  2026-07-18)** `[T]` A body INSIDE a
   ship's subspace block region **that is ENCLOSED — ship blocks overhead in the SHIP
   frame (`DeckBoarding.hasRoofAboveFor:779`) —** and has a deck below it IN THE SHIP FRAME (within a
   bounded reach — `hasDeckBelowFor:709`; the whole test is `DeckBoarding.interiorCandidate:750`,
@@ -172,8 +172,12 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   A roofed body past the deck probe's reach is likewise
   never released by `noDeckBelow` (interior-stay, `DeckBoarding.deckMayKeep:719`). The outer hull
   (C11) is a contact with NO ship-frame deck below; an enclosed body with a deck below is
-  C12's. Unpinned: the interior gate at admission (`DeckFrameTick.java:928`) replaced by `null`
-  leaves both methods this cited green (measured 2026-10-18). The released-interior re-seat
+  C12's. Pinned (admission): `VSLivingBodyOnADeckTest#aChickenLetGoInsideAnInvertedCabinIsSeatedOnTheDeck`
+  — a chicken let go mid-cabin of the upside-down `with-roofed-deck` craft, half the cabin's height above
+  the deck, is held and seated on the deck; with the gate replaced by `null` the world drops it onto the
+  roof's inner face (3.997 above the deck) and nothing holds it. Not pinned: the roofed keep past the
+  6-block floor probe (the cabin is 4 high). The interior gate at admission (`DeckFrameTick.java:928`)
+  replaced by `null` leaves both client methods this cited green (measured 2026-10-18). The released-interior re-seat
   (`VSCrewInteriorBoardingTest#aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`) is re-seated by
   the dismount seed, not by the gate; the body displaced mid-cavity of the 170° roofed ship
   (`aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck`) is never released — a floor within

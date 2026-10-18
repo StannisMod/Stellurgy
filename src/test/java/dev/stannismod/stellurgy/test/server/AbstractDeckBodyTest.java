@@ -99,8 +99,18 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
         }
     }
 
+    /** The open 5x5 deck: {@link #buildCraft(String)} of {@code with-pilot-deck}. */
     protected Craft buildCraft() throws Exception {
-        int[] bp = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-deck", 4, 12,
+        return buildCraft("with-pilot-deck");
+    }
+
+    /**
+     * Build, assemble and hold the chunks around a craft of fixture {@code variant} — one of the
+     * pilot-deck family ({@code with-pilot-deck}, or {@code with-roofed-deck}: the same deck under a 5x5
+     * roof), whose seat locates the deck.
+     */
+    protected Craft buildCraft(String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site(), c -> arrange(c).raw(), variant, 4, 12,
                 "the craft whose deck the body lies on stands in this volume");
         long pressMark = serverLog.mark();
         String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();

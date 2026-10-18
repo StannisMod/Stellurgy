@@ -567,6 +567,110 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
                 carriedWhileHeld.isEmpty());
     }
 
+    // -- an enclosed interior takes a body with nothing under its feet (C8 CREW-C12) ---------------
+
+    /**
+     * How long a body let go mid-cavity is given to be taken and seated, in server ticks: a chicken,
+     * flapping, falls at about 0.11 blocks a tick at most ((v - 0.08) * 0.98 * 0.6 = v), so the two
+     * blocks to a deck take it about twenty ticks; five times that.
+     */
+    private static final int CAVITY_SETTLE_TICKS = 100;
+
+    /** The highest layer above the deck searched for the roof's underside, in blocks. */
+    private static final int ROOF_SEARCH_LAYERS = 8;
+
+    /** The chicken's height, blocks ({@code EntityChicken}'s size): the cavity must take it twice over. */
+    private static final double CHICKEN_HEIGHT = 0.7;
+
+    /** The server's log, read for the deck's own record of taking the body. */
+    private final Events boardingLog =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+
+    /**
+     * A living body let go in the middle of an upside-down craft's enclosed cabin - nothing under
+     * its feet, a roof over its head - is taken by the deck and seated on it: it ends standing on
+     * the deck, held, against the world's gravity, which pulls it toward the roof.
+     *
+     * <p>Only the enclosure takes it: it hangs half the cabin's height above the deck, out of reach
+     * of the standing probe (0.30 below the feet) and declared by nothing, so the deck that holds it
+     * at the end is the interior gate's ({@code DeckBoarding#interiorCandidate}, asked by the deck's
+     * admission). Without that gate the world drops it onto the roof's inner face, where in the
+     * craft's frame there is no floor beneath it and nothing takes it.</p>
+     *
+     * <p>A chicken and not an armor stand: upside down, a body's world box hangs from its feet toward
+     * the deck while its box in the craft's frame stands up toward the roof, and only a body shorter
+     * than half the cabin fits both ways round. Its AI is on - a mob with it off does not move at
+     * all - and how it wanders on the deck is not read. Not seen here: a player, whose client admits
+     * him; the roofed keep past the deck frame's six-block floor probe.</p>
+     */
+    @RedWitness(verdict = "must be held by this craft's deck", member = "DeckFrameTick#admissionFor",
+            at = "? DeckBoarding.interiorCandidate((EntityLivingBase) entity) : null;", replacedBy = "? null : null;",
+            fails = "a body inside an enclosed cabin must be held by this craft's deck even with nothing under its"
+                    + " feet (C8 CREW-C12): heldBy=none", on = "2026-10-18")
+    @NotYetRed(prose = "the seating verdict: the same inversion stops at the hold verdict before it, the chicken"
+            + " lying on the roof's inner face at 3.997 above the deck (2026-10-18).")
+    @Pins("CREW-C12")
+    @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), CAVITY_SETTLE_TICKS);",
+            why = "where the body comes to rest is a converging value with no announcement of its end; the"
+                    + " stretch is spent in full and the body read once after, its own tick count read at both"
+                    + " ends to show the world simulated it.")
+    public void aChickenLetGoInsideAnInvertedCabinIsSeatedOnTheDeck() throws Exception {
+        Craft craft = buildCraft("with-roofed-deck");
+        rollTo(craft, 180.0);
+        // The cabin's height at the cell one off the seat on each axis, read layer by layer from the
+        // deck's top in the craft's subspace: the first block that is not air is the roof's underside.
+        int cellX = (int) Math.floor(craft.seat.seatX + 1.5);
+        int cellZ = (int) Math.floor(craft.seat.seatZ - 0.5);
+        int deckTop = (int) Math.round(craft.seat.seatY);
+        int roofAt = -1;
+        String column = "";
+        for (int k = 0; k < ROOF_SEARCH_LAYERS; k++) {
+            Reply block = Reply.of(read("stellurgytest block at 0 " + cellX + " " + (deckTop + k) + " " + cellZ).raw());
+            String id = block.textOr("block", "?");
+            column += k + "=" + id + " ";
+            if (roofAt < 0 && !"minecraft:air".equals(id)) {
+                roofAt = k;
+            }
+        }
+        requireArranged("the cabin must be open above the deck and roofed within " + ROOF_SEARCH_LAYERS
+                + " blocks, at least twice a chicken high (" + column + ")", roofAt >= 2.0 * CHICKEN_HEIGHT + 0.1);
+        double feet = roofAt / 2.0;
+
+        long mark = boardingLog.markInstrumented();
+        double[] at = toWorld(craft, 1.5, feet, -0.5);
+        Reply spawned = Reply.of(arrange("stellurgytest vs drop-living 0 minecraft:chicken " + at[0] + " " + at[1]
+                + " " + at[2] + " ai").raw());
+        requireArranged("the chicken must have been spawned: " + spawned, spawned.boolOr("found", false));
+        int chickenId = spawned.integer("entityId");
+        double[] first = deckPoint(craft, chickenId);
+        // Upside down its world box hangs CHICKEN_HEIGHT from its feet toward the deck, which also puts
+        // the feet past the standing probe's 0.30.
+        requireArranged("the chicken must hang mid-cabin, its world box clear of the deck and out of the standing"
+                + " probe's reach (deck-frame height above the deck " + (first[1] - craft.seat.seatY) + ")",
+                first[1] - craft.seat.seatY > CHICKEN_HEIGHT && first[1] - craft.seat.seatY + CHICKEN_HEIGHT < roofAt);
+        GameTicks.advance(client(), GameTicks.server(), CAVITY_SETTLE_TICKS);
+        requireTicked(craft, chickenId);
+        double[] settled = deckPoint(craft, chickenId);
+        simulatedBetween(first, settled, CAVITY_SETTLE_TICKS);
+        Reply held = Reply.of(read("stellurgytest vs player-ship-data 0 " + chickenId + " " + craft.shipId).raw());
+        requireArranged("the craft must still be upside down (deck-up world Y " + deckUpY(craft) + ")",
+                deckUpY(craft) < UPSIDE_DOWN_UP_Y);
+
+        String claims = boardingLog.since(mark, "interior_claimed");
+        String entered = boardingLog.since(mark, "deck_entered");
+        System.out.println("[deck-living] cabin roofAt=" + roofAt + " letGoAt=" + (first[1] - craft.seat.seatY)
+                + " settledAt=" + (settled[1] - craft.seat.seatY) + " heldBy=" + held.textOr("deckHeldBy", "none")
+                + " interiorClaims=" + Events.recordsWhere(claims, "e", String.valueOf(chickenId)).size()
+                + " entered=" + Events.recordsWhere(entered, "e", String.valueOf(chickenId)));
+        assertTrue("a body inside an enclosed cabin must be held by this craft's deck even with nothing under its"
+                + " feet (C8 CREW-C12): heldBy=" + held.textOr("deckHeldBy", "none") + " " + held,
+                craft.shipId.equals(held.textOr("deckHeldBy", null)));
+        assertTrue("the deck's gravity must seat it on the deck, against the world's (deck-frame height above"
+                + " the deck " + (settled[1] - craft.seat.seatY) + ", the roof's underside at " + roofAt + ")",
+                Math.abs(settled[1] - craft.seat.seatY) <= AT_REST);
+    }
+
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
             why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.")
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",
