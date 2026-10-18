@@ -88,11 +88,15 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
   one (`VSMath.STANDING_TOLERANCE = 0.42`, the substrate's own limit).
 
 - **ENT-8 (the seat is current, for every held entity) — every HELD entity is re-imaged through S's
-  current pose at the end of each tick**, so it stands where its deck is and not where the deck was a
+  current pose at the end of each tick**, `[T]` so it stands where its deck is and not where the deck was a
   tick ago (CREW-C15 for every class). This includes an entity that another RIDES: a HELD mount is
   re-imaged like any held body, and vanilla's rider glue positions its rider. A SEAT bound to S is held
   by no deck and is current all the same: after S's pose advances it is re-glued to its seat block through
-  that pose, and its riders are placed on it again.
+  that pose, and its riders are placed on it again. REGIONS: `held body`, `bound seat`, `held mount` PLANNED.
+  Pinned by `VSItemOnADeckTest#anItemLyingOnADeckStaysOnItWhileTheCraftRollsOver`,
+  `VSLivingBodyOnADeckTest#anArmorStandOnADeckStaysOnItWhileTheCraftRollsOver` (held body) and
+  `VSRiderKeepsHisMountAtCruiseTest#aSeatedPilotIsShownOnHisSeatOnEveryTickOfAFlight` (bound seat, client
+  and server); a held mount is not built (Known violated).
 
 - **ENT-9 (environment is read in both frames, each for its own fact)** — ruled 2026-09-30. Whether a
   WORLD fact holds (weather, biome, the dimension's own atmosphere, sky light) is read at the body's

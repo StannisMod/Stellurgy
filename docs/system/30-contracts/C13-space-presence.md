@@ -158,7 +158,7 @@ behaviour and quietly becomes fiction.
 - **PRES-5/PRES-6 (one record, durable reference).** There is no persisted deck anchor:
   `RelogDeckHold` reads the unified record, and the record stores the durable ship id plus a
   computer-relative point. CREW-C14 holds on that source: `VSCrewRelogPersistenceTest` `[T]`.
-- **CREW-C14 holds across a slot-cell restart too** `[T]`
+- **Across a slot-cell restart too, CREW-C14 holds** `[T]`
   (`…aPilotWhoStoodUpBeforeLoggingOutComesBackAboardOnHisFeet`), the cross-dimension case C8
   defers to this doc for.
 

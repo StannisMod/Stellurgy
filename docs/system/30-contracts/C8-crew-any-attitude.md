@@ -55,7 +55,7 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   (STANDING support — box top at/below feet: `DeckFrameTick.java:917`) AND NOT
   simultaneously supported by world terrain (`:889`), both in the deck's admission
   (`DeckFrameTick.admissionFor:870`). A body on world terrain never
-  becomes ABOARD. Pinned: `VSCrewCaptureContractTest.walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame`
+  becomes ABOARD. Pinned: `VSCrewCaptureContractTest#walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame`
   (its positive precondition is the deck frame's own admission decision, recorded
   per tick at `admissionFor`'s return).
   The (a) path DELIVERS the SEAT's deck point: the seed is a client-side pending
@@ -69,13 +69,14 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   `DismountPendingSeedTest`;
   end-to-end: the dismount e2es + `VSCrewInteriorBoardingTest` (stand = seat point,
   deterministic).
-- **CREW-C2 (anchor)** `[T]` While ABOARD(S) every transform resolves through S — by
+- **CREW-C2 (anchor)** `[A]` While ABOARD(S) every transform resolves through S — by
   ship id (the episode's `shipId`, `DeckBoarding.aboardShipId:438`), never re-picked
   from containment mid-episode; `PacketDeckCapture` carries the ship id (wire — C2 doc).
-  Pinned: still-crew / fast-climb kinematics tests (same class).
+  Unpinned: the "still-crew / fast-climb kinematics tests" this cited name no method (measured
+  2026-10-17).
 - **CREW-C3 (stay)** `[T]` ABOARD persists inside S's subspace region grown by a margin
   (measured in SUBSPACE — attitude-invariant; `DeckFrameTick.java:543-548`). Jumping/
-  falling above the deck does not release. Pinned: `jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt`.
+  falling above the deck does not release. Pinned: `VSCrewCaptureContractTest#jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt`.
 - **CREW-C4 (release)** `[A]` ABOARD(S) ends only on: S unloading; leaving the grown region; no deck
   below and no enclosure (`noDeckBelow`, `DeckBoarding.deckMayKeep:719`); entering a state that gives
   the body ANOTHER owner (riding, elytra, creative flight — only when NOT aboard/claimable
@@ -88,12 +89,13 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   A body stepping onto world terrain is not released by this clause: the deck refuses terrain at
   admission only, and a held body over world ground is held by the keep test — consistent with
   CREW-C17's consequence 1.
-- **CREW-C5 (gravity)** `[T]` ABOARD bodies accelerate toward subspace −Y at vanilla
+- **CREW-C5 (gravity)** `[A]` ABOARD bodies accelerate toward subspace −Y at vanilla
   living magnitude at ANY attitude — their own vanilla update runs in the deck's frame
   (`DeckFrameTick.runInDeckFrame:493`); the dimension's gravity is not applied to them
   (`GravityHandler.java:91`, the deck-hold early return). Pinned:
-  `VSShipFlightTelemetryTest.crewStaysOnASteeplyRolledDeck…` (75°).
-  > **Design — the `[T]` above describes the code and stays true under `shipGravityByDefault = true`.**
+  `VSShipFlightTelemetryTest#crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner` (75°), which
+  carries no witness (measured 2026-10-17) — so the clause is not pinned.
+  > **Design — the clause above describes the code and stays true under `shipGravityByDefault = true`.**
   > With the config at its default `false`, an aboard body
   > accelerates by **`g_felt = (g_world − a_ship) + g_field`** in the ship frame: the world's field minus the
   > ship's own acceleration (landed → the planet's gravity; coasting → zero; thrusting → toward the stern),
@@ -115,23 +117,26 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   "dedicated server" and nothing else), and
   world `rotationYaw/Pitch` are DERIVED (`world = shipQuat·deckLook`) each tick+frame —
   the wire and the server keep world semantics unchanged. Pinned:
-  `theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck` (real mouse +
+  `VSCrewCaptureContractTest#theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck` (real mouse +
   real key at 60→85° roll) + `DeckFrameLookTest` (4 unit pins on the composition math).
-- **CREW-C7 (camera)** `[T]` First person while ABOARD: the eye sits along the SHIP's up
+- **CREW-C7 (camera)** `[A]` First person while ABOARD: the eye sits along the SHIP's up
   (`MixinEntityRendererShipEye.java:35-38`), and the view is the composition
   `shipQuat ∘ deckLookQuat` (`event/RocketEventHandler.java` crew branch;
   `FreeFlightPhysics.lookQuat`) — no singular attitude; camera == derived aim by
   construction. Eye/model/camera gate on the MOVEMENT truth (`isResolvingAboard`),
-  never containment. Pinned: same e2e (camera-vs-aim leg) + telemetry camera tests.
+  never containment. Unpinned: "same e2e (camera-vs-aim leg) + telemetry camera tests" names no
+  method (measured 2026-10-17).
 - **CREW-C8 (no suffocation)** `[A]` An ABOARD body standing on a deck open in the ship
   frame takes no suffocation damage and no inside-block overlay at any attitude (its
   world capsule may legally intersect hull blocks). NOT yet verified/pinned.
-- **CREW-C9 (bystanders)** `[T]` A body on world terrain near/under/inside any ship's
-  world AABB keeps world-frame gravity, movement and camera untouched. Pinned:
-  `walkingOnTheGround…` + `flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera`.
-- **CREW-C10 (interaction)** `[T]` The block outlined under the crosshair is the block
-  interacted with: the raytrace originates from the SAME eye the camera renders. Pinned:
-  `theCrosshairPicksTheSameDeckBlockAtAnyAttitude`. Which code gives a deck-held body the property
+- **CREW-C9 (bystanders)** `[A]` A body on world terrain near/under/inside any ship's
+  world AABB keeps world-frame gravity, movement and camera untouched. Unpinned: the methods this
+  cited (`walkingOnTheGround…`, `flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera`)
+  carry no witness for it — the second only an attempt that stayed green (measured 2026-10-17).
+- **CREW-C10 (interaction)** `[A]` The block outlined under the crosshair is the block
+  interacted with: the raytrace originates from the SAME eye the camera renders. Unpinned: the method
+  this cited, `theCrosshairPicksTheSameDeckBlockAtAnyAttitude`, carries no witness (measured
+  2026-10-17). Which code gives a deck-held body the property
   is not named here: not read.
 - **CREW-C11 (outer hull)** `[T]` The OUTER hull is walkable at ANY attitude with
   WORLD-frame semantics: no deck holds a body there — in S's frame that face has no floor beneath
@@ -145,7 +150,7 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   *"давай вернем допуск на старый VS-овский. Это чуть более логично, да и разница небольшая"* (let us
   return the tolerance to the old VS one; it is slightly more logical, and the difference is small).
   Pinned (client):
-  `VSCrewCaptureContractTest.aPlayerOnTheOuterHullKeepsWorldFrameSemantics` (no deck takes him, the
+  `VSCrewCaptureContractTest#aPlayerOnTheOuterHullKeepsWorldFrameSemantics` (no deck takes him, the
   deck camera never engages) and the outer-hull scenarios beside it — still (`…StaysWhereHeLanded`),
   flying (`…RidesWithIt`), spinning, a 38° face (`aPlayerOnASteepOuterHullFace…`), a 20-block fall
   (`aPlayerFallingFastOntoTheOuterHullLandsOnIt`), walking (`aPlayerWalkingOnTheOuterHullStaysOnIt`);
@@ -168,7 +173,7 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   never released by `noDeckBelow` (interior-stay, `DeckBoarding.deckMayKeep:719`). The outer hull
   (C11) is a contact with NO ship-frame deck below; an enclosed body with a deck below is
   C12's. Pinned (admission site `DeckFrameTick.java:928`): the released-interior
-  re-seat (`VSCrewInteriorBoardingTest.aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`)
+  re-seat (`VSCrewInteriorBoardingTest#aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`)
   + the POSITIVE roofed-cavity hold —
   `aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck` on the
   `with-roofed-deck` fixture: a body displaced UNSUPPORTED mid-cavity of the 170° ship
@@ -192,11 +197,11 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   `DeckFrameTick.isFlying:483`), and runs his UNMODIFIED vanilla update in the deck's frame — where
   subspace +Y is the deck normal, so vanilla's own creative flight IS variant A. Flight over the outer
   hull is world flight. No partial hold-without-deck-kinematics state exists (the forbidden split).
-  Pinned: `VSCrewInteriorBoardingTest.aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff`
+  Pinned: `VSCrewInteriorBoardingTest#aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff`
   (60° roll: hold+camera kept while flying, ascend/descend along subspace ±Y with
   dxz=0, flight-off reseats) + `aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold` (no
   yank-down; region exit releases).
-- **CREW-C14 (persistence)** `[T]` ABOARD survives a relog: a player who logs out
+- **CREW-C14 (persistence)** `[A]` ABOARD survives a relog: a player who logs out
   ABOARD(S) logs back in ABOARD(S) at the same subspace point, at any ship attitude —
   never handed to world gravity while the hold re-seeds. The anchor is the durable aboard
   record (`space/AboardRecord`, read through `DeckBoarding.aboardShipId` /
@@ -206,14 +211,15 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   excluded state / a teleport after its own / timeout (clean vanilla handover) — the lifecycle is
   C31's (HOLD-2, HOLD-3, HOLD-6). Pinned:
   `VSCrewRelogPersistenceTest.aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt` (real
-  FTF relog, 170° deck, dY=0.03).
-  **Scope limit: this clause is `[T]` for a SAME-DIMENSION relog only.**
+  FTF relog, 170° deck, dY=0.03) — a method that carries no witness (measured 2026-10-17), so the
+  clause is not pinned.
+  **Scope limit: this clause holds for a SAME-DIMENSION relog only.**
   Across a server restart in a space cell it does not hold, and the anchor it relies on cannot
   make it hold — the anchor is keyed by the VS ship id and stores a raw subspace point, both of
   which a re-assembly invalidates, and it is read after vanilla has already chosen the world.
   That case is owned by **C13 (space presence)**, clauses PRES-2/3/5. Do not extend this clause to
   cover it — the cross-dimension case is Layer 1 and belongs there, not in the ship-frame contract.
-- **CREW-C15 (the seat is current)** `[T]` An ABOARD body stands at the image of its held deck
+- **CREW-C15 (the seat is current)** `[A]` An ABOARD body stands at the image of its held deck
   point under S's pose **as S holds it now** — never under the pose S held a tick ago. The
   substrate advances every ship's pose at tick phase END, i.e. AFTER the world's entities have
   moved, on both sides (`EventsCommon.onWorldTickEvent`, `EventsClient.onClientTick`), so the
@@ -228,10 +234,10 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   motion off its deck spot, every tick, for as long as the craft moves — 0.1974 blocks at
   2 rad/s for a body 1.974 blocks off the roll axis, and the same angle through a longer arm
   on a wider craft. It does not accumulate (the deck point is re-imaged each tick) and no carry
-  can remove it: a body's position never comes from a velocity. Pinned:
+  can remove it: a body's position never comes from a velocity. Measured by
   `VSCrewRelogPersistenceTest.aCrewMemberStandingOnADeckIsNotReleasedWhileTheShipRolls`
   (seat miss 0.001 against a 0.02 bar, with the deck stepping 0.197 a tick as the arrangement
-  witness).
+  witness) — a method that carries no red witness (measured 2026-10-17), so the clause is not pinned.
 - **CREW-C16 (acceleration hurts)** `[A]` A body aboard takes damage when the craft's **proper
   acceleration** — thrust and drag over mass, so a ship hovering on Earth reads 1 g and one in free fall
   reads 0 — stays above a tolerance for long enough (what is read is the

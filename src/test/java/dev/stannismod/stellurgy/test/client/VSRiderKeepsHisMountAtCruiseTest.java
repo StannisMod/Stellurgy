@@ -505,6 +505,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
      */
     @Test
     @dev.stannismod.stellurgy.test.contract.Pins({"ENT-7", "ENT-8"})
+    @dev.stannismod.stellurgy.test.contract.Regions(of = "ENT-8", value = "bound seat")
     @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ClientDeckFollowsItsShip#afterTheShipsHaveMoved",
             at = "EntityDummy.followBoundSeats(Minecraft.getMinecraft().world);", replacedBy = "",
             fails = "a seated pilot must be shown exactly where his seat is shown on the client", on = "2026-10-17",

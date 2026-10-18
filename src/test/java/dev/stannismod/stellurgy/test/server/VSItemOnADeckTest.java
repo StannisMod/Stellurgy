@@ -120,6 +120,7 @@ public class VSItemOnADeckTest extends AbstractDeckBodyTest {
             + " called {@code DeckFrameTick#update} and the substrate held the item - a configuration change, not"
             + " a fragment replacement.")
     @Pins({"ENT-3", "ENT-8"})
+    @dev.stannismod.stellurgy.test.contract.Regions(of = "ENT-8", value = "held body")
     @Test
     public void anItemLyingOnADeckStaysOnItWhileTheCraftRollsOver() throws Exception {
         Craft craft = buildCraft();

@@ -17,6 +17,10 @@ import java.util.regex.Pattern;
  *       and method exists, and at least one named method carries {@link Pins} with the anchor AND a
  *       witness, a {@link RedWitness} or a {@link LegacyWitness}. A clause listing {@code REGIONS:} is pinned only when those methods'
  *       {@link Regions} cover every listed region.</li>
+ *   <li>PARTIAL -- as PINNED, for a clause whose {@code REGIONS:} marks some regions {@code PLANNED}: every
+ *       region NOT so marked is visited, no PLANNED one is (a visited region is built, and saying otherwise is
+ *       BROKEN), and at least one region is not PLANNED. Counted apart from PINNED, so a clause built half way
+ *       is neither zero nor whole.</li>
  *   <li>UNPINNED -- carries {@code UNPINNED:} with a dated maintainer ruling, or "pinned by
  *       {@code <ANCHOR>}" where that anchor is PINNED and one of its named methods pins this one too.</li>
  *   <li>BROKEN -- the evidence does not hold (a missing test or method, no pin, no witness, an
@@ -37,9 +41,16 @@ import java.util.regex.Pattern;
 public final class PinMap {
 
     /** The state of one clause. */
-    public enum State { PINNED, UNPINNED, BROKEN, OWED, PLANNED, RETIRED, MECH }
+    public enum State { PINNED, PARTIAL, UNPINNED, BROKEN, OWED, PLANNED, RETIRED, MECH }
 
-    static final String ANCHOR = "[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-[0-9]+[a-z]?";
+    /**
+     * An anchor: a prefix, any middle segments, and a final segment of digits — which may open with ONE
+     * capital, as C8's {@code CREW-C1} does, and close with one letter of either case, as
+     * {@code MECH-ATM-16b} and {@code INV-STN-0A} do. Without those letters the pattern never matched a
+     * crew clause or that station invariant, so they stood outside the map: not pinned, not owed, not
+     * refused.
+     */
+    static final String ANCHOR = "[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-[A-Z]?[0-9]+[a-zA-Z]?";
     /** A constant: a compiled {@link Pattern} is immutable (every matcher holds its own state). */
     private static final Pattern DEF = Pattern.compile("^[ \\t]*-[ \\t]*\\*\\*(" + ANCHOR + ")\\b(.*)$");
     /** A constant: a compiled {@link Pattern} is immutable. */
@@ -66,7 +77,12 @@ public final class PinMap {
      */
     private static final Pattern REGIONS_OPEN = Pattern.compile("\\bREGIONS:");
     /** A constant: a compiled {@link Pattern} is immutable. */
-    private static final Pattern REGION_SPAN = Pattern.compile("\\s*`([^`\\n]+)`\\s*(,)?");
+    private static final Pattern REGION_SPAN = Pattern.compile("\\s*`([^`\\n]+)`(?:\\s+PLANNED\\b)?\\s*(,)?");
+    /**
+     * A region the clause owes and the code does not build yet: its span followed by {@code PLANNED}.
+     * A constant: a compiled {@link Pattern} is immutable.
+     */
+    private static final Pattern PLANNED_SPAN = Pattern.compile("`([^`\\n]+)`\\s+PLANNED\\b");
 
     private PinMap() {
     }
@@ -209,6 +225,24 @@ public final class PinMap {
         return out;
     }
 
+    /**
+     * The regions of a clause's {@code REGIONS:} list that are marked {@code PLANNED} — owed by the clause,
+     * not built by the code yet. Read only after {@link #regions} has accepted the list's form.
+     */
+    static Set<String> planned(String body) {
+        Matcher open = REGIONS_OPEN.matcher(body);
+        Set<String> out = new LinkedHashSet<>();
+        if (!open.find()) {
+            return out;
+        }
+        Matcher span = PLANNED_SPAN.matcher(body);
+        span.region(open.end(), body.length());
+        while (span.find()) {
+            out.add(span.group(1).trim());
+        }
+        return out;
+    }
+
     private static List<String> tags(Clause c) {
         List<String> out = new ArrayList<>();
         Matcher m = TAGS.matcher(c.inside);
@@ -306,7 +340,10 @@ public final class PinMap {
             return null;
         }
         String why = whyNotPinned(c, tests);
-        return why == null ? new Verdict(State.PINNED, c.doc, null) : new Verdict(State.BROKEN, c.doc, why);
+        if (why != null) {
+            return new Verdict(State.BROKEN, c.doc, why);
+        }
+        return new Verdict(planned(c.body).isEmpty() ? State.PINNED : State.PARTIAL, c.doc, null);
     }
 
     private static String whyNotPinned(Clause c, Tests tests) {
@@ -364,8 +401,19 @@ public final class PinMap {
         if (!unknown.isEmpty()) {
             return "@Regions names regions the clause does not list: " + String.join(", ", unknown);
         }
+        Set<String> planned = planned(c.body);
+        if (!wanted.isEmpty() && planned.containsAll(wanted)) {
+            return "every region is PLANNED: nothing of it is built, so the clause is [PLANNED], not [T]";
+        }
+        Set<String> built = new TreeSet<>(planned);
+        built.retainAll(visited);
+        if (!built.isEmpty()) {
+            return "regions marked PLANNED are visited by its named methods, so they are built: "
+                    + String.join(", ", built);
+        }
         Set<String> missing = new TreeSet<>(wanted);
         missing.removeAll(visited);
+        missing.removeAll(planned);
         if (!missing.isEmpty()) {
             return "regions not visited by its named methods: " + String.join(", ", missing);
         }

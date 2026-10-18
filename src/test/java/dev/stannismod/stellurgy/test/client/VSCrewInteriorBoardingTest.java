@@ -223,6 +223,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             why = "coming to rest is a value approached over ticks, not an instant production commits; the trace"
                     + " is the deliverable, and the per-tick record read after this loop carries the verdict."
                     + " What this cannot see: motion inside one 3-tick sample.")
+    @dev.stannismod.stellurgy.test.contract.Pins("CREW-C12")
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
         final FixtureSite site = site();
@@ -710,6 +711,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
             + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
             why = "the second press")
+    @dev.stannismod.stellurgy.test.contract.Pins("CREW-C13")
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;

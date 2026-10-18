@@ -205,6 +205,20 @@ nothing about whether it triggers.
   (`WearAccrualDisableTest`, `WeatherCycleDisableTest`).
 - **INV-TST-08 [V]** Test dim-ids (9001-9004) and world seed are fixed constants so
   worldgen/round-trip snapshots stay deterministic. `test/StellurgyTestConstants.java:16-22`.
+- **INV-TST-09 [T] [SYS]** A clause whose region list marks some regions PLANNED is PARTIAL only when
+  every unmarked region is visited by a pinning, witnessed method, no PLANNED region is visited, and at
+  least one region is unmarked; PINNED needs no PLANNED region left (`test/contract/PinMap.java`,
+  `whyNotPinned`, `judgeOwn`). FOR: the coverage of a clause built part way is neither zero nor whole —
+  maintainer ruling 2026-10-17, *"да"* on the PARTIAL state. Pinned by
+  `test/unit/PinMapTest#aClauseWhoseBuiltRegionsAreVisitedAndWhoseRestIsPlannedIsPartial`,
+  `…#aBuiltRegionNoMethodVisitsIsStillRefusedBesideAPlannedOne`,
+  `…#aRegionMarkedPlannedThatAMethodVisitsIsRefusedAsBuilt`, `…#aClauseWhoseEveryRegionIsPlannedIsNotPartial`.
+- **INV-TST-10 [T] [SYS]** Every anchor form the docs define is a clause of the map: a final segment of
+  digits may open with one capital (`CREW-C1`) and close with one letter of either case (`MECH-ATM-16b`,
+  `INV-STN-0A`) (`test/contract/PinMap.java`, `ANCHOR`). FOR: a clause outside the map is neither pinned,
+  owed nor refused, so a `[T]` on it is unchecked — measured 2026-10-17, all of C8's crew clauses stood
+  there; maintainer ruling 2026-10-17, *"да"* on widening it. Pinned by
+  `test/unit/PinMapTest#anAnchorWithALetterBeforeOrAfterItsDigitsIsAClause`.
 
 ## Failure modes & edge cases
 

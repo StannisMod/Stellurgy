@@ -455,6 +455,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             why = "the APEX of the jump is an extremum over the samples, a property of the arc rather than of any"
                     + " instant production commits, so no record can carry it. What it cannot see: a higher"
                     + " apex reached and left between two samples.")
+    @Pins("CREW-C3")
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -639,6 +640,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                     + " is laid for it. Counted on the later of two clocks, a server lagging the client"
                     + " lengthened the walk — measured 2026-10-06, he walked off the platform's far edge at the"
                     + " tenth sample and fell to y 139, twice, the same 138.998 both times.")
+    @Pins("CREW-C1")
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1573,7 +1575,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " {@code return entity == null ? null : DeckFrameTick.heldShipId(entity);} both answering by"
             + " containment at once: \"the deck camera must never engage for a player on the outer hull: 1 engage"
             + " edge(s), standing value active=true\".")
-    @Pins("ENT-7")
+    @Pins({"ENT-7", "CREW-C11"})
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(OUTER_HULL_LAND_TICKS);",
             why = "a tenth of a block at a player's 0.08 blocks/tick^2 lands in about two ticks; the window is the"
@@ -2107,6 +2109,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                     + " band.")
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); double[] up2 = shipUpFromInfo(shipInfo());",
             why = "overshoot only lets the deck turn further, which the roll gate measures instead of assuming.")
+    @Pins("CREW-C6")
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;

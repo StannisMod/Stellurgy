@@ -288,4 +288,71 @@ public class PinMapTest {
         assertTrue("the refusal must name both classes: " + v.why,
                 v.why.contains("2 compiled test classes"));
     }
+
+    // --- every anchor form the docs use is a clause -----------------------------------------------------------
+
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-TST-10")
+    @RedWitness(verdict = "a letter before the digits", member = "PinMap#ANCHOR", at = "-[A-Z]?[0-9]+[a-zA-Z]?",
+            replacedBy = "-[0-9]+[a-zA-Z]?", fails = "CREW-C1 was not judged at all", on = "2026-10-17")
+    @RedWitness(verdict = "a capital after the digits", member = "PinMap#ANCHOR", at = "-[A-Z]?[0-9]+[a-zA-Z]?",
+            replacedBy = "-[A-Z]?[0-9]+[a-z]?", fails = "INV-STN-0A was not judged at all", on = "2026-10-17")
+    public void anAnchorWithALetterBeforeOrAfterItsDigitsIsAClause() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("pinsIt", method(set("CREW-C1"), 1, NO_REGIONS));
+        Map<String, PinMap.Verdict> state = judge("- **CREW-C1 (boarding)** `[T]` (`AlphaTest#pinsIt`).\n\n"
+                + "- **INV-STN-0A [V]** one source of truth.\n", methods);
+        assertState(state, "CREW-C1", PinMap.State.PINNED);
+        assertState(state, "INV-STN-0A", PinMap.State.OWED);
+    }
+
+    // --- a clause built part way: PLANNED regions and the PARTIAL state ---------------------------------------
+
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-TST-09")
+    @RedWitness(member = "PinMap#judgeOwn", at = "planned(c.body).isEmpty() ? State.PINNED : State.PARTIAL",
+            replacedBy = "State.PINNED", fails = "INV-A-50 is PINNED", on = "2026-10-17")
+    public void aClauseWhoseBuiltRegionsAreVisitedAndWhoseRestIsPlannedIsPartial() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("seat", method(set("INV-A-50"), 1, visits("INV-A-50", "bound seat")));
+        assertState(judge("- **INV-A-50** `[T]` every rider. REGIONS: `bound seat`, `held mount` PLANNED."
+                + " (`AlphaTest#seat`).\n", methods), "INV-A-50", PinMap.State.PARTIAL);
+    }
+
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-TST-09")
+    @RedWitness(member = "PinMap#whyNotPinned", at = "missing.removeAll(planned);", replacedBy = "missing.clear();",
+            fails = "INV-A-51 is PARTIAL", on = "2026-10-17")
+    public void aBuiltRegionNoMethodVisitsIsStillRefusedBesideAPlannedOne() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("seat", method(set("INV-A-51"), 1, visits("INV-A-51", "bound seat")));
+        PinMap.Verdict v = assertState(judge("- **INV-A-51** `[T]` every rider. REGIONS: `bound seat`, `held body`,"
+                + " `held mount` PLANNED. (`AlphaTest#seat`).\n", methods), "INV-A-51", PinMap.State.BROKEN);
+        assertTrue("the refusal must name the built region nobody visits: " + v.why,
+                v.why.endsWith("not visited by its named methods: held body"));
+    }
+
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-TST-09")
+    @RedWitness(member = "PinMap#whyNotPinned", at = "built.retainAll(visited);", replacedBy = "built.clear();",
+            fails = "INV-A-52 is PARTIAL", on = "2026-10-17")
+    public void aRegionMarkedPlannedThatAMethodVisitsIsRefusedAsBuilt() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("both", method(set("INV-A-52"), 1, visits("INV-A-52", "bound seat", "held mount")));
+        PinMap.Verdict v = assertState(judge("- **INV-A-52** `[T]` every rider. REGIONS: `bound seat`, `held mount`"
+                + " PLANNED. (`AlphaTest#both`).\n", methods), "INV-A-52", PinMap.State.BROKEN);
+        assertTrue("the refusal must name the region that is built after all: " + v.why,
+                v.why.endsWith("so they are built: held mount"));
+    }
+
+    @Test
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-TST-09")
+    @RedWitness(member = "PinMap#whyNotPinned", at = "if (!wanted.isEmpty() && planned.containsAll(wanted)) {",
+            replacedBy = "if (false) {", fails = "INV-A-53 is PARTIAL", on = "2026-10-17")
+    public void aClauseWhoseEveryRegionIsPlannedIsNotPartial() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("none", method(set("INV-A-53"), 1, NO_REGIONS));
+        assertState(judge("- **INV-A-53** `[T]` every rider. REGIONS: `held mount` PLANNED. (`AlphaTest#none`).\n",
+                methods), "INV-A-53", PinMap.State.BROKEN);
+    }
 }

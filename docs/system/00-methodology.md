@@ -176,6 +176,13 @@ This yields the chain **mechanic → invariant → test → defect**. A test nam
 map in both directions on the compiled tests (`checkTestBindings`). Source may cite an anchor where it
 implements one. The anchors are public API of the docs.
 
+**A clause built part way lists its unbuilt regions as `PLANNED`** (``REGIONS: `a`, `b` PLANNED.``). It
+is then **PARTIAL** — counted apart from PINNED — when every region not marked PLANNED is visited by a
+pinning, witnessed method and no PLANNED one is (a visited region is built, and calling it planned is
+refused); it is PINNED only once nothing is PLANNED. A clause whose every region is PLANNED is
+`[PLANNED]`, not `[T]`. Which task builds a planned region is recorded beside the task, not here: these
+docs carry no task ids. Ruled 2026-10-17 (INV-TST-09).
+
 **An anchor is a permanent identifier — never renumber it and never reuse it.** Treat these exactly
 like registry names and NBT keys: a reused number silently re-points somebody else's reference.
 Retire an anchor **in place** with one line, `- **X-N** — retired.`; the number stays burned.

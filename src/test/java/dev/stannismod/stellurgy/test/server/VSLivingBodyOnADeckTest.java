@@ -102,6 +102,7 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
             + " {@code DeckFrameTick#admissible} at {@code return entity instanceof EntityLivingBase} answering"
             + " false (no living body admitted) - along 0.226.")
     @Pins({"ENT-3", "ENT-8"})
+    @dev.stannismod.stellurgy.test.contract.Regions(of = "ENT-8", value = "held body")
     @Test
     public void anArmorStandOnADeckStaysOnItWhileTheCraftRollsOver() throws Exception {
         Craft craft = buildCraft();
