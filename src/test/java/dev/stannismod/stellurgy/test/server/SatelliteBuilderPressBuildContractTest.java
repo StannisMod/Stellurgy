@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -72,6 +73,10 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      * Pins INV-SAT-05 (Builder stamps the same fresh satelliteId into both the chassis item (satId) and the id chip (satelliteId)).
      */
     @Pins("INV-SAT-05")
+    @RedWitness(member = "TileSatelliteBuilder#assembleSatellite",
+            at = "setInventorySlotContents(chipSlot, sat.getControllerItemStack(getStackInSlot(chipSlot), properties));",
+            replacedBy = "",
+            fails = "chip + chassis must share the same satelliteId", on = "2026-10-19")
     @Test
     public void pressBuildAssemblesOpticalSatellite() throws Exception {
         int x = CX_OPTICAL, y = CY, z = CZ;
@@ -133,6 +138,10 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      * Pins INV-SAT-06 (a chip-overriding type rejects the default id chip).
      */
     @Pins("INV-SAT-06")
+    @RedWitness(member = "SatelliteWeatherController#isAcceptableControllerItemStack",
+            at = "stack.getItem() instanceof ItemWeatherController", replacedBy = "true",
+            fails = "expected canAssembleSatellite=false error for default chip + weatherController",
+            on = "2026-10-19")
     @Test
     public void pressBuildRejectsDefaultChipForChipOverridingType() throws Exception {
         int x = CX_WEATHER, y = CY, z = CZ;

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -27,6 +28,9 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Pins("INV-CMD-02")
+    @RedWitness(member = "AddTorchCommand#execute", at = "getCommandSenderAsPlayer(sender)",
+            replacedBy = "(EntityPlayerMP) sender.getCommandSenderEntity()",
+            fails = "addTorch must refuse console", on = "2026-10-19")
     @Test
     public void addTorchRefusesConsoleSender() throws Exception {
         String resp = arrange("ar addTorch").raw();

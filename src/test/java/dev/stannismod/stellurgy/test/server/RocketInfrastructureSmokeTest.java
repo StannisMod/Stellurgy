@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -72,6 +73,9 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      * Pins INV-INFRA-12 (a powered fueling station next to a rocket drains its tank into the rocket).
      */
     @Pins("INV-INFRA-12")
+    @RedWitness(member = "TileFuelingStation#performFunction", at = "linkedRocket.addFuelAmount(typeToFill, toOffer)",
+            replacedBy = "0",
+            fails = "station tank must drop after fueling-station tick burst", on = "2026-10-19")
     @Test
     public void stationDrainsTankAndRocketFuelRisesAfterLinkAndTick() throws Exception {
         // The test's own bar on the ARRANGEMENT: a craft with no capacity or a station with an empty

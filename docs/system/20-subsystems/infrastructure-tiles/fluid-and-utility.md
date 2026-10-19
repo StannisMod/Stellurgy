@@ -52,8 +52,8 @@ NBT keys (`TilePump` `tank`, `TileForceFieldProjector` `ext`, `TileFluidTank` vi
   ~60 ticks. [T TilePumpFillsFromAdjacentWaterSourceTest.java:77-82] Pinned by `TilePumpFillsFromAdjacentWaterSourceTest#poweredPumpDrainsAdjacentFluidSource`.
 - **INV-INFRA-23 [V][BEH]** The pump only spends 100 RF when a drainable source is confirmed in
   `cache` (`canPerformFunction` returns `!cache.isEmpty()`). [V TilePump.java:287-320]
-- **INV-INFRA-24 [T][BEH]** Fluid injected into a pressure tank survives a server restart at the
-  same coords. [T FluidTankNBTRoundTripsAcrossRestartTest.java:93] Pinned by `FluidTankNBTRoundTripsAcrossRestartTest#liquidTankRetainsOxygenContentAcrossRestart`.
+- **INV-INFRA-24 [V][BEH]** Fluid injected into a pressure tank survives a server restart at the
+  same coords. [V TileFluidTank.java:222 write, :229 read]
 - **INV-INFRA-25 [T][BEH]** Stacked pressure tanks distribute a fill correctly (top-down column
   fill). [T FluidTankStackedFillTest.java] Pinned by `FluidTankStackedFillTest#smallInjectionFillsBottomTankAndLeavesTopEmpty`, `FluidTankStackedFillTest#overflowingInjectionFillsBottomThenSpillsIntoTop`.
 - **INV-INFRA-26 [T][BEH]** A solar panel in aStellurgy dimension gains energy on a forced tick,
@@ -85,7 +85,7 @@ Config: see `C4-config-surface`. Pump/force-field constants are `tunable`; there
 
 ## Test coverage
 
-INV-INFRA-22 → TilePumpFillsFromAdjacentWaterSourceTest:77-82 · INV-INFRA-24/25 →
-FluidTankNBTRoundTripsAcrossRestartTest:93, FluidTankStackedFillTest · INV-INFRA-26 →
+INV-INFRA-22 → TilePumpFillsFromAdjacentWaterSourceTest:77-82 · INV-INFRA-24 → none (a storage
+round trip, `[V]`) · INV-INFRA-25 → FluidTankStackedFillTest · INV-INFRA-26 →
 SolarPanelInsolationTest:118 · INV-INFRA-27 → ForceFieldProjectorProjectsAndRetractsTest,
 ForceFieldProjectionSmokeTest.

@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.EntityState;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -59,6 +60,9 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
 
     /** Pins INV-MBM-23 (the area gravity controller zeroes fallDistance inside its radius only). */
     @Pins("INV-MBM-23")
+    @RedWitness(member = "TileAreaGravityController#update", at = "e.fallDistance = 0;",
+            replacedBy = "",
+            fails = "controller must reset fallDistance of the IN-radius entity", on = "2026-10-19")
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
         // 0) Hold the controller + out-of-radius chunks hot so spawned

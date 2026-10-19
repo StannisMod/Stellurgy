@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -51,6 +52,9 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
     /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
     @Pins("INV-RASM-04")
+    @RedWitness(member = "TileRocketAssemblingMachine#assembleRocket", at = "new EntityRocket(world, storageChunk, stats.copy(), cx, cy, cz)",
+            replacedBy = "new dev.stannismod.stellurgy.entity.EntityStationDeployedRocket(world, storageChunk, stats.copy(), cx, cy, cz)",
+            fails = "rocket assembler must spawn EntityRocket", on = "2026-10-19")
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
         // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here

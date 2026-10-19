@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotEquals;
@@ -66,6 +67,9 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * Pins INV-STN-10 (the altitude controller walks the station's orbital distance toward its target).
      */
     @Pins("INV-STN-10")
+    @RedWitness(member = "TileStationAltitudeController#update", at = "double next = current +",
+            replacedBy = "double next = current -",
+            fails = "station's orbitalDistance must move toward the target", on = "2026-10-19")
     @Test
     public void altitudeControllerWalksStationOrbitalDistanceTowardTarget()
             throws Exception {
@@ -211,6 +215,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * Pins INV-STN-12 (the orientation controller walks the station's rotation toward its target).
      */
     @Pins("INV-STN-12")
+    @RedWitness(member = "TileStationOrientationController#update", at = "spaceObject.setDeltaRotation(finalVel, dirs[i]);",
+            replacedBy = "", fails = "station's rotation around EAST must move from baseline", on = "2026-10-19")
     @Test
     public void orientationControllerWalksStationRotationTowardTarget()
             throws Exception {

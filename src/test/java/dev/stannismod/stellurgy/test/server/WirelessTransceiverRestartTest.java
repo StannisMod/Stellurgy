@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -76,6 +77,8 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
 
     /** Pins INV-WDT-05 (mode, enabled and networkID survive an NBT round-trip and the tile re-registers its role). */
     @Pins("INV-WDT-05")
+    @RedWitness(member = "TileWirelessTransceiver#onLoad", at = "if (networkID != UNLINKED_NETWORK_ID) {",
+            replacedBy = "if (false) {", fails = "onLoad must re-register extract-mode tile as source", on = "2026-10-19")
     @Test
     public void modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);

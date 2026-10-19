@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -66,6 +67,9 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      */
     @Pins("INV-MBM-20")
+    @RedWitness(member = "TileRailgun#attemptCargoTransfer", at = "dest.onReceiveCargo(tfrStack);",
+            replacedBy = "",
+            fails = "destination output port must contain", on = "2026-10-19")
     @Test
     public void railgunFiresCargoToLinkedRailgunInSameDimension() throws Exception {
         buildAndComplete(SX, SY, SZ);
@@ -145,6 +149,9 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
     @Pins({"INV-MBM-20", "INV-MBM-21"})
+    @RedWitness(member = "TileRailgun#attemptCargoTransfer", at = "if (destWorld == null) {",
+            replacedBy = "if (destWorld == null) { inv2.setInventorySlotContents(index, ItemStack.EMPTY);",
+            fails = "cargo must be preserved on a failed shot", on = "2026-10-19")
     @Test
     public void railgunReportsUnavailableForUnloadableDestination() throws Exception {
         buildAndComplete(UX, SY, XZ);

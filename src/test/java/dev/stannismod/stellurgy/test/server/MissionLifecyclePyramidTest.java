@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -88,6 +89,9 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
      */
     @Pins("INV-MSN-04")
+    @RedWitness(member = "MissionResourceCollection#getProgress", at = "(double) duration",
+            replacedBy = "(double) (2 * duration)",
+            fails = "after advance 250 / duration 1000, progress must be in [0.25, 0.35)", on = "2026-10-19")
     @Test
     public void progressAdvancesLinearlyWithWorldTime() throws Exception {
         long mid = buildRocketAndStartGasMission(7000, 1000);

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -71,6 +72,9 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      * Pins INV-INFRA-13 (the fluid loader transfers fluid into a rocket fluid tile).
      */
     @Pins("INV-INFRA-13")
+    @RedWitness(member = "TileRocketFluidLoader#update", at = "fillHandler.fill(fromLoader, true)",
+            replacedBy = "0",
+            fails = "loader's own tank must have drained from", on = "2026-10-19")
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {
         // THE PAIR MOVES TOGETHER. The loader sat at y=65 and the rocket's base at y=64, one below

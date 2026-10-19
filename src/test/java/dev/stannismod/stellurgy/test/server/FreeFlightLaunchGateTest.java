@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -48,6 +49,9 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
 
     /** Pins INV-RKT-09 (a fuelless free-flight rocket stays grounded after prepareLaunch). */
     @Pins("INV-RKT-09")
+    @RedWitness(member = "EntityRocket#canStartFreeFlight", at = "if (!hasFreeFlightThrustFuel()) {",
+            replacedBy = "if (false) {",
+            fails = "fuel-less FF rocket must stay grounded after prepareLaunch", on = "2026-10-19")
     @Test
     public void fuellessFreeFlightRocketStaysGroundedOnPrepareLaunch() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3380, 700));

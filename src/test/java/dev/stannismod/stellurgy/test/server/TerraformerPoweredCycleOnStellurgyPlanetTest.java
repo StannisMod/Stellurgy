@@ -127,6 +127,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
      */
     @Pins("INV-MBM-06")
+    @RedWitness(member = "TileAtmosphereTerraformer#processComplete", at = "properties.addToAtmosphere(new AirState(STEP_PER_GAS, STEP_PER_GAS, 0L));",
+            replacedBy = "",
+            fails = "powered + fueled terraformer did not move density", on = "2026-10-19")
     @Test
     public void nativePlanetTerraformerWithFuelAndPowerStepsDensity() throws Exception {
         assertDimIsNativeStellurgyPlanet();

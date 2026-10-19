@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -38,6 +39,9 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
 
     /** Pins INV-MBM-04 (mining mode breaks the target block and yields its drop). */
     @Pins("INV-MBM-04")
+    @RedWitness(member = "MiningDrill#performOperation", at = "stacks.addAll(items);",
+            replacedBy = "",
+            fails = "mining drill must yield the mined block's drop", on = "2026-10-19")
     @Test
     public void miningModeBreaksTargetBlockAndYieldsItsDrop() throws Exception {
         String resp = act("stellurgytest infra laserdrill-mine 0 "

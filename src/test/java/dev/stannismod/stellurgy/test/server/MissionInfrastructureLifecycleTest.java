@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -134,6 +135,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
     @Pins("INV-MSN-08")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "((IInfrastructure) tile).unlinkMission();",
+            replacedBy = "",
+            fails = "infra must report hasMission=false after completion", on = "2026-10-19")
     @Test
     public void completionUnlinksInfrastructureFromMission() throws Exception {
         int baseX = 9100;

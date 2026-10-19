@@ -141,8 +141,7 @@ tier-2 oracles are C8-C22 and `stellurgytest-probe-catalog`.
 Tests independently exercise the same seams the contract docs own:
 - **C1 NBT round-trip**: every `*NbtRoundTrip`/`*NBTRoundTrip`/`*Persistence`/`*Restart`
   test writes→reads→asserts equality (e.g. `unit/RocketFlightModeNbtTest`,
-  `unit/ChipNBTRoundTripTest`, `server/FluidTankNBTRoundTripsAcrossRestartTest`,
-  `server/MissionPersistenceRestartTest`). Restart tests use per-method
+  `unit/ChipNBTRoundTripTest`). Restart tests use per-method
   `AbstractHeadlessServerTest` to force a real save/load cycle across two boots.
 - **C2 packets**: `integration/PacketSerializationTest` + `unit/PacketSerializationTest`
   round-trip all wire packets and pin negative-input safety.

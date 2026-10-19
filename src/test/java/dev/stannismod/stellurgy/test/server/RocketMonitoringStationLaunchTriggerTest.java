@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -139,6 +140,9 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
 
     /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */
     @Pins("INV-INFRA-02")
+    @RedWitness(member = "TileRocketMonitoringStation#onAdjacentBlockUpdated",
+            at = "boolean rising = now && !isPoweredCached;", replacedBy = "boolean rising = false;",
+            fails = "rising-edge tick must fire prepareLaunch exactly once", on = "2026-10-19")
     @Test
     public void risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire()
             throws Exception {

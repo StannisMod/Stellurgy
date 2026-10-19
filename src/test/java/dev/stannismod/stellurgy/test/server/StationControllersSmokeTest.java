@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -66,6 +67,9 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-13 (all three controllers place and tick without error). */
     @Pins("INV-STN-13")
+    @RedWitness(member = "Stellurgy#registerBlocks", at = "new BlockTileComparatorOverride(TileStationAltitudeController.class,",
+            replacedBy = "new BlockTileComparatorOverride(TileStationGravityController.class,",
+            fails = "block stellurgy:altitudeController must produce tile TileStationAltitudeController", on = "2026-10-19")
     @Test
     public void altitudeControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(

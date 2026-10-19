@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -93,6 +94,9 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      * Pins INV-INFRA-08 (the broken-part scan collects exactly the worn parts of the linked rocket).
      */
     @Pins("INV-INFRA-08")
+    @RedWitness(member = "TileRocketServiceStation#linkRocket", at = "updateRepairList();",
+            replacedBy = "",
+            fails = "post-link scan must surface exactly 1 worn part", on = "2026-10-19")
     @Test
     public void injectedBrokenPartAppearsInPartsToRepairAfterLink() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_SINGLE);

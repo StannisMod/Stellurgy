@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -30,6 +31,9 @@ public class CentrifugeRecipeEndToEndTest extends AbstractSharedServerTest {
 
     /** Pins INV-MBM-13 (a centrifuge and a crystallizer run a full recipe end to end). */
     @Pins("INV-MBM-13")
+    @RedWitness(member = "TileCentrifuge#processComplete", at = "super.processComplete();",
+            replacedBy = "",
+            fails = "centrifuge output hatch must contain at least one item", on = "2026-10-19")
     @Test
     public void centrifugeRunsFirstRegisteredRecipe() throws Exception {
         // F3 mitigation: bypass strict output-identity check from the kit.

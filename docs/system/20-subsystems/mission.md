@@ -98,8 +98,8 @@ budget cap, MECH-MSN-06) and, for ore missions, `asteroidType` / `asteroidUUID` 
   `loc` array; read repopulates `infrastructureCoords` with matching coords, guard
   `coords.length >= 3`. `MissionResourceCollection.java:212-218,239-245`. (Was `[T]`, same
   deletion.) FOR: save format: mission survives restart (INV-MSN-03).
-- **INV-MSN-03 [T][BEH]** A gas/ore mission survives a full server restart with its type and
-  `duration` intact and not dead. `MissionPersistenceRestartTest.java:107-140,144-...`. Pinned by `MissionPersistenceRestartTest#gasMissionSurvivesServerRestart`, `MissionPersistenceRestartTest#oreMissionSurvivesServerRestart`.
+- **INV-MSN-03 [V][BEH]** A gas/ore mission survives a full server restart with its type and
+  `duration` intact and not dead. `MissionResourceCollection.java:206-207` write, `:234-235` read.
 - **INV-MSN-04 [T][BEH]** `getProgress` is linear in world time and unbounded above 1.0;
   completion fires exactly at progress ≥ 1. `MissionLifecyclePyramidTest.java:91-134`;
   code `MissionResourceCollection.java:85-86,144-147`. Pinned by `MissionLifecyclePyramidTest#progressAdvancesLinearlyWithWorldTime`, `MissionLifecyclePyramidTest#progressIsUnboundedAboveOne`, `MissionLifecyclePyramidTest#completionFiresAtProgressOne`.
@@ -162,8 +162,7 @@ harvests nothing (`MissionOreMining.java:118-120`). The `64000` mB gas base and 
 
 ## Test coverage
 
-INV-MSN-01/02 → none (both are `[V]`); INV-MSN-03 →
-`MissionPersistenceRestartTest`; INV-MSN-04 → `MissionLifecyclePyramidTest`;
+INV-MSN-01/02/03 → none (all `[V]`); INV-MSN-04 → `MissionLifecyclePyramidTest`;
 INV-MSN-05/06 → `MissionOreCompletionTest`; INV-MSN-07 → `MissionGasCompletionTest`;
 INV-MSN-08 → `MissionInfrastructureLifecycleTest`; INV-MSN-09 →
 `MissionResourceCollectionContractTest`.

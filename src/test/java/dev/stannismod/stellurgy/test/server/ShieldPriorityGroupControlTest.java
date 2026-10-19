@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -32,6 +33,10 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-09 (deleting a priority group does not change any member emitter's priority). */
     @Pins("INV-SHD-09")
+    @RedWitness(member = "ShieldControl#deleteGroup", at = "markDirty(world);",
+            replacedBy = "markDirty(world); for (TileEntityFieldGenerator emitter : emittersInDomain(world,"
+                    + " config.getDomainId())) { emitter.setPriority(0); }",
+            fails = "deleting the group silently retuned emitter 1", on = "2026-10-19")
     @Test
     public void groupPushesPriorityIntoMemberEmitters() throws Exception {
         int base = 1040, z = 840;
@@ -65,6 +70,9 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-10 (a group created at one console is editable at another and survives that console's destruction). */
     @Pins("INV-SHD-10")
+    @RedWitness(member = "ShieldControl#configFor", at = "String domainId = ShieldDomains.forBlock(world, pos);",
+            replacedBy = "String domainId = ShieldDomains.forBlock(world, pos) + \"@\" + pos.toLong();",
+            fails = "stellurgytest shield group list", on = "2026-10-19")
     @Test
     public void anyConsoleEditsTheSameDomainConfig() throws Exception {
         int base = 1040, z = 852;
@@ -102,6 +110,8 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-11 (rotating the access code changes the credential and leaves grouping and priority untouched). */
     @Pins("INV-SHD-11")
+    @RedWitness(member = "ShieldControl#rotateAccessCode", at = "emitter.applyAccessCode(newCode);", replacedBy = "",
+            fails = "the new credential was not written to the emitter", on = "2026-10-19")
     @Test
     public void rotatingAccessCodeChangesCredentialButNotGrouping() throws Exception {
         int base = 1040, z = 864;

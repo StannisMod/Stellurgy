@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -102,15 +103,24 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     }
 
     /** Production gate: if `(int)stats.getStatTag("intakePower") > 0`
-     *  is false, the fluid-fill loop is skipped (MissionGasCollection
-     *  line 46). Counter-test pinning the gate.
+     *  is false, the fluid-fill loop is skipped. Counter-test pinning the gate.
+     *
+     *  <p>The rocket carries tanks the fill could reach ({@code with-fluid-cargo}, empty at launch,
+     *  both read before the mission); without them "no tank came back full" would hold whatever the
+     *  intake power, because there would be nothing to fill.</p>
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
     @Pins("INV-MSN-07")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "ip > 0 &&", replacedBy = "",
+            fails = "intakePower=0 -> no fluid entries", on = "2026-10-19")
     @Test
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
-        int rid = buildAndAssembleRocket(8100);
-        long mid = startGasMission(rid, 1000, "water", 0);
+        int rid = buildAndAssembleRocket(8100, "with-fluid-cargo");
+        Reply tanks = read("stellurgytest rocket storage-fluid " + rid);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the rocket must carry empty tanks the completion could fill: " + tanks,
+                tanks.objectArray("tanks").length > 0 && tanks.integer("totalAmount") == 0);
+        long mid = startGasMission(rid, 1000, "oxygen", 0);
         MissionCompletion cargo = completeNow(mid);
         // The completion returns its rocket on this path too; the gate is that its tanks stay empty.
         assertTrue("intakePower=0 -> no fluid entries: " + cargo.raw(),
@@ -145,6 +155,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
     @Pins("INV-MSN-07")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "ip > 0 &&",
+            replacedBy = "ip <= 0 &&",
+            fails = "fluidEntries must be > 0 (production filled fluid tiles)", on = "2026-10-19")
     @Test
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");

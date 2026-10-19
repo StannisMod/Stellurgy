@@ -276,6 +276,7 @@ enum ProbeVerbKind {
             case "machine recipe-info-block":
             case "machine recipes-summary":
             case "machine tick-until":
+            case "mission asteroid-types":
             case "mission infra-state":
             case "mission rocket-cargo":
             case "mission state":

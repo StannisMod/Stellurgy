@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -38,6 +39,10 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-05 (a charged coil absorbs a single impact costing more than its per-tick intake). */
     @Pins("INV-SHD-05")
+    @RedWitness(member = "TileEntityFieldGenerator#consumeShieldEnergy",
+            at = "int extracted = energy.extractEnergy(amount, false);",
+            replacedBy = "int extracted = energy.extractEnergy(Math.min(amount, getRechargeThroughput()), false);",
+            fails = "the powered coil did not absorb the energy projectile", on = "2026-10-19")
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
         int gx = 980, gz = 774;
@@ -177,6 +182,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-06 (a kinetic projectile is deflected, not consumed). */
     @Pins("INV-SHD-06")
+    @RedWitness(member = "TileEntityFieldGenerator#tryAbsorbEntityImpact", at = "pushEntityBack(entity);",
+            replacedBy = "", fails = "the arrow ended up inside the shell", on = "2026-10-19")
     @Test
     public void chargedShieldDeflectsAnArrow() throws Exception {
         int gx = 992, gz = 786;

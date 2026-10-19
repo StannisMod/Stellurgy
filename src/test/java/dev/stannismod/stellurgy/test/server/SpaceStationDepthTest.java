@@ -5,6 +5,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -44,6 +45,8 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
      * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
      */
     @Pins({"INV-STN-02", "INV-STN-22"})
+    @RedWitness(member = "SpaceObjectManager#getNextStationId", at = "if (!stationLocations.containsKey(i))",
+            replacedBy = "if (true)", fails = "station ids must be unique within the same orbit", on = "2026-10-19")
     @Test
     public void multipleStationsCoexistWithDistinctIds() throws Exception {
         int a = createStation(0);
@@ -79,6 +82,8 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-04 (addFuel clamps at MAX_FUEL and returns the amount actually added). */
     @Pins("INV-STN-04")
+    @RedWitness(member = "SpaceStationObject#addFuel", at = "fuelAmount = Math.min(fuelAmount + amt, MAX_FUEL);",
+            replacedBy = "fuelAmount = fuelAmount + amt;", fails = "after-add fuel must clamp at max", on = "2026-10-19")
     @Test
     public void fuelAddRespectsMaxCapacity() throws Exception {
         int id = createStation(0);
@@ -102,6 +107,8 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-03 (useFuel consumes nothing when the stock is short and drains exactly otherwise). */
     @Pins("INV-STN-03")
+    @RedWitness(member = "SpaceStationObject#useFuel", at = "if (amt > getFuelAmount())", replacedBy = "if (false)",
+            fails = "useFuel on insufficient stock must not consume anything", on = "2026-10-19")
     @Test
     public void fuelUseAllOrNothingWhenInsufficient() throws Exception {
         int id = createStation(0);

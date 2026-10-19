@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -42,6 +43,9 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
     @Pins("INV-SHD-02")
+    @RedWitness(member = "WorldState#rebuild", at = "if (allPositions.contains(next) && visited.add(next)) {",
+            replacedBy = "if (cables.containsKey(next) && visited.add(next)) {",
+            fails = "adjacent generator+emitter (no cable) failed to power", on = "2026-10-19")
     @Test
     public void twoBlockShieldPowersWithoutCable() throws Exception {
         // Generator at G, emitter directly adjacent along +X. No cable, console or accumulator.

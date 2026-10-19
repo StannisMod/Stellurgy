@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.StationPads;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -102,6 +103,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-07 (a dock claims only free pads that opted into auto-land). */
     @Pins("INV-STN-07")
+    @RedWitness(member = "SpaceStationObject#getNextLandingPad",
+            at = "if (!pos.getOccupied() && pos.getAllowedForAutoLand()) {", replacedBy = "if (!pos.getOccupied()) {",
+            fails = "dock must refuse a pad that hasn't opted into auto-land", on = "2026-10-19")
     @Test
     public void dockRejectsPadWithoutAutoLandOptIn() throws Exception {
         // Critical: getNextLandingPad gates on BOTH not-occupied AND
@@ -123,6 +127,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
      * Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it).
      */
     @Pins({"INV-STN-07", "INV-STN-24"})
+    @RedWitness(member = "SpaceStationObject#getNextLandingPad", at = "pos.setOccupied(true);", replacedBy = "",
+            fails = "dock must mark the pad occupied=true", on = "2026-10-19")
     @Test
     public void dockClaimsAutoLandPadAndMarksOccupied() throws Exception {
         int id = createStation();
@@ -195,6 +201,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
     @Pins("INV-STN-23")
+    @RedWitness(member = "StationLandingLocation#equals",
+            at = "return pos.equals(((StationLandingLocation) object).getPos());", replacedBy = "return false;",
+            fails = "duplicate add at same (x,z) must NOT grow padCount", on = "2026-10-19")
     @Test
     public void addPadIsIdempotentForSamePosition() throws Exception {
         // Production gate: spawnLocations.contains(pos) check uses

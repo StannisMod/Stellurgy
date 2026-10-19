@@ -25898,7 +25898,7 @@ public class TestProbeCommand extends CommandBase {
     private void handleMission(net.minecraft.server.MinecraftServer server,
                                ICommandSender sender, String[] args) {
         if (args.length == 0) {
-            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
+            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | asteroid-types | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
             return;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -25958,11 +25958,29 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"type\":\"gas\"}");
                 return;
             }
+            if ("asteroid-types".equals(sub)) {
+                // /stellurgytest mission asteroid-types — the asteroid types the server has
+                // registered, i.e. the ids an asteroid chip may carry for a harvest to happen.
+                StringBuilder types = new StringBuilder();
+                for (String id : dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                        .getAsteroidTypes().keySet()) {
+                    if (types.length() > 0) types.append(',');
+                    types.append('"').append(id.replace("\\", "\\\\").replace("\"", "\\\"")).append('"');
+                }
+                send(sender, "{\"types\":[" + types + "]}");
+                return;
+            }
             if ("start-ore".equals(sub) && args.length >= 5) {
                 int dim = parseIntOr(args[1], Integer.MIN_VALUE);
                 int rocketId = parseIntOr(args[2], -1);
                 long duration = (long) parseDoubleOr(args[3], 0);
                 float drillingPower = (float) parseDoubleOr(args[4], 0);
+                // Optional 6th argument: the asteroid type the chip names, joined from the rest so a
+                // type with spaces in its name survives. Absent, the chip names a type nobody
+                // registers, and production skips the harvest whatever the drilling power.
+                String chipType = args.length >= 6
+                        ? String.join(" ", java.util.Arrays.copyOfRange(args, 5, args.length))
+                        : "ar-test-fixture";
                 net.minecraft.world.WorldServer world = server.getWorld(dim);
                 if (world == null) {
                     send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -25978,9 +25996,9 @@ public class TestProbeCommand extends CommandBase {
                 // Equip a programmed asteroid chip in the guidance computer's
                 // slot 0 with full max-data values so production's random
                 // rolls (distance/composition/mass over maxData) effectively
-                // always fire. The chip's "type" is set to a sentinel; if no
-                // asteroid type is registered for it production will short
-                // circuit on `asteroid != null` and skip the harvest fill —
+                // always fire. The chip's "type" is the caller's, or a sentinel
+                // no asteroid is registered under — then production short
+                // circuits on `asteroid != null` and skips the harvest fill;
                 // chip-replacement still runs (the post-condition tests).
                 net.minecraft.item.ItemStack chipStack = new net.minecraft.item.ItemStack(
                         dev.stannismod.stellurgy.api.StellurgyItems.itemAsteroidChip);
@@ -25990,7 +26008,7 @@ public class TestProbeCommand extends CommandBase {
                 chip.setData(chipStack, 100, dev.stannismod.stellurgy.api.DataStorage.DataType.DISTANCE);
                 chip.setData(chipStack, 100, dev.stannismod.stellurgy.api.DataStorage.DataType.COMPOSITION);
                 chip.setData(chipStack, 100, dev.stannismod.stellurgy.api.DataStorage.DataType.MASS);
-                chip.setType(chipStack, "ar-test-fixture");
+                chip.setType(chipStack, chipType);
                 chip.setUUID(chipStack, System.nanoTime());
                 if (rocket.storage == null) {
                     send(sender, "{\"error\":\"rocket has null storage chunk\"}");
@@ -26023,6 +26041,7 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"dim\":" + dim
                         + ",\"duration\":" + duration
                         + ",\"drillingPower\":" + drillingPower
+                        + ",\"chipType\":\"" + chipType.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
                         + ",\"type\":\"ore\"}");
                 return;
             }

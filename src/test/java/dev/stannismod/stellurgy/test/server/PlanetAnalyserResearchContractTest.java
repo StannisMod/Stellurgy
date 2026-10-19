@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -51,6 +52,9 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
      * Pins INV-MBM-16 (a powered analyser with data on its buses increments the chip's composition data).
      */
     @Pins("INV-MBM-16")
+    @RedWitness(member = "TileAstrobodyDataProcessor#onRunningPoweredTick", at = "incrementDataOnChip(1, DataType.COMPOSITION);",
+            replacedBy = "",
+            fails = "chip composition must have incremented from 0", on = "2026-10-19")
     @Test
     public void poweredAnalyserIncrementsChipCompositionFromDataBus() throws Exception {
         // 1) Assemble the analyser via fixture.
