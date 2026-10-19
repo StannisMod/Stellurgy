@@ -1611,20 +1611,31 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
+        // Both marks go BEFORE buildShip: its approach teleport puts him over this deck, and a capture
+        // opened there can survive the teleport below without a release, leaving no edge after a
+        // later mark. The upright capture is arrangement here — the subject is its stability under
+        // the tilt — so whichever teleport opened it serves.
+        Events clientEvents = clientEvents();
+        long landingMark = clientEvents.mark();
+        Events serverEvents = serverEvents();
+        long serverLandingMark = serverEvents.markInstrumented();
         double[] ship = buildShip(site);
 
         // Stand the client player on the UPRIGHT deck first (capture works there), then tilt the ship
         // and hold it. The player rides the deck; the camera and capture must stay STABLE while the ship
         // is stationary at a steep angle - not jitter frame-to-frame (RC-2 Euler pole) nor flicker the
         // capture (which alternates gravity and drags the body "back and forth through the deck").
-        Events clientEvents = clientEvents();
-        long landingMark = clientEvents.mark();
         arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        // The message says CLIENT, so the read is the client's: his own resolver's capture record,
-        // awaited rather than given 80 ticks. (The server probe beside it re-evaluates handles() for
-        // the SERVER player and reads the SERVER state map — a second opinion, not this one.)
+        // Each side's capture is its own resolver's decision and each is linked on its own record:
+        // the client takes him while he is still falling, and the server only knows where he is from
+        // the movement packets that follow, so a server read right after the client's link can find
+        // him in the air over the deck (measured 2026-10-19: anchorShipId null, supportedByShip
+        // false, one red in a full VS client gate).
         ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
                 "the client must be captured on THIS upright deck before the ship is tilted under him",
+                DECK_LINK_BUDGET_TICKS);
+        ShipIdentity.awaitCaptureHeldBy(serverEvents, serverLandingMark, scenarioShipId,
+                "the server must hold him on THIS upright deck too before its capture is read",
                 DECK_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
@@ -1828,8 +1839,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // ---- Leg A (control): a PARKED ship's render transform converges onto its tick pose, so the
         // skew of a body on its deck bounds the instrument's noise floor.
         Events events = serverEvents();
-        double[] ship = buildShip(site);
+        // The mark goes BEFORE buildShip: its approach teleport puts him over this deck, and the
+        // capture can open there and survive the teleport below without a release, leaving no edge
+        // after a later mark (measured 2026-10-19, in-suite: deck_carry on this ship from the mark's
+        // first tick, no deck_entered within the budget). The capture is arrangement here, not the
+        // subject, so whichever teleport opened it serves; the opening is only possible on a ship
+        // this scenario spawned inside the window.
         long captureMark = events.markInstrumented();
+        double[] ship = buildShip(site);
         arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // `deck_entered` is an EDGE; the sample below needs the deck to be HOLDING him when the wait
         // returns — the chain: the opening on this ship, later than the last release.
