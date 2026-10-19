@@ -21013,6 +21013,48 @@ public class TestProbeCommand extends CommandBase {
             dirs.put(d.name(), dm);
         }
         m.put("directions", dirs);
+        m.put("bill", r.bill() == null ? null : billMap(r.bill()));
+        return m;
+    }
+
+    /**
+     * A ship's bill (C10 STAT-25) as JSON-ready data: the Δv aboard per regime, then — unless {@code noBody}
+     * names why there is none — the start, the line, the surface and each leg with its outcome. A leg that
+     * was not computed is null.
+     */
+    private static java.util.Map<String, Object> billMap(dev.stannismod.stellurgy.ship.control.FlightBill b) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("metered", b.metered());
+        java.util.List<Object> regimes = new java.util.ArrayList<>();
+        for (dev.stannismod.stellurgy.ship.control.FlightBill.Regime r : b.regimes()) {
+            java.util.Map<String, Object> rm = new java.util.LinkedHashMap<>();
+            rm.put("propellant", r.propellant());
+            rm.put("exhaustVelocity", r.exhaustVelocity());
+            rm.put("usableKg", r.usableKg());
+            rm.put("deltaV", r.deltaV());
+            regimes.add(rm);
+        }
+        m.put("regimes", regimes);
+        m.put("noBody", b.noBody() == null ? null : b.noBody().name());
+        if (b.noBody() == null) {
+            m.put("startY", b.startY());
+            m.put("lineY", b.lineY());
+            m.put("surfaceY", b.surfaceY());
+            m.put("ascent", legMap(b.ascent()));
+            m.put("landing", legMap(b.landing()));
+            m.put("climbBack", b.climbBack() == null ? null : legMap(b.climbBack()));
+            m.put("canClimbBackOut", b.canClimbBackOut());
+        }
+        return m;
+    }
+
+    private static java.util.Map<String, Object> legMap(dev.stannismod.stellurgy.ship.control.FlightBill.Leg leg) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("outcome", leg.outcome().name());
+        m.put("deltaV", leg.deltaV());
+        m.put("propellantKg", leg.propellantKg());
+        m.put("altitude", leg.altitude());
+        m.put("speed", leg.speed());
         return m;
     }
 

@@ -62,10 +62,12 @@ public final class ShipReadout {
     private final double[][][] torque;
     /** [view][direction]: seconds the burst figure lasts */
     private final double[][] seconds;
+    /** What the propellant buys and the body below charges (C10 STAT-25); {@code null} when the readout says nothing of it. */
+    private final FlightBill bill;
 
     private ShipReadout(long revision, double structural, double content, double crew, double reaction,
                         double gravity, double[][][] authority, double[][][] torque, double[][] seconds,
-                        Map<String, Double> aboardKg, List<String> starved) {
+                        Map<String, Double> aboardKg, List<String> starved, FlightBill bill) {
         this.revision = revision;
         this.structural = structural;
         this.content = content;
@@ -79,6 +81,7 @@ public final class ShipReadout {
         this.authority = authority;
         this.torque = torque;
         this.seconds = seconds;
+        this.bill = bill;
     }
 
     /**
@@ -103,7 +106,7 @@ public final class ShipReadout {
         ShipMassFrame mass = live.mass();
         return new ShipReadout(revision, mass.getStructuralMass(), mass.getContentMass(),
                 mass.getCrewMass(), mass.getReactionMass(), gravity, a, t, s,
-                Collections.<String, Double>emptyMap(), Collections.<String>emptyList());
+                Collections.<String, Double>emptyMap(), Collections.<String>emptyList(), null);
     }
 
     /**
@@ -113,7 +116,18 @@ public final class ShipReadout {
      */
     public ShipReadout withPropellant(Map<String, Double> aboardKg, List<String> starved) {
         return new ShipReadout(revision, structural, content, crew, reaction, gravity, authority, torque, seconds,
-                aboardKg, starved);
+                aboardKg, starved, bill);
+    }
+
+    /** This readout, carrying {@code bill} (C10 STAT-25). */
+    public ShipReadout withBill(FlightBill bill) {
+        return new ShipReadout(revision, structural, content, crew, reaction, gravity, authority, torque, seconds,
+                aboardKg, starved, bill);
+    }
+
+    /** What the propellant buys and the body below charges; {@code null} when this readout says nothing of it. */
+    public FlightBill bill() {
+        return bill;
     }
 
     /** Kilograms of propellant in the holders the drives draw from (C10 STAT-41). */
@@ -254,6 +268,10 @@ public final class ShipReadout {
         for (String name : starved) {
             out.writeUTF(name);
         }
+        out.writeBoolean(bill != null);
+        if (bill != null) {
+            bill.write(out);
+        }
     }
 
     public static ShipReadout read(DataInput in) throws IOException {
@@ -286,6 +304,8 @@ public final class ShipReadout {
         for (int i = in.readInt(); i > 0; i--) {
             starved.add(in.readUTF());
         }
-        return new ShipReadout(revision, structural, content, crew, reaction, gravity, a, t, s, aboard, starved);
+        FlightBill bill = in.readBoolean() ? FlightBill.read(in) : null;
+        return new ShipReadout(revision, structural, content, crew, reaction, gravity, a, t, s, aboard, starved,
+                bill);
     }
 }

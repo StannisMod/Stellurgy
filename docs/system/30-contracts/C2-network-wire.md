@@ -207,8 +207,13 @@ S→C only. Wire: the addressed tile's `BlockPos` as a long, the live slice (`sa
 `wheelFill` double), then `ShipReadout.write` — revision, three masses, the field, and per view ×
 endurance × twelve directions an authority and a torque, then per view the twelve burst endurances,
 then the reaction mass (double), the propellant aboard (an int count, then per fluid its name as UTF
-and its kilograms) and the propellants idle drives wait for (an int count, then each name as UTF)
-(`ship/control/ShipReadout#write`, `network/PacketShipReadout.java`) `[V]`. An infinite endurance
+and its kilograms) and the propellants idle drives wait for (an int count, then each name as UTF), then
+whether a bill follows (boolean) and the bill (C10 STAT-48): metered (boolean), the Δv rows (an int count,
+then per row its propellant as UTF and its exhaust velocity, usable kilograms and Δv as doubles), why there
+is no body below (a byte, −1 when there is one), and only then the start, line and surface altitudes
+(doubles) and the ascent, landing and — behind a boolean — climb-back legs, each an outcome byte and its Δv,
+propellant, altitude and speed as doubles (`ship/control/ShipReadout#write`, `ship/control/FlightBill#write`,
+`network/PacketShipReadout.java`) `[V]`. An infinite endurance
 or TWR travels as a double infinity; that is fine on this wire and is why the JSON probe spells it
 differently.
 

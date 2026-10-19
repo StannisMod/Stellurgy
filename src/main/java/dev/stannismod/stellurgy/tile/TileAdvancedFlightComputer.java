@@ -1308,6 +1308,8 @@ public class TileAdvancedFlightComputer extends TileEntity
     private java.util.List<String> surveyedStarved = java.util.Collections.emptyList();
     private boolean surveyedMetered = false;
     private java.util.Set<String> surveyedFed = java.util.Collections.emptySet();
+    /** Game thread only: the bill of the current model, taken where the ship stood when it was surveyed (C10 STAT-25). */
+    private dev.stannismod.stellurgy.ship.control.FlightBill surveyedBill = null;
 
     /** Per player: the model revision and the tick of the last readout pushed to them. */
     private final java.util.Map<java.util.UUID, long[]> readoutSent = new java.util.HashMap<>();
@@ -1385,6 +1387,8 @@ public class TileAdvancedFlightComputer extends TileEntity
                         survey.mass(), survey.design(), survey.live(),
                         dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
         flightModel = model;
+        surveyedBill = dev.stannismod.stellurgy.integration.vs.FlightBillSurvey.of(world, uuid, getPos(),
+                model.live(), survey.metered() ? survey.poolKg() : null, localGravity(world), entryCeiling());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
                 new dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent(world,
                         shipId == null ? null : shipId.toString(), getPos(),
@@ -1454,10 +1458,11 @@ public class TileAdvancedFlightComputer extends TileEntity
         return false;
     }
 
-    /** The readout of {@code model} with what is aboard now and what idles for want of it. */
+    /** The readout of {@code model} with what is aboard now, what idles for want of it, and the model's bill. */
     private dev.stannismod.stellurgy.ship.control.ShipReadout readoutOf(
             dev.stannismod.stellurgy.ship.control.ShipFlightModel model) {
-        return model.readout(localGravity(world)).withPropellant(propellantLedger.aboard(), surveyedStarved);
+        return model.readout(localGravity(world)).withPropellant(propellantLedger.aboard(), surveyedStarved)
+                .withBill(surveyedBill);
     }
 
     private void writeWheelsBack() {

@@ -521,8 +521,9 @@ public final class ServerEventRecorder {
      * <p>{@code ship} is the craft's durable name, {@code afcX/Y/Z} the computer's own address (a
      * subspace one on an assembled ship), {@code revision} this computer's rebuild count, and
      * {@code totalKg} the mass the new model was solved for — the one figure a cargo scenario links
-     * on — and {@code liveSurgeN} the sustained forward authority of the actuators working now, the
-     * figure a scenario that changes the hull's motors links on.</p>
+     * on — {@code reactionKg} the propellant in it, {@code liveSurgeN} the sustained forward authority of
+     * the actuators working now, the figure a scenario that changes the hull's motors links on, and the
+     * model's bill ({@link #billFields}).</p>
      */
     @SubscribeEvent
     public static void onFlightModelChanged(
@@ -539,10 +540,33 @@ public final class ServerEventRecorder {
                         + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
                         + ",\"revision\":" + event.readout.revision()
                         + ",\"totalKg\":" + num(event.readout.totalMass())
+                        + ",\"reactionKg\":" + num(event.readout.reactionMass())
                         + ",\"liveSurgeN\":" + num(event.readout.authority(
                                 dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE,
                                 dev.stannismod.stellurgy.ship.control.ControlDirection.SURGE_POSITIVE,
-                                dev.stannismod.stellurgy.ship.control.Endurance.SUSTAINED)));
+                                dev.stannismod.stellurgy.ship.control.Endurance.SUSTAINED))
+                        + billFields(event.readout.bill()));
+    }
+
+    /**
+     * The model's bill as the record carries it: the ascent leg — outcome, Δv, propellant, where it ended —
+     * and the start and line it was taken between, with the field it was taken in; {@code billNoBody} when
+     * there is no body below, and nothing at all when the readout carries no bill.
+     */
+    private static String billFields(dev.stannismod.stellurgy.ship.control.FlightBill bill) {
+        if (bill == null) {
+            return "";
+        }
+        if (bill.noBody() != null) {
+            return ",\"billNoBody\":\"" + bill.noBody().name() + "\"";
+        }
+        dev.stannismod.stellurgy.ship.control.FlightBill.Leg ascent = bill.ascent();
+        return ",\"billAscent\":\"" + ascent.outcome().name() + "\""
+                + ",\"billAscentDeltaV\":" + num(ascent.deltaV())
+                + ",\"billAscentKg\":" + num(ascent.propellantKg())
+                + ",\"billAscentAltitude\":" + num(ascent.altitude())
+                + ",\"billStartY\":" + num(bill.startY())
+                + ",\"billLineY\":" + num(bill.lineY());
     }
 
     /**

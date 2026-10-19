@@ -379,19 +379,22 @@ drift.
 the authority). Edge: a holder the frame cannot count (NBT contents) is not in the pool at all (STAT-22),
 so the term never sees mass it did not count.
 
-### STAT-25 `[A]` — The readout computes and SHOWS the bill; it never refuses
+### STAT-25 `[T][BEH]` — The readout computes and SHOWS the bill; it never refuses
 
-Beside STAT-12's TWR: available **Δv** per regime by the rocket equation over the counted propellant;
-the **ascent bill** to the shell for the body below or targeted, under the same drag and gravity
-model the flight uses; the **landing bill**; and the TWR at that body. A craft that cannot climb back
-out is told so before it descends, and may descend (an unreasonable act stays possible and costs what
-it costs; maintainer ruling 2026-10-02).
+Beside STAT-12's TWR, the console shows the **Δv aboard** per regime (STAT-45) and, for the body BELOW the
+craft, three legs computed by the flight's own law run forward (STAT-46): the **ascent bill** from where
+the craft stands to the line its takeoff fires on, the **landing bill** from there to the surface under its
+hull, and the **climb back out** from that surface on what the landing leaves — each with its Δv and its
+propellant, and, for a leg that does not make it, how far it gets — and a warning when the craft could not
+climb back out after landing. The TWR at that body is STAT-12's own figure: the body is the one the
+readout's field is taken in. A craft that cannot climb back out is told so before it descends, and may
+descend: nothing reads the bill to decide anything (an unreasonable act stays possible and costs what it
+costs; maintainer ruling 2026-10-02). In the world the bill and the flight agree (STAT-49).
 
-*Stress-test.* Falsifiable: the shown Δv equals `v_e·ln(m0/m1)` for the counted pool; a flight that
-spends the shown ascent bill reaches the shell within tolerance. Code: absent. Consistent with STAT-12
-(a readout raised to a confirmation, never a refusal) and STAT-21 (the same channels). Edge: the bill is
-computed by the flight's own model, never a second approximation — a readout that disagrees with the
-physics is a silent fallback.
+**Body below only**: no navigation target exists, and the descent trigger's nearest body may have no world
+to read a field, an air or a surface from yet, so a TARGETED body is not billed; where there is no body below
+— no field (a space cell), no orbit line, or a pose that cannot be read — the bill says which and shows the
+Δv aboard alone (`FlightBill.NoBody`). What the bill does not model is listed at STAT-46.
 
 ## The tier-1 launch gate — STAT-26..29
 
@@ -637,8 +640,78 @@ column under one capacity, cruise first; recipes cached per pressure band) — t
 
 **Not built, and why**: power budgets (STAT-22's second and third terms — no power allocation and no
 electric drive exist; power-drawing families stay on the binary stage); the boost switch's key, profile and
-HUD (no engine has two regimes); the readout's Δv and ascent bills (STAT-25). The feed-exit heat of C12
+HUD (no engine has two regimes). The feed-exit heat of C12
 HEAT-4 does not exist; when it does, it reads the drain and is off with it.
+
+## The bill — STAT-45..49 (tier 2)
+
+STAT-25 made concrete (`ship/control/FlightBill`, `integration/vs/FlightBillSurvey`). **Terms.** **a leg** =
+one stretch of flight the bill follows: the ascent, the landing, the climb back. **the step** = one physics
+step, `VSConfig#getTimeSimulatedPerTick` engine seconds (a sixtieth: 0.0301 SI s). **the climb command** = what
+full upward throttle with Flight Assist off commands, `SHIP_MAX_SPEED` straight up (40 blocks per engine
+second, 22.15 m/s). Maintainer rulings these rest on: the 2026-10-02 propulsion-physics rulings — STAT-25's
+own, and that a takeoff starts from the planet's real line — and that the ascent integrates its thrust over
+the pressure the climb meets, step by step, never a vacuum figure.
+
+- **STAT-45** `[T][SYS]` **Δv aboard is the rocket equation over what the live drives can burn.** One row per
+  distinct regime a LIVE drive burns: its exhaust velocity `v_e` is its full-throttle force in vacuum over its
+  full-throttle flow (the propellant's ceiling times the design's cycle, STAT-32); its usable propellant is the
+  most of its mixture the pool supplies (a pair: the least of each fluid over its share by mass); its Δv is
+  `v_e·ln(m0/(m0 − usable))`, `m0` the frame's whole mass. With consumption off there is no row: nothing is
+  spent. REGIONS: `monopropellant`, `pair`, `consumption off`. FOR: STAT-25. Pinned by
+  `PropulsionLawsTest#theDeltaVAboardIsTheRocketEquationOverWhatTheLiveDrivesBurn`; on a real ship's readout
+  — the surveyed pool and the frame's whole mass handed to it — by
+  `TierTwoCraftFlightModelGroupTest#aCraftCarryingItsAscentBillCrossesTheLineAndOneShortOfItDoesNot`.
+- **STAT-46** `[T][SYS]` **A leg is the flight law run forward.** From rest, step by step in the order the
+  physics step applies them: the air takes its share of the velocity (`FreeFlightPhysics#ambientDragFactor`
+  at the world's density — the pressure is one number per world, STAT-43, so the thrust's pressure term is
+  the model's own); the flight computer's velocity law asks the acceleration that brings the craft to the
+  command against the field (`FreeFlightPhysics#shipControlAccel`, its gravity feed-forward included); the
+  hull delivers the fraction of its LIVE sustained heave recipe that gives it, at most all, held inside the
+  pool by the one factor the scarcest fluid allows, ejecting each fluid's flow by that fraction (STAT-47);
+  and the field pulls (STAT-14). **The profiles**: the **ascent** climbs from the craft's pose on the climb
+  command until a coast — nothing pushing, the air and the field acting — would carry it to the entry line
+  (`TileAdvancedFlightComputer#entryCeiling`), then coasts: the least a climb on the command spends, and what
+  a craft carrying no more than that does when it holds the throttle until its tanks run dry — `reaches the
+  line`, or turns back below it, `runs dry short of it` (its apex) or `stalls` (thrust below weight,
+  propellant left); the
+  **landing** falls with no linear command and lights the brake (a command of zero) at the LATEST step from
+  which it still stops at or above the surface — the pose at which the hull's lowest point rests on the
+  highest ground under its footprint — and, a stop above the surface being a hover, goes on down from there
+  the same way on what it has left until a descent gains no height: `stops at the surface` (within a step's
+  fall of it), or `cannot stop` (the speed it strikes at — a craft whose propellant runs out while it brakes);
+  the **climb back** is the ascent from that surface on what the landing left (the ascent itself for a
+  craft already down). A bill follows at most `FlightBill.MAX_STEPS` = 2²⁰ steps over all its legs — room
+  for seven of Earth's climbs at the command (100 000 blocks at 22.15 m/s is 150 000 steps) — and a leg cut
+  there says so (`BEYOND_HORIZON`). **What it does not model**, each a way the flight differs: the scheme
+  divides by the model's mass, rebuilt on a cadence (MECH-SFM-07), where a leg divides by its own — the
+  deadbeat then holds the craft `(r − 1)·g·Δt/r` off the command, `r` the ratio of the two; the drain moves
+  the physics record once per game tick, not per step (STAT-40); what the attitude hold spends, in flight and
+  against a pad before it (a craft is billed for what it holds when the model is solved); a craft that
+  is not upright (the heave axis is taken as straight up); collisions. REGIONS: `reaches the line`,
+  `runs dry short of it`, `stalls`, `stops at the surface`, `cannot stop`. FOR: STAT-25. Pinned by
+  `PropulsionLawsTest#aClimbSpendsWhatTheLawAsksAndSaysHowHighItGets`,
+  `PropulsionLawsTest#aLandingBrakesAtTheLastStepThatStillStopsAboveTheSurface`.
+- **STAT-47** `[T][SYS]` **A leg's step is the control scheme's step.** For the upward acceleration the law
+  asks, a leg's step accelerates the craft by the force the scheme's command for that acceleration applies,
+  over the craft's mass, and ejects what that command ejects — under the hull's authority, at it, and where
+  the budget bites. FOR: STAT-25 (a bill that disagrees with the flight is a silent fallback). REGIONS:
+  `under authority`, `at authority`, `the budget bites`. Pinned by
+  `ShipMotionJointsTest#aLegsStepIsTheControlSchemesStep`.
+- **STAT-48** `[T][SYS]` **The bill rides the readout.** It is computed when the flight computer solves its
+  model (MECH-SFM-07), for where the craft stands then, at rest, and never per tick — at most `MAX_STEPS`
+  steps of a few multiplications each on that game tick; it travels in the readout's wire after the
+  starved propellants (C2) and arrives whole: every row, the start, line and surface, and every leg.
+  REGIONS: `a body below`, `no body below`. FOR: STAT-25, STAT-21. Pinned by
+  `ShipReadoutTest#theWireCarriesTheBill`.
+- **STAT-49** `[T][BEH]` **In the world the bill and the flight agree, within a tenth.** A craft flown on the
+  bill's climb — Flight Assist off, full upward throttle held — carrying the propellant a bill says the climb
+  spends and a tenth more crosses the line, and one carrying a tenth less turns back short of it, told so by
+  its own bill. REGIONS: `reaches the line`, `runs dry short of it`. Pinned by
+  `TierTwoCraftFlightModelGroupTest#aCraftCarryingItsAscentBillCrossesTheLineAndOneShortOfItDoesNot`
+  (measured 2026-10-19 at a quarter gee in the overworld's air, the line at Y 255 from a pad at Y 154: the
+  bill of six full tanks spends 3 092 kg for 32.3 m/s; a craft carrying 3 401 kg crossed, one carrying
+  2 782 kg was told it runs dry at Y 240.6 and turned back at Y 237.8).
 
 ## Status of the tier-2 clauses (read with `ship-flight-model`)
 
@@ -666,7 +739,8 @@ HEAT-4 does not exist; when it does, it reads the drain and is off with it.
 | STAT-19 cached recipes, revisions | `[V]` recipes cached per model; the model's revision is the one counter | MECH-SFM-07 |
 | STAT-20 mass seam | `[V][T]` | MECH-SFM-02 |
 | STAT-21 client channels | `[V]` one packet of primitives to the pilot and console viewers only (`PacketShipReadout`) | C2 |
-| STAT-22..25 propulsion physics | `[A]` | made concrete by STAT-30..43 |
+| STAT-22..24 propulsion physics | `[A]` | made concrete by STAT-30..43 |
+| STAT-25, STAT-45..49 the bill | `[T]` Δv aboard, the three legs, the wire, the agreement with the scheme (fast tiers); the bill and the flight in the world (`TierTwoCraftFlightModelGroupTest`); body below only, the assembler's scan carries no bill | ship-flight-model MECH-SFM-12 |
 | STAT-38..43 tier-2 consumption, boost columns, pressure bands | `[T]` laws in `PropulsionLawsTest`; the survey, drain and frame in `TierTwoCraftFlightModelGroupTest`; power budgets and the boost switch not built | ship-flight-model MECH-SFM-11 |
 | STAT-44 rocket fuel tanks hold their role | `[T]` `TileFuelTank`, in `TierTwoCraftFlightModelGroupTest` | blocks MECH-BLK-03 |
 | STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight drain wiring by `FreeFlightCycleTest`, the classic ascent's has no test | — |

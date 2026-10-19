@@ -1,6 +1,6 @@
 ---
 id: ship-flight-model
-owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/ChemicalMotorActuators.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/ShipPropellant.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
+owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/ChemicalMotorActuators.java, integration/vs/FlightBillSurvey.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/ShipPropellant.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
 entrypoints: [TileAdvancedFlightComputer#update→tickFlightModel, TileAdvancedFlightComputer#onPhysicsTick, ShipMassTrigger.Hooks#onShipNamed, TileRocketAssemblingMachine#scanRocket (tier-2 readout)]
 depends-on: [util-core (WeightEngine), dimension-planets, network-wire, rocket-assembly]
 depended-by: [hyperdrive, client-render (HUD lines)]
@@ -41,6 +41,7 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 | `PropellantBudget` / `PropellantLedger` / `StepConditions` | what a step may eject; the account between the step that ejects and the tick that drains; the step's budget, pressure and boost switch |
 | `ShipPropellant` | the pool's holders aboard: measured every tick, drained in whole millibuckets, the physics record moved by the drain |
 | `ShipFlightModel` / `ShipReadout` | immutable DESIGN+LIVE capability at a revision; the primitives + arithmetic all surfaces use |
+| `FlightBill` / `FlightBillSurvey` | Δv aboard per regime and the ascent, landing and climb-back legs, the flight law run forward; the body below as the law sees it |
 | `HullSurvey` | one visit: mass frame + design/live actuators + construction count |
 | `BlockReactionWheel` / `TileReactionWheel` | three pure-torque actuators; stored momentum in tile NBT |
 
@@ -109,6 +110,17 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   `#withConsumptionSwitchedOffABurnTakesNothing`, `#propellantWeighsItsRealMassWhateverTheContentScale`).
   The frame's `reaction` term is the pool's fluids at their real mass (`ShipHullMass#addHeld`). Not built:
   power budgets, the boost switch's key.
+- **MECH-SFM-12 — the bill** (C10 STAT-25, STAT-45..49). When the computer solves a model it takes the
+  bill on the game thread, where the ship stands then: the Δv aboard per regime of the LIVE drives over the
+  surveyed pool, and — for a world with a field and an orbit line — the ascent from the pose to
+  `#entryCeiling`, the landing to the highest ground under the hull's footprint
+  (`TerrainHeightFinder#terrainTopOfFootprint`, offset by the pose's height above the hull's lowest point),
+  and the climb back from there, each stepped on the physics step through the drag factor, the velocity law
+  with its feed-forward, the LIVE heave recipe and its flow, and the field (`integration/vs/FlightBillSurvey`,
+  `ship/control/FlightBill`). At most `FlightBill.MAX_STEPS` steps a bill; it rides the readout
+  (`ShipReadout#withBill`, the console's `ShipReadoutText#console`) and the `FlightModelChangedEvent`; the
+  HUD does not carry it. Nothing decides on it `[T]` (`PropulsionLawsTest`, `ShipMotionJointsTest`,
+  `ShipReadoutTest`, in-world `TierTwoCraftFlightModelGroupTest#aCraftCarryingItsAscentBillCrossesTheLineAndOneShortOfItDoesNot`).
 - **MECH-SFM-10 — tier-2 assembly gate.** A build with an AFC skips the rocket thrust/fuel checks
   (`TileRocketAssemblingMachine#scanRocket`); its scan readout is solved on the pad's mass frame with every
   rocket fuel tank FULL (`HullSurvey#padMassWithTanksFull`), and under a DESIGN TWR of 1 in the local field
@@ -236,7 +248,8 @@ gates the field.
 owner's LAWS, one class: the capability solve's, each red-witnessed, and the scheme's over time on
 production-built hulls — INV-SFM-12 and its liveness twin, burst endurance and buy-back, hulls without
 the means); **`ShipMotionJointsTest`** (integration — the owner's JOINTS, each witnessed at the handoff:
-readout ↔ delivery INV-SFM-13, mass frame ↔ readout MECH-SFM-01 / INV-SFM-07); shared instruments `test/ShipMotionCases`, `test/CleanCommandLaw`; e2e for the mass round and gravity. No in-world e2e pins
+readout ↔ delivery INV-SFM-13, mass frame ↔ readout MECH-SFM-01 / INV-SFM-07, a bill's step ↔ the
+scheme's C10 STAT-47); `PropulsionLawsTest` carries the bill's laws (C10 STAT-45, STAT-46); shared instruments `test/ShipMotionCases`, `test/CleanCommandLaw`; e2e for the mass round and gravity. No in-world e2e pins
 MECH-SFM-07..10 yet.
 
 ## Open questions

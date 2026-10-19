@@ -9,6 +9,8 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
 import org.joml.Vector3d;
 import org.junit.Test;
 
@@ -167,5 +169,89 @@ public class ShipReadoutTest {
                         sent.burstSeconds(v, d), got.burstSeconds(v, d), 0.0D);
             }
         }
+    }
+
+    /**
+     * STAT-48: the bill crosses the readout's wire whole — through the readout's own writer and reader, every
+     * Δv row, the start, line and surface, every leg with its outcome and figures — and a bill with no body
+     * below arrives saying which. The craft is a slab lifted by one drive burning a pair, so a row, a climb
+     * that runs dry and a landing all exist to be carried; the body is declared here, its law the deadbeat
+     * the flight computer's contract states.
+     */
+    @Pins("STAT-48")
+    @Regions(of = "STAT-48", value = {"a body below", "no body below"})
+    @RedWitness(verdict = "STAT-48 a body below", member = "FlightBill#write", at = "out.writeDouble(lineY);",
+            replacedBy = "out.writeDouble(0);", fails = "STAT-48 a body below", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-48 no body below", member = "FlightBill#read",
+            at = "NoBody.values()[absent]", replacedBy = "NoBody.values()[0]", fails = "STAT-48 no body below",
+            on = "2026-10-19")
+    @Test
+    public void theWireCarriesTheBill() throws IOException {
+        Propellant pair = Propellant.pair("f", "o", 6.0D);
+        List<Actuator> lift = new ArrayList<>();
+        lift.add(Actuator.reactionDrive(new ActuatorId(0, -1, 0, 0), new Vector3d(0, -1, 0), new Vector3d(0, 1, 0),
+                java.util.Collections.singletonList(new PropellantDemand(pair, 4.0e5, 0, 4.0e5 / 4000.0D, 0)), 0));
+        java.util.Map<String, Double> pool = new java.util.TreeMap<>();
+        pool.put("f", 120.0D);
+        pool.put("o", 600.0D);
+        ShipMassFrameBuilder b = new ShipMassFrameBuilder();
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                b.add(MassContributor.ofBlock(x, 0, z, 1000.0D, Kind.STRUCTURAL));
+            }
+        }
+        b.add(MassContributor.ofBlock(0, 0, 0, 720.0D, Kind.REACTION));
+        ShipFlightModel model = ShipFlightModel.solve(1L, b.build(), lift, lift, HELM);
+        double step = 0.0301D;
+        FlightBill.Body body = new FlightBill.Body(9.81D, 0.99D, step, 22.15D,
+                (commanded, velocity) -> (commanded - velocity) / step + 9.81D, 80.0D, 5_000.0D, 64.0D);
+        FlightBill below = FlightBill.over(model.live(), pool, body);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("the bill must carry a row, a climb that"
+                        + " turns back and a landing: " + below.regimes().size() + " rows, ascent "
+                        + below.ascent().outcome() + ", landing " + below.landing().outcome(),
+                below.regimes().size() == 1 && below.ascent().outcome() != FlightBill.Outcome.REACHES
+                        && below.landing().deltaV() > 0);
+        FlightBill got = carried(model.readout(9.81D).withBill(below)).bill();
+        assertEquals("STAT-48 a body below: metered", below.metered(), got.metered());
+        assertEquals("STAT-48 a body below: the row's propellant", below.regimes().get(0).propellant(),
+                got.regimes().get(0).propellant());
+        assertEquals("STAT-48 a body below: the row's v_e", below.regimes().get(0).exhaustVelocity(),
+                got.regimes().get(0).exhaustVelocity(), 0.0D);
+        assertEquals("STAT-48 a body below: the row's usable kg", below.regimes().get(0).usableKg(),
+                got.regimes().get(0).usableKg(), 0.0D);
+        assertEquals("STAT-48 a body below: the row's dv", below.regimes().get(0).deltaV(),
+                got.regimes().get(0).deltaV(), 0.0D);
+        assertNull("STAT-48 a body below: no reason for none", got.noBody());
+        assertEquals("STAT-48 a body below: start", below.startY(), got.startY(), 0.0D);
+        assertEquals("STAT-48 a body below: line", below.lineY(), got.lineY(), 0.0D);
+        assertEquals("STAT-48 a body below: surface", below.surfaceY(), got.surfaceY(), 0.0D);
+        FlightBill.Leg[] sentLegs = {below.ascent(), below.landing(), below.climbBack()};
+        FlightBill.Leg[] gotLegs = {got.ascent(), got.landing(), got.climbBack()};
+        for (int i = 0; i < sentLegs.length; i++) {
+            String leg = "STAT-48 a body below: leg " + i;
+            assertEquals(leg + " present", sentLegs[i] == null, gotLegs[i] == null);
+            if (sentLegs[i] == null) {
+                continue;
+            }
+            assertEquals(leg + " outcome", sentLegs[i].outcome(), gotLegs[i].outcome());
+            assertEquals(leg + " dv", sentLegs[i].deltaV(), gotLegs[i].deltaV(), 0.0D);
+            assertEquals(leg + " kg", sentLegs[i].propellantKg(), gotLegs[i].propellantKg(), 0.0D);
+            assertEquals(leg + " altitude", sentLegs[i].altitude(), gotLegs[i].altitude(), 0.0D);
+            assertEquals(leg + " speed", sentLegs[i].speed(), gotLegs[i].speed(), 0.0D);
+        }
+
+        FlightBill none = FlightBill.withoutBody(model.live(), pool, FlightBill.NoBody.NO_LINE);
+        FlightBill gotNone = carried(model.readout(9.81D).withBill(none)).bill();
+        assertEquals("STAT-48 no body below: says which", FlightBill.NoBody.NO_LINE, gotNone.noBody());
+        assertEquals("STAT-48 no body below: the row still crosses", none.regimes().get(0).deltaV(),
+                gotNone.regimes().get(0).deltaV(), 0.0D);
+        assertNull("STAT-48 no body below: no leg", gotNone.ascent());
+    }
+
+    /** {@code sent} through the readout's own writer and reader. */
+    private static ShipReadout carried(ShipReadout sent) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        sent.write(new DataOutputStream(bytes));
+        return ShipReadout.read(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())));
     }
 }

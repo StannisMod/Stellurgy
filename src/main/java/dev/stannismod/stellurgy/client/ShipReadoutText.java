@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.client;
 
 import dev.stannismod.stellurgy.ship.control.ControlDirection;
 import dev.stannismod.stellurgy.ship.control.Endurance;
+import dev.stannismod.stellurgy.ship.control.FlightBill;
 import dev.stannismod.stellurgy.ship.control.ShipReadout;
 import dev.stannismod.stellurgy.ship.control.ShipReadout.View;
 import net.minecraft.client.resources.I18n;
@@ -53,7 +54,45 @@ public final class ShipReadoutText {
         if (!r.canHover(View.LIVE)) {
             lines.add(I18n.format("msg.ship.warn.cannot_hover", num(r.thrustToWeight(View.LIVE))));
         }
+        if (r.bill() != null) {
+            bill(r.bill(), lines);
+        }
         return lines;
+    }
+
+    /** The bill: Δv aboard per regime, then each leg over the body below, then whether the craft gets back out. */
+    private static void bill(FlightBill b, List<String> lines) {
+        if (!b.metered()) {
+            lines.add(I18n.format("msg.ship.bill.dv.unmetered"));
+        } else if (b.regimes().isEmpty()) {
+            lines.add(I18n.format("msg.ship.bill.dv.none"));
+        }
+        for (FlightBill.Regime regime : b.regimes()) {
+            lines.add(I18n.format("msg.ship.bill.dv", regime.propellant(), whole(regime.deltaV()),
+                    whole(regime.exhaustVelocity()), whole(regime.usableKg())));
+        }
+        if (b.noBody() != null) {
+            lines.add(I18n.format("msg.ship.bill.nobody." + b.noBody().name().toLowerCase(Locale.ROOT)));
+            return;
+        }
+        lines.add(leg("ascent", b.ascent(), b.lineY()));
+        lines.add(leg("landing", b.landing(), b.surfaceY()));
+        if (b.climbBack() != null) {
+            lines.add(leg("back", b.climbBack(), b.lineY()));
+        }
+        if (!b.canClimbBackOut()) {
+            lines.add(I18n.format("msg.ship.warn.no_way_back"));
+        }
+    }
+
+    private static String leg(String name, FlightBill.Leg leg, double towardY) {
+        return I18n.format("msg.ship.bill." + name + "." + leg.outcome().name().toLowerCase(Locale.ROOT),
+                whole(towardY), whole(leg.deltaV()), whole(leg.propellantKg()), whole(leg.altitude()),
+                whole(leg.speed()));
+    }
+
+    private static String whole(double v) {
+        return String.format(Locale.ROOT, "%.0f", v);
     }
 
     /** The pilot's slice: mass and thrust to weight, forward and reverse acceleration, the limits. */

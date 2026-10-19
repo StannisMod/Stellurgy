@@ -19,8 +19,8 @@ import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
  * computer's controller, which the physics solver hands every physics step of the ship it sits on.
  *
  * <p>Entry reads the solver's own state for the step it is about to run — the velocity it carries
- * in, the angular velocity, the mass and the step length — so the window measures the CRAFT, not the
- * command. Return reads the controller's own verdict, whether it delivered less than was asked.</p>
+ * in, the angular velocity, the mass, the step length and the world altitude of the physics pose — so
+ * the window measures the CRAFT, not the command. Return reads the controller's own verdict, whether it delivered less than was asked.</p>
  *
  * <p>Both points announce themselves before anything is filtered, so an empty window can be told
  * from a controller that never ran.</p>
@@ -43,7 +43,8 @@ public abstract class MixinFlightComputerPhysicsStepWindow {
         Vector3d v = calc.getLinearVelocity();
         Vector3d w = calc.getAngularVelocity();
         PhysicsStepWindow.enter(self.getWorld(), physo, p.getX(), p.getY(), p.getZ(), dt,
-                v.x, v.y, v.z, w.x, w.y, w.z, calc.getMass());
+                v.x, v.y, v.z, w.x, w.y, w.z, calc.getMass(),
+                physo.getShipTransformationManager().getCurrentPhysicsTransform().getPosY());
     }
 
     @Inject(method = "onPhysicsTick", at = @At("RETURN"), remap = false, require = 1)

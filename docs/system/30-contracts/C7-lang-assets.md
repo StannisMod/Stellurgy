@@ -214,6 +214,7 @@ through any other wrapper, is invisible to it.
 |---|---|
 | `tile.reactionWheel.name` | the reaction wheel block |
 | `msg.ship.readout.*`, `msg.ship.dir.*` (twelve), `msg.ship.warn.{no_authority,burst_only,cannot_hover}` | the flight computer's console (`client/ShipReadoutText#console`) `[V]` |
+| `msg.ship.bill.dv`, `msg.ship.bill.dv.{none,unmetered}`, `msg.ship.bill.nobody.<reason>`, `msg.ship.bill.<leg>.<outcome>` (leg `ascent`, `landing`, `back`; outcome the lower-case `FlightBill.Outcome` each leg can end in), `msg.ship.warn.no_way_back` | the bill on the console (`ShipReadoutText#console`, C10 STAT-25) `[V]` |
 | `msg.ship.hud.{mass,accel,saturated,wheel}` | the pilot's HUD flight slice (`ShipReadoutText#hud`, appended in `KeyBindings.freeFlightHudLines`) `[V]` |
 | `msg.rocketbuilder.shiptwr`, `msg.rocketbuilder.lowtwr.gui`, `msg.rocketbuilder.lowtwr` | the assembler's tier-2 readout and the TWR < 1 warning (GUI line and chat) `[V]` |
 

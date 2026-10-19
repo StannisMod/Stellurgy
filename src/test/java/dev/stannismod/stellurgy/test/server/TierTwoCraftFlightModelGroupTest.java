@@ -2424,6 +2424,244 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         }
     }
 
+    // ---- 4. the bill ------------------------------------------------------------------------------
+
+    /**
+     * The lowest orbit line production lets a world state: its takeoff fires above it, and a craft stood
+     * at the site climbs about a hundred blocks to it.
+     */
+    private static final int BILL_LINE = dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
+
+    /**
+     * The overworld's field, as a share of standard, for the bill's crafts — an input: at the standard
+     * field the fixture's six full tanks buy less than the climb to {@link #BILL_LINE} costs in its air (the
+     * bill says so: measured 2026-10-19, see the method), so the bracket below would have nothing above it.
+     */
+    private static final double BILL_FIELD = 0.25;
+
+    /**
+     * The exhaust velocity a hydrazine-fed motor of the fixture runs at, m/s: the weight table's hydrazine
+     * row, 2206 m/s (STAT-32's monopropellant ceiling, an MR-80B-class 225 s), times the advanced motor's
+     * cycle fraction, 1 — a parameter the bill reads, cited here, not computed.
+     */
+    private static final double HYDRAZINE_EXHAUST = 2206.0;
+
+    /** STAT-49's tolerance: a tenth either side of what a bill says the climb spends. */
+    private static final double BILL_TOLERANCE = 0.1;
+
+    /**
+     * The deadline of the LINK on the full craft's takeoff: the climb from the site to {@link #BILL_LINE}
+     * at the climb command, about a hundred blocks at 22.15 m/s, is under five SI seconds — some fifty game
+     * ticks; eight times that, so an expiry is a craft that never crossed.
+     */
+    private static final int CLIMB_LINK_TICKS = 400;
+
+    /**
+     * EXPERIMENT dose of the short craft's climb, game ticks: it holds full upward throttle for this long and
+     * the window reads its highest altitude. The climb to its apex is the same five-odd SI seconds — fifty
+     * game ticks — and the dose is four times that; the window's own last altitude below its highest is what
+     * says the apex fell inside it.
+     */
+    private static final int SHORT_CLIMB_DOSE_TICKS = 200;
+
+    /**
+     * A craft carrying what a bill says its climb to the line spends, and a tenth more, crosses the line;
+     * one carrying a tenth less turns back short of it — and its own readout told it so (C10 STAT-49, the
+     * bill computed by STAT-46's flight law run forward).
+     *
+     * <p>Three crafts of the {@code with-pilot-seat} fixture — six monopropellant rocket tanks, two motors
+     * lifting it — in the overworld's own air, at a quarter of the standard field and with the lowest line
+     * a world can state. The CALIBRATION craft carries six full tanks; its readout's bill says what the climb
+     * from its pad to the line spends, {@code U} kg. The FULL craft is poured {@code U} and a tenth, the
+     * SHORT craft {@code U} less a tenth, each read back as its own bill. Then each is flown as a pilot flies
+     * a straight climb — Flight Assist off, full upward throttle — the full craft until the takeoff's own
+     * gate records it ({@code entry_decided}, which the flight computer asks only above the line), the short
+     * craft for a dose inside which its window must see it turn back.</p>
+     *
+     * <p>What it sees, on the server: the bill as the flight computer's announcement of its model carries it,
+     * the takeoff gate's record, and the physics pose step by step ({@code PhysicsStepWindow}). Not seen: a
+     * pilot's key on its way to the computer (the input enters where the seat's packet handler puts it), a
+     * console drawing the bill (`ShipReadoutText`), the landing and climb-back legs (`PropulsionLawsTest`).</p>
+     */
+    @Pins({"STAT-49", "STAT-45"})
+    @Regions(of = "STAT-49", value = {"reaches the line", "runs dry short of it"})
+    @Regions(of = "STAT-45", value = {"monopropellant"})
+    @RedWitness(verdict = "STAT-45 on a real ship", member = "TileAdvancedFlightComputer#rebuildFlightModel",
+            at = "survey.metered() ? survey.poolKg() : null",
+            replacedBy = "survey.metered() ? java.util.Collections.singletonMap(\"hydrazine\", 1.0D) : null",
+            fails = "STAT-45 on a real ship", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-49 reaches the line", member = "TileAdvancedFlightComputer#rebuildFlightModel",
+            at = "localGravity(world), entryCeiling());", replacedBy = "localGravity(world) / 4, entryCeiling());",
+            fails = "STAT-49 reaches the line", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-49 told it runs dry", member = "FlightBill#climb",
+            at = "craft.dry ? Outcome.RUNS_DRY : Outcome.STALLS", replacedBy = "Outcome.STALLS",
+            fails = "STAT-49 told it runs dry", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-49 runs dry short of it", member = "TileAdvancedFlightComputer#rebuildFlightModel",
+            at = "localGravity(world), entryCeiling());", replacedBy = "localGravity(world) * 2, entryCeiling());",
+            fails = "STAT-49 runs dry short of it", on = "2026-10-19")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), SHORT_CLIMB_DOSE_TICKS);",
+            why = "the dose of the short craft's climb: the verdict is the highest altitude a window over it saw, and a"
+                    + " craft that turns back below the line publishes nothing — the takeoff gate is asked only above it;"
+                    + " the window's last altitude below its highest is checked as the arrangement")
+    @Test
+    public void aCraftCarryingItsAscentBillCrossesTheLineAndOneShortOfItDoesNot() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            OrbitLine line = OrbitLine.state(c -> arrange(c).raw(), DIM, BILL_LINE);
+            try {
+                requireArranged("the overworld's takeoff must fire above the stated line: " + line,
+                        line.line() == BILL_LINE && line.entryCeiling() == BILL_LINE);
+                arrange("ar planet set " + DIM + " gravitationalMultiplier " + BILL_FIELD);
+                Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
+                requireArranged("the overworld must stand at a quarter field, in its own air: " + planet,
+                        planet.number("gravity") == BILL_FIELD && planet.number("atmosphereDensity") > 0);
+
+                Plot plot = plot();
+                AssembledCraft calibrating = pouredCraft(plot.siteAt(4, 20), 6 * PROPELLANT_MB,
+                        "the calibration craft, its six tanks full");
+                Reply calibration = billOf(calibrating, "the calibration craft");
+                Reply model = readout(calibrating, "the calibration craft's readout");
+                Reply mass = Reply.of(model.object("mass"));
+                String[] rows = Reply.of(model.object("bill")).objectArray("regimes");
+                measured("bill", "aboard=" + model.object("mass") + " rows=" + String.join(",", rows));
+                requireArranged("the calibration craft's readout must show one Δv row, its motors burning one"
+                        + " propellant: " + String.join(",", rows), rows.length == 1);
+                Reply row = Reply.of(rows[0]);
+                double total = mass.number("totalKg");
+                double usable = row.number("usableKg");
+                assertTrue("STAT-45 on a real ship: the row is the rocket equation over the propellant the frame"
+                                + " counts, " + mass.number("reactionKg") + " kg of " + total + " kg, at the"
+                                + " hydrazine row's 2206 m/s — " + rows[0],
+                        Math.abs(usable - mass.number("reactionKg")) <= 1e-9 * total
+                                && Math.abs(row.number("exhaustVelocity") - HYDRAZINE_EXHAUST) <= 1e-9 * HYDRAZINE_EXHAUST
+                                && Math.abs(row.number("deltaV") - HYDRAZINE_EXHAUST * Math.log(total / (total - usable)))
+                                        <= 1e-9 * row.number("deltaV"));
+                requireArranged("the calibration craft's bill must reach the line, or it says no climb's price: "
+                        + calibration, "REACHES".equals(Events.text(calibration.raw(), "billAscent")));
+                double spends = Events.number(calibration.raw(), "billAscentKg");
+                double perMb = Events.number(calibration.raw(), "reactionKg") / (6 * PROPELLANT_MB);
+                measured("bill", "calibration=" + calibration.raw());
+
+                // Each craft is flown as soon as its bill is read: released on its pad it still holds its
+                // attitude against the pad's knocks on its motors — measured 2026-10-19, 388 kg of a 3 401 kg
+                // pool before any input (logs/t494-server5-result.xml) — so a wait between the two would fly
+                // a craft lighter than its bill.
+                AssembledCraft full = pouredCraft(plot.siteAt(24, 20),
+                        (int) Math.ceil(spends * (1 + BILL_TOLERANCE) / perMb), "the full craft");
+                Reply fullBill = billOf(full, "the full craft");
+                long fullMark = events.mark();
+                climb(full, "the full craft");
+                measured("bill", "full=" + fullBill.raw());
+                requireArranged("the full craft's own bill must reach the line: " + fullBill,
+                        "REACHES".equals(Events.text(fullBill.raw(), "billAscent")));
+                String crossed = events.awaitRecordWithFields(fullMark, "entry_decided",
+                        "STAT-49 reaches the line: the craft carrying its bill and a tenth must cross the line, where its"
+                                + " takeoff is asked", CLIMB_LINK_TICKS, "ship", full.durable);
+                measured("bill", "crossed=" + crossed);
+
+                AssembledCraft shortOf = pouredCraft(plot.siteAt(44, 20),
+                        (int) Math.floor(spends * (1 - BILL_TOLERANCE) / perMb), "the short craft");
+                Reply shortBill = billOf(shortOf, "the short craft");
+                ServerWindow window = ServerWindow.open(c -> read(c).raw(),
+                        "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM, shortOf.afcX, shortOf.afcY,
+                        shortOf.afcZ);
+                long shortMark = events.mark();
+                climb(shortOf, "the short craft");
+                GameTicks.advance(client(), GameTicks.server(), SHORT_CLIMB_DOSE_TICKS);
+                long closeMark = events.mark();
+                window.close();
+                String closing = events.since(closeMark, "physics_step_window");
+                String asked = events.since(shortMark, "entry_decided");
+                arrange("stellurgytest vs ff-input-by-id " + DIM + " " + shortOf.physicsId);
+                measured("bill", "short=" + shortBill.raw());
+                assertEquals("STAT-49 told it runs dry: the short craft's readout says its climb turns back — "
+                        + shortBill.raw(), "RUNS_DRY", Events.text(shortBill.raw(), "billAscent"));
+                List<String> windows = Events.records(closing);
+                requireArranged("closing the short craft's window must write exactly its one record: " + closing,
+                        windows.size() == 1);
+                String flown = windows.get(0);
+                measured("bill", "short flight=" + flown);
+                Events.assertInstrumentRan(closing, "server_flight_controller_physics_step",
+                        "the short craft's controller steps are what its window reads");
+                Events.assertInstrumentRan(asked, "entry_events",
+                        "the takeoff gate's records are what says a craft crossed — the full craft's crossing was one");
+                assertTrue("STAT-49 runs dry short of it: the craft carrying a tenth less than its bill must never be"
+                        + " asked to take off — " + asked, Events.recordsWhere(asked, "ship", shortOf.durable).isEmpty());
+                requireArranged("the short craft must have climbed and turned back inside the window: " + flown,
+                        Events.number(flown, "steps") > 1
+                                && Events.number(flown, "maxY") > Events.number(flown, "y0")
+                                && Events.number(flown, "y1") < Events.number(flown, "maxY"));
+                double apex = Events.number(flown, "maxY");
+                assertTrue("STAT-49 runs dry short of it: the craft carrying a tenth less than its bill turned back at Y "
+                        + apex + ", below the line at " + BILL_LINE, apex < BILL_LINE);
+            } finally {
+                OrbitLine.unstate(c -> arrange(c).raw(), DIM);
+            }
+        }
+    }
+
+    /**
+     * A {@code with-pilot-seat} craft laid at {@code site} and built, released — Flight Assist off, so standing
+     * on its pad it is not holding station at hover thrust — with {@code mb} of the propellant its motors wait
+     * for poured across its rocket tanks, a cubic metre at most in each, the tank's own size.
+     */
+    private AssembledCraft pouredCraft(FixtureSite site, int mb, String what) throws Exception {
+        Reply fixture = lay(site, "with-pilot-seat", what);
+        int[][] tanks = fixture.blockPosArray("fuelTanks");
+        int[] computer = fixture.blockPos("flightComputer");
+        requireArranged(what + " — the fixture must say where its tanks and computer stand: " + fixture,
+                tanks != null && tanks.length > 0 && computer != null);
+        requireArranged(what + " — " + mb + " mB must fit its " + tanks.length + " tanks", mb <= tanks.length * PROPELLANT_MB);
+        AssembledCraft craft = assembleLaid(site, fixture, what);
+        release(craft, what);
+        String[] waitsFor = readout(craft, what + ", empty").textArray("starvedFor");
+        requireArranged(what + " — an empty metered craft must name the one propellant its motors wait for: "
+                + String.join(",", waitsFor), waitsFor.length == 1);
+        int left = mb;
+        for (int[] tank : tanks) {
+            int into = Math.min(left, PROPELLANT_MB);
+            if (into > 0) {
+                pour(craft, new int[] {tank[0] - computer[0], tank[1] - computer[1], tank[2] - computer[2]},
+                        waitsFor[0], into, what);
+            }
+            left -= into;
+        }
+        return craft;
+    }
+
+    /**
+     * The craft's bill as the flight computer announces it on its next model after now — a survey that read
+     * every tank as it stands, since the load round comes after every pour — as the one record that names it.
+     */
+    private Reply billOf(AssembledCraft craft, String what) throws Exception {
+        long mark = events.mark();
+        String model = events.awaitRecordWithFields(mark, "flight_model_changed",
+                what + " — the flight computer must solve its model again with what was poured", LINK_BUDGET_TICKS,
+                "ship", craft.durable);
+        requireArranged(what + " — the model must carry a bill over the body below, to the stated line: " + model,
+                Events.text(model, "billAscent") != null && Events.number(model, "billLineY") == BILL_LINE);
+        return Reply.of(model);
+    }
+
+    /** Switch the craft's Flight Assist off: unpiloted, it is released rather than held. */
+    private void release(AssembledCraft craft, String what) throws Exception {
+        Reply off = Reply.of(arrange("stellurgytest vs fa-by-id " + DIM + " " + craft.physicsId + " false").raw());
+        // absence is the answer "not switched": a verb that resolves no flight computer answers without
+        // either field, and that is what this refuses.
+        requireArranged(what + " — Flight Assist must be off: " + off,
+                off.boolOr("afcResolved", false) && !off.boolOr("flightAssist", true));
+    }
+
+    /** Fly {@code craft} as a pilot flies a straight climb: Flight Assist off, full upward throttle, held. */
+    private void climb(AssembledCraft craft, String what) throws Exception {
+        release(craft, what);
+        Reply held = Reply.of(arrange("stellurgytest vs ff-input-by-id " + DIM + " " + craft.physicsId
+                + " 0 1 0 0 0 0").raw());
+        // absence is the answer "not held": a verb that resolves no flight computer answers without either
+        // field, and that is what this refuses.
+        requireArranged(what + " — full upward throttle must be held: " + held,
+                held.boolOr("afcResolved", false) && "SET".equals(held.textOr("input", "")));
+    }
+
     /**
      * How far from the middle of the seat's own block a point may lie and still be in the seat's
      * column, in blocks: half a block, the cell's own half-width.

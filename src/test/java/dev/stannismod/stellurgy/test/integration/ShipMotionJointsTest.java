@@ -7,6 +7,8 @@ import dev.stannismod.stellurgy.test.CleanCommandLaw;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
@@ -198,6 +200,123 @@ public class ShipMotionJointsTest {
             compared++;
         }
         requireArranged("the symmetric hull must push in some translation: " + compared, compared > 0);
+    }
+
+    /**
+     * C10 STAT-47: a leg of the bill steps the craft as the control scheme would. Side A is the scheme's
+     * command for an upward acceleration (its force over the declared mass, and what it ejects); side B is
+     * one step of a bill's ascent asked for the same acceleration (the Δv it delivered over the step, and
+     * the propellant it burnt). The craft is a deck lifted by four production-built drives at its corners,
+     * two on a monopropellant and two on a pair, so the heave recipe runs drives of both kinds and the pool
+     * has three fluids. Visited at the call: under the hull's authority, past it, and with a pool smaller
+     * than the step asks for.
+     *
+     * <p>The bill's law is handed in as the constant the scheme is asked for, and its line stands just above
+     * its start, so the ascent is one step whichever way it ends. What this does NOT see: the body, the law
+     * itself, the steps after the first (the kernel's laws, {@code PropulsionLawsTest}).</p>
+     */
+    @Pins("STAT-47")
+    @Regions(of = "STAT-47", value = {"under authority", "at authority", "the budget bites"})
+    @RedWitness(verdict = "STAT-47 under authority", member = "FlightBill#Craft",
+            at = "PropellantBudget.ejected(live.actuators(), heave.throttles, 1.0D)",
+            replacedBy = "PropellantBudget.ejected(live.actuators(), heave.throttles, 2.0D)",
+            fails = "STAT-47 under authority", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-47 at authority", member = "FlightBill#thrust",
+            at = "double fraction = Math.min(1.0D, asked);", replacedBy = "double fraction = asked;",
+            fails = "STAT-47 at authority", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-47 the budget bites", member = "FlightBill#Craft",
+            at = "pool[i] = poolKg.getOrDefault(fluid.getKey(), 0.0D);",
+            replacedBy = "pool[i] = 2 * poolKg.getOrDefault(fluid.getKey(), 0.0D);",
+            fails = "STAT-47 the budget bites", on = "2026-10-19")
+    @Test
+    public void aLegsStepIsTheControlSchemesStep() {
+        double step = 0.0301D;
+        double g = ShipMotionCases.G;
+        Random rng = new Random(0xB177L);
+        int under = 0, at = 0, bites = 0;
+        // The sweep's size, an input: every case visits each of the three regions once.
+        int cases = 60;
+        for (int c = 0; c < cases; c++) {
+            double mono = ShipMotionCases.THRUST * (0.5 + rng.nextDouble());
+            double pair = ShipMotionCases.THRUST * (0.5 + rng.nextDouble());
+            double ratio = 1 + 7 * rng.nextDouble();
+            List<Actuator> drives = new ArrayList<>();
+            drives.add(corner(-1, -1, Propellant.of("m"), mono, 2_000 + 2_000 * rng.nextDouble()));
+            drives.add(corner(1, 1, Propellant.of("m"), mono, 2_000 + 2_000 * rng.nextDouble()));
+            drives.add(corner(-1, 1, Propellant.pair("f", "o", ratio), pair, 3_000 + 1_500 * rng.nextDouble()));
+            drives.add(corner(1, -1, Propellant.pair("f", "o", ratio), pair, 3_000 + 1_500 * rng.nextDouble()));
+            java.util.Map<String, Double> plenty = new java.util.TreeMap<>();
+            plenty.put("m", 1e6);
+            plenty.put("f", 1e6);
+            plenty.put("o", 1e6);
+            ShipMassFrameBuilder b = new ShipMassFrameBuilder();
+            double declared = 0;
+            for (int x = -1; x <= 1; x++) {
+                for (int z = -1; z <= 1; z++) {
+                    b.add(MassContributor.ofBlock(x + 0.5D, 0.5D, z + 0.5D, ShipMotionCases.BLOCK_KG,
+                            MassContributor.Kind.STRUCTURAL));
+                    declared += ShipMotionCases.BLOCK_KG;
+                }
+            }
+            double structure = declared;
+            ShipCapability cap = ShipCapability.solve(drives, b.build(), ShipMotionCases.HELM);
+            double heave = cap.authority(ControlDirection.HEAVE_POSITIVE, Endurance.SUSTAINED);
+            requireArranged("the corner drives must lift the deck: heave " + heave, heave > 0);
+
+            double[] asks = {0.3 * heave / structure, 1.7 * heave / structure, 0.8 * heave / structure};
+            for (int k = 0; k < asks.length; k++) {
+                java.util.Map<String, Double> pool = plenty;
+                if (k == 2) {
+                    ActuatorCommand full = scheme(cap, asks[k], plenty, step);
+                    pool = new java.util.TreeMap<>();
+                    for (java.util.Map.Entry<String, Double> e : full.ejectedKg().entrySet()) {
+                        pool.put(e.getKey(), e.getValue() * (0.1 + 0.8 * rng.nextDouble()));
+                    }
+                }
+                ActuatorCommand command = scheme(cap, asks[k], pool, step);
+                double schemeAccel = command.force().dot(ShipMotionCases.HELM.axis(ControlAxis.HEAVE)) / structure;
+                double schemeKg = 0;
+                for (double kg : command.ejectedKg().values()) {
+                    schemeKg += kg;
+                }
+                double ask = asks[k];
+                FlightBill.Leg leg = FlightBill.over(cap, pool, new FlightBill.Body(g, 1.0D, step, 1.0D,
+                        (commanded, velocity) -> ask, 0.0D, 1e-12, 0.0D)).ascent();
+                double billAccel = leg.deltaV() / step;
+                String region = k == 0 ? "STAT-47 under authority" : k == 1 ? "STAT-47 at authority"
+                        : "STAT-47 the budget bites";
+                String where = region + ", case " + c + ": scheme " + schemeAccel + " m/s2, " + schemeKg
+                        + " kg; bill " + billAccel + " m/s2, " + leg.propellantKg() + " kg";
+                assertEquals(where, schemeAccel, billAccel, Math.abs(schemeAccel) * 1e-9);
+                assertEquals(where, schemeKg, leg.propellantKg(), Math.max(schemeKg, 1e-12) * 1e-9);
+                if (k == 0) {
+                    requireArranged("under authority must not saturate: " + where, !command.isSaturated());
+                    under++;
+                } else if (k == 1) {
+                    requireArranged("past the authority must saturate: " + where, command.isSaturated());
+                    at++;
+                } else {
+                    requireArranged("a short pool must bite: " + where, command.isSaturated() && schemeKg > 0);
+                    bites++;
+                }
+            }
+        }
+        requireArranged("every region visited: " + under + "/" + at + "/" + bites, under == cases && at == cases && bites == cases);
+    }
+
+    /** A drive under the deck's corner {@code (x, z)}, pushing up, built by production's own factory. */
+    private static Actuator corner(int x, int z, Propellant p, double thrust, double exhaustVelocity) {
+        java.util.Map<Propellant, dev.stannismod.stellurgy.api.propulsion.EngineRegime> regimes = new java.util.LinkedHashMap<>();
+        regimes.put(p, dev.stannismod.stellurgy.api.propulsion.EngineDesign.chemical(thrust, 1.0D, 1.0D)
+                .regimeFor(exhaustVelocity));
+        return ChemicalMotor.fromPropellants(x, -1, z, 0, -1, 0, regimes, 0, 0);
+    }
+
+    /** The scheme's command for {@code up} m/s² straight up the helm's heave, under {@code pool}, over one step. */
+    private static ActuatorCommand scheme(ShipCapability cap, double up, java.util.Map<String, Double> pool, double step) {
+        return ControlScheme.cleanAxes().allocate(cap,
+                new Vector3d(ShipMotionCases.HELM.axis(ControlAxis.HEAVE)).mul(up), new Vector3d(),
+                new MomentumStore(), step, StepConditions.of(PropellantBudget.of(pool), Double.NaN, false));
     }
 
     // ---- the hulls -----------------------------------------------------------------------------------

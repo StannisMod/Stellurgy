@@ -848,4 +848,314 @@ public class PropulsionLawsTest {
         assertFalse("STAT-43 outside", cap.holdsAt(p0 + 1.01 * w));
         assertFalse("STAT-43 outside", cap.holdsAt(p0 - 1.01 * w));
     }
+
+    // ─── The bill: STAT-45, STAT-46 ──────────────────────────────────────────────────────────────
+
+    /**
+     * A constant: one physics step of the bill's experiments, SI seconds — an input, the order of the
+     * substrate's own (a sixtieth of an engine second, 1.806/60).
+     */
+    private static final double BILL_STEP = 0.0301;
+    /** A constant: the field the bill's experiments stand in, m/s² — an input. */
+    private static final double BILL_G = 9.81;
+    /** A constant: the climb the bill's experiments command, m/s — an input, the order of a pilot's full throttle. */
+    private static final double BILL_CLIMB = 22.15;
+
+    /**
+     * The flight computer's velocity law as its contract states it (ship-flight-model MECH-SFM-08): the
+     * acceleration that brings the velocity to the command in one step, plus the field it must also cancel.
+     * An input of the experiment, declared here, so a bill is judged on its stepping and not on this law.
+     */
+    private static dev.stannismod.stellurgy.ship.control.FlightBill.ControlLaw deadbeat() {
+        return (commanded, velocity) -> (commanded - velocity) / BILL_STEP + BILL_G;
+    }
+
+    /**
+     * A craft standing on one vertical column through its centre: {@code blocks} structural kilograms in a
+     * column of five, the pool's fluids as reaction mass on the same column, and each drive below it pushing
+     * straight up the column — so its heave is clean and the whole of every drive's force. The mass it is
+     * built with is returned in {@code m0[0]}, summed from what was declared.
+     */
+    private static dev.stannismod.stellurgy.ship.control.ShipCapability column(double blocks, Map<String, Double> pool,
+                                                                               List<Actuator> drives, double[] m0) {
+        dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder b = new dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder();
+        double total = 0;
+        for (int y = 0; y < 5; y++) {
+            b.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(0.5, y + 0.5, 0.5, blocks / 5,
+                    dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.STRUCTURAL));
+            total += blocks / 5;
+        }
+        if (pool != null) {
+            for (double kg : pool.values()) {
+                b.add(dev.stannismod.stellurgy.ship.mass.MassContributor.ofBlock(0.5, 2.5, 0.5, kg,
+                        dev.stannismod.stellurgy.ship.mass.MassContributor.Kind.REACTION));
+                total += kg;
+            }
+        }
+        m0[0] = total;
+        return dev.stannismod.stellurgy.ship.control.ShipCapability.solve(drives, b.build(),
+                dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
+    }
+
+    /** A chemical drive in the column's block {@code below} under its foot, pushing up, built by production's factory. */
+    private static Actuator lifter(int below, Map<dev.stannismod.stellurgy.ship.control.Propellant, EngineRegime> regimes) {
+        return ChemicalMotor.fromPropellants(0, -below, 0, 0, -1, 0, regimes, 0, 0);
+    }
+
+    private static Map<dev.stannismod.stellurgy.ship.control.Propellant, EngineRegime> burning(
+            dev.stannismod.stellurgy.ship.control.Propellant p, double force, double cycle, double propellantVe) {
+        Map<dev.stannismod.stellurgy.ship.control.Propellant, EngineRegime> m = new LinkedHashMap<>();
+        m.put(p, EngineDesign.chemical(force, cycle, 1.0).regimeFor(propellantVe));
+        return m;
+    }
+
+    /**
+     * STAT-45: per regime the live drives burn, the Δv aboard is {@code v_e·ln(m0/(m0 − usable))} — {@code v_e}
+     * the propellant's ceiling times the design's cycle (STAT-32), the usable propellant the most of the
+     * regime's mixture the pool holds (a pair: the least fluid over its share by mass, the share from the O/F),
+     * {@code m0} the craft's whole declared mass. Liveness: every regime aboard gets its row, positive. With
+     * consumption off no row is owed, and the bill says it is not metered. Every expected figure is computed
+     * here from the declared drives, pool and masses.
+     */
+    @Pins("STAT-45")
+    @Regions(of = "STAT-45", value = {"monopropellant", "pair", "consumption off"})
+    @RedWitness(verdict = "STAT-45 monopropellant", member = "FlightBill#regimes",
+            at = "ve * Math.log(m0 / (m0 - usable))", replacedBy = "ve * usable / m0",
+            fails = "STAT-45 monopropellant", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-45 pair", member = "FlightBill#regimes",
+            at = "poolKg.getOrDefault(share.getKey(), 0.0D) / share.getValue()",
+            replacedBy = "poolKg.getOrDefault(share.getKey(), 0.0D)", fails = "STAT-45 pair", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-45 consumption off", member = "FlightBill#withoutBody",
+            at = "new FlightBill(poolKg != null,", replacedBy = "new FlightBill(true,",
+            fails = "STAT-45 consumption off", on = "2026-10-19")
+    @Test
+    public void theDeltaVAboardIsTheRocketEquationOverWhatTheLiveDrivesBurn() {
+        Random r = new Random(SEED + 45);
+        int mono = 0, pair = 0, off = 0;
+        for (int i = 0; i < 300; i++) {
+            double blocks = logUniform(r, 1e4, 1e6);
+            double veMono = logUniform(r, 1.5e3, 3e3), cycleMono = 0.5 + 0.5 * r.nextDouble();
+            double vePair = logUniform(r, 3e3, 4.5e3), cyclePair = 0.5 + 0.5 * r.nextDouble();
+            double ratio = 1 + 7 * r.nextDouble();
+            double pm = blocks * r.nextDouble(), pf = blocks * r.nextDouble() / 3, po = blocks * r.nextDouble();
+            Map<String, Double> pool = new LinkedHashMap<>();
+            pool.put("m", pm);
+            pool.put("f", pf);
+            pool.put("o", po);
+            List<Actuator> drives = new ArrayList<>();
+            drives.add(lifter(1, burning(dev.stannismod.stellurgy.ship.control.Propellant.of("m"),
+                    logUniform(r, 1e5, 1e7), cycleMono, veMono)));
+            drives.add(lifter(2, burning(dev.stannismod.stellurgy.ship.control.Propellant.pair("f", "o", ratio),
+                    logUniform(r, 1e5, 1e7), cyclePair, vePair)));
+            double[] m0 = new double[1];
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap = column(blocks, pool, drives, m0);
+            dev.stannismod.stellurgy.ship.control.FlightBill bill = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .withoutBody(cap, pool, dev.stannismod.stellurgy.ship.control.FlightBill.NoBody.NO_FIELD);
+            String at = "m0=" + m0[0] + " pool=" + pool + " O/F=" + ratio;
+            assertTrue("STAT-45 metered: " + at, bill.metered());
+            assertEquals("STAT-45 liveness: a row per regime aboard, " + at, 2, bill.regimes().size());
+            dev.stannismod.stellurgy.ship.control.FlightBill.Regime rowPair = bill.regimes().get(0);
+            dev.stannismod.stellurgy.ship.control.FlightBill.Regime rowMono = bill.regimes().get(1);
+
+            assertEquals("STAT-45 monopropellant names its propellant, " + at, "m", rowMono.propellant());
+            assertClose("STAT-45 monopropellant v_e, " + at, cycleMono * veMono, rowMono.exhaustVelocity());
+            assertClose("STAT-45 monopropellant, " + at, cycleMono * veMono * Math.log(m0[0] / (m0[0] - pm)),
+                    rowMono.deltaV());
+            assertTrue("STAT-45 monopropellant liveness, " + at, rowMono.deltaV() > 0);
+            mono++;
+
+            double usable = Math.min(pf * (1 + ratio), po * (1 + ratio) / ratio);
+            assertEquals("STAT-45 pair names its propellant, " + at, "f+o", rowPair.propellant());
+            assertClose("STAT-45 pair usable, " + at, usable, rowPair.usableKg());
+            assertClose("STAT-45 pair, " + at, cyclePair * vePair * Math.log(m0[0] / (m0[0] - usable)),
+                    rowPair.deltaV());
+            pair++;
+
+            dev.stannismod.stellurgy.ship.control.FlightBill unmetered = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .withoutBody(cap, null, dev.stannismod.stellurgy.ship.control.FlightBill.NoBody.NO_FIELD);
+            assertFalse("STAT-45 consumption off: not metered, " + at, unmetered.metered());
+            assertTrue("STAT-45 consumption off: no row, " + at, unmetered.regimes().isEmpty());
+            off++;
+        }
+        assertTrue("arrangement: every region visited", mono == 300 && pair == 300 && off == 300);
+    }
+
+    /**
+     * STAT-46, the climb, on a column craft stood at rest, judged against what the declared law and body
+     * make of it:
+     *
+     * <ul>
+     *   <li>{@code reaches the line} — a hull strong enough to meet every step's ask, consumption off: the
+     *       first step brings it to the climb and every later step holds it there against the field and, in
+     *       air, against the share the air took; it burns until a coast — the air's share and the field each
+     *       step, nothing pushing — carries it to the line, so after {@code N} steps, the first from which that
+     *       coast reaches, it has spent {@code climb + N·g·Δt + (N − 1)·climb·(1 − retention)}. In vacuum and
+     *       in air; the coast's height is summed here from the same two terms.</li>
+     *   <li>{@code runs dry short of it} — a real hull with a small pool and a line it cannot reach: it ejects the
+     *       whole pool, turns back above where it started, and its thrust delivered the rocket equation's Δv over
+     *       that pool — never more, and less only by the discretisation of a step, at most one step's share of
+     *       the mass left.</li>
+     *   <li>{@code stalls} — thrust half the weight: it turns back at once, at its start, with propellant left
+     *       unsaid.</li>
+     * </ul>
+     */
+    @Pins("STAT-46")
+    @Regions(of = "STAT-46", value = {"reaches the line", "runs dry short of it", "stalls"})
+    @RedWitness(verdict = "STAT-46 reaches the line", member = "FlightBill#burnFor",
+            at = "double carried = v * body.retention;", replacedBy = "double carried = v;",
+            fails = "STAT-46 reaches the line", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-46 runs dry short of it", member = "FlightBill#thrust",
+            at = "fraction *= lambda;", replacedBy = "", fails = "STAT-46 runs dry short of it", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-46 stalls", member = "FlightBill#climb",
+            at = "craft.dry ? Outcome.RUNS_DRY : Outcome.STALLS", replacedBy = "Outcome.RUNS_DRY",
+            fails = "STAT-46 stalls", on = "2026-10-19")
+    @Test
+    public void aClimbSpendsWhatTheLawAsksAndSaysHowHighItGets() {
+        Random r = new Random(SEED + 46);
+        int reaches = 0, dry = 0, stalls = 0;
+        for (int i = 0; i < 100; i++) {
+            double blocks = logUniform(r, 1e4, 1e6);
+            double ve = logUniform(r, 1.5e3, 4.5e3);
+            dev.stannismod.stellurgy.ship.control.Propellant m = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+            double[] m0 = new double[1];
+
+            // reaches: enough force for the first step's ask with room to spare, nothing metered
+            double retention = i % 2 == 0 ? 1.0 : 0.9 + 0.099 * r.nextDouble();
+            double strong = 2 * blocks * (BILL_CLIMB / BILL_STEP + BILL_G);
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap = column(blocks, null,
+                    java.util.Collections.singletonList(lifter(1, burning(m, strong, 1.0, ve))), m0);
+            int n = 50 + r.nextInt(400);
+            double coast = 0;
+            for (double rising = BILL_CLIMB * retention - BILL_G * BILL_STEP; rising > 0;
+                    rising = rising * retention - BILL_G * BILL_STEP) {
+                coast += rising * BILL_STEP;
+            }
+            double height = (n - 0.5) * BILL_CLIMB * BILL_STEP + coast;
+            dev.stannismod.stellurgy.ship.control.FlightBill.Leg up = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .over(cap, null, new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, retention, BILL_STEP,
+                            BILL_CLIMB, deadbeat(), 100, 100 + height, 100)).ascent();
+            String at = "m0=" + m0[0] + " retention=" + retention + " N=" + n;
+            assertEquals("STAT-46 reaches the line, " + at, dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.REACHES,
+                    up.outcome());
+            double expected = BILL_CLIMB + n * BILL_G * BILL_STEP + (n - 1) * BILL_CLIMB * (1 - retention);
+            assertTrue("STAT-46 reaches the line: spent " + up.deltaV() + " against " + expected + ", " + at,
+                    Math.abs(up.deltaV() - expected) <= 1e-9 * expected);
+            reaches++;
+
+            // runs dry: a real hull, a pool it burns through long before a line it cannot reach
+            double weight = blocks * BILL_G;
+            double force = weight * (1.5 + 2 * r.nextDouble());
+            double pool = blocks * (0.001 + 0.05 * r.nextDouble());
+            Map<String, Double> aboard = java.util.Collections.singletonMap("m", pool);
+            cap = column(blocks, aboard, java.util.Collections.singletonList(lifter(1, burning(m, force, 1.0, ve))), m0);
+            dev.stannismod.stellurgy.ship.control.FlightBill.Leg out = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .over(cap, aboard, new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, 1.0, BILL_STEP,
+                            BILL_CLIMB, deadbeat(), 100, 1e12, 100)).ascent();
+            at = "m0=" + m0[0] + " pool=" + pool + " F=" + force + " ve=" + ve;
+            assertEquals("STAT-46 runs dry short of it, " + at,
+                    dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.RUNS_DRY, out.outcome());
+            assertClose("STAT-46 runs dry short of it: the whole pool is ejected, " + at, pool, out.propellantKg());
+            double aboardDv = ve * Math.log(m0[0] / (m0[0] - pool));
+            double stepShare = force / ve * BILL_STEP / (m0[0] - pool);
+            assertTrue("STAT-46 runs dry short of it: spent " + out.deltaV() + " of " + aboardDv + " aboard, " + at,
+                    out.deltaV() <= aboardDv * (1 + DOUBLE_ROUNDING) && out.deltaV() >= aboardDv * (1 - stepShare));
+            assertTrue("STAT-46 runs dry short of it: it climbed before it turned, apex " + out.altitude() + ", " + at,
+                    out.altitude() > 100);
+            dry++;
+
+            // stalls: thrust half the weight
+            cap = column(blocks, null, java.util.Collections.singletonList(lifter(1, burning(m, weight / 2, 1.0, ve))), m0);
+            dev.stannismod.stellurgy.ship.control.FlightBill.Leg stuck = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .over(cap, null, new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, 1.0, BILL_STEP,
+                            BILL_CLIMB, deadbeat(), 100, 200, 100)).ascent();
+            at = "m0=" + m0[0] + " F=" + weight / 2;
+            assertEquals("STAT-46 stalls, " + at, dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.STALLS,
+                    stuck.outcome());
+            assertEquals("STAT-46 stalls where it stood, " + at, 100.0, stuck.altitude(), 0.0);
+            stalls++;
+        }
+        assertTrue("arrangement: every region visited", reaches == 100 && dry == 100 && stalls == 100);
+    }
+
+    /**
+     * STAT-46, the landing, from rest {@code H} above the surface:
+     *
+     * <ul>
+     *   <li>{@code stops at the surface} — thrust above the weight: it stops at or above the surface, and above
+     *       it by no more than lighting the brake one step later would have cost — one step's fall at the
+     *       fastest the craft can be falling, {@code sqrt(2gH)}, plus the braking distance that one step's
+     *       gravity adds, {@code sqrt(2gH)·Δt·g/(a − g)}, plus a step's discretisation, {@code 2a·Δt²}, with
+     *       {@code a} the thrust's acceleration. In vacuum and in air; and a craft already on the surface spends
+     *       nothing.</li>
+     *   <li>{@code cannot stop} — thrust below the weight, or a pool that runs out mid-brake: it strikes the
+     *       surface, says how fast, and then has no climb back.</li>
+     * </ul>
+     */
+    @Pins("STAT-46")
+    @Regions(of = "STAT-46", value = {"stops at the surface", "cannot stop"})
+    @RedWitness(verdict = "STAT-46 stops at the surface", member = "FlightBill#descend", at = "lit = mid;",
+            replacedBy = "late = mid;", fails = "STAT-46 stops at the surface", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-46 cannot stop", member = "FlightBill#brakeFrom",
+            at = "if (y <= body.surfaceY && v < 0) {", replacedBy = "if (false) {", fails = "STAT-46 cannot stop",
+            on = "2026-10-19")
+    @Test
+    public void aLandingBrakesAtTheLastStepThatStillStopsAboveTheSurface() {
+        Random r = new Random(SEED + 47);
+        int stops = 0, cannot = 0;
+        dev.stannismod.stellurgy.ship.control.Propellant m = dev.stannismod.stellurgy.ship.control.Propellant.of("m");
+        for (int i = 0; i < 100; i++) {
+            double blocks = logUniform(r, 1e4, 1e6);
+            double ve = logUniform(r, 1.5e3, 4.5e3);
+            double weight = blocks * BILL_G;
+            double h = logUniform(r, 5, 500);
+            double retention = i % 2 == 0 ? 1.0 : 0.9 + 0.099 * r.nextDouble();
+            double[] m0 = new double[1];
+
+            double force = weight * (1.5 + 3 * r.nextDouble());
+            dev.stannismod.stellurgy.ship.control.ShipCapability cap = column(blocks, null,
+                    java.util.Collections.singletonList(lifter(1, burning(m, force, 1.0, ve))), m0);
+            dev.stannismod.stellurgy.ship.control.FlightBill bill = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .over(cap, null, new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, retention, BILL_STEP,
+                            BILL_CLIMB, deadbeat(), 100 + h, 101 + h, 100));
+            dev.stannismod.stellurgy.ship.control.FlightBill.Leg down = bill.landing();
+            double a = force / m0[0];
+            double fastest = Math.sqrt(2 * BILL_G * h);
+            double room = fastest * BILL_STEP * (1 + BILL_G / (a - BILL_G)) + 2 * a * BILL_STEP * BILL_STEP;
+            String at = "m0=" + m0[0] + " F=" + force + " H=" + h + " retention=" + retention;
+            assertEquals("STAT-46 stops at the surface, " + at,
+                    dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.STOPS, down.outcome());
+            assertTrue("STAT-46 stops at the surface, at " + down.altitude() + " within " + room + " above 100, " + at,
+                    down.altitude() >= 100 && down.altitude() - 100 <= room);
+            assertTrue("STAT-46 stops at the surface: the brake spent something, " + at, down.deltaV() > 0);
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("a strong, unmetered craft that lands"
+                    + " climbs the step back to its line — the control for the climb back a weak one is denied, " + at,
+                    bill.canClimbBackOut());
+            dev.stannismod.stellurgy.ship.control.FlightBill.Leg grounded = dev.stannismod.stellurgy.ship.control.FlightBill
+                    .over(cap, null, new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, retention, BILL_STEP,
+                            BILL_CLIMB, deadbeat(), 100, 101, 100)).landing();
+            assertEquals("STAT-46 stops at the surface: on it, nothing to spend, " + at, 0.0, grounded.deltaV(), 0.0);
+            stops++;
+
+            cap = column(blocks, null, java.util.Collections.singletonList(lifter(1, burning(m, weight * 0.8, 1.0, ve))), m0);
+            bill = dev.stannismod.stellurgy.ship.control.FlightBill.over(cap, null,
+                    new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, retention, BILL_STEP, BILL_CLIMB,
+                            deadbeat(), 100 + h, 101 + h, 100));
+            at = "m0=" + m0[0] + " F=0.8 weight H=" + h;
+            assertEquals("STAT-46 cannot stop: too weak, " + at,
+                    dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.CANNOT_STOP, bill.landing().outcome());
+            assertTrue("STAT-46 cannot stop: says how fast, " + at, bill.landing().speed() > 0);
+            assertFalse("STAT-46 cannot stop: no climb back, " + at, bill.canClimbBackOut());
+
+            Map<String, Double> sip = java.util.Collections.singletonMap("m", force / ve * BILL_STEP);
+            cap = column(blocks, sip, java.util.Collections.singletonList(lifter(1, burning(m, force, 1.0, ve))), m0);
+            bill = dev.stannismod.stellurgy.ship.control.FlightBill.over(cap, sip,
+                    new dev.stannismod.stellurgy.ship.control.FlightBill.Body(BILL_G, retention, BILL_STEP, BILL_CLIMB,
+                            deadbeat(), 100 + h, 101 + h, 100));
+            at = "m0=" + m0[0] + " one step's propellant, H=" + h;
+            assertEquals("STAT-46 cannot stop: runs out braking, " + at,
+                    dev.stannismod.stellurgy.ship.control.FlightBill.Outcome.CANNOT_STOP, bill.landing().outcome());
+            cannot++;
+        }
+        assertTrue("arrangement: every region visited", stops == 100 && cannot == 100);
+    }
 }

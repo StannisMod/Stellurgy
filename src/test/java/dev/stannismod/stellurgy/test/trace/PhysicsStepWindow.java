@@ -7,7 +7,9 @@ import java.util.List;
 /**
  * What ONE flight computer's craft did on the PHYSICS clock between a test's {@code open} and its
  * {@code close}: its velocity and angular velocity at the first and the last physics step, the largest
- * angular speed at any step ({@code maxAngularSpeed}, radians per engine second), how much
+ * angular speed at any step ({@code maxAngularSpeed}, radians per engine second), the world altitude of its
+ * physics pose at the first and the last step and the highest any step carried ({@code y0}, {@code y1},
+ * {@code maxY}), how much
  * physics time lay between them, and the same two differences taken over only the steps in which the
  * controller was AT the craft's authority.
  *
@@ -73,6 +75,10 @@ public final class PhysicsStepWindow implements TraceWindow {
     private double maxW;
     private double firstMass;
     private double lastMass;
+    /** The world altitude of the physics pose at the first sample, the last, and the highest any sample carried. */
+    private double firstY;
+    private double lastY;
+    private double maxY = Double.NEGATIVE_INFINITY;
     private int saturatedSteps;
     private int returnedSteps;
     private double satSeconds;
@@ -106,13 +112,13 @@ public final class PhysicsStepWindow implements TraceWindow {
     /** Feed every open window watching this computer — called by the controller mixin at entry. */
     public static void enter(World world, Object ship, int x, int y, int z, double dt,
                              double vx, double vy, double vz, double wx, double wy, double wz,
-                             double mass) {
+                             double mass, double poseY) {
         List<PhysicsStepWindow> open = SideTrace.of(world).windows(PhysicsStepWindow.class);
         int dim = world.provider.getDimension();
         for (int i = 0; i < open.size(); i++) {
             PhysicsStepWindow w = open.get(i);
             if (w.dim == dim && w.x == x && w.y == y && w.z == z) {
-                w.sample(ship, dt, vx, vy, vz, wx, wy, wz, mass);
+                w.sample(ship, dt, vx, vy, vz, wx, wy, wz, mass, poseY);
             }
         }
     }
@@ -157,12 +163,13 @@ public final class PhysicsStepWindow implements TraceWindow {
     }
 
     private synchronized void sample(Object of, double dt, double vx, double vy, double vz,
-                                     double wx, double wy, double wz, double mass) {
+                                     double wx, double wy, double wz, double mass, double poseY) {
         if (steps == 0) {
             ship = of;
             firstV[0] = vx; firstV[1] = vy; firstV[2] = vz;
             firstW[0] = wx; firstW[1] = wy; firstW[2] = wz;
             firstMass = mass;
+            firstY = poseY;
         } else {
             // The step BEFORE this sample is what carried the craft from the previous velocity to
             // this one, so its dt — and its saturation verdict — belong to this difference.
@@ -179,6 +186,8 @@ public final class PhysicsStepWindow implements TraceWindow {
         lastW[0] = wx; lastW[1] = wy; lastW[2] = wz;
         maxW = Math.max(maxW, Math.sqrt(wx * wx + wy * wy + wz * wz));
         lastMass = mass;
+        lastY = poseY;
+        maxY = Math.max(maxY, poseY);
         steps++;
     }
 
@@ -207,6 +216,9 @@ public final class PhysicsStepWindow implements TraceWindow {
                 .append(",\"firstMassKg\":").append(num(firstMass))
                 .append(",\"lastMassKg\":").append(num(lastMass))
                 .append(",\"maxAngularSpeed\":").append(steps > 0 ? num(maxW) : "null")
+                .append(",\"y0\":").append(steps > 0 ? num(firstY) : "null")
+                .append(",\"y1\":").append(steps > 0 ? num(lastY) : "null")
+                .append(",\"maxY\":").append(steps > 0 ? num(maxY) : "null")
                 .append(",\"colliderTicks\":").append(colliderTicks)
                 .append(",\"contacts\":").append(contacts);
         String[] axes = {"X", "Y", "Z"};
