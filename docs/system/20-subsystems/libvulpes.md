@@ -379,7 +379,7 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
 - **INV-LVP-05 [V][T]** Every libVulpes decoder reads bytes only; no C→S packet acts on a block, entity or item its sender could not
   reach in his own world, and a refused or undecodable packet is dropped and logged, never thrown. `network/PacketSenderCheck.java:26-110`,
   `network/PacketMachine.java:83-160`, `network/PacketEntity.java:96-160`; `ClientPacketSenderServerGroupTest`,
-  `RocketPacketSenderClientGroupTest`.
+  `RocketPacketSenderClientGroupTest`. Pinned by `ClientPacketSenderServerGroupTest#aMachinePacketFromBeyondReachIsNotApplied`.
 - **INV-LVP-06 [V]** A structure is validated in full before the first world mutation of that attempt; the cell list and the port caches
   are cleared before validation, so a failed attempt leaves the machine with no ports. `tile/multiblock/TileMultiBlock.java:317-439`.
 - **INV-LVP-07 [V]** A controller placed alone is not complete; a fixture-built correct structure validates, and replacing any one
@@ -397,7 +397,8 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
 - **INV-LVP-12 [V]** Machine speed is the product of the multipliers of the cells replaced at formation, reset to 1 on deconstruction;
   recipe time never drops below one tick. `TileMultiPowerConsumer.java:109-138,261-262`, `TileMultiblockMachine.java:503`.
 - **INV-LVP-13 [V][T]** `MultiBattery` conserves both ways: `acceptEnergy` passes the remainder on, `extractEnergy` asks each battery only
-  for what is still owed. `util/MultiBattery.java:26-37,68-80`; `MachineEnergyBoundaryTest`.
+  for what is still owed. `util/MultiBattery.java:26-37,68-80`; `MachineEnergyBoundaryTest`. Pinned by
+  `MachineEnergyBoundaryTest#aMachineWithTwoPowerPlugsPaysItsRequestOnceInTotal`.
 - **INV-LVP-14 [V]** A `PowerMultiplier` ≠ 1 scales what a multiblock consumer — recipe machines included — must hold to run AND what it
   spends, by the one figure `requiredPowerPerTick` / `usedPowerPerTick`. `TileMultiPowerConsumer.java:162,206-220`,
   `TileMultiblockMachine.java:135`, `tile/TileEntityRFConsumer.java:119-120`. Unpinned: a pin needs the multiplier ≠ 1 before boot, a

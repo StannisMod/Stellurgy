@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.energy.TileForgePowerOutput;
 import dev.stannismod.stellurgy.libvulpes.util.MultiBattery;
 import dev.stannismod.stellurgy.tile.TilePump;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -49,9 +50,12 @@ public class MachineEnergyBoundaryTest {
      * once across all its batteries — the remainder asked of the next, nothing asked once it is met.
      * The aggregate is the machine's whole view of its power, so an over-draw here is a running cost
      * multiplied by the number of plugs.</p>
-     * <p>red-witnessed: with {@code MultiBattery#extractEnergy} at {@code amtExtracted += battery.extractEnergy(amt - amtExtracted, simulate);} asking every battery for {@code amt}, the stop removed, fails: "the aggregate must pay the request once, not once per plug — paid 600, the plugs hold 700 and 700 of 1000 each" (2026-10-07).</p>
      */
     @Pins("INV-LVP-13")
+    @RedWitness(member = "MultiBattery#extractEnergy",
+            at = "if(amtExtracted >= amt) break; amtExtracted += battery.extractEnergy(amt - amtExtracted, simulate);",
+            replacedBy = "amtExtracted += battery.extractEnergy(amt, simulate);",
+            fails = "the aggregate must pay the request once, not once per plug", on = "2026-10-19")
     @Test
     public void aMachineWithTwoPowerPlugsPaysItsRequestOnceInTotal() {
         TileForgePowerInput first = chargedInputPlug();

@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
@@ -150,9 +151,11 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      *
      * <p>Contract: fails if {@code PacketMachine#executeServer} stops refusing a sender who is not within
      * container reach of the addressed machine ({@code PacketSenderCheck#withinContainerReach}).</p>
-     * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code if (!PacketSenderCheck.withinContainerReach(player, pos))} made {@code if (false)}, fails: "a priority packet from a sender 20 blocks away — beyond the reach any screen of the port can be used from — must not change the port expected:<1> but was:<-1>" (2026-10-07).</p>
      */
     @Pins("INV-LVP-05")
+    @RedWitness(member = "PacketMachine#executeServer",
+            at = "if (!PacketSenderCheck.withinContainerReach(player, pos))", replacedBy = "if (false)",
+            fails = "a priority packet from a sender 20 blocks away", on = "2026-10-19")
     @Test
     public void aMachinePacketFromBeyondReachIsNotApplied() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the ventilation port stands in this volume");

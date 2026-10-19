@@ -102,7 +102,10 @@ own private packet ids (0–4) not the `PacketType` enum `EntityElevatorCapsule.
   saved/old-client wire ids do not shift `EntityRocket.java:3848`. FOR: wire format: packet type ids.
 - **INV-RKT-16 [V][T]** No sub-packet acts for a client the rocket's per-id table does not
   accept — passenger, screen range or hull reach as the id requires; an unlisted id is the
-  server's alone `EntityRocket.java:3367-3369,3565-3597`; `RocketPacketSenderClientGroupTest`.
+  server's alone `EntityRocket.java:3367-3369,3565-3597`; `RocketPacketSenderClientGroupTest`. Pinned by
+  `RocketPacketSenderClientGroupTest#aRocketTakesItsStateOnlyFromTheServer`,
+  `RocketPacketSenderClientGroupTest#aRocketScreenPacketFromBeyondItsScreenRangeIsRefused`,
+  `RocketPacketSenderClientGroupTest#aDeployedRocketsGasSelectionIsWeighedByTheRocketsRule`.
 - **INV-RKT-17 [V][SYS]** `flightMode` is written unconditionally (even for CLASSIC) so
   the field round-trips without "missing == default" ambiguity `:3094`; missing key
   still degrades safely to CLASSIC via `readFromNBT` `RocketFlightMode.java:29`. FOR: save format: flightMode key.
