@@ -275,22 +275,90 @@ final class WitnessReplay {
         return found.size() == 1 ? found.get(0) : null;
     }
 
-    /** The span inside the braces of the first declaration of {@code member}, or null. */
+    /**
+     * The span inside the braces of the first DECLARATION of {@code member}, or null. Matched on the source
+     * with comments and literals blanked, and only where a type or modifier stands before the name: a
+     * javadoc {@code {@link #update()}} or a call {@code if (isAboard(...)) {} } is not a declaration.
+     */
     private static int[] memberBody(String src, String member) {
+        String code = blankCommentsAndLiterals(src);
         // NOT-A-PROBE-REPLY: Java source -- a member's declaration.
-        Matcher m = Pattern.compile("(?<![\\w.])" + Pattern.quote(member)
-                + "\\s*\\([^;{]*\\)\\s*(?:throws[^{;]*)?\\{").matcher(src);
-        if (!m.find()) {
-            return null;
+        Matcher m = Pattern.compile("(?<![\\w.#])" + Pattern.quote(member)
+                + "\\s*\\([^;{]*\\)\\s*(?:throws[^{;]*)?\\{").matcher(code);
+        while (m.find()) {
+            if (!declaredHere(code, m.start())) {
+                continue;
+            }
+            int depth = 1;
+            int i = m.end();
+            while (i < code.length() && depth > 0) {
+                char c = code.charAt(i);
+                depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+                i++;
+            }
+            return new int[]{m.end(), i - 1};
         }
-        int depth = 1;
-        int i = m.end();
-        while (i < src.length() && depth > 0) {
+        return null;
+    }
+
+    /** A type, a generic's {@code >} or an array's {@code ]} — or a modifier — stands right before the name. */
+    private static boolean declaredHere(String code, int nameStart) {
+        int j = nameStart - 1;
+        while (j >= 0 && Character.isWhitespace(code.charAt(j))) {
+            j--;
+        }
+        if (j < 0 || j == nameStart - 1) {
+            return false;
+        }
+        char c = code.charAt(j);
+        // A constructor with no modifier follows the previous member's end, a block or an annotation; a
+        // call there would be followed by ';', never by '{'.
+        if (c == '>' || c == ']' || c == '{' || c == '}' || c == ';' || c == ')') {
+            return true;
+        }
+        if (!Character.isJavaIdentifierPart(c)) {
+            return false;
+        }
+        int k = j;
+        while (k >= 0 && Character.isJavaIdentifierPart(code.charAt(k))) {
+            k--;
+        }
+        String word = code.substring(k + 1, j + 1);
+        return !word.equals("new") && !word.equals("return") && !word.equals("else") && !word.equals("throw");
+    }
+
+    /** {@code src} with every comment and string / char literal replaced by spaces, newlines kept. */
+    private static String blankCommentsAndLiterals(String src) {
+        StringBuilder out = new StringBuilder(src);
+        int i = 0;
+        int n = src.length();
+        while (i < n) {
             char c = src.charAt(i);
-            depth += c == '{' ? 1 : c == '}' ? -1 : 0;
-            i++;
+            int end;
+            if (src.startsWith("//", i)) {
+                end = src.indexOf('\n', i);
+                end = end < 0 ? n : end;
+            } else if (src.startsWith("/*", i)) {
+                end = src.indexOf("*/", i + 2);
+                end = end < 0 ? n : end + 2;
+            } else if (c == '"' || c == '\'') {
+                end = i + 1;
+                while (end < n && src.charAt(end) != c && src.charAt(end) != '\n') {
+                    end += src.charAt(end) == '\\' ? 2 : 1;
+                }
+                end = Math.min(end + 1, n);
+            } else {
+                i++;
+                continue;
+            }
+            for (int k = i; k < end; k++) {
+                if (out.charAt(k) != '\n') {
+                    out.setCharAt(k, ' ');
+                }
+            }
+            i = end;
         }
-        return new int[]{m.end(), i - 1};
+        return out.toString();
     }
 
     /** The failure message of the record's method with the replaced file compiled first; null if it passed. */
