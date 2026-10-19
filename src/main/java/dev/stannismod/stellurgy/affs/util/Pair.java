@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.affs.util;
 
-import javax.annotation.concurrent.Immutable;
+import com.google.errorprone.annotations.Immutable;
 import java.util.Objects;
 
-@Immutable
+@Immutable(containerOf = {"T1", "T2"})
 public class Pair<T1, T2> {
 
     private final T1 first;

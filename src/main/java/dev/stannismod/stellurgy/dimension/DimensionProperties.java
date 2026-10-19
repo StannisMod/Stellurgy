@@ -3095,8 +3095,8 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         UNKNOWN(new ResourceLocation("stellurgy:textures/planets/Unknown.png"));
 
 
-        private ResourceLocation resource;
-        private ResourceLocation resourceLEO;
+        private final ResourceLocation resource;
+        private final ResourceLocation resourceLEO;
 
         PlanetIcons(ResourceLocation resource) {
             this.resource = resource;

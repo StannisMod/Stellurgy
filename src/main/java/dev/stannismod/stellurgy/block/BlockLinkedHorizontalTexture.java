@@ -86,7 +86,7 @@ public class BlockLinkedHorizontalTexture extends Block {
         NOEDGE("noedge");
 
         /** Effectively final, process lifetime: set once when the object is built. */
-        private String suffix;
+        private final String suffix;
 
         IconNames(String suffix) {
             this.suffix = suffix;
