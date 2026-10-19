@@ -933,6 +933,149 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 0.0, Math.sqrt(ax * ax + ay * ay + az * az), NO_MOTION_BAND);
     }
 
+    // ---- 6a'. a nuclear nozzle draws on the core column behind it, and on nothing else ------------
+
+    /**
+     * N: what one fuelled NERVA-class core gives the nozzle it stands behind, in vacuum — power-bound,
+     * {@code 2ηP/v_e} (C10 STAT-30) with the nozzle's η = 0.753 (XE-Prime), a core's P = 1.1·10⁹ W (C10's
+     * component table) and the least-force regime of the working fluids the default configuration
+     * accepts, hydrogen alone, at v_e = 8 500 m/s through a core at its 2 700 K (STAT-32, STAT-37).
+     */
+    private static final double ONE_CORE_NOZZLE_FORCE = 2 * 0.753 * 1.1e9 / 8_500.0;
+
+    /**
+     * Relative band on a nozzle's force: the survey computes it in double precision from the same
+     * declared figures in a handful of operations (≈1e-15). 1e-9 is far outside that and far inside the
+     * smallest defect it exists to see — a second core's power counted, which doubles it.
+     */
+    private static final double NOZZLE_FORCE_PRECISION = 1e-9;
+
+    /**
+     * A tier-2 nuclear nozzle draws on the column of cores behind it and on nothing else (C10 STAT-36,
+     * STAT-35): built with no fuelled core behind it, it declares no force; with one fuelled core behind
+     * it, one core's power-bound force; a fuelled core touching it from the SIDE adds nothing; a second
+     * fuelled core further up the column doubles it.
+     *
+     * <p>The craft is {@code with-advanced-flight-computer} with a nuclear nozzle laid against its
+     * hull, a column of two empty cores above the nozzle (its back — the nozzle faces away from the core
+     * that touches it from above, so it exhausts down), and one empty core beside it. Each core is then
+     * fuelled in turn aboard the ship, through its own slot as a hopper fills it, and the hull survey —
+     * what the flight computer builds its model from — is read after each. The survey is computed when it
+     * is asked, so no wait stands between a fuelling and its reading.</p>
+     *
+     * <p>In vacuum ({@link #standInVacuum}) so a nozzle's force is the law's without the pressure term.
+     * A mechanics test: probes lay the blocks and fuel the cores; production builds the ship and the
+     * survey. It does not see a pilot's key, the flight computer's allocation over the nozzle (the
+     * survey is its input), the tier-1 scan's own column rule ({@code NuclearEngineRocketAssemblyTest}),
+     * a nozzle laid on its side (whose facing follows the core it touches), or the cores' burn-up — no
+     * tier-2 burn spends a core's fuel.</p>
+     */
+    @Pins({"STAT-36", "STAT-35"})
+    @RedWitness(verdict = "STAT-36 a nozzle whose cores hold no fuel declares no force",
+            member = "BlockNuclearCore#getThermalPower", at = "core != null && core.isFuelled()",
+            replacedBy = "core != null", fails = "STAT-36 a nozzle whose cores hold no fuel declares no force",
+            on = "2026-10-18")
+    @RedWitness(verdict = "STAT-36 one fuelled core behind the nozzle gives it one core's power",
+            member = "ChemicalMotorActuators#addNuclear", at = "BlockPos at = pos.offset(nozzle.getOpposite());",
+            replacedBy = "BlockPos at = pos.offset(nozzle);",
+            fails = "STAT-36 one fuelled core behind the nozzle gives it one core's power", on = "2026-10-18")
+    @RedWitness(verdict = "STAT-36 a fuelled core touching the nozzle from the side feeds it nothing",
+            member = "ChemicalMotorActuators#addNuclear", at = "at = at.offset(nozzle.getOpposite());",
+            replacedBy = "at = at.east().down();",
+            fails = "STAT-36 a fuelled core touching the nozzle from the side feeds it nothing", on = "2026-10-18")
+    @RedWitness(verdict = "STAT-36 the whole column of cores behind the nozzle feeds it",
+            member = "ChemicalMotorActuators#addNuclear", at = "at = at.offset(nozzle.getOpposite());",
+            replacedBy = "at = pos;",
+            fails = "STAT-36 the whole column of cores behind the nozzle feeds it", on = "2026-10-18")
+    @Test
+    public void aNuclearNozzleDrawsOnTheCoreColumnBehindItAndOnNothingElse() throws Exception {
+        standInVacuum();
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-advanced-flight-computer", "a craft with a nuclear nozzle laid on");
+        int[] computerAt = fixture.requireBlockPos("flightComputer");
+        // The nozzle hangs off the lowest fuel tank of the middle column, on the side away from the
+        // assembler: a cell the fixture leaves empty, welded to the hull by that tank.
+        int[] tank = null;
+        int[][] tanks = fixture.blockPosArray("fuelTanks");
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        for (int[] t : tanks) {
+            minX = Math.min(minX, t[0]);
+            maxX = Math.max(maxX, t[0]);
+        }
+        for (int[] t : tanks) {
+            if (2 * t[0] == minX + maxX && (tank == null || t[1] < tank[1])) {
+                tank = t;
+            }
+        }
+        requireArranged("the fixture must lay a middle column of fuel tanks: " + fixture, tank != null);
+        int[] nozzle = {tank[0], tank[1], tank[2] + 1};
+        int[] behind = {nozzle[0], nozzle[1] + 1, nozzle[2]};
+        int[] further = {nozzle[0], nozzle[1] + 2, nozzle[2]};
+        int[] beside = {nozzle[0] + 1, nozzle[1], nozzle[2]};
+        laid(nozzle, "stellurgy:nuclearrocketmotor");
+        laid(behind, "stellurgy:nuclearcore");
+        laid(further, "stellurgy:nuclearcore");
+        laid(beside, "stellurgy:nuclearcore");
+
+        AssembledCraft craft = assembleLaid(site, fixture, "a craft with a nuclear nozzle laid on");
+        int[] nozzleAboard = aboard(craft, computerAt, nozzle);
+
+        double none = nozzleForce(craft, nozzleAboard);
+        fuel(craft, aboard(craft, computerAt, behind));
+        double oneBehind = nozzleForce(craft, nozzleAboard);
+        fuel(craft, aboard(craft, computerAt, beside));
+        double withSideCore = nozzleForce(craft, nozzleAboard);
+        fuel(craft, aboard(craft, computerAt, further));
+        double wholeColumn = nozzleForce(craft, nozzleAboard);
+        measured("nuclear nozzle", "none=" + none, "oneBehind=" + oneBehind, "withSideCore=" + withSideCore,
+                "wholeColumn=" + wholeColumn, "expected one core=" + ONE_CORE_NOZZLE_FORCE);
+
+        assertEquals("STAT-36 a nozzle whose cores hold no fuel declares no force", 0.0, none, 0.0);
+        assertEquals("STAT-36 one fuelled core behind the nozzle gives it one core's power",
+                ONE_CORE_NOZZLE_FORCE, oneBehind, ONE_CORE_NOZZLE_FORCE * NOZZLE_FORCE_PRECISION);
+        assertEquals("STAT-36 a fuelled core touching the nozzle from the side feeds it nothing",
+                oneBehind, withSideCore, ONE_CORE_NOZZLE_FORCE * NOZZLE_FORCE_PRECISION);
+        assertEquals("STAT-36 the whole column of cores behind the nozzle feeds it",
+                2 * ONE_CORE_NOZZLE_FORCE, wholeColumn, ONE_CORE_NOZZLE_FORCE * NOZZLE_FORCE_PRECISION);
+    }
+
+    /** Lay {@code block} at the world cell {@code at}, before assembly, and require it stands there. */
+    private void laid(int[] at, String block) throws Exception {
+        Reply r = arrange("stellurgytest place " + DIM + " " + at[0] + " " + at[1] + " " + at[2] + " " + block);
+        requireArranged("the " + block + " must be laid at " + java.util.Arrays.toString(at) + ": " + r,
+                r.ok() && r.bool("placed"));
+    }
+
+    /**
+     * Where the world cell {@code laid} went aboard: the craft moved as one body, so its offset from the
+     * flight computer it was laid beside is its offset from the computer's address aboard.
+     */
+    private static int[] aboard(AssembledCraft craft, int[] computerAt, int[] laid) {
+        return new int[]{craft.afcX + laid[0] - computerAt[0], craft.afcY + laid[1] - computerAt[1],
+                craft.afcZ + laid[2] - computerAt[2]};
+    }
+
+    /** One fuel element into the core aboard at {@code core}, through its own slot. */
+    private void fuel(AssembledCraft craft, int[] core) throws Exception {
+        Reply r = arrange("stellurgytest vs stow " + DIM + " " + core[0] + " " + core[1] + " " + core[2]
+                + " stellurgy:nuclearFuelElement 1");
+        requireArranged("a fuel element must go into the core aboard at " + java.util.Arrays.toString(core)
+                + ": " + r, r.ok() && r.integer("stowed") == 1);
+    }
+
+    /** The force the hull survey declares for the nozzle aboard at {@code nozzle}, N. */
+    private double nozzleForce(AssembledCraft craft, int[] nozzle) throws Exception {
+        Reply survey = read("stellurgytest vs actuators " + DIM + " " + craft.physicsId);
+        requireArranged("the craft must be surveyable: " + survey, survey.bool("survey"));
+        Reply device = survey.elementWhereAll("actuators", "x", String.valueOf(nozzle[0]),
+                "y", String.valueOf(nozzle[1]), "z", String.valueOf(nozzle[2]));
+        double fx = device.number("forceX");
+        double fy = device.number("forceY");
+        double fz = device.number("forceZ");
+        return Math.sqrt(fx * fx + fy * fy + fz * fz);
+    }
+
     // ---- 6b. an idle craft gives its wheel back ---------------------------------------------------
 
     /**

@@ -9890,6 +9890,34 @@ public class TestProbeCommand extends CommandBase {
             info.put("exhaustVelocity", rocket.stats.getExhaustVelocity().orElse(-1));
             info.put("mass_kg", rocket.stats.getMass());
             info.put("corePowerW", rocket.stats.getCoreThermalPower());
+            // Every nuclear core aboard, in STORAGE coordinates: what its slot holds, the burn-up of that
+            // element and the power the core delivers now — read in the same reply as the stats' power
+            // and thrust, so a scenario judges a burn-out on one read of one rocket.
+            java.util.List<Map<String, Object>> cores = new java.util.ArrayList<>();
+            if (rocket.storage != null) {
+                for (TileEntity te : rocket.storage.getTileEntityList()) {
+                    if (!(te instanceof dev.stannismod.stellurgy.tile.TileNuclearCore)) {
+                        continue;
+                    }
+                    BlockPos at = te.getPos();
+                    net.minecraft.item.ItemStack held =
+                            ((dev.stannismod.stellurgy.tile.TileNuclearCore) te).fuel().getStackInSlot(0);
+                    net.minecraft.block.Block coreBlock = rocket.storage.getBlockState(at).getBlock();
+                    Map<String, Object> core = new LinkedHashMap<>();
+                    core.put("x", at.getX());
+                    core.put("y", at.getY());
+                    core.put("z", at.getZ());
+                    // absence is the empty string: an empty slot holds no item to name.
+                    core.put("item", held.isEmpty() ? "" : String.valueOf(held.getItem().getRegistryName()));
+                    core.put("burnupJ", dev.stannismod.stellurgy.item.ItemNuclearFuelElement.burnup(held));
+                    core.put("powerW", coreBlock instanceof dev.stannismod.stellurgy.api.IRocketNuclearCore
+                            ? ((dev.stannismod.stellurgy.api.IRocketNuclearCore) coreBlock)
+                                    .getThermalPower(rocket.storage, at)
+                            : -1);
+                    cores.add(core);
+                }
+            }
+            info.put("cores", cores);
             info.put("thrust", rocket.stats.getThrust());
             info.put("dry_mass_kg", rocket.stats.getDryMass());
             info.put("breakingProb", rocket.storage.getBreakingProbability());
@@ -14957,7 +14985,10 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code charged-item <player> <item> <energy>} — one {@code item} charged through its Forge Energy
      *       capability ({@code receiveEnergy}, what a charger calls), into the player's inventory;</li>
      *   <li>{@code held-target <dim> <x> <y> <z> <uuidMost> <uuidLeast>} — a zombie with no AI that takes no
-     *       damage, of the given uuid, through the entity's own setters, spawned at that point.</li>
+     *       damage, of the given uuid, through the entity's own setters, spawned at that point;</li>
+     *   <li>{@code core-burnup <rocketId> <x> <y> <z> <joules>} — the burn-up of the fresh fuel element in the
+     *       nuclear core at that STORAGE address of a built rocket, through {@code ItemNuclearFuelElement#setBurnup}
+     *       (the energy an element that has already flown carries); refused for an empty or spent slot.</li>
      * </ul>
      */
     private void handleTypedArrangement(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -15029,8 +15060,28 @@ public class TestProbeCommand extends CommandBase {
                     send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
                     return;
                 }
+                case "core-burnup": {
+                    EntityRocket rocket = findRocket(server, Integer.parseInt(args[1]));
+                    BlockPos at = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
+                    TileEntity tile = rocket == null || rocket.storage == null ? null : rocket.storage.getTileEntity(at);
+                    if (!(tile instanceof dev.stannismod.stellurgy.tile.TileNuclearCore)) {
+                        send(sender, "{\"error\":\"no nuclear core at storage " + at + " of rocket " + escapeJson(args[1]) + "\"}");
+                        return;
+                    }
+                    dev.stannismod.stellurgy.tile.TileNuclearCore core = (dev.stannismod.stellurgy.tile.TileNuclearCore) tile;
+                    net.minecraft.item.ItemStack element = core.fuel().getStackInSlot(0);
+                    if (!dev.stannismod.stellurgy.item.ItemNuclearFuelElement.hasBurnupLeft(element)) {
+                        send(sender, "{\"error\":\"the core at storage " + at + " holds no fresh fuel element\"}");
+                        return;
+                    }
+                    dev.stannismod.stellurgy.item.ItemNuclearFuelElement.setBurnup(element, Double.parseDouble(args[5]));
+                    core.markDirty();
+                    send(sender, "{\"ok\":true,\"burnupJ\":" + dev.stannismod.stellurgy.item.ItemNuclearFuelElement.burnup(element)
+                            + ",\"fresh\":" + dev.stannismod.stellurgy.item.ItemNuclearFuelElement.hasBurnupLeft(element) + "}");
+                    return;
+                }
                 default:
-                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target …\"}");
+                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target|core-burnup …\"}");
             }
         } catch (NumberFormatException | ArrayIndexOutOfBoundsException badArguments) {
             send(sender, "{\"error\":\"arrange " + escapeJson(sub) + ": bad arguments (" + escapeJson(String.valueOf(badArguments)) + ")\"}");
@@ -18424,6 +18475,10 @@ public class TestProbeCommand extends CommandBase {
                 world.setBlockState(new BlockPos(rocketX + 1, rocketY + 3, rocketZ),
                         miningDrill.getDefaultState());
             }
+            // Where the flight computer stands in the WORLD, for a caller that lays more blocks beside the
+            // build and must find them aboard: assembly moves the build as one rigid body, so a laid block's
+            // offset from this is its offset from the computer's address aboard.
+            String flightComputerAt = "null";
             if (includeAdvancedFlightComputer) {
                 // Free cell on the far side of the guidance column (rocketX-1,
                 // rocketY+3). Above it stays air (seat is the centre column only),
@@ -18432,6 +18487,7 @@ public class TestProbeCommand extends CommandBase {
                 int afcY = includePilotDeck ? rocketY + 4 : rocketY + 3;
                 world.setBlockState(new BlockPos(rocketX - 1, afcY, rocketZ),
                         advancedFlightComputer.getDefaultState());
+                flightComputerAt = "[" + (rocketX - 1) + "," + afcY + "," + rocketZ + "]";
                 if (includeNavComputer) {
                     // Face-adjacent to the flight computer (one cell along Z), so the assembly
                     // flood-fill welds it into the same ship and the build scan sees both. Inside the
@@ -18637,6 +18693,7 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"holdFromFlightComputer\":" + holdFromComputer
                     + ",\"tankFromFlightComputer\":" + tankFromComputer
                     + ",\"fuelTanks\":" + blockPosArrayJson(fuelTanksLaid)
+                    + ",\"flightComputer\":" + flightComputerAt
                     + ",\"pilotSeatFromFlightComputer\":" + seatFromComputer
                     + ",\"jumpBayFromFlightComputer\":" + jumpBayFromComputer
                     + ",\"wheelPos\":" + (wheel == null ? "null"
@@ -20995,6 +21052,7 @@ public class TestProbeCommand extends CommandBase {
                     firstItem = false;
                     if (item == null) builder.append("null");
                     else if (item instanceof Number || item instanceof Boolean) builder.append(item);
+                    else if (item instanceof Map) builder.append(jsonMap((Map<String, ?>) item));
                     else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');

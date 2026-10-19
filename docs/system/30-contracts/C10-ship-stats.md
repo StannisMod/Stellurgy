@@ -505,7 +505,7 @@ bell and the retired knobs (2026-10-17).
   mass per millibucket equal the mass ejected to within one millibucket per tank. A tick that applies
   no force drains nothing. `rocketsRequireFuel` off drains nothing. REGIONS: `monopropellant`, `pair`,
   `less than a millibucket a tick`, `no force`. FOR: STAT-24; maintainer ruling 2026-10-17
-  ("По рекомендациям"). Pinned by `PropulsionLawsTest#theDrainTakesWhatTheBurnEjectedToWithinAMillibucket` (the law; the flight's wiring of it has no test).
+  ("По рекомендациям"). Pinned by `PropulsionLawsTest#theDrainTakesWhatTheBurnEjectedToWithinAMillibucket` (the law); the free flight's wiring of it — a full burn drains `F·τ/v_e` a flight tick with τ = 90.3 ms, a half-throttle burn half of that — by `FreeFlightCycleTest#aFreeFlightBurnDrainsThePropellantOfTheForceItApplied`; the classic ascent's wiring has no test.
 - **STAT-34** `[T][BEH]` **The fuel check is the rocket equation run through the flight's own law, and
   it warns.** Before a tier-1 launch, and at the assembler, the craft's ascent is run tick by tick
   through the same per-tick climb, drain and coast as the flight, from where it stands to the
@@ -514,17 +514,29 @@ bell and the retired knobs (2026-10-17).
   its loaded mass as the rocket equation says. The TWR gate (STAT-26..29) is unaffected and still
   refuses. REGIONS: `reaches the line`, `runs dry short of it`. FOR: STAT-25; maintainer ruling
   2026-10-17 ("По рекомендациям"). Pinned on the law, which is pure (`api/propulsion/ClassicAscent`), by `PropulsionLawsTest#thePropellantAClimbNeedsGrowsWithTheLoadAsTheRocketEquationSays`, `PropulsionLawsTest#aClimbReachesTheLineExactlyWhenItsPropellantCanBuyIt`; the launch's wiring by `RocketFlightFailureModesTest#launchWithZeroFuelStillTransitionsToInFlight`, the assembler's (a rocket's only) by `RocketRequireFuelDisableAssemblesTest#aShipIsNotHeldToTheClimbToOrbitThatARocketIs`.
-- **STAT-35** `[A][SYS]` **A nuclear core is rated in thermal power and temperature, and its fuel is
+- **STAT-35** `[T][SYS]` **A nuclear core is rated in thermal power and temperature, and its fuel is
   consumed.** A core delivers its rated power (× `nuclearCorePowerRatio`) at its rated temperature
   while it holds a fuel element with burn-up left, and NO power otherwise. Energy produced advances
   the element's burn-up; an element holds `mass × enrichment × 8.2·10¹³ J/kg` (complete fission of
   U-235); a burned-out element becomes spent fuel of the same mass, which stays in the core until the
   player takes it out. REGIONS: `fuelled`, `burns out this tick`, `spent`, `empty`. FOR: maintainer
-  ruling 2026-10-17 ("ок").
-- **STAT-36** `[A][SYS]` **A nuclear nozzle draws from the core stack it touches.** On both tiers the
+  ruling 2026-10-17 ("ок"). Pinned on a tier-1 free flight by
+  `NuclearEngineRocketAssemblyTest#anElementBurnsOutAtItsCapacityAndItsCoreGivesNoMorePower` (burn-up
+  advances by `P·τ` a flight tick, an element is fresh short of its capacity and spent past it, a spent
+  core gives no power and the thrust loses its share), the empty core by
+  `NuclearEngineRocketAssemblyTest#anEmptyCoreGivesTheNozzleNothing`; the spent element's mass and the
+  exact tick of the burn-out are not pinned.
+- **STAT-36** `[T][SYS]` **A nuclear nozzle draws from the core stack it touches.** On both tiers the
   power a nuclear nozzle may use is that of the contiguous column of cores behind it — the side
   opposite its exhaust — and no other; tier-1 sums the stacks of the nozzles it counts. A nozzle with
-  no fuelled core behind it gives no thrust. FOR: maintainer ruling 2026-10-17 ("ок").
+  no fuelled core behind it gives no thrust. FOR: maintainer ruling 2026-10-17 ("ок"). Pinned on tier 1
+  by `NuclearEngineRocketAssemblyTest#nuclearCoreAboveMotorContributesNuclearThrust` and
+  `#misplacedNuclearCoreFailsAssemblyWithNoEngines`; on tier 2 by
+  `TierTwoCraftFlightModelGroupTest#aNuclearNozzleDrawsOnTheCoreColumnBehindItAndOnNothingElse` (no fuelled
+  core: no force; one behind it: one core's power-bound force; a fuelled core beside it: nothing more; the
+  whole column: two). Only a column above a downward nozzle is exercised: a nozzle whose core touches a
+  SIDE face is drawn pointing at that core (`BlockNuclearRocketMotor#getActualState`), so it walks away from
+  it and draws nothing — a known divergence from this clause, unpinned.
 - **STAT-37** `[T][SYS]` **A tier-2 reaction actuator declares what it takes.** Each motor actuator
   carries, per regime it can run (one per propellant the fuel registry accepts for its role that has
   a row), its mass flow and its power at full throttle, both linear in throttle; its force is the
@@ -657,8 +669,8 @@ HEAT-4 does not exist; when it does, it reads the drain and is off with it.
 | STAT-22..25 propulsion physics | `[A]` | made concrete by STAT-30..43 |
 | STAT-38..43 tier-2 consumption, boost columns, pressure bands | `[T]` laws in `PropulsionLawsTest`; the survey, drain and frame in `TierTwoCraftFlightModelGroupTest`; power budgets and the boost switch not built | ship-flight-model MECH-SFM-11 |
 | STAT-44 rocket fuel tanks hold their role | `[T]` `TileFuelTank`, in `TierTwoCraftFlightModelGroupTest` | blocks MECH-BLK-03 |
-| STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight and ascent drain wiring has no test | — |
-| STAT-35, STAT-36 core fuel and stack | `[A]` — built (`TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`); the tier-1 scan's `fuelled` / `empty` / column cases are exercised by `NuclearEngineRocketAssemblyTest`, burn-out, spent fuel and the tier-2 nozzle's stack are not | — |
+| STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight drain wiring by `FreeFlightCycleTest`, the classic ascent's has no test | — |
+| STAT-35, STAT-36 core fuel and stack | `[T]` — `TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`; the tier-1 scan's cases, burn-up, burn-out and spent fuel in flight in `NuclearEngineRocketAssemblyTest`, the tier-2 nozzle's column in `TierTwoCraftFlightModelGroupTest`; a side-mounted nozzle draws nothing (STAT-36) | — |
 
 **Known not built**: gimbals (STAT-16), the power budgets of STAT-22 (the propellant budget is
 STAT-38..40). The hyperdrive reads the real

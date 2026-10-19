@@ -1,9 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.*;
 
 /**
@@ -248,5 +252,164 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
                 (Reply.of(resp).number("pitch") == AXIS_CLAMP));
         assertTrue("clamp brake to 1.0: " + resp,
                 (Reply.of(resp).number("brake") == 1.0));
+    }
+
+    // ---- the drain follows the force the burn applied ---------------------------------------------
+
+    /**
+     * s: one tier-1 flight tick — the tick vanilla's 0.08 blocks/tick² is 9.81 m/s² in (C10 STAT-6, units).
+     * A constant: a final double computed once from two literals.
+     */
+    private static final double TICK_SECONDS = Math.sqrt(0.08 / 9.81);
+
+    /**
+     * N: the thrust of {@code with-nuclear-stack}'s two fuelled NERVA-class cores, power-bound —
+     * {@code 2ηP/v_e} per core (C10 STAT-30) with the nozzle's η = 0.753 (XE-Prime), a core's
+     * P = 1.1·10⁹ W (C10's component table) and hydrogen's v_e = 8 500 m/s at the core's 2 700 K (STAT-32).
+     */
+    private static final double TWO_CORES_THRUST = 2 * 0.753 * (2 * 1.1e9) / 8_500.0;
+
+    /** m/s: the exhaust the drain divides by — hydrogen at 2 700 K (C10 STAT-32's anchor). */
+    private static final double HYDROGEN_EXHAUST_VELOCITY = 8_500.0;
+
+    /** kg per millibucket of hydrogen: a litre of the liquid, 70.8 kg/m³ (C10 STAT-33, weight-mass INV-WGT-09). */
+    private static final double HYDROGEN_KG_PER_MB = 70.8 / 1000;
+
+    /**
+     * Millibuckets a window's drain may differ from {@code F·τ/v_e} per flight tick: STAT-33's own bound,
+     * the fraction of a millibucket each burn carries to the next (under one at either read), plus the
+     * flight's precision on the applied force — its thrust in whole newtons (1 in 389 788) and its climb
+     * in single precision — taken as 1e-5 of the drain. The smallest defect it exists to see, a drain at
+     * the rated flow under a half throttle, is half the window's drain.
+     */
+    private static final double DRAIN_CARRY_MB = 1.0;
+    /** @see #DRAIN_CARRY_MB */
+    private static final double DRAIN_PRECISION = 1e-5;
+
+    /** The gentle burn's throttle: half the vertical stick, an input of the experiment. */
+    private static final double GENTLE_THROTTLE = 0.5;
+
+    /** EXPERIMENT dose of each burn, game ticks: dozens of millibuckets a tick, so hundreds over a window. */
+    private static final int BURN_WINDOW_TICKS = 10;
+
+    /**
+     * A tier-1 free flight drains the propellant of the force it APPLIED (C10 STAT-33): a gentle burn
+     * drains in proportion to its throttle, a full one the whole of {@code F·τ/v_e} a tick, with τ the
+     * 90.3 ms tick the flight integrates over.
+     *
+     * <p>The craft is {@code with-nuclear-stack}: its thrust is power-bound by its cores, so the force is
+     * a figure of the contract, and its acceleration stays under the free-flight law's cap
+     * ({@code FreeFlightPhysics#MAX_THRUST_ACCEL}, a premise read below), where the force the Newtonian law
+     * applies is the throttle times the thrust. Flight Assist is off, so the vertical stick IS the throttle.
+     * The gentle burn comes first and does not lift the craft off its pad (its thrust is half its weight);
+     * the force it applies is still half the thrust, because the law pushes and the pad holds. The full
+     * burn then lifts it a block.</p>
+     *
+     * <p>Two windows of two reads each; the flight ticks between the reads are the rocket's own count, in
+     * the same reply as the propellant aboard, so a slow box changes how many ticks a window holds and
+     * never the verdict.</p>
+     *
+     * <p>A mechanics test: probes arrange the flight (mode, Flight Assist off, the start, the throttle);
+     * the server's own entity tick flies and drains. It does not see a pilot's key reaching the throttle,
+     * the classic ascent's drain (at the rated thrust, through the same {@code EntityRocket#burnPropellant}),
+     * a pair's split by its mixture ratio, a force above the free-flight cap, or a burn of less than a
+     * millibucket a tick (STAT-33's other regions).</p>
+     */
+    @Pins("STAT-33")
+    @RedWitness(verdict = "STAT-33 a full burn drains its thrust times the tick over its exhaust velocity",
+            member = "StatsRocket#ejectedMassPerTick", at = "Math.max(0, forceNewtons) * TICK_SECONDS / exhaustVelocity",
+            replacedBy = "Math.max(0, forceNewtons) * 0.05 / exhaustVelocity",
+            fails = "STAT-33 a full burn drains its thrust times the tick over its exhaust velocity", on = "2026-10-18")
+    @RedWitness(verdict = "STAT-33 a gentle burn drains in proportion to the force it applied",
+            member = "EntityRocket#tickFreeFlight", at = "burnPropellant(appliedForce, 1);",
+            replacedBy = "burnPropellant(stats.getThrust(), 1);",
+            fails = "STAT-33 a gentle burn drains in proportion to the force it applied", on = "2026-10-18")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<Reply> gentle = Window.over(",
+            why = "a drain is a value that falls with every burning tick; two reads and the flight ticks between them")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<Reply> full = Window.over(",
+            why = "a drain is a value that falls with every burning tick; two reads and the flight ticks between them")
+    @Test
+    public void aFreeFlightBurnDrainsThePropellantOfTheForceItApplied() throws Exception {
+        FixtureSite site = site();
+        int id;
+        // Two NERVA-class cores do not lift this chassis past the launch gate's margin, and whether they
+        // do is the gate's question (C10 STAT-26..29): the gate is opened for the press alone, so the scan
+        // weighs the craft as the flight will.
+        try (ConfigFlag gateOpen = ConfigFlag.set(commands(), "minLaunchTWR", 0.0)) {
+            id = rockets.assembleAt(site, c -> act(c).raw(), "with-nuclear-stack", 2, 10,
+                    "the nuclear rocket whose burns are measured stands in this volume");
+        }
+        Reply mode = arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT");
+        requireArranged("the rocket must be put in free flight mode: " + mode, mode.ok());
+        Reply assist = arrange("stellurgytest rocket set-flight-assist " + id + " off");
+        requireArranged("Flight Assist must be off, so the stick is the throttle: " + assist,
+                assist.ok() && !assist.bool("flightAssistOn"));
+
+        Reply built = drainInfo(id);
+        // Nobody stands near the rocket, so nothing ticks it until a ticket holds the chunk its column
+        // stands in; the server's own entity tick then flies it. The ticket is taken only once the flight
+        // has started AND the stick is set, so the first tick the rocket flies is already the gentle burn —
+        // the start's lift-off hover, which would take it off its pad and arm the landing, never runs.
+        String chunk = (int) built.number("dim") + " " + Math.floorDiv((int) Math.floor(built.number("posX")), 16)
+                + " " + Math.floorDiv((int) Math.floor(built.number("posZ")), 16);
+        // The harness's server runs with consumption off; a burn drains only with it on, as the game ships.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            Reply started = arrange("stellurgytest rocket start-free-flight " + id);
+            requireArranged("the rocket must be in free flight, its tanks filled: " + started,
+                    started.ok() && started.bool("isInFlight"));
+            throttle(id, GENTLE_THROTTLE);
+            Reply held = arrange("stellurgytest chunk forceload " + chunk);
+            requireArranged("the rocket's chunk must be held loaded: " + held, held.ok());
+            Reply burning = drainInfo(id);
+            requireArranged("the rocket must burn hydrogen at the two cores' thrust, " + TWO_CORES_THRUST
+                            + " N, out of 4 000 mB: " + burning, "hydrogen".equals(burning.text("workingFluid"))
+                            && Math.abs(burning.number("thrust") - TWO_CORES_THRUST) <= TWO_CORES_THRUST * DRAIN_PRECISION
+                            && workingFluid(burning) > 0);
+            requireArranged("the thrust must accelerate the rocket under the free-flight law's cap of "
+                            + dev.stannismod.stellurgy.api.FreeFlightPhysics.MAX_THRUST_ACCEL + " blocks/tick²: "
+                            + burning, burning.number("thrust") / burning.number("mass_kg") * TICK_SECONDS * TICK_SECONDS
+                            < dev.stannismod.stellurgy.api.FreeFlightPhysics.MAX_THRUST_ACCEL);
+
+            Window<Reply> gentle = Window.over(() -> drainInfo(id), client(), GameTicks.server(),
+                    t -> GameTicks.advance(client(), GameTicks.server(), t), BURN_WINDOW_TICKS);
+            throttle(id, 1.0);
+            Window<Reply> full = Window.over(() -> drainInfo(id), client(), GameTicks.server(),
+                    t -> GameTicks.advance(client(), GameTicks.server(), t), BURN_WINDOW_TICKS);
+
+            double perTickAtFull = TWO_CORES_THRUST * TICK_SECONDS / HYDROGEN_EXHAUST_VELOCITY / HYDROGEN_KG_PER_MB;
+            double fullTicks = full.change(r -> r.number("freeFlightTicksSinceStart"));
+            double gentleTicks = gentle.change(r -> r.number("freeFlightTicksSinceStart"));
+            requireArranged("the rocket must fly in both windows: gentle " + gentle + "; full " + full,
+                    fullTicks > 0 && gentleTicks > 0);
+            double fullDrain = fullTicks * perTickAtFull;
+            assertEquals("STAT-33 a full burn drains its thrust times the tick over its exhaust velocity: " + full,
+                    -fullDrain, full.change(FreeFlightCycleTest::workingFluid), DRAIN_CARRY_MB + fullDrain * DRAIN_PRECISION);
+            double gentleDrain = gentleTicks * GENTLE_THROTTLE * perTickAtFull;
+            assertEquals("STAT-33 a gentle burn drains in proportion to the force it applied: " + gentle,
+                    -gentleDrain, gentle.change(FreeFlightCycleTest::workingFluid),
+                    DRAIN_CARRY_MB + gentleDrain * DRAIN_PRECISION);
+            System.out.println("[measured] drain | perTickAtFull=" + perTickAtFull + " | gentle " + gentle
+                    + " | full " + full);
+        } finally {
+            arrange("stellurgytest chunk release " + chunk);
+        }
+    }
+
+    /** The vertical stick at {@code throttle}, nothing else held, and require that it reached the rocket. */
+    private void throttle(int id, double throttle) throws Exception {
+        Reply r = act("stellurgytest rocket free-flight-input " + id + " 0 " + throttle + " 0 0 0");
+        requireArranged("the throttle must reach the rocket: " + r, r.ok() && r.bool("applied") && r.number("vert") == throttle);
+    }
+
+    /** One read of the rocket — its flight, its thrust and the propellant aboard — in one reply. */
+    private Reply drainInfo(int id) throws Exception {
+        Reply r = read("stellurgytest rocket info " + id);
+        requireArranged("the rocket must answer its info: " + r, r.has("fuel"));
+        return r;
+    }
+
+    /** Millibuckets of working fluid aboard, as the read reports them. */
+    private static double workingFluid(Reply info) {
+        return Reply.of(Reply.of(info.object("fuel")).object("NUCLEAR_WORKING_FLUID")).number("amount");
     }
 }
