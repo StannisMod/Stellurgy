@@ -534,9 +534,9 @@ bell and the retired knobs (2026-10-17).
   `#misplacedNuclearCoreFailsAssemblyWithNoEngines`; on tier 2 by
   `TierTwoCraftFlightModelGroupTest#aNuclearNozzleDrawsOnTheCoreColumnBehindItAndOnNothingElse` (no fuelled
   core: no force; one behind it: one core's power-bound force; a fuelled core beside it: nothing more; the
-  whole column: two). Only a column above a downward nozzle is exercised: a nozzle whose core touches a
-  SIDE face is drawn pointing at that core (`BlockNuclearRocketMotor#getActualState`), so it walks away from
-  it and draws nothing — a known divergence from this clause, unpinned.
+  whole column: two); a SIDEWAYS nozzle — its nozzle drawn pointing away from the one core beside it — by
+  `TierTwoCraftFlightModelGroupTest#aSidewaysMotorPushesTowardTheTankOrCoreThatFeedsIt` (one core's force,
+  toward the core). A sideways column of more than one core is not exercised.
 - **STAT-37** `[T][SYS]` **A tier-2 reaction actuator declares what it takes.** Each motor actuator
   carries, per regime it can run (one per propellant the fuel registry accepts for its role that has
   a row), its mass flow and its power at full throttle, both linear in throttle; its force is the
@@ -670,7 +670,7 @@ HEAT-4 does not exist; when it does, it reads the drain and is off with it.
 | STAT-38..43 tier-2 consumption, boost columns, pressure bands | `[T]` laws in `PropulsionLawsTest`; the survey, drain and frame in `TierTwoCraftFlightModelGroupTest`; power budgets and the boost switch not built | ship-flight-model MECH-SFM-11 |
 | STAT-44 rocket fuel tanks hold their role | `[T]` `TileFuelTank`, in `TierTwoCraftFlightModelGroupTest` | blocks MECH-BLK-03 |
 | STAT-30..34, 37 engine law, drain, forecast, declaration | `[T]` on the laws (`PropulsionLawsTest`); the launch warning and the assembler's forecast are pinned in the server tier; the free-flight drain wiring by `FreeFlightCycleTest`, the classic ascent's has no test | — |
-| STAT-35, STAT-36 core fuel and stack | `[T]` — `TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`; the tier-1 scan's cases, burn-up, burn-out and spent fuel in flight in `NuclearEngineRocketAssemblyTest`, the tier-2 nozzle's column in `TierTwoCraftFlightModelGroupTest`; a side-mounted nozzle draws nothing (STAT-36) | — |
+| STAT-35, STAT-36 core fuel and stack | `[T]` — `TileNuclearCore`, `RocketEngineTally`, `ChemicalMotorActuators#addNuclear`; the tier-1 scan's cases, burn-up, burn-out and spent fuel in flight in `NuclearEngineRocketAssemblyTest`, the tier-2 nozzle's column, upright and sideways, in `TierTwoCraftFlightModelGroupTest` | — |
 
 **Known not built**: gimbals (STAT-16), the power budgets of STAT-22 (the propellant budget is
 STAT-38..40). The hyperdrive reads the real

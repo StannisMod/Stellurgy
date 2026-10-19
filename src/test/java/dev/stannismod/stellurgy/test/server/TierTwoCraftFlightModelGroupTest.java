@@ -1040,6 +1040,103 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 2 * ONE_CORE_NOZZLE_FORCE, wholeColumn, ONE_CORE_NOZZLE_FORCE * NOZZLE_FORCE_PRECISION);
     }
 
+    /**
+     * A sideways motor pushes toward what feeds it (C10 STAT-36 for the nuclear nozzle; a motor's nozzle
+     * points away from its tank or core, as it is drawn): a chemical motor beside its fuel tank declares a
+     * force toward the tank, for two horizontal facings, and a nuclear nozzle beside a fuelled core declares
+     * one core's power-bound force toward the core.
+     *
+     * <p>The chemical motors are {@code with-advanced-flight-computer}'s own: one standing east of the
+     * east tank column (its tank to the west) and one standing south of that column (its tank to the
+     * north). Each motor's facing follows the tank beside it ({@code BlockRocketMotor#getActualState}),
+     * so the build alone turns them sideways. The nuclear pair is laid on: a core south of the middle
+     * column's lowest tank, and the nozzle south of the core, touching no other core — so the core is
+     * what turns it. The core is fuelled aboard, through its own slot, and the hull survey is read once
+     * after: the survey is computed when it is asked.</p>
+     *
+     * <p>In vacuum ({@link #standInVacuum}), so a force is the law's without the pressure term. A
+     * mechanics test: probes lay blocks and fuel the core, production builds the ship and the survey. It
+     * does not see a pilot's key, what the model on screen looks like (the force is held to the side the
+     * blockstates draw the nozzle on by reading, not by a frame), or a sideways nozzle fed by a column of
+     * more than one core.</p>
+     */
+    @Pins("STAT-36")
+    @RedWitness(verdict = "a sideways chemical motor pushes toward the tank beside it",
+            member = "ChemicalMotorActuators#facing",
+            at = "return facing.getAxis() == EnumFacing.Axis.Y ? facing : facing.getOpposite();",
+            replacedBy = "return facing;",
+            fails = "a sideways chemical motor pushes toward the tank beside it", on = "2026-10-19")
+    @RedWitness(verdict = "STAT-36 a sideways nuclear nozzle draws on the fuelled core beside it",
+            member = "ChemicalMotorActuators#addNuclear", at = "BlockPos at = pos.offset(nozzle.getOpposite());",
+            replacedBy = "BlockPos at = pos.offset(nozzle);",
+            fails = "STAT-36 a sideways nuclear nozzle draws on the fuelled core beside it", on = "2026-10-19")
+    @Test
+    public void aSidewaysMotorPushesTowardTheTankOrCoreThatFeedsIt() throws Exception {
+        standInVacuum();
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-advanced-flight-computer", "a craft with sideways motors");
+        int[] computerAt = fixture.requireBlockPos("flightComputer");
+        int[][] tanks = fixture.blockPosArray("fuelTanks");
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        for (int[] t : tanks) {
+            minX = Math.min(minX, t[0]);
+            maxX = Math.max(maxX, t[0]);
+        }
+        int[] eastTank = null;
+        int[] middleTank = null;
+        for (int[] t : tanks) {
+            if (t[0] == maxX && (eastTank == null || t[1] < eastTank[1])) {
+                eastTank = t;
+            }
+            if (2 * t[0] == minX + maxX && (middleTank == null || t[1] < middleTank[1])) {
+                middleTank = t;
+            }
+        }
+        requireArranged("the fixture must lay an east and a middle column of fuel tanks: " + fixture,
+                eastTank != null && middleTank != null && maxX > minX);
+        int[] eastMotor = {eastTank[0] + 1, eastTank[1], eastTank[2]};
+        int[] southMotor = {eastTank[0], eastTank[1], eastTank[2] + 1};
+        int[] core = {middleTank[0], middleTank[1], middleTank[2] + 1};
+        int[] nozzle = {middleTank[0], middleTank[1], middleTank[2] + 2};
+        laid(core, "stellurgy:nuclearcore");
+        laid(nozzle, "stellurgy:nuclearrocketmotor");
+
+        AssembledCraft craft = assembleLaid(site, fixture, "a craft with sideways motors");
+        fuel(craft, aboard(craft, computerAt, core));
+        Reply survey = read("stellurgytest vs actuators " + DIM + " " + craft.physicsId);
+        requireArranged("the craft must be surveyable: " + survey, survey.bool("survey"));
+        // Each lookup refuses an address no device stands at, so a fixture whose motors moved fails here.
+        double[] east = forceOf(survey, aboard(craft, computerAt, eastMotor));
+        double[] south = forceOf(survey, aboard(craft, computerAt, southMotor));
+        double[] nuclear = forceOf(survey, aboard(craft, computerAt, nozzle));
+        measured("sideways motors", "east=" + java.util.Arrays.toString(east),
+                "south=" + java.util.Arrays.toString(south), "nuclear=" + java.util.Arrays.toString(nuclear));
+
+        requireArranged("the two chemical motors must declare a force: " + survey,
+                magnitude(east) > 0 && magnitude(south) > 0);
+        assertEquals("a sideways chemical motor pushes toward the tank beside it - the motor east of its tank"
+                + " pushes west: " + java.util.Arrays.toString(east), -1.0, east[0] / magnitude(east),
+                NOZZLE_FORCE_PRECISION);
+        assertEquals("a sideways chemical motor pushes toward the tank beside it - the motor south of its tank"
+                + " pushes north: " + java.util.Arrays.toString(south), -1.0, south[2] / magnitude(south),
+                NOZZLE_FORCE_PRECISION);
+        assertEquals("STAT-36 a sideways nuclear nozzle draws on the fuelled core beside it, and pushes toward"
+                + " it: " + java.util.Arrays.toString(nuclear), -ONE_CORE_NOZZLE_FORCE, nuclear[2],
+                ONE_CORE_NOZZLE_FORCE * NOZZLE_FORCE_PRECISION);
+    }
+
+    /** The force vector the hull survey declares for the device aboard at {@code at}, N. */
+    private static double[] forceOf(Reply survey, int[] at) {
+        Reply device = survey.elementWhereAll("actuators", "x", String.valueOf(at[0]),
+                "y", String.valueOf(at[1]), "z", String.valueOf(at[2]));
+        return new double[]{device.number("forceX"), device.number("forceY"), device.number("forceZ")};
+    }
+
+    private static double magnitude(double[] v) {
+        return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    }
+
     /** Lay {@code block} at the world cell {@code at}, before assembly, and require it stands there. */
     private void laid(int[] at, String block) throws Exception {
         Reply r = arrange("stellurgytest place " + DIM + " " + at[0] + " " + at[1] + " " + at[2] + " " + block);

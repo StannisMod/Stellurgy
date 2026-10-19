@@ -59,9 +59,11 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 - **MECH-SFM-03 — gravity field.** Space cell 0; a registered Stellurgy world the configured vector ×
   its multiplier; anything else the configured vector (`integration/vs/StellurgyWorldGravity.java`) `[T]`.
 - **MECH-SFM-04 — actuators.** A chemical motor is one force at its block centre pushing AWAY from its
-  nozzle (`ship/control/ChemicalMotor.java`) `[T]`; the nozzle is the ACTUAL-state facing (follows the
-  feeding tank) and it works unless worn to its last stage — the two things the world tells it
-  (`block/ChemicalMotorActuators.java`) `[V]`. Its force is the engine law at the world's pressure, the
+  nozzle (`ship/control/ChemicalMotor.java`) `[T]`; the nozzle is where the motor is DRAWN pointing — the
+  ACTUAL-state facing (which follows the feeding tank) for up and down, its opposite sideways (blocks
+  MECH-BLK-29), so a sideways motor pushes toward its tank — and it works unless worn to its last stage:
+  the two things the world tells it (`block/ChemicalMotorActuators.java`) `[T]` sideways
+  (`TierTwoCraftFlightModelGroupTest#aSidewaysMotorPushesTowardTheTankOrCoreThatFeedsIt`), `[V]` the wear. Its force is the engine law at the world's pressure, the
   least over the regimes the registry and the weight table give it, and it declares each regime's
   full-throttle mass flow and power (`ChemicalMotor#fromRegimes`, `PropellantDemand`; C10 STAT-30, 31,
   37); a nuclear nozzle is fed the power of the core column behind it (STAT-36) `[V]`. A reaction wheel is three pure torques (`TORQUE`,

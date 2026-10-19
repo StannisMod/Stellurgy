@@ -191,10 +191,14 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   and delegate render to vanilla LEAVES. `BlockLightwoodSapling.java:40,67` `BlockLightwoodLeaves.java:67`
 - **MECH-BLK-29 Rocket motors are ship actuators.** `BlockRocketMotor` (and so
   its advanced/nuclear subclasses) and `BlockBipropellantRocketMotor` implement `IShipActuatorBlock`:
-  on a tier-2 hull each is one force at its block centre, pushing away from the nozzle its ACTUAL state
-  shows, of the engine law's size at the world's pressure; a nuclear motor's is held to the core column
-  behind it; a motor worn to its last stage does not fire. `ChemicalMotorActuators.java`
-  `[V]`. See `ship-flight-model` MECH-SFM-04.
+  on a tier-2 hull each is one force at its block centre, pushing away from the nozzle as it is DRAWN, of
+  the engine law's size at the world's pressure; a nuclear motor's is held to the core column behind it; a
+  motor worn to its last stage does not fire. The nozzle is read from the ACTUAL state's facing — the facing
+  itself for up and down, its opposite sideways, because the blockstates turn the down-pointing model by
+  x=90 for every horizontal facing, which draws the nozzle on the side opposite the facing. So a motor
+  beside its tank, or a nuclear nozzle beside its core, pushes toward it. `ChemicalMotorActuators#facing`
+  `[T]` (`TierTwoCraftFlightModelGroupTest#aSidewaysMotorPushesTowardTheTankOrCoreThatFeedsIt`). See
+  `ship-flight-model` MECH-SFM-04.
 - **MECH-BLK-30 Reaction wheel.** `BlockReactionWheel` (`reactionWheel`, tile
   `TileReactionWheel`): three pure-torque actuators about the ship's axes, `TORQUE` and
   `MOMENTUM_CAPACITY` `tunable`; no recipe. `BlockReactionWheel.java` `[V]`.

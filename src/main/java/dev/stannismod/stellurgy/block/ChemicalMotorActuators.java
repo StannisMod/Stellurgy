@@ -33,8 +33,8 @@ import java.util.Map;
  * works, which propellants could feed it, the power of the core stack behind a nuclear nozzle, and
  * the pressure of the air it fires into (C10 STAT-31, STAT-36, STAT-37).
  *
- * <p>The nozzle is the facing the motor is DRAWN with — its actual state, which follows the tank it
- * is fed from — so the push a pilot gets is the push the model on screen shows. Two motor families
+ * <p>The nozzle is where the motor is DRAWN pointing — read from its actual state, which follows the
+ * tank it is fed from — so the push a pilot gets is the push the model on screen shows. Two motor families
  * share this and do not share a superclass, which is the only reason it is a helper and not an
  * inherited method.</p>
  */
@@ -102,8 +102,15 @@ final class ChemicalMotorActuators {
                 regimes, power, AtmosphereDensity.pascals(world)));
     }
 
+    /**
+     * Where the nozzle points as DRAWN. The motor model's nozzle points down unrotated, and its
+     * blockstates turn it with an x-rotation of 90° for every horizontal facing (180° for up), which
+     * lands the nozzle on the side OPPOSITE the facing (`facing=east` draws it pointing west, away from
+     * a tank to the east). So the facing is the nozzle for up and down and its opposite sideways.
+     */
     private static EnumFacing facing(World world, BlockPos pos, IBlockState state) {
-        return state.getBlock().getActualState(state, world, pos).getValue(BlockFullyRotatable.FACING);
+        EnumFacing facing = state.getBlock().getActualState(state, world, pos).getValue(BlockFullyRotatable.FACING);
+        return facing.getAxis() == EnumFacing.Axis.Y ? facing : facing.getOpposite();
     }
 
     /** A motor worn to its last stage is broken and does not fire; anything short of that does. */
