@@ -74,9 +74,9 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
     @Test
     @Pins("SHIPCTL-20")
     @RedWitness(member = "EntityDummy#onUpdate",
-            at = "(!seatStands() || outlivedItsShip())", replacedBy = "false",
+            at = "(outlivedItsShip() || (getPassengers().isEmpty() && !seatStands()))", replacedBy = "(false)",
             fails = "the riderless dummy of a seat that went with its discarded ship was never removed",
-            on = "2026-10-14")
+            on = "2026-10-17")
     public void aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself() throws Exception {
         int[] builder = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-seat", 4, 12,
                 "the craft whose seat the dummy is bound to stands in this volume");

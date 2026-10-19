@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.After;
@@ -1803,6 +1804,75 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Math.abs(at[0] - (seatX + 0.5)) <= SEAT_COLUMN_HALF_WIDTH
                         && Math.abs(at[2] - (seatZ + 0.5)) <= SEAT_COLUMN_HALF_WIDTH
                         && at[1] >= seatY && at[1] <= seatY + SEATED_HEIGHT);
+    }
+
+    /**
+     * Somebody still seated on a craft that is discarded does not ride on into the next craft built in its
+     * claim: the next craft weighs exactly its own hull (SHIPCTL-20).
+     *
+     * <p>Contract: this fails if production lets the mount of a ship that no longer exists keep its rider,
+     * and so carries him onto whatever seat the next ship of that claim has at the same coordinate.</p>
+     *
+     * <p>The two craft are laid from one fixture on two sites. The first is assembled, an occupant is
+     * seated on it, and a round of its own shows him weighed — the positive half that makes the later
+     * absence mean something. Then it is discarded, and the next craft is assembled; the allocator hands
+     * the released claim out first, and the arrangement requires that it did (the same flight-computer
+     * coordinate, hence the same seat coordinate). The verdict is the second craft's physics record after
+     * a round of its own, against the first craft's record before anybody sat: the round is where crew
+     * reaches the physics, so an earlier read could miss a rider who had not been weighed yet.</p>
+     *
+     * <p>What it does not see: where the rider is set down, and a ship that crosses rather than being
+     * discarded (a crossing takes its crew off their mounts itself). It leaves the occupant standing where
+     * the first craft was, as {@link #aSeatedOccupantIsWeighedWhereItSits} does.</p>
+     */
+    @Pins("SHIPCTL-20")
+    @RedWitness(member = "EntityDummy#onUpdate",
+            at = "(outlivedItsShip() || (getPassengers().isEmpty() && !seatStands()))",
+            replacedBy = "(getPassengers().isEmpty() && (!seatStands() || outlivedItsShip()))",
+            fails = "the next craft of the claim must weigh only its own hull", on = "2026-10-17")
+    @Test
+    public void aRiderOfADiscardedCraftIsNotCarriedIntoTheNextCraftOfItsClaim() throws Exception {
+        FixtureSite firstSite = plot().siteAt(4, 4);
+        FixtureSite nextSite = plot().siteAt(36, 4);
+        Reply fixture = lay(firstSite, "with-pilot-deck", "the craft that will be discarded with a rider aboard");
+        int[] seatOffset = fixture.intArray("pilotSeatFromFlightComputer");
+        requireArranged("the fixture must say where its pilot seat stands: " + fixture,
+                seatOffset != null && seatOffset.length == 3);
+        AssembledCraft first = assembleLaid(firstSite, fixture, "the craft that will be discarded");
+        Reply empty = Reply.of(read("stellurgytest vs ship-info " + DIM + " id " + first.physicsId).raw());
+        requireArranged("the first craft's physics record must answer its mass: " + empty, empty.has("massKg"));
+        double hullKg = empty.number("massKg");
+
+        Reply occupied = Reply.of(arrange("stellurgytest vs seat-occupy " + DIM + " " + (first.afcX + seatOffset[0])
+                + " " + (first.afcY + seatOffset[1]) + " " + (first.afcZ + seatOffset[2])).raw());
+        requireArranged("an occupant must be seated on the first craft: " + occupied,
+                occupied.boolOr("spawned", false) && occupied.boolOr("mounted", false));
+        long seatedMark = events.markInstrumented();
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(seatedMark, "ship_mass_measured",
+                "a round of the first craft must run with its occupant seated", ROUND_BUDGET_TICKS,
+                "ship", first.physicsId, "path", "round"));
+        Reply ridden = Reply.of(read("stellurgytest vs ship-info " + DIM + " id " + first.physicsId).raw());
+        requireArranged("the occupant must be weighed aboard the first craft before it is discarded: " + ridden
+                + " against the empty " + hullKg + " kg", ridden.number("massKg") > hullKg + CREW_MASS_BAND);
+
+        Disposal.ship(c -> arrange(c).raw(), events, DIM, first.physicsId);
+        AssembledCraft next = assembleLaid(nextSite, lay(nextSite, "with-pilot-deck", "the claim's next craft"),
+                "the claim's next craft");
+        requireArranged("the next craft must be handed the discarded craft's claim — its flight computer at "
+                        + first.afcX + "," + first.afcY + "," + first.afcZ + ", it is at " + next.afcX + ","
+                        + next.afcY + "," + next.afcZ,
+                next.afcX == first.afcX && next.afcY == first.afcY && next.afcZ == first.afcZ);
+
+        long nextMark = events.markInstrumented();
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(nextMark, "ship_mass_measured",
+                "a round of the next craft must run, weighing whoever it carries", ROUND_BUDGET_TICKS,
+                "ship", next.physicsId, "path", "round"));
+        Reply weighed = Reply.of(read("stellurgytest vs ship-info " + DIM + " id " + next.physicsId).raw());
+        requireArranged("the next craft's physics record must answer its mass: " + weighed, weighed.has("massKg"));
+        assertEquals("the next craft of the claim must weigh only its own hull (" + hullKg + " kg, its twin's"
+                        + " before anybody sat); a rider left on the discarded craft's mount rides on into it."
+                        + " Its record after a round: " + weighed,
+                hullKg, weighed.number("massKg"), CREW_MASS_BAND);
     }
 
     // ================================================================================================

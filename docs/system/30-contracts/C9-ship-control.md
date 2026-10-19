@@ -153,7 +153,7 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   placed on a ship with NO pilot seat **auto-links** (the replacement path after SHIPCTL-14); a
   second seat's placement is refused with a message. R10/R11 hold for the ship's LIFETIME. **(c)**
   Mid-flight building of non-control blocks is OUT of scope.
-- **SHIPCTL-20** `[V][SYS]` A RIDERLESS mount dummy whose seat no longer stands removes itself, on the
+- **SHIPCTL-20** `[T][SYS]` A RIDERLESS mount dummy whose seat no longer stands removes itself, on the
   server, on its own tick — whatever took the seat away, including a discarded ship whose chunks are
   deleted and whose blocks are therefore never broken. Its seat stands while the bound seat position
   holds a seat block, or — that position not loaded — while it lies in the shipyard under a REGISTERED
@@ -167,7 +167,10 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   off their mounts before it cuts (`CrewTransfer#capture`), so no live crew rides such a mount. The
   block's own `breakBlock` remains the immediate path for a broken seat (SHIPCTL-14). It is vanilla's
   idiom for an entity bound to a block: a hanging entity checks its surface (`EntityHanging.onUpdate`),
-  a sleeping player his bed (`EntityPlayer.isInBed`). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
+  a sleeping player his bed (`EntityPlayer.isInBed`). Pinned by
+  `VSPilotSeatDummyReuseTest#aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself` (the riderless mount)
+  and `TierTwoCraftFlightModelGroupTest#aRiderOfADiscardedCraftIsNotCarriedIntoTheNextCraftOfItsClaim`
+  (the ridden one, seen through the next craft's mass). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
   рядом с игроком можно оставить как требование, но чистить надо как-то автоматически"* (the dummy near
   the player may stay a requirement, but it must be cleaned up automatically), and the choice of the
   dummy-side check the same day (*"1"*).
