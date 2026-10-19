@@ -273,6 +273,12 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **INV-VSK-12** [V] Block damage records travel with their blocks through assembly and copy-back (`WorldServerShipManager.java:272`, `:308-314`; `MoveBlocks.java:54`).
 - **INV-VSK-13 [V]**  A VS ship is present and the registry answers on a loaded server (`src/test/java/dev/stannismod/stellurgy/test/server/VsVendorSmokeTest.java:42`) and
   a commanded ship translates under the physics loop (`src/test/java/dev/stannismod/stellurgy/test/server/VSShipMotionServerTest.java:94`).
+- **INV-VSK-15 [T][BEH]** A ship the client unloads leaves none of its tiles among those the client draws. A ship's render
+  chunks put its tiles into the world renderer's global tile set, and that set draws a tile wherever the ship managing its
+  POSITION stands (`MixinTileEntityRendererDispatcher#preRender`), so a tile left there after its ship is gone is drawn inside
+  whichever ship is next handed the claim. `PhysRenderChunk#killRenderChunk`, reached by a ship's unload
+  (`PhysObjectRenderManager#killRenderers`) and by a chunk's replacement (`PhysObjectRenderManager#updateChunk`). Pinned by
+  `VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw`.
 
 ## Failure modes & edge cases
 
@@ -334,6 +340,7 @@ Tunable; values are not pinned here.
 | MECH-VSK-13 | `test/unit/StandingOnAHullCountsAsBeingAtItTest.java:47` |
 | MECH-VSK-15 | `test/server/SpaceSlotVsShipPersistTest.java:65` |
 | INV-VSK-13 | `test/server/VsVendorSmokeTest.java:42`, `test/server/VSShipMotionServerTest.java:94` |
+| INV-VSK-15 | `test/client/VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw` |
 
 (All under `src/test/java/dev/stannismod/stellurgy/`.) **No test found** for: the pose-send watchdog, the deconstruct states, or the
 terrain collider — a grep of `src/test` and `testframework` for `poseSendIsOverdue`, `DeconstructState`,

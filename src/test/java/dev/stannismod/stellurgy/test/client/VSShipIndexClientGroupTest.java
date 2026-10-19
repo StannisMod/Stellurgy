@@ -5,12 +5,16 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.trace.ClientShipPickable;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -181,6 +185,58 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
         clientEvents().awaitRecordWithFields(seatedMark, "ship_pilot_gate_decided",
                 "the pilot gate must open for the pilot of a craft built on a claim given back", LINK_TICKS,
                 "open", "true");
+    }
+
+    /**
+     * A ship the client unloads leaves none of its tiles for the client to draw (INV-VSK-15).
+     *
+     * <p>Contract: fails if tearing a ship's renderer down leaves its tiles in the world renderer's global
+     * tile set. That set draws a tile wherever the ship managing its position stands, so a tile left there
+     * is drawn inside the next ship handed the claim — and a renderer reading that ship's block at the
+     * tile's position as the tile's own crashes the client.</p>
+     *
+     * <p>The craft is built where the player watches it. Once the client holds it with every chunk of its
+     * claim ({@code client_ship_pickable}), the tiles of the claim it draws are counted — the positive half,
+     * without which an empty count after the unload would mean nothing. The craft is destroyed; when the
+     * client's unload of it is recorded ({@code ship_unloaded}, written as the unload begins, which then
+     * finishes on the same thread before any later read), the same count is taken again. The claim is the
+     * one the craft's spawn record names, and its extent the substrate's own.</p>
+     *
+     * <p>What it does not see: the chunk-replacement path, which tears a render chunk down the same way; and
+     * the drawing itself — it reads the set that is drawn, not a frame.</p>
+     */
+    @Pins("INV-VSK-15")
+    @RedWitness(member = "PhysRenderChunk#killRenderChunk",
+            at = "Minecraft.getMinecraft().renderGlobal.updateTileEntities(tileEntitiesToRender, new ArrayList<>());",
+            replacedBy = "", fails = "a ship the client unloaded must leave none of its tiles for it to draw",
+            on = "2026-10-18")
+    @Test
+    public void anUnloadedShipLeavesNoTileForTheClientToDraw() throws Exception {
+        FixtureSite site = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
+        int px = plot().x(PLAYER_DX), pz = plot().z(PLAYER_DZ);
+        layThePlayersFloor(site, px, pz);
+        standOnFloorTheClientHolds(px + 0.5, site.y + 1, pz + 0.5, 0, 0, "the player stands where he watches the craft");
+
+        long clientMark = clientEvents().mark();
+        long serverMark = serverEvents().mark();
+        String ship = assemble(site, "the craft the client will unload");
+        String[] claim = claimOf(serverMark, ship).split(",");
+        int centreX = Integer.parseInt(claim[0].trim());
+        int centreZ = Integer.parseInt(claim[1].trim());
+        clientEvents().awaitRecordWithFields(clientMark, ClientShipPickable.RECORD,
+                "the client must hold the craft and every chunk of its claim", LINK_TICKS, "ship", ship);
+        int drawnWhileHeld = ClientShipRenderTiles.inClaim(bot(), centreX, centreZ);
+        scenario().requireArranged("while the client holds the craft it must draw the tiles of its claim, or an empty"
+                + " count after the unload says nothing: " + drawnWhileHeld, drawnWhileHeld > 0);
+
+        long unloadMark = clientEvents().mark();
+        Reply destroyed = arrange("stellurgytest vs destroy-ship " + OVERWORLD + " " + ship);
+        scenario().requireArranged("the craft must be marked for collection: " + destroyed, destroyed.bool("found"));
+        clientEvents().awaitRecordWithFields(unloadMark, "ship_unloaded",
+                "the client must unload the destroyed craft", LINK_TICKS, "vsShip", ship);
+        assertEquals("a ship the client unloaded must leave none of its tiles for it to draw; it drew "
+                        + drawnWhileHeld + " of the claim centred on " + centreX + "," + centreZ + " while it held the ship",
+                0, ClientShipRenderTiles.inClaim(bot(), centreX, centreZ));
     }
 
     /** The shipyard claim, as {@code x,z} of its centre chunk, that {@code ship}'s spawn record names. */
