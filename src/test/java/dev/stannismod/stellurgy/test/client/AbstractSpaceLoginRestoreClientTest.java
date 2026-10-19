@@ -292,7 +292,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                 Boolean.parseBoolean(System.getProperty(
                         AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
-        root = ServerRoot.fresh("forge-client-space-login-restore-");
+        // The subject is the seat restore, not fuel: the same seed as the shared harnesses, or the
+        // control leg's thrust waits on propellant this fixture's ship does not carry.
+        root = ServerRoot.fresh("forge-client-space-login-restore-").seed(GameDirSeed.forTheSharedHarness());
     }
 
     @After
