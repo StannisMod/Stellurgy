@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.RocketFlightMode;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
@@ -28,6 +29,9 @@ public class RocketFlightModeNbtTest {
 
     /** Pins INV-RKT-04 (RocketFlightMode DEFAULT is CLASSIC_LAUNCH so a legacy save with no flightMode key loads onto the classic path). */
     @Pins("INV-RKT-04")
+    @RedWitness(member = "RocketFlightMode#readFromNBT", at = "!nbt.hasKey(NBT_KEY)) return DEFAULT;",
+            replacedBy = "!nbt.hasKey(NBT_KEY)) return FREE_FLIGHT;",
+            fails = "expected same:<CLASSIC_LAUNCH> was not:<FREE_FLIGHT>", on = "2026-10-19")
     @Test
     public void missingNbtKeyReadsDefault() {
         NBTTagCompound nbt = new NBTTagCompound();

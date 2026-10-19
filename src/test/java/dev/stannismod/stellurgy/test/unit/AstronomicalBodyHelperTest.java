@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
@@ -493,6 +494,8 @@ public class AstronomicalBodyHelperTest {
 
     /** Pins INV-NAV-08 (a moon's period follows its parent's mass). */
     @Pins("INV-NAV-08")
+    @RedWitness(member = "AstronomicalBodyHelper#getMoonOrbitalPeriod", at = "/ planetaryMass", replacedBy = "",
+            fails = "expected:<13.66> but was:<27.32>", on = "2026-10-19")
     @Test
     public void moonPeriodScalesWithParentMassAndDistanceExactly() {
         // The SCALING is what this pins, and it is unchanged by the reference the law is anchored on:

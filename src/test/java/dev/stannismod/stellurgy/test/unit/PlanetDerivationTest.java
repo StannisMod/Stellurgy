@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
@@ -186,6 +187,9 @@ public class PlanetDerivationTest {
      * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
     @Pins("INV-NAV-11")
+    @RedWitness(member = "PlanetDerivation#rotationalPeriodOf",
+            at = "CellHash.norm(CellHash.ofBody(seed, key, variant, SALT_SPIN))", replacedBy = "0.5d",
+            fails = "two worlds of equal gravity must be able to have different days", on = "2026-10-19")
     @Test
     public void aDayIsDrawnAndIsNotAFunctionOfGravity() {
         GalacticCoord anchor = cell(600, 0, 0);

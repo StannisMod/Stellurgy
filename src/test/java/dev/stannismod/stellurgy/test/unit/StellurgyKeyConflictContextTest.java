@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.client.StellurgyKeyConflictContext;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraftforge.client.settings.KeyConflictContext;
 import org.junit.Test;
 
@@ -33,6 +34,8 @@ public class StellurgyKeyConflictContextTest {
 
     /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
     @Pins("INV-CLR-08")
+    @RedWitness(member = "StellurgyKeyConflictContext#conflicts", at = "this == other", replacedBy = "true",
+            fails = "null", on = "2026-10-19")
     @Test
     public void pilotingAndNotPilotingNeverConflict() {
         // The whole point: a steering key (PILOTING) and the vanilla key it

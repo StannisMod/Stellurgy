@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.SpacePosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
@@ -68,6 +69,8 @@ public class SpacePositionTest {
 
     /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
     @Pins("INV-NAV-01")
+    @RedWitness(member = "SpacePosition#readFromNBT", at = "if (!nbt.hasKey(\"spacePosition\")) return;",
+            replacedBy = "", fails = "expected:<5.0> but was:<0.0>", on = "2026-10-19")
     @Test
     public void readFromNbtWithoutSpacePositionTagIsNoOp() {
         SpacePosition position = new SpacePosition();
@@ -80,6 +83,8 @@ public class SpacePositionTest {
 
     /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
     @Pins("INV-NAV-02")
+    @RedWitness(member = "SpacePosition#distanceToSpacePosition2", at = "yy * yy +", replacedBy = "",
+            fails = "expected:<169.0> but was:<153.0>", on = "2026-10-19")
     @Test
     public void distanceSquaredMatchesEuclideanDefinition() {
         SpacePosition a = new SpacePosition();

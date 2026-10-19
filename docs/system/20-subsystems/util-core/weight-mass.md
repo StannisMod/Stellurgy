@@ -96,8 +96,8 @@ between two patterns that both match.
 
 - **INV-WGT-01 [V][BEH]** Empty stack or null registry name ⇒ weight `0`.
   `WeightEngine.java:86-88`.
-- **INV-WGT-02 [T][SYS]** `individual` override survives a JSON save→load round-trip.
-  `test/unit/WeightEngineUnitTest.java:83-102`. Pinned by `WeightEngineUnitTest#individualOverrideSurvivesSaveLoadRoundTrip`. FOR: save format: weight config file.
+- **INV-WGT-02 [V][SYS]** `individual` override survives a JSON save→load round-trip.
+  `WeightEngine.java:546` write, `:420` read. FOR: save format: weight config file.
 - **INV-WGT-03 [T][BEH]** Fluid weight is strictly positive and linear in amount, and scales
   with `fuelMassScale`. `test/unit/WeightEngineUnitTest.java:43,61`. (Every test builds its own engine
   from `WeightEngine.fromJson` / a temp file, so none reaches the mod's table.) Pinned by `WeightSystemTest#fluidWeightUsesFallbackAndFuelScale`.

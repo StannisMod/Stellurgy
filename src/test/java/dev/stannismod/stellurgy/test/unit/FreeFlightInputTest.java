@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
@@ -37,6 +38,8 @@ public class FreeFlightInputTest {
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Pins("INV-RKT-08")
+    @RedWitness(member = "FreeFlightInput#clamp", at = "if (v > MAX) return MAX;", replacedBy = "",
+            fails = "expected:<1.0> but was:<5.0>", on = "2026-10-19")
     @Test
     public void constructorClampsAboveOne() {
         FreeFlightInput in = new FreeFlightInput(5f, 2.5f, 1.000001f, 100f, 7f);

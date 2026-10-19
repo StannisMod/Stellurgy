@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -49,6 +50,8 @@ public class ChipNBTRoundTripTest {
 
     /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
     @Pins("INV-ITM-01")
+    @RedWitness(member = "ItemPlanetIdentificationChip#getDimensionId", at = "return Constants.INVALID_PLANET;",
+            replacedBy = "return 0;", fails = "fresh stack must read as INVALID_PLANET", on = "2026-10-19")
     @Test
     public void planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt() {
         // Production contract (getDimensionId, lines 99-103): a stack with
@@ -89,6 +92,8 @@ public class ChipNBTRoundTripTest {
      * Pins INV-ITM-04 (setting the invalid planet still attaches a tag carrying the sentinel).
      */
     @Pins("INV-ITM-04")
+    @RedWitness(member = "ItemPlanetIdentificationChip#setDimensionId", at = "stack.setTagCompound(nbt); return;",
+            replacedBy = "return;", fails = "setDimensionId(INVALID_PLANET) must attach the NBT", on = "2026-10-19")
     @Test
     public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -117,6 +122,9 @@ public class ChipNBTRoundTripTest {
 
     /** Pins INV-ITM-03 (erase drops the entire compound). */
     @Pins("INV-ITM-03")
+    @RedWitness(member = "ItemPlanetIdentificationChip#erase", at = "stack.setTagCompound(null);",
+            replacedBy = "stack.setTagCompound(new NBTTagCompound());",
+            fails = "erase() must drop the entire NBT compound", on = "2026-10-19")
     @Test
     public void planetChipEraseClearsAllNbt() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();

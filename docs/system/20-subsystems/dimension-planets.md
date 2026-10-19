@@ -296,7 +296,8 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   geode (not volcano) field is `[V]` — `DimensionProperties.java:2781-2783`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-05 [V][SYS]** Ring angle/color and sky/fog/sunrise colors survive the round-trip
   (`DimensionProperties.java:1891-1916,2111` read, `:2275-2298` write). FOR: save format: a dimension survives a world reload.
-- **INV-DIM-06 [T][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-06 [T][SYS]** `realizeAtmosphere(oxygenated, d)` derives an air whose density reads `d`
+  (`DimensionProperties.java:1139-1143`). `DimensionPropertiesTest#realizingTheAtmosphereYieldsTheStatedDensity`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-07 [V][BEH]** Parent↔child links are bidirectional (`DimensionProperties.java:1313-1320`,
   `addChildPlanet` sets both ends); a moon inherits its parent's solar distance (`:1034-1040`).
 - **INV-DIM-08 [V][SYS]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state):

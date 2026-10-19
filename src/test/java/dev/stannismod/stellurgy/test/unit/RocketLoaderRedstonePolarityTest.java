@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -85,6 +86,8 @@ public class RocketLoaderRedstonePolarityTest {
 
     /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Pins("INV-INFRA-11")
+    @RedWitness(member = "TileRocketLoader#isStateActive", at = "return condition;", replacedBy = "return !condition;",
+            fails = "state=ON + condition=true must emit redstone", on = "2026-10-19")
     @Test
     public void onStateEmitsRedstoneWhenConditionTrue() {
         assertTrue("state=ON + condition=true must emit redstone "
@@ -103,6 +106,8 @@ public class RocketLoaderRedstonePolarityTest {
 
     /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Pins("INV-INFRA-11")
+    @RedWitness(member = "TileRocketLoader#isStateActive", at = "return !condition;", replacedBy = "return condition;",
+            fails = "state=INVERTED + condition=true must NOT emit", on = "2026-10-19")
     @Test
     public void invertedStateFlipsTruthOutput() {
         assertFalse("state=INVERTED + condition=true must NOT emit "

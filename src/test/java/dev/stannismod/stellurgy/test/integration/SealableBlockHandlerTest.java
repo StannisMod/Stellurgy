@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.integration;
 
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -54,6 +55,8 @@ public class SealableBlockHandlerTest {
 
     /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
     @Pins("INV-SEAL-01")
+    @RedWitness(member = "SealableBlockHandler#addSealableBlock", at = "blockBanList.remove(block);", replacedBy = "",
+            fails = "addSealableBlock must remove the block from the ban list", on = "2026-10-19")
     @Test
     public void whitelistOverridesDetection() throws Exception {
         Block target = Blocks.LEAVES;

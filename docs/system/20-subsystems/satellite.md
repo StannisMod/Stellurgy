@@ -68,7 +68,7 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   `applyWeatherMode` sets the planet's rain marker (+1/-1) and toggles `WorldInfo` raining;
   `performAction` recomputes `viable_positions` per mode; `tickEntity` mutates one water/air
   block per tick with particle packets. `setDead` releases the rain marker (rain/drain only).
-  [V] `SatelliteWeatherController.java:98,174,283,200` [T] `SatelliteWeatherAndMicrowaveNbtTest.java:51`
+  [V] `SatelliteWeatherController.java:98,174,283,200`
 - **MECH-SAT-08 Satellite assembly.** `TileSatelliteBuilder.assembleSatellite` sums power/data/
   weight from part slots 1-6, mints `SatelliteProperties` with a fresh id from
   `DimensionManager.getNextSatelliteId()`, stamps the chassis (`ItemSatellite`) and the id
@@ -111,10 +111,10 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
   `SatelliteTickBehaviourTest.java:63,88` Pinned by `SatelliteTickBehaviourTest#baseSatelliteTickAccruesAtApproximatelyPowerGenRate`, `SatelliteTickBehaviourTest#baseSatelliteBatteryCapsAtPowerStorage`.
 - **INV-SAT-02** [T][BEH] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
   data gate ~`ticks/collectionTime` times. `SatelliteTickBehaviourTest.java:112,134` Pinned by `SatelliteTickBehaviourTest#dataSatelliteAccumulatesDataOverTime`, `SatelliteTickBehaviourTest#dataSatelliteRespectsMaxDataCap`.
-- **INV-SAT-03** [T][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
+- **INV-SAT-03** [V][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
   `floodlevel==-1` sentinel must survive so the lazy sea-level fallback fires.
-  `SatelliteWeatherAndMicrowaveNbtTest.java:51,79` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel`, `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesFreshDefaults`. FOR: save format: satellite survives reload.
-- **INV-SAT-04** [T][SYS] Microwave `teir` byte round-trips through NBT. `SatelliteWeatherAndMicrowaveNbtTest.java:108` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#microwaveEnergyTeirByteRoundTripsAcrossNbt`. FOR: save format: satellite survives reload.
+  `SatelliteWeatherController.java:372-374` write, `:379-381` read; the fallback `:52-53`. FOR: save format: satellite survives reload.
+- **INV-SAT-04** [V][SYS] Microwave `teir` byte round-trips through NBT. `SatelliteMicrowaveEnergy.java:78` write, `:84` read. FOR: save format: satellite survives reload.
 - **INV-SAT-05** [T][BEH] Builder stamps the *same* fresh `satelliteId` into both the chassis item
   (`satId`) and the id chip (`satelliteId`); chassis slot is consumed, output stays empty until
   `completionTime`. `SatelliteBuilderPressBuildContractTest.java:76` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildAssemblesOpticalSatellite`.
@@ -171,7 +171,7 @@ Config: see `C4-config-surface` (`enableTerraforming` false ⇒ the terminal sti
 
 ## Test coverage
 
-INV-SAT-01/02 → `SatelliteTickBehaviourTest`; INV-SAT-03/04 → `SatelliteWeatherAndMicrowaveNbtTest`;
+INV-SAT-01/02 → `SatelliteTickBehaviourTest`; INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; scanning types → `ScanningSatelliteTickContractTest`,

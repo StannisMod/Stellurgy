@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.item.ItemSpaceElevatorChip;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.DimensionBlockPosition;
 import net.minecraft.item.ItemStack;
 import org.junit.BeforeClass;
@@ -91,6 +92,9 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
     @Pins("INV-ITM-06")
+    @RedWitness(member = "ItemSpaceElevatorChip#setBlockPositions", at = "} else if (!listToStore.isEmpty()) {",
+            replacedBy = "} else {", fails = "setBlockPositions([]) on a stack with no NBT must not create a tag compound",
+            on = "2026-10-19")
     @Test
     public void elevatorChipSetEmptyOnFreshStackDoesNotAttachNbt() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -109,6 +113,9 @@ public class ItemDataCarrierNBTRoundTripTest {
      * Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT).
      */
     @Pins("INV-ITM-06")
+    @RedWitness(member = "ItemSpaceElevatorChip#setBlockPositions", at = "removeTag(\"list\")",
+            replacedBy = "removeTag(\"positions\")", fails = "setBlockPositions with an empty list must clear the stored list",
+            on = "2026-10-19")
     @Test
     public void elevatorChipSetEmptyAfterNonEmptyClearsList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -197,6 +204,8 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
     @Pins("INV-ITM-05")
+    @RedWitness(member = "ItemData#getMaxData", at = "damage == 0 ? 1000 : 0", replacedBy = "1000",
+            fails = "damage 1 -> max data 0 (inert variant)", on = "2026-10-19")
     @Test
     public void dataStickMaxDataIsZeroForNonZeroDamage() {
         // ItemData.getMaxData(damage) returns 1000 only for damage 0;

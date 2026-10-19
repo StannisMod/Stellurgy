@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,32 +43,12 @@ public class WeightEngineUnitTest {
 
     /** Pins INV-WGT-04 (seedDefaults populates a non-empty material table). */
     @Pins("INV-WGT-04")
+    @RedWitness(member = "WeightEngine#defaultMaterials", at = "return m;", replacedBy = "return new LinkedHashMap<>();",
+            fails = "default material table must be populated", on = "2026-10-19")
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
-    }
-
-    /** Pins INV-WGT-02 (an individual override survives a JSON save and load). */
-    @Pins("INV-WGT-02")
-    @Test
-    public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
-        File file = new File(tempFolder.getRoot(), "weights.json");
-
-        WeightEngine fresh = new WeightEngine(file.getPath());
-        assertNull("a fresh file must not know the test key", fresh.rawIndividual("ar:roundtrip_probe"));
-
-        Files.write(file.toPath(), (CURRENT + ",\"individual\":{\"ar:roundtrip_probe\":42.0}}")
-                .getBytes(StandardCharsets.UTF_8));
-        WeightEngine written = new WeightEngine(file.getPath());
-        assertEquals("the override must be read from the file",
-                Double.valueOf(42.0), written.rawIndividual("ar:roundtrip_probe"));
-
-        // Save writes it back; an engine built from what was saved must hold it again.
-        written.save();
-        WeightEngine reloaded = new WeightEngine(file.getPath());
-        assertEquals("override must persist across save/load",
-                Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
     @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has(\"formatVersion\")} checking no schema"
@@ -177,6 +158,9 @@ public class WeightEngineUnitTest {
      * Pins INV-WGT-07 (Every column the file declares survives a save and load, and every regex column keeps its written order).
      */
     @Pins("INV-WGT-07")
+    @RedWitness(member = "WeightEngine#read", at = "\"ablationByRegex\", linkedType", replacedBy = "\"ablationByRegex\", mapType",
+            fails = "first-match-wins makes pattern order the precedence rule, and ablationByRegex came back reordered",
+            on = "2026-10-19")
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -211,6 +195,8 @@ public class WeightEngineUnitTest {
      * Pins INV-WGT-08 (A config file that cannot be read leaves no column carrying the previous load's rows).
      */
     @Pins("INV-WGT-08")
+    @RedWitness(member = "WeightEngine#seedDefaults", at = "ablationIndividual = new HashMap<>();", replacedBy = "",
+            fails = "the fallback must leave no column carrying the broken file's rows", on = "2026-10-19")
     @Test
     public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");

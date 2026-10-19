@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.mixin.StellurgyMixinPlugin;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -54,6 +55,8 @@ public class StellurgyMixinPluginTest {
 
     /** Pins INV-MIX-01 (the WorldInfo mixins weave iff perDimWorldInfo is on and all other mixins always weave). */
     @Pins("INV-MIX-01")
+    @RedWitness(member = "StellurgyMixinPlugin#shouldApply", at = "shouldApply(perDimWorldInfoEnabled, true, true,",
+            replacedBy = "shouldApply(true, true, true,", fails = "null", on = "2026-10-19")
     @Test
     public void worldInfoMixinsSkippedWhenPerDimWorldInfoDisabled() {
         assertFalse(StellurgyMixinPlugin.shouldApply(false, WORLD_SERVER_MULTI));

@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -61,6 +62,8 @@ public class FreeFlightAssistsTest {
 
     /** Pins INV-RKT-11 (the setpoint ramps while the key is held, survives release, is zeroed by the cut and clamped to the assist ceiling). */
     @Pins("INV-RKT-11")
+    @RedWitness(member = "FreeFlightPhysics#rampSetpoint", at = "if (input.cutActive) return new double[] {0, 0, 0};",
+            replacedBy = "", fails = "expected:<0.0> but was:<2.0>", on = "2026-10-19")
     @Test
     public void cutZeroesTheWholeSetpointInstantly() {
         double[] sp = FreeFlightPhysics.rampSetpoint(2.0, 1.0, -1.0, cut());
