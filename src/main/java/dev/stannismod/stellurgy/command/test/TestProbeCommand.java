@@ -3576,6 +3576,16 @@ public class TestProbeCommand extends CommandBase {
             // A mob whose AI is off does not move itself at all, so "it stayed where it was" says
             // nothing about it; its yaw is what its idle look turns, the cheapest sign the AI runs.
             m.put("rotationYaw", subject.rotationYaw);
+            // The medium readings, each in the frame it is read in: `inWater` is the flag the body's
+            // LAST update left (for a body a deck holds, an update run in the craft's subspace, so the
+            // craft's water); `inLava` is asked now, of the body's box where it stands - the world.
+            m.put("inWater", subject.isInWater());
+            m.put("inLava", subject.isInLava());
+            m.put("noGravity", subject.hasNoGravity());
+            if (subject instanceof net.minecraft.entity.EntityLivingBase) {
+                m.put("levitating", ((net.minecraft.entity.EntityLivingBase) subject)
+                        .isPotionActive(net.minecraft.init.MobEffects.LEVITATION));
+            }
             if (subject instanceof net.minecraft.entity.EntityLiving) {
                 net.minecraft.entity.EntityLiving mob = (net.minecraft.entity.EntityLiving) subject;
                 m.put("aiDisabled", mob.isAIDisabled());
@@ -23256,6 +23266,27 @@ public class TestProbeCommand extends CommandBase {
             entity.motionX = 0; entity.motionY = 0; entity.motionZ = 0;
             send(sender, "{\"ok\":true,\"entityId\":" + id
                     + ",\"hasNoGravity\":" + entity.hasNoGravity() + "}");
+            return;
+        }
+        if (args.length >= 5 && "add-effect".equalsIgnoreCase(args[0])) {
+            // entity add-effect <dim> <entityId> <effect> <ticks> — give THIS living entity a potion
+            // effect, the way a brewed potion does (addPotionEffect). The vanilla /effect command names
+            // its target by selector, which picks whichever entity matches, not the scenario's own.
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            net.minecraft.entity.Entity entity = world == null ? null : world.getEntityByID(parseIntOr(args[2], -1));
+            if (!(entity instanceof net.minecraft.entity.EntityLivingBase)) {
+                send(sender, "{\"error\":\"no living entity with that id\"}");
+                return;
+            }
+            net.minecraft.potion.Potion potion = net.minecraft.potion.Potion.getPotionFromResourceLocation(args[3]);
+            if (potion == null) {
+                send(sender, "{\"error\":\"unknown effect\",\"effect\":\"" + escapeJson(args[3]) + "\"}");
+                return;
+            }
+            net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
+            living.addPotionEffect(new net.minecraft.potion.PotionEffect(potion, parseIntOr(args[4], 0)));
+            send(sender, "{\"ok\":true,\"entityId\":" + entity.getEntityId()
+                    + ",\"active\":" + living.isPotionActive(potion) + "}");
             return;
         }
         if (args.length >= 6 && "set-pos".equalsIgnoreCase(args[0])) {

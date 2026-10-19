@@ -238,7 +238,7 @@ public final class TestTrace {
         return sb.toString();
     }
 
-    /** One decimal place — enough to see a metre, short enough to read a whole chain on one line. */
+    /** Six significant figures — short enough to read a whole chain on one line; why not fewer, below. */
     public static String fmt(double v) {
         // SIX SIGNIFICANT FIGURES, not one decimal place — the precision is part of what an
         // instrument measures.

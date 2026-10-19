@@ -5,7 +5,6 @@ import java.util.Map;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.MobEffects;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
@@ -39,16 +38,16 @@ public final class DeckBoarding {
      *  predicate for every consumer — the deck frame's admission and the seeds, which must REFUSE an
      *  excluded body: a seed that ignored creative flight once snapped a flying player to the deck
      *  point every window tick, freezing him mid-air while the holder released him right back each
-     *  tick — a per-tick war. */
+     *  tick — a per-tick war.
+     *
+     *  <p>Only a state that hands the body to ANOTHER owner excludes it: riding (its vehicle places
+     *  it), elytra flight, creative flight outside a claim. A medium aboard is the craft's - its water,
+     *  lava and ladders act on the body in its frame through the body's own update - and levitation and
+     *  no-gravity run in that frame too, so the body keeps the deck's orientation even on a craft with
+     *  no gravity. The world's medium is {@link #worldMediumReaches}'s question, not this one's. */
     private static String excludedStateOf(EntityLivingBase entity) {
-        if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()) {
+        if (entity.isRiding() || entity.isElytraFlying()) {
             return "excludedState";
-        }
-        if (entity.isInWater() || entity.isInLava() || entity.isOnLadder()) {
-            return "excludedMedium";
-        }
-        if (entity.isPotionActive(MobEffects.LEVITATION)) {
-            return "excludedLevitation";
         }
         if (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
             // Creative flight is not excluded for a body a deck already holds (its flight then runs on
@@ -60,6 +59,20 @@ public final class DeckBoarding {
             }
         }
         return null;
+    }
+
+    /**
+     * Whether the WORLD's water or lava reaches {@code entity} where craft {@code shipId} does not cover
+     * it: liquid in its box at its world position, and open sky over its point {@code local} in the
+     * craft's subspace ({@link DeckFrameTick#craftCovers}). Two facts in two frames: the world point
+     * never sees the craft's roof, and the subspace never sees the world's water. Asked while the body
+     * stands at its world position - before a deck maps it in, or of a body no deck holds yet.
+     */
+    static boolean worldMediumReaches(Entity entity, String shipId, double[] local) {
+        if (local == null || !entity.world.containsAnyLiquid(entity.getEntityBoundingBox())) {
+            return false;
+        }
+        return !DeckFrameTick.craftCovers(entity.world, entity, local[0], local[1], local[2]);
     }
 
     /** Whether a creative FLYER is the deck's to claim right now: supported by a ship's blocks in

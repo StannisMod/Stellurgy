@@ -79,7 +79,7 @@ public class AcidRainHandler {
         if (DeckFrameTick.inDeckFrame(body)) {
             BlockPos inWorld = DeckFrameTick.worldPositionOf(body);
             if (inWorld == null || !world.isRainingAt(inWorld)) return false;
-            if (!world.canSeeSky(here)) return false;
+            if (DeckFrameTick.craftCovers(world, body, body.posX, body.posY, body.posZ)) return false;
         } else if (!world.isRainingAt(here)) {
             return false;
         }

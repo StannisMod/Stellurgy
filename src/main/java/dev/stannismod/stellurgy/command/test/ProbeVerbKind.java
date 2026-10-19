@@ -453,6 +453,7 @@ enum ProbeVerbKind {
             case "drive info":
             case "drive push":
             case "energy inject":
+            case "entity add-effect":
             case "entity capsule-set-dst":
             case "entity capsule-set-motion":
             case "entity capsule-set-src":

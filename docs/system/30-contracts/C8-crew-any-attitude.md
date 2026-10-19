@@ -82,8 +82,8 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   the body ANOTHER owner (riding, elytra, creative flight — only when NOT aboard/claimable
   (`DeckBoarding.flyCaptureEligible:68`)). **Water, lava, ladders, levitation and no-gravity do NOT end
   it** — superseded 2026-10-17 by C30 ENT-1's R4 ruling (a medium aboard is the craft's; the world's acts
-  only where S does not enclose the body; levitation and no-gravity run in S's frame). **Known violated**:
-  the code still releases on all five (`excludedStateOf:43-52`). Release is EXPLICIT
+  only where S does not enclose the body; levitation and no-gravity run in S's frame). As built and pinned:
+  C30 ENT-1 (`DeckBoarding.excludedStateOf`, `worldMediumReaches`, release reason `worldMedium`). Release is EXPLICIT
   (`DeckFrameTick.release:827`, reason recorded). The creative-flight half is pinned by
   `aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold`.
   A body stepping onto world terrain is not released by this clause: the deck refuses terrain at
@@ -175,8 +175,11 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   C12's. Pinned (admission): `VSLivingBodyOnADeckTest#aChickenLetGoInsideAnInvertedCabinIsSeatedOnTheDeck`
   — a chicken let go mid-cabin of the upside-down `with-roofed-deck` craft, half the cabin's height above
   the deck, is held and seated on the deck; with the gate replaced by `null` the world drops it onto the
-  roof's inner face (3.997 above the deck) and nothing holds it. Not pinned: the roofed keep past the
-  6-block floor probe (the cabin is 4 high). The interior gate at admission (`DeckFrameTick.java:928`)
+  roof's inner face (3.997 above the deck) and nothing holds it. Pinned (the roofed keep):
+  `VSLivingBodyOnADeckTest#aChickenFallingThroughAHoleInACabinDeckIsHeldUntilItLeavesTheCraft` — a chicken
+  on the cabin's deck when the deck block under it is removed falls through and is let go only past the
+  craft's bottom (4.02 below the deck's top, the bottom at 4.0); with the roof branch of
+  `DeckBoarding.deckMayKeep:719` off it is let go at the hole. The interior gate at admission (`DeckFrameTick.java:928`)
   replaced by `null` leaves both client methods this cited green (measured 2026-10-18). The released-interior re-seat
   (`VSCrewInteriorBoardingTest#aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck`) is re-seated by
   the dismount seed, not by the gate; the body displaced mid-cavity of the 170° roofed ship
@@ -271,7 +274,11 @@ reaches LOADED entities only. The pending dismount/boarding seed is per client w
   hold IS the craft's artificial gravity (C30 ENT-1), and the world-collision paragraph is folded into
   C30 ENT-2.
   **FIELD(S)** — the region where S's artificial gravity acts. *Design*: the gravity device's coverage
-  (`C25` HYPER-33). *Interim, until a device exists*: the field is always on and
+  (`C25` HYPER-33). **Widened 2026-10-19 — the hold is the FIELD's, whatever emits it**: a body is held
+  wherever any gravity field acts on it — S's own device, an area gravity block on S (which extends S's
+  hold), or an area gravity block in the world, whose field gives the body a frame of its own (the deck
+  frame generalised beyond crafts); what the body feels there is the coverage-weighted resultant of every
+  covering field (`C25` HYPER-33). Design, unbuilt. *Interim, until a device exists*: the field is always on and
   FIELD(S) = { p : d_S(p) ≤ R }, where d_S(p) is the distance, measured in S's frame
   (`VSIntegration.toShipFrameFor`), from p to the nearest block of S — a coarse SDF over S's block set —
   and **R = 2.0 blocks**: enough to cover a body jumping on a deck (apex ~1.25) and a narrow

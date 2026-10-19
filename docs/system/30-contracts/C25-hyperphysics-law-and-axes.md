@@ -198,10 +198,14 @@ per block, and a thrusting craft would accelerate rather than hold a rate.
   feels only the field's NON-uniformity (the equivalence principle — a uniform body force is not felt). It
   moves no energy the drive did not supply: it changes how force reaches a body, not how much. It costs a
   draw to SUSTAIN — never less than proportional to the covered volume and the acceleration carried — its
-  losses are `C12` heat, and its reaction runs field → emitters → structure. Fields from emitters
-  phase-locked into one network add coherently; fields from independent devices do not, and the strongest
-  covering one applies. This is the gravity dampener and the basis of a ship's own
-  gravity.
+  losses are `C12` heat, and its reaction runs field → emitters → structure. **Forces add; capacity pools
+  only where locked** (ruled 2026-10-19, replacing "the strongest covering one applies"): the body force at a
+  point is the VECTOR SUM of every covering field's force, each weighted by its coverage there — 1 deep inside
+  its region, falling smoothly to 0 across its edge — so a body passes smoothly between regions of different
+  gravity, in magnitude and in direction. What phase-locking pools is CAPACITY: emitters locked into one
+  network share one budget and one coverage; independent devices each sustain their own field on their own
+  draw. This is the gravity dampener, the basis of a ship's own gravity, and the area gravity block's shaped
+  fields (uniform in any direction, radial, toward a line, toward a plane).
   *Stress-test.* Falsifiable: a body inside a uniform field under the craft's acceleration takes no harm
   where an uncovered one does; at the field's edge harm rises with the gradient; doubling the carried
   acceleration over the same volume at least doubles the draw; two locked dampeners cover what one cannot,

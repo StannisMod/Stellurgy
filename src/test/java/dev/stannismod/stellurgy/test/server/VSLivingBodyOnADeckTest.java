@@ -671,6 +671,340 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
                 Math.abs(settled[1] - craft.seat.seatY) <= AT_REST);
     }
 
+    // -- a medium aboard is the craft's; only another owner ends a hold (C30 ENT-1, R4) ------------
+
+    /**
+     * How long a held body is watched in a medium or a state, in server ticks. Which states end a
+     * hold is judged on every update of the body, so a state that ends it does so on the body's first
+     * update in it; three seconds also outlasts the levitation dose below.
+     */
+    private static final int MEDIUM_WINDOW_TICKS = 60;
+
+    /** The levitation dose, ticks: about 1.8 blocks of rise, inside the deck frame's six-block floor probe. */
+    private static final int LEVITATION_TICKS = 40;
+
+    /** The cell of the deck the medium cases use, from the seat's corner: one off the seat on each axis. */
+    private static final double MEDIUM_CELL_DX = 1.5;
+    private static final double MEDIUM_CELL_DZ = -0.5;
+
+    /**
+     * Put a living body of {@code type} on the medium cases' deck cell and gate that the deck holds it
+     * there - the positive precondition every "it stays held" verdict below needs.
+     */
+    private int heldOnTheMediumCell(Craft craft, String type) throws Exception {
+        int id = putOnDeck(craft, type, MEDIUM_CELL_DX, MEDIUM_CELL_DZ);
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + id + " " + craft.shipId).raw());
+        requireArranged("the deck must hold the " + type + " before the medium is introduced: " + r,
+                craft.shipId.equals(r.textOr("deckHeldBy", null)));
+        return id;
+    }
+
+    /** Premise: a deck took body {@code id} at some point since {@code mark} (the deck frame's own record). */
+    private void requireTakenSince(int id, long mark) throws Exception {
+        String entered = boardingLog.since(mark, "deck_entered");
+        requireArranged("a deck must have taken the body, or \"it was never let go\" is about nothing: " + entered,
+                !Events.recordsWhere(entered, "e", String.valueOf(id)).isEmpty());
+    }
+
+    /** The subspace block cell the medium cases use, at {@code layer} blocks from the deck's top. */
+    private int[] mediumCell(Craft craft, int layer) {
+        return new int[]{(int) Math.floor(craft.seat.seatX + MEDIUM_CELL_DX),
+                (int) Math.round(craft.seat.seatY) + layer, (int) Math.floor(craft.seat.seatZ + MEDIUM_CELL_DZ)};
+    }
+
+    /** One block id at a subspace or world cell. */
+    private String blockAt(int[] cell) throws Exception {
+        return Reply.of(read("stellurgytest block at 0 " + cell[0] + " " + cell[1] + " " + cell[2]).raw())
+                .textOr("block", "?");
+    }
+
+    /**
+     * Verdict: since {@code mark} - taken while the deck held the body - no deck has let it go. The
+     * window is spent by the caller; the release record is the deck frame's own, written at the one
+     * place a hold ends.
+     */
+    private void assertNeverLetGo(Craft craft, int id, long mark, String clause) throws Exception {
+        requireTicked(craft, id);
+        String released = boardingLog.since(mark, "deck_released");
+        Events.assertInstrumentRan(released, "deck_capture_events", "the deck never let the body go");
+        java.util.List<String> mine = Events.recordsWhere(released, "e", String.valueOf(id));
+        Reply now = Reply.of(read("stellurgytest vs player-ship-data 0 " + id + " " + craft.shipId).raw());
+        System.out.println("[deck-living] medium releases=" + mine + " now=" + now);
+        assertTrue(clause + ": the deck let the body go " + mine, mine.isEmpty());
+    }
+
+    /**
+     * A body in the craft's own water stays held: S's water acts on it in S's frame, through its own
+     * update. Arranged as a one-block pool sunk into the deck - water where a deck block was, stone
+     * under it, the deck's own blocks around it - so it cannot spread.
+     */
+    @RedWitness(member = "DeckBoarding#excludedStateOf", at = "if (entity.isRiding() || entity.isElytraFlying()) {",
+            replacedBy = "if (entity.isRiding() || entity.isElytraFlying() || entity.isInWater()) {",
+            fails = "a body in the craft's own water must stay held (C30 ENT-1, R4): the deck let the body go",
+            on = "2026-10-19")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the hold is judged on every update in the water, and the verdict is"
+                    + " over every release record of it.")
+    public void anArmorStandInAPoolAboardStaysHeld() throws Exception {
+        Craft craft = buildCraft();
+        int[] pool = mediumCell(craft, -1);
+        int[] floor = mediumCell(craft, -2);
+        arrange("setblock " + floor[0] + " " + floor[1] + " " + floor[2] + " minecraft:stone");
+        arrange("setblock " + pool[0] + " " + pool[1] + " " + pool[2] + " minecraft:water");
+        requireArranged("the pool must be water over stone (" + blockAt(pool) + " over " + blockAt(floor) + ")",
+                "minecraft:water".equals(blockAt(pool)) && "minecraft:stone".equals(blockAt(floor)));
+        // Marked BEFORE the stand lands: it lands in the water, so a release on landing is the defect.
+        long mark = boardingLog.markInstrumented();
+        int id = putOnDeck(craft, "minecraft:armor_stand", MEDIUM_CELL_DX, MEDIUM_CELL_DZ);
+        GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+        requireTakenSince(id, mark);
+        assertNeverLetGo(craft, id, mark, "a body in the craft's own water must stay held (C30 ENT-1, R4)");
+    }
+
+    /** A body on the craft's own ladder stays held: S's ladder acts on it in S's frame. */
+    @NotYetRed(prose = "green before the R4 change as after it (measured 2026-10-19): the old exclusion asked"
+            + " {@code isOnLadder} at the body's WORLD position, where the craft's ladder is not, so it never let a"
+            + " body on a craft's ladder go. No plausible regression of our code reaches this verdict; it stands as"
+            + " the measurement that a ladder aboard is the craft's.")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the hold is judged on every update on the ladder.")
+    public void anArmorStandOnALadderAboardStaysHeld() throws Exception {
+        Craft craft = buildCraft();
+        int[] ladder = mediumCell(craft, 0);
+        int[] wall = {ladder[0] + 1, ladder[1], ladder[2]};
+        arrange("setblock " + wall[0] + " " + wall[1] + " " + wall[2] + " minecraft:stone");
+        // Facing west (meta 4): its back against the stone at +X.
+        arrange("setblock " + ladder[0] + " " + ladder[1] + " " + ladder[2] + " minecraft:ladder 4");
+        requireArranged("the ladder must stand on the deck against its wall (" + blockAt(ladder) + " beside "
+                + blockAt(wall) + ")", "minecraft:ladder".equals(blockAt(ladder)) && "minecraft:stone".equals(blockAt(wall)));
+        // Marked BEFORE the stand lands: it lands on the ladder, so a release on landing is the defect.
+        long mark = boardingLog.markInstrumented();
+        int id = putOnDeck(craft, "minecraft:armor_stand", MEDIUM_CELL_DX, MEDIUM_CELL_DZ);
+        GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+        requireTakenSince(id, mark);
+        assertNeverLetGo(craft, id, mark, "a body on the craft's own ladder must stay held (C30 ENT-1, R4)");
+    }
+
+    /** A levitating body stays held: levitation runs in S's frame, along the deck's up. */
+    @RedWitness(member = "DeckBoarding#excludedStateOf", at = "if (entity.isRiding() || entity.isElytraFlying()) {",
+            replacedBy = "if (entity.isRiding() || entity.isElytraFlying()"
+                    + " || entity.isPotionActive(net.minecraft.init.MobEffects.LEVITATION)) {",
+            fails = "a levitating body must stay held (C30 ENT-1, R4): the deck let the body go", on = "2026-10-19")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the hold is judged on every update while the effect runs.")
+    public void aCowLevitatingOnADeckStaysHeld() throws Exception {
+        Craft craft = buildCraft();
+        int id = heldOnTheMediumCell(craft, "minecraft:cow");
+        long mark = boardingLog.markInstrumented();
+        Reply effect = Reply.of(arrange("stellurgytest entity add-effect 0 " + id + " minecraft:levitation "
+                + LEVITATION_TICKS).raw());
+        requireArranged("the cow must be levitating: " + effect, effect.bool("active"));
+        GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+        assertNeverLetGo(craft, id, mark, "a levitating body must stay held (C30 ENT-1, R4)");
+    }
+
+    /** A body with no gravity stays held: it runs in S's frame, keeping the deck's orientation. */
+    @RedWitness(member = "DeckBoarding#excludedStateOf", at = "if (entity.isRiding() || entity.isElytraFlying()) {",
+            replacedBy = "if (entity.isRiding() || entity.isElytraFlying() || entity.hasNoGravity()) {",
+            fails = "a body with no gravity must stay held (C30 ENT-1, R4): the deck let the body go", on = "2026-10-19")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the hold is judged on every update with no gravity.")
+    public void anArmorStandWithNoGravityOnADeckStaysHeld() throws Exception {
+        Craft craft = buildCraft();
+        int id = heldOnTheMediumCell(craft, "minecraft:armor_stand");
+        long mark = boardingLog.markInstrumented();
+        Reply off = Reply.of(arrange("stellurgytest entity set-no-gravity 0 " + id + " true").raw());
+        requireArranged("the stand must have no gravity: " + off, off.bool("hasNoGravity"));
+        GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+        assertNeverLetGo(craft, id, mark, "a body with no gravity must stay held (C30 ENT-1, R4)");
+    }
+
+    /**
+     * World water where the body stands in the WORLD: one source block at the cell the held body's world
+     * position falls in, on {@code craft}, which hovers. Returns that world cell, for its removal.
+     */
+    private int[] worldWaterAt(Craft craft, int id) throws Exception {
+        Reply r = Reply.of(read("stellurgytest vs player-ship-data 0 " + id + " " + craft.shipId).raw());
+        int[] cell = {(int) Math.floor(r.number("playerX")), (int) Math.floor(r.number("playerY") + 0.1),
+                (int) Math.floor(r.number("playerZ"))};
+        arrange("setblock " + cell[0] + " " + cell[1] + " " + cell[2] + " minecraft:water");
+        requireArranged("a world water source must stand where the body is in the world (" + blockAt(cell) + ")",
+                "minecraft:water".equals(blockAt(cell)));
+        return cell;
+    }
+
+    /**
+     * World water acts on a held body where the craft does not enclose it: an armor stand on an OPEN
+     * deck that the world's water reaches is let go to the world, reason {@code worldMedium}.
+     */
+    @RedWitness(verdict = "must be let go to the world", member = "DeckFrameTick#runInDeckFrame",
+            at = "if (DeckBoarding.worldMediumReaches(entity, shipId, local)) {", replacedBy = "if (false) {",
+            fails = "a held body the world's water reaches on an open deck must be let go to the world (C30 ENT-1, R4)",
+            on = "2026-10-19")
+    @RedWitness(verdict = "must not be taken back", member = "DeckFrameTick#admissionFor",
+            at = "if (DeckBoarding.worldMediumReaches(entity, shipId, local)) {", replacedBy = "if (false) {",
+            fails = "a body let go to the world's water must not be taken back while the water still reaches it:"
+                    + " released 66 times, taken again 66 times", on = "2026-10-19")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the body stands in the world's water for all of it, and the verdict"
+                    + " reads every release record of it.")
+    public void anArmorStandOnAnOpenDeckInTheWorldsWaterIsLetGoToTheWorld() throws Exception {
+        Craft craft = buildCraft();
+        int id = heldOnTheMediumCell(craft, "minecraft:armor_stand");
+        long mark = boardingLog.markInstrumented();
+        int[] water = worldWaterAt(craft, id);
+        try {
+            GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+            requireTicked(craft, id);
+            String released = boardingLog.since(mark, "deck_released");
+            Events.assertInstrumentRan(released, "deck_capture_events", "the deck let the body go to the world");
+            java.util.List<String> mine = Events.recordsWhereAll(released, "e", String.valueOf(id),
+                    "reason", "worldMedium");
+            System.out.println("[deck-living] worldWaterOpen releases=" + Events.recordsWhere(released, "e",
+                    String.valueOf(id)));
+            assertTrue("a held body the world's water reaches on an open deck must be let go to the world"
+                    + " (C30 ENT-1, R4): " + released, !mine.isEmpty());
+            // Let go means STAYS let go: a deck that takes it straight back and lets it go again is
+            // two owners fighting over it every tick, not a hand-over.
+            String retaken = boardingLog.since(mark, "deck_entered");
+            java.util.List<String> again = Events.recordsWhere(retaken, "e", String.valueOf(id));
+            assertTrue("a body let go to the world's water must not be taken back while the water still reaches"
+                    + " it: released " + Events.recordsWhere(released, "e", String.valueOf(id)).size()
+                    + " times, taken again " + again.size() + " times", again.isEmpty());
+        } finally {
+            arrange("setblock " + water[0] + " " + water[1] + " " + water[2] + " minecraft:air");
+        }
+    }
+
+    /**
+     * Under the craft's roof the world's water does not reach a held body: an armor stand on a cabin's
+     * deck, where the world has water, stays held.
+     */
+    @RedWitness(member = "DeckBoarding#worldMediumReaches",
+            at = "return !DeckFrameTick.craftCovers(entity.world, entity, local[0], local[1], local[2]);",
+            replacedBy = "return true;",
+            fails = "a body under the craft's roof must stay held where the world has water (C30 ENT-1, R4)",
+            on = "2026-10-19")
+    @Pins("ENT-1")
+    @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);",
+            why = "the stretch is the dose: the body stands where the world has water for all of it.")
+    public void anArmorStandUnderTheCraftsRoofWhereTheWorldHasWaterStaysHeld() throws Exception {
+        Craft craft = buildCraft("with-roofed-deck");
+        int id = heldOnTheMediumCell(craft, "minecraft:armor_stand");
+        long mark = boardingLog.markInstrumented();
+        int[] water = worldWaterAt(craft, id);
+        try {
+            GameTicks.advance(client(), GameTicks.server(), MEDIUM_WINDOW_TICKS);
+            assertNeverLetGo(craft, id, mark, "a body under the craft's roof must stay held where the world has"
+                    + " water (C30 ENT-1, R4)");
+        } finally {
+            arrange("setblock " + water[0] + " " + water[1] + " " + water[2] + " minecraft:air");
+        }
+    }
+
+    /** Server ticks for the deck to let go of a body falling out through a hole in it: a deadline on the record. */
+    private static final int HOLE_RELEASE_LINK_TICKS = 200;
+
+    /**
+     * The release record's height resolution, blocks: it is written to six significant figures
+     * ({@code TestTrace.fmt}), so a world height under 10 000 is rounded to 0.01 at worst. A body let go
+     * just past the craft's bottom may read up to this above it; one let go at the hole reads a whole
+     * deck block or more above it.
+     */
+    private static final double RELEASE_HEIGHT_RESOLUTION = 0.01;
+
+    /**
+     * A living body under a craft's roof is not let go for want of a floor while it is still inside
+     * the craft: a chicken standing on a cabin's deck when the deck block under it is taken away falls
+     * through the hole and is released only once it has left the craft's block region - never at the
+     * hole, where no floor lies within the deck frame's six-block probe below it.
+     *
+     * <p>The decision is the keep's second branch, {@code DeckBoarding#deckMayKeep}: inside the craft's
+     * own block region under a roof. Upright, so the world's gravity and the deck's pull the same way and
+     * the fall is the chicken's own. Read from the deck frame's release record, whose height says where
+     * it was let go. Not seen here: a body that stays inside a roofed cavity taller than the probe, which
+     * no fixture builds; a player.</p>
+     */
+    @RedWitness(member = "DeckBoarding#deckMayKeep", at = "&& hasRoofAboveAt(entity, shipId, local);",
+            replacedBy = "&& false;",
+            fails = "a body under the craft's roof must not be let go for want of a floor while it is inside the"
+                    + " craft (C8 CREW-C12)", on = "2026-10-18")
+    @Pins("CREW-C12")
+    @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
+            why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks; the hold that"
+                    + " follows is read as a premise.")
+    public void aChickenFallingThroughAHoleInACabinDeckIsHeldUntilItLeavesTheCraft() throws Exception {
+        Craft craft = buildCraft("with-roofed-deck");
+        Reply spot = Reply.of(read("stellurgytest vs deck-spot 0 id " + craft.shipId).raw());
+        requireArranged("the deck must have a free cell beside the seat: " + spot, spot.ok());
+        int cx = spot.integer("subX");
+        int cy = spot.integer("subY");
+        int cz = spot.integer("subZ");
+        int regionBottom = cy - spot.integer("offY");
+        // The column through the cell: the deck block under it, nothing below it down to the region's
+        // bottom, and a roof above - read whole, then judged.
+        String under = "";
+        boolean clearBelow = true;
+        for (int y = cy - 2; y >= regionBottom; y--) {
+            String id = Reply.of(read("stellurgytest block at 0 " + cx + " " + y + " " + cz).raw()).textOr("block", "?");
+            under += y + "=" + id + " ";
+            clearBelow &= "minecraft:air".equals(id);
+        }
+        String deckBlock = Reply.of(read("stellurgytest block at 0 " + cx + " " + (cy - 1) + " " + cz).raw())
+                .textOr("block", "?");
+        String above = "";
+        boolean roofed = false;
+        for (int k = 1; k <= ROOF_SEARCH_LAYERS; k++) {
+            String id = Reply.of(read("stellurgytest block at 0 " + cx + " " + (cy + k) + " " + cz).raw()).textOr("block", "?");
+            above += (cy + k) + "=" + id + " ";
+            roofed |= !"minecraft:air".equals(id);
+        }
+        requireArranged("the cell must stand on a deck block, over nothing down to the craft's bottom (layer "
+                + regionBottom + "), under a roof: deck " + deckBlock + "; below " + under + "; above " + above,
+                !"minecraft:air".equals(deckBlock) && clearBelow && roofed && regionBottom < cy - 1);
+
+        double dx = cx + 0.5 - craft.seat.seatX;
+        double dz = cz + 0.5 - craft.seat.seatZ;
+        double[] at = toWorld(craft, dx, 0.1, dz);
+        Reply spawned = Reply.of(arrange("stellurgytest vs drop-living 0 minecraft:chicken " + at[0] + " " + at[1]
+                + " " + at[2] + " ai").raw());
+        requireArranged("the chicken must have been spawned: " + spawned, spawned.boolOr("found", false));
+        int chickenId = spawned.integer("entityId");
+        GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
+        requireTicked(craft, chickenId);
+        Reply before = Reply.of(read("stellurgytest vs player-ship-data 0 " + chickenId + " " + craft.shipId).raw());
+        requireArranged("the deck must hold the chicken standing on it before the hole opens: " + before,
+                craft.shipId.equals(before.textOr("deckHeldBy", null)));
+
+        long mark = boardingLog.markInstrumented();
+        arrange("setblock " + cx + " " + (cy - 1) + " " + cz + " minecraft:air");
+        String released = boardingLog.awaitField(mark, "deck_released", "e", chickenId,
+                "the chicken falls out through the hole, so the deck must let it go at some point",
+                HOLE_RELEASE_LINK_TICKS);
+        String release = Events.recordsWhere(released, "e", String.valueOf(chickenId)).get(0);
+        requireArranged("the craft must still stand upright (deck-up world Y " + deckUpY(craft) + ")",
+                deckUpY(craft) > 1.0 - DECK_UP_Y_TOLERANCE);
+        double deckTopWorld = toWorld(craft, dx, 0.0, dz)[1];
+        double letGoAt = Events.number(release, "y") - deckTopWorld;
+        double bottomAt = regionBottom - craft.seat.seatY;
+        System.out.println("[deck-living] hole letGoAt=" + letGoAt + " regionBottom=" + bottomAt + " release=" + release);
+        assertTrue("a body under the craft's roof must not be let go for want of a floor while it is inside the"
+                + " craft (C8 CREW-C12): let go " + letGoAt + " from the deck's top, the craft's bottom at "
+                + bottomAt + ": " + release, letGoAt <= bottomAt + RELEASE_HEIGHT_RESOLUTION);
+    }
+
     @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);",
             why = "a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.")
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);",

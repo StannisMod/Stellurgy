@@ -46,6 +46,12 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
   in S's frame through its own update, and it stays held; the world's medium acts on a held body only
   where S does not ENCLOSE it (ENT-9's boundary). Levitation and no-gravity stay held too — they run in
   S's frame, so the body keeps the deck's orientation and view even on a craft with no gravity.
+  `[T]` As built: the excluded states are riding, elytra and creative flight outside a claim
+  (`DeckBoarding.excludedStateOf`); the world's medium is world water or lava in the body's box at its
+  WORLD position where S does not cover the body — no sky over the middle of its height at its subspace
+  point (`DeckBoarding.worldMediumReaches`, `DeckFrameTick.craftCovers`, the one cover predicate acid rain
+  uses too). A held body it reaches is let go (`worldMedium`), and no deck it reaches takes it. A world
+  ladder is not a medium for a held body: its own update runs in subspace, where the ladder is not.
 
 - **ENT-2 (one resolution per mode) — while HELD, every displacement that carries a direction, own
   movement or foreign push, is resolved by the one collision of the body's MODE, in S's frame.**
@@ -81,8 +87,11 @@ holds, and who may displace one. **The code is a snapshot; this document is the 
 - **ENT-7 (no split) — an entity is moved by exactly one mechanism per tick.** An entity no deck holds
   is the substrate's until it is admitted; nothing is resolved by the deck AND by the substrate in the
   same tick. **A rider is placed by his vehicle alone**: the substrate's carry of a body that touched a
-  hull never moves the rider of a seat bound to a craft. **One gravity source per body** (ruled 2026-10-06): while a deck holds a body, an Area
-  Gravity Controller's field skips it. **The outer hull is the substrate's**: a body
+  hull never moves the rider of a seat bound to a craft. **One gravity resolution per body** (ruled
+  2026-10-06 as "one source", widened 2026-10-19): every gravity source — the craft's own device, an area
+  gravity block on the craft or in the world — is a FIELD in one resolution; the body feels their
+  coverage-weighted resultant (`C25` HYPER-33), applied by the frame that holds it, and no source writes its
+  motion besides. **The outer hull is the substrate's**: a body
   standing on S's world-facing surface is no deck's; the substrate collides it with S
   (`EntityCollisionInjector`), and it stands on a face within ~40.4° of level and slides off a steeper
   one (`VSMath.STANDING_TOLERANCE = 0.42`, the substrate's own limit).
@@ -111,12 +120,11 @@ the reverse (a raytrace through subspace both ways).
 | clause | what the code does instead | where |
 |---|---|---|
 | ENT-1 | admission by CLASS: `EntityItem` and `EntityLivingBase` only — a minecart, boat, XP orb, TNT or falling block is never held. The field (CREW-C17) is absent: admission is a 0.30 standing probe, an enclosed interior, or a declared craft | `DeckFrameTick.admissible:753-770`, `admissionFor:870-929` `[V]` |
-| ENT-1 (R4) | a MEDIUM releases: a living body in water, lava or on a ladder, levitating or with no gravity; an item in water or lava. Which frame each flag is read in is not measured — `isInWater` is the flag of the body's last update (run in subspace, and the substrate hooks `handleWaterMovement`), `isOnLadder` is asked at the world position | `DeckBoarding.excludedStateOf:43-52`, `DeckFrameTick.admissible:761` `[V]` |
 | ENT-2 | foreign pushes are not replayed: `moveHeld` takes `PLAYER` only, so `PISTON` / `SHULKER` / `SHULKER_BOX` go through the world pipeline; no world collision for a held body (the subspace `move` sees shipyard blocks only) | `DeckFrameTick.moveHeld:367`; vanilla callers `TileEntityPiston:202,297`, `EntityShulker:386`, `TileEntityShulkerBox:191` `[V]` |
 | ENT-6 | unimplemented — see ENT-2; a ship-mounted piston's subspace-facing delta is applied as a world translation | as above `[V]` |
-| ENT-7 | the gravity controller skips no body: its field acts on every entity in its radius, a deck-held body included | `TileAreaGravityController.java:212`, the `getEntitiesWithinAABB` loop `[V]` |
+| ENT-7 | the area gravity block is no field in any resolution: it writes world-axis motion into every entity in its radius, a deck-held body included, and zeroes its fall distance | `TileAreaGravityController.java:212`, the `getEntitiesWithinAABB` loop `[V]` |
 | ENT-8 | a ridden mount is never held: admission refuses `isBeingRidden()` | `DeckFrameTick.admissible:754` `[V]` |
-| ENT-9 | atmosphere both halves `[T]`; acid rain reads both points (`AcidRainHandler#isExposedToAcidRain`, `DeckFrameTick#worldPositionOf`) `[V]` with no e2e; biome, sky light and weather handlers not enumerated | — |
+| ENT-9 | atmosphere both halves `[T]`; acid rain reads both points (`AcidRainHandler#isExposedToAcidRain`, `DeckFrameTick#worldPositionOf`, the cover at the middle of the body's height `DeckFrameTick#craftCovers`) `[V]` with no e2e; biome, sky light and weather handlers not enumerated | — |
 
 Not measured either way: the substrate's `move` HEAD (priority 1) still runs inside the deck frame's
 swap for a held body's own `move`; no reading shows it acting on the result (along ≤ 1.9e-8),
@@ -129,6 +137,7 @@ none shows it inert (ENT-7).
 | ENT-2 (player, ABOARD) | `VSCrewRidesRollingDeckTest` — the server's verdict over every replay of the roll | client |
 | ENT-7 (the outer hull is the substrate's) | `VSCrewCaptureContractTest#aPlayerOnTheOuterHull…` (still, flying, spinning, keeps world semantics), `#aPlayerOnASteepOuterHullFace…` (38°), `#aPlayerFallingFastOntoTheOuterHullLandsOnIt`, `#aPlayerWalkingOnTheOuterHullStaysOnIt`; `VSLivingBodyOnADeckTest#anArmorStandOnTheOuterHull…` (still, flying) | client; server |
 | ENT-3 | `VSItemOnADeckTest`, `VSLivingBodyOnADeckTest` — item, armor stand, cow; rolls, slews, gravity 0 | server |
+| ENT-1 (which states end HELD) | `VSLivingBodyOnADeckTest`: held in the craft's own water (`#anArmorStandInAPoolAboardStaysHeld`), on its ladder (`#anArmorStandOnALadderAboardStaysHeld`, unwitnessed: the old exclusion read the ladder at the world position and never fired), levitating (`#aCowLevitatingOnADeckStaysHeld`), with no gravity (`#anArmorStandWithNoGravityOnADeckStaysHeld`), under the roof where the world has water (`#anArmorStandUnderTheCraftsRoofWhereTheWorldHasWaterStaysHeld`); let go to the world's water on an open deck and not taken back (`#anArmorStandOnAnOpenDeckInTheWorldsWaterIsLetGoToTheWorld`). Not visited: lava, an item, a player, the client | server |
 | ENT-4 | `VSItemOnADeckTest#anItemPlacedElsewhereOnTheDeckStaysWhereItWasPut`; `VSCrewCaptureContractTest#aTeleportAlongTheDeckIsWhereTheDeckHoldsHimFromThen` | server; client |
 | ENT-5 | `VSItemOnADeckTest#aPushMovesAnItemAlongTheDeckAndFrictionStopsIt` (0.7282 against a predicted 0.728) | server |
 | ENT-7 | client and server census `heldBy=deckFrame` in `VSCrewInteriorBoardingTest` (printed, not asserted); a seat's rider never carried by the substrate, on a seat over a deck his box meets, `VSRiderKeepsHisMountAtCruiseTest#aSeatedPilotIsShownOnHisSeatOnEveryTickOfAFlight` (a pilot over open air never arms the carry, so only a deck can redden it) | client |
@@ -155,3 +164,11 @@ Nothing pins ENT-1 beyond the admitted classes, ENT-6, or the gravity-source hal
   look in its frame, which is useful even on a craft without gravity.
 - **2026-10-06**: ENT-2 is per mode with CREW-C17's world collision; the held mount is a known violation
   (ENT-8); one gravity source per body (the controller skips a held body).
+- **2026-10-19**: superseded and widened — the area gravity block is a field source in one gravity
+  resolution, of arbitrary shape (uniform, radial, toward a line or a plane), in its own frame (on a craft or
+  in the world); the resultant is the coverage-weighted vector sum (`C25` HYPER-33 amended); a body is held
+  wherever any field acts, and a world field gives it a frame of its own (C8 CREW-C17 widened). Verbatim:
+  *"Площадной встраивай в общий расчёт гравитации, как источник поля. Причём, на самом деле, нам стоит
+  поддержать эту механику выставления направления, дав блоку возможность выдавать гравитацию произвольной
+  формы. Тогда SDF не только объединяет области, но ещё и считает равнодействующую гравитации в каждой
+  точке, чтобы переход между областями с разной гравитацией был плавным"*.

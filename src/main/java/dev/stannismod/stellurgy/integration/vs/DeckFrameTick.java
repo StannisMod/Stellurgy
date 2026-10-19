@@ -157,6 +157,22 @@ public final class DeckFrameTick {
     }
 
     /**
+     * Whether a craft covers {@code body} standing at {@code (x, y, z)} of its subspace: craft blocks
+     * somewhere over it, so no sky reaches it there. The craft's half of every "does the world reach
+     * this body" question about a body on a deck - rain, the world's water - whose other half, the
+     * world's own fact, is asked at the body's world point.
+     *
+     * <p>Asked at the middle of the body's height, never at its feet: feet on a deck lie on the deck
+     * block's top face, and a mapping into subspace that lands them one ulp under it (127.99999999999999
+     * for 128, measured 2026-10-19) names the DECK BLOCK as their cell - which is in the sky's height map,
+     * so an open deck read as covered. Read that way at admission and the other way at the next keep, a
+     * body in the world's water was taken and let go again every tick.</p>
+     */
+    public static boolean craftCovers(World world, Entity body, double x, double y, double z) {
+        return !world.canSeeSky(new net.minecraft.util.math.BlockPos(x, y + body.height / 2.0, z));
+    }
+
+    /**
      * Where {@code entity} is in its world: its own position, or, while {@link #inDeckFrame}, its
      * deck point mapped through the craft's pose. {@code null} only for a body in the deck frame of
      * a craft that no longer maps - a position that names nowhere, never a stand-in.
@@ -265,6 +281,10 @@ public final class DeckFrameTick {
         }
         if (!isFlying(player) && !DeckBoarding.deckMayKeep(player, shipId, local)) {
             release(player, "noDeckBelow");
+            return false;
+        }
+        if (DeckBoarding.worldMediumReaches(player, shipId, local)) {
+            release(player, "worldMedium");
             return false;
         }
         double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
@@ -555,6 +575,10 @@ public final class DeckFrameTick {
             release(entity, "noDeckBelow");
             return false;
         }
+        if (DeckBoarding.worldMediumReaches(entity, shipId, local)) {
+            release(entity, "worldMedium");
+            return false;
+        }
         // WHAT THE ENTITY IS DOING ON THE DECK: the velocity its last update left it, plus whatever the
         // world has added since, taken into the deck's frame. Never the whole world motion rotated in.
         // Measured 2026-09-29: an armor stand resting on a craft slewing to 150 deg of roll moved 0.41
@@ -751,16 +775,16 @@ public final class DeckFrameTick {
      * not exclude; one that is riding or ridden belongs to its vehicle. A creative flyer is excluded
      * by that predicate unless a deck already holds him or may claim him
      * where he is (standing contact, an enclosed interior), and a held one keeps flying in the deck's
-     * frame (see {@link #isFlying}). An item in water or lava
-     * is left to the world - which states exclude a body that is not living is an open question, and
-     * this is only where the first admission put the line.</p>
+     * frame (see {@link #isFlying}). An item is the deck's in any state: the craft's own water and lava
+     * act on it in the deck's frame, and the world's are {@link DeckBoarding#worldMediumReaches}'s
+     * question, asked per craft.</p>
      */
     private static boolean admissible(Entity entity) {
         if (entity.isDead || entity.isBeingRidden()) {
             return false;
         }
         if (entity instanceof EntityItem) {
-            return !entity.isInWater() && !entity.isInLava();
+            return true;
         }
         // On the server, and on a client only the player it plays. A client moves a mob by
         // interpolating toward the world positions the server sends, so its update run in the deck's
@@ -904,6 +928,10 @@ public final class DeckFrameTick {
             double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
                     entity.motionX, entity.motionY, entity.motionZ);
             if (local == null || motion == null) {
+                continue;
+            }
+            if (DeckBoarding.worldMediumReaches(entity, shipId, local)) {
+                trace(entity, "decline worldMedium ship=" + shipId);
                 continue;
             }
             // A craft DECLARED for him is boarded by the declaration, not by where his feet happen
