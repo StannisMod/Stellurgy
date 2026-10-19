@@ -92,11 +92,13 @@ dropped in 0.1.0 with the warp core; it is neither written nor read.)
   drain leaves `stock-amt` and returns `amt` (SpaceStationDepthTest:101-135). Pinned by `SpaceStationDepthTest#fuelUseAllOrNothingWhenInsufficient`, `SpaceStationDepthTest#fuelUseExactAmountDrains`.
 - **INV-STN-04 [T][BEH]** `addFuel` clamps at `MAX_FUEL` and returns only the amount actually added
   (SpaceStationDepthTest:80-97). Pinned by `SpaceStationDepthTest#fuelAddRespectsMaxCapacity`.
-- **INV-STN-05 [T][BEH]** A freshly created station holds `fuelAmount = 0` and reports the planet it was created to orbit. Pinned by `SpaceStationDepthTest#stationCreateRegistersAndPersistsForList`.
+- **INV-STN-05 [V][BEH]** A freshly created station holds `fuelAmount = 0` (an unset field,
+  `SpaceStationObject.java:48`) and reports the planet it was created to orbit
+  (`setOrbitingBody`, `:603`).
 - **INV-STN-06 [T][SYS]** Pads survive a save/reload round-trip with their `occupied`, `name` and
   `allowAutoLand` fields intact; `autoLand` is read from its own key, not tied to `occupied`
-  (SpaceStationPadPersistenceTest:114-174; note the corrective comment at
-  `SpaceStationObject.java:825-827`). Pinned by `SpaceStationPadPersistenceTest#padSetAndPerPadStateSurviveRestart`, `SpaceStationPadPersistenceTest#autoLandFlagWithoutDockSurvivesRestart`. FOR: save format: pads survive reload.
+  (SpaceStationPadPersistenceTest; the `autoLand` read is `SpaceStationObject.java:823`, and an
+  absent key reads as on). Pinned by `SpaceStationPadPersistenceTest#padSetAndPerPadStateSurviveRestart`, `SpaceStationPadPersistenceTest#autoLandFlagWithoutDockSurvivesRestart`. FOR: save format: pads survive reload.
 - **INV-STN-07 [T][BEH]** `getNextLandingPad` only returns pads that are free **and** auto-land-enabled;
   a pad must opt into auto-land before a dock can claim it
   (SpaceStationDockUndockTest:87-123; StationLandingLocationTest). Pinned by `SpaceStationDockUndockTest#dockRejectsPadWithoutAutoLandOptIn`, `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`.

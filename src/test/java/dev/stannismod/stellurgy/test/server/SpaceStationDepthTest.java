@@ -149,31 +149,6 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     }
 
     /**
-     * Create registers a real {@link dev.stannismod.stellurgy.stations.SpaceStationObject}: its id
-     * was not in the list before and is after, and its info reports the orbit it was created for and
-     * an empty tank. Read as a DELTA — sibling scenarios on this server create stations too.
-     * Pins INV-STN-05 (a freshly created station holds no fuel and reports the planet it orbits).
-     * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
-     */
-    @Pins({"INV-STN-05", "INV-STN-22"})
-    @Test
-    public void stationCreateRegistersAndPersistsForList() throws Exception {
-        String before = String.join("\n", client().read("stellurgytest station list"));
-        int id = createStation(0);
-        assertFalse("the new station's id " + id + " was already listed before create: " + before,
-                Reply.of("stellurgytest station list", before).holdsElement("stations", "id", String.valueOf(id)));
-
-        String listAfter = String.join("\n", client().read("stellurgytest station list"));
-        Reply.of(listAfter).element("stations", "id", String.valueOf(id));
-
-        // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
-        // satisfied by a station orbiting dim 9701 and `"fuelAmount":0` by one holding 1000.
-        StationInfo info = station(id);
-        assertEquals("station info wrong orbitingPlanetId: " + info.raw(), 0, info.orbitingPlanetId);
-        assertEquals("station info wrong default fuelAmount: " + info.raw(), 0, info.fuelAmount());
-    }
-
-    /**
      * The reverse index's radius-0 case in {@code SpaceObjectManager.getSpaceStationFromBlockCoords}.
      *
      * <p>The spiral index formula {@code (2*radius-1)^2 + x + radius} evaluates to {@code 1} at

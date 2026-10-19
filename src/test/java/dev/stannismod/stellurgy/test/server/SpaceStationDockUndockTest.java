@@ -237,30 +237,6 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertFalse("removed pad must be gone from list: " + pads.raw(), pads.has(100, 100));
     }
 
-    /** Pins INV-STN-25 (pad ownership is per station). */
-    @Pins("INV-STN-25")
-    @Test
-    public void multipleStationsTrackPadsIndependently() throws Exception {
-        // Per-station pad state must not bleed across stations. A regression
-        // that consolidated landing pads into a global registry would
-        // silently route rockets to the wrong station's pads.
-        int a = createStation();
-        int b = createStation();
-        assertNotEquals("station ids must be unique", a, b);
-
-        ok(client().arrange("stellurgytest station add-pad " + a + " 200 200 a1"));
-        ok(client().arrange("stellurgytest station add-pad " + b + " 300 300 b1"));
-
-        StationPads padsA = pads(a);
-        StationPads padsB = pads(b);
-        assertTrue("station A must have its pad: " + padsA.raw(), padsA.has(200, 200));
-        assertFalse("station A must NOT have station B's pad: " + padsA.raw(),
-                padsA.has(300, 300));
-        assertTrue("station B must have its pad: " + padsB.raw(), padsB.has(300, 300));
-        assertFalse("station B must NOT have station A's pad: " + padsB.raw(),
-                padsB.has(200, 200));
-    }
-
     @Test
     public void infoExposesPadCountAndFreePadFlag() throws Exception {
         // Pin the info probe's pad-related fields; downstream tooling

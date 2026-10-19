@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationPads;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -187,22 +188,16 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
     }
 
     /**
-     * <em>DOCUMENTS KNOWN PRODUCTION BUG</em> at
-     * {@code SpaceStationObject.java:801}:
-     *
-     * <pre>
-     * tag.setBoolean("autoLand", pos.getAllowedForAutoLand());  // write
-     * ...
-     * loc.setAllowedForAutoLand(
-     *     !tag.hasKey("occupied") || tag.getBoolean("occupied"));  // read
-     * </pre>
-     *
-     * the read now uses the "autoLand" key
-     * that the write side writes. allowAutoLand survives restart even
-     * for pads that weren't docked at save time.
+     * A pad's auto-land flag is read back from its own key, not from whether the pad was docked:
+     * a pad with auto-land on and nothing docked keeps auto-land across a restart. (The reader once
+     * took the flag from {@code occupied}, so an undocked auto-land pad lost it on every reload.)
      * Pins INV-STN-06 (pads survive a save and reload with occupied, name and auto-land intact).
      */
     @Pins("INV-STN-06")
+    @RedWitness(member = "SpaceStationObject#readFromNbt",
+            at = "loc.setAllowedForAutoLand(!tag.hasKey(\"autoLand\") || tag.getBoolean(\"autoLand\"));",
+            replacedBy = "loc.setAllowedForAutoLand(!tag.hasKey(\"occupied\") || tag.getBoolean(\"occupied\"));",
+            fails = "padA allowAutoLand must be true after restart", on = "2026-10-19")
     @Test
     public void autoLandFlagWithoutDockSurvivesRestart() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
@@ -212,8 +207,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
         assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
         long stationId = created.integer(STATION_ID);
 
-        // Add ONE pad and enable auto-land — but DO NOT dock it. occupied
-        // stays false; the read-side bug forces allowAutoLand to false too.
+        // Add ONE pad and enable auto-land — but DO NOT dock it, so occupied stays false.
         ok(firstBoot, "stellurgytest station add-pad " + stationId + " 999 999 lonely");
         ok(firstBoot, "stellurgytest station set-autoland " + stationId + " 999 999 true");
 
@@ -232,10 +226,8 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
 
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         StationPads.Pad lonelyAfter = pads(secondBoot, stationId).at(999, 999);
-        assertTrue("padA allowAutoLand must be true after restart — "
-                        + "SpaceStationObject:801 now reads from the same "
-                        + "\"autoLand\" key the write side writes. pads dump: "
-                        + lonelyAfter.raw(),
+        assertTrue("padA allowAutoLand must be true after restart: it was on and the pad was not"
+                        + " docked when the world saved. pads dump: " + lonelyAfter.raw(),
                 lonelyAfter.allowAutoLand);
     }
 

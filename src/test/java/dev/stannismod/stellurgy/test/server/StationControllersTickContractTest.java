@@ -41,15 +41,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class StationControllersTickContractTest extends AbstractSharedServerTest {
 
-    /**
-     * The gravity a station must walk BELOW after the controller has ticked.
-     *
-     * <p>The TEST'S OWN: the default is 1.0, so this is "measurably below default" — the
-     * player-visible contract that a gravity controller does something — rather than a target the
-     * controller aims at.</p>
-     */
-    private static final double MEASURABLY_BELOW_DEFAULT_GRAVITY = 0.9;
-
     private static final int SPACE_DIM = -2;
 
     private static final String STATION_ID = "id";
@@ -128,39 +119,21 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
     }
 
     /**
-     * Pin: gravity controller's tick walks station gravity toward the
-     * controller's effective target.
+     * Pin: the gravity controller, given a target through its slider, makes the station's actual
+     * gravity walk toward that target.
      *
-     * <p><b>Production bug</b>:
-     * {@link dev.stannismod.stellurgy.tile.station.TileStationGravityController}'s
-     * constructor does NOT call
-     * {@code redstoneControl.setRedstoneState(OFF)} the way its
-     * altitude sibling does. {@link
-     * dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleRedstoneOutputButton}'s
-     * default state is {@code RedstoneState.ON}, so a freshly-placed
-     * gravity controller enters its {@code update()} loop with
-     * {@code redstoneControl.getState() == ON}, which on every tick
-     * overwrites the station's {@code targetGravity} to
-     * {@code world.getStrongPower(pos) * 6 + 10} = {@code 10} (no
-     * redstone wiring around it). Calls to
-     * {@code setProgress(0, value)} from this test (or from the GUI
-     * slider) get immediately reverted by the next tick.</p>
-     *
-     * <p>Test workaround: don't bother fighting the bug — just exercise
-     * the walk-loop using the (broken) default target. With
-     * {@code targetGravity == 10}, {@code targetMultiplier/100 = 0.1};
-     * default station gravity is {@code 1.0}, so the walk pulls
-     * gravity downwards at {@code acc = 0.001} per tick. After 400
-     * ticks the station's gravity must have moved measurably off
-     * 1.0.</p>
-     *
-     * <p>When the production bug is fixed (constructor adds the
-     * {@code setRedstoneState(OFF)} call), this test still passes
-     * because {@code setProgress} writes a fresh {@code targetGravity}
-     * and the walk eats it.</p>
+     * <p>The controller's redstone button is set OFF first, as a player does in its screen: with the
+     * button ON (its default) and no signal, every tick rewrites the target to the minimum, which is
+     * where a fresh station's gravity already stands — so nothing could move, and "gravity is below
+     * one" held with no controller at all. The target is read back from the station after the slider
+     * write, and the start is read before the ticks, so the verdict compares the walk against a
+     * target that differs from where it began.</p>
      * Pins INV-STN-11 (the gravity controller walks the station's gravity toward its target).
      */
     @Pins("INV-STN-11")
+    @RedWitness(member = "TileStationGravityController#update",
+            at = "spaceObject.getProperties().setGravitationalMultiplier((float) finalVel);", replacedBy = "",
+            fails = "station's gravity must move toward the controller's target", on = "2026-10-19")
     @Test
     public void gravityControllerWalksStationGravityTowardTarget() throws Exception {
         arrange("stellurgytest dim load " + SPACE_DIM);
@@ -176,32 +149,28 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         assertTrue("gravity controller must place: " + place,
                 Reply.of(place).bool("placed"));
 
-        // Try setting an explicit target via the controller. This may
-        // get reverted by the redstone-default bug, but it's still a
-        // valid input even if the production loop fights us.
-        act("stellurgytest station controller-set-target "
-                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 50").raw();
+        Reply redstone = arrange("stellurgytest station controller-set-redstone "
+                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " OFF");
+        assertTrue("controller-set-redstone OFF must succeed: " + redstone, redstone.ok());
+        Reply setTarget = act("stellurgytest station controller-set-target "
+                + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 50");
+        assertTrue("controller-set-target must succeed: " + setTarget, setTarget.ok());
 
-        // Force enough ticks to ensure gravity has settled at the
-        // controller's effective target (regardless of which write
-        // path wins — slider or redstone-bug-induced overwrite).
+        StationInfo before = station(stationId);
+        double preGravity = before.gravity();
+        double targetGravity = before.targetGravityPercent() / 100D;
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the slider's target must differ from where the station's gravity starts: "
+                        + before.raw(), Math.abs(targetGravity - preGravity) > 0.01);
+
         act("stellurgytest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
-                + " 2000").raw();
+                + " 200").raw();
 
-        StationInfo postInfo = station(stationId);
-        double postGravity = postInfo.gravity();
-
-        // End-state contract: gravity has moved measurably below the
-        // default-station gravity of 1.0 — proving the controller's
-        // tick loop actually walks the station's gravity. The exact
-        // settled value depends on which write path wins; both
-        // produce a number distinctly below 1.0.
-        assertTrue("station's actual gravity must walk measurably below "
-                        + "default (1.0) after 2000 controller ticks "
-                        + "(the player-visible 'gravity controller does "
-                        + "something' contract); postGravity=" + postGravity
-                        + " postInfo=" + postInfo.raw(),
-                postGravity < MEASURABLY_BELOW_DEFAULT_GRAVITY);
+        StationInfo after = station(stationId);
+        double postGravity = after.gravity();
+        assertTrue("station's gravity must move toward the controller's target; pre=" + preGravity
+                        + " post=" + postGravity + " target=" + targetGravity + " info=" + after.raw(),
+                Math.abs(postGravity - targetGravity) < Math.abs(preGravity - targetGravity));
     }
 
     /**
