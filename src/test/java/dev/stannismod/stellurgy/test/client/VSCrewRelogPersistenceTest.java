@@ -108,8 +108,10 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // name, which the fixture-site counter's own patterns could not see either.
         final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(site);
-        // The mark BEFORE he is put on the deck. A capture is an EPISODE the resolver opens when a
+        // The mark BEFORE he is put on the deck — and buildShip's approach teleport already puts him
+        // over it, where a capture can open and then survive the teleport below without a release,
+        // leaving no edge after a later mark. So the mark precedes buildShip; the capture is the
+        // arrangement for the roll, not its subject. A capture is an EPISODE the resolver opens when a
         // body meets a deck, and the 80-tick sleep this replaces could only ask whether it happened
         // to be open when it finally looked - an episode that opened and closed inside the sleep,
         // or one that never opened at all, are the same reading to it.
@@ -120,6 +122,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // on 2026-09-15, in the tick-burst leg. `awaitCaptureHeldBy` states the whole chain.
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
+        double[] ship = buildShip(site);
         arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
@@ -386,9 +389,10 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // Capture the client player on the OPEN top deck while the ship is upright, then roll the
         // ship to inverted UNDER him - the capture carries his deck spot through the roll, leaving
         // him standing on the deck of an inverted ship (hanging under the hull in world terms).
-        double[] ship = buildShip(site);
+        // The mark precedes buildShip, whose approach teleport can already open the capture.
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
+        double[] ship = buildShip(site);
         arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck while the"
@@ -545,9 +549,10 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(site);
+        // The mark precedes buildShip, whose approach teleport can already open the capture.
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
+        double[] ship = buildShip(site);
         arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck before he"
