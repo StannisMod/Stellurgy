@@ -126,24 +126,16 @@ final class VSBridge {
         // out of the source world and the substrate's registry entry can outlive them, blockless.
         // That remnant IS this ship, so it is dropped here and the assembly re-registers the same
         // identity around the blocks that actually arrived. See {@link #adoptOwnRemnant}.
-        UUID identity = adoptOwnRemnant(world, name, logger);
-        ShipData ship = identity == null
-                ? ValkyrienUtils.createNewShip(world, afcPos)
-                : ValkyrienUtils.createNewShip(world, afcPos, identity);
-        // Set WITHOUT touching the index: this record is not in the collection yet, and the indexing
-        // setter would put it there - registering a ship whose blocks have not been moved in. It is
-        // indexed with everything else when the spawn is drained.
-        //
-        // Written even when `adoptOwnRemnant` refused the identity: the substrate then mints its own
-        // uuid and the two values DIVERGE for this craft, which is a state the durable name must
-        // still describe. It is the one remaining way they can differ, it is logged below, and it is
-        // not reachable from a correct build — a live ship holding this name means the craft's
-        // flight computer was duplicated, which the facade re-mints for before it gets here.
-        ship.setStellurgyDurableIdBeforeRegistration(name);
+        // A refused identity refuses the ASSEMBLY: the alternative is a substrate-minted uuid beside the
+        // name, two ids for one craft, which PORT-13 forbids. Not reached from a correct build — the
+        // facade re-mints the name on the same predicate before it gets here.
+        if (adoptOwnRemnant(world, name, logger) == null) {
+            return null;
+        }
+        ShipData ship = ValkyrienUtils.createNewShip(world, afcPos, name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
         manager.queueShipSpawn(ship, afcPos, tier2BlockSearch(), cause, footprint);
-        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
-                ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
+        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}).", afcPos, ship.getName(), ship.getUuid());
         return ship.getUuid();
     }
 
@@ -165,9 +157,8 @@ final class VSBridge {
      *   <li><b>A ship with BLOCKS, or a loaded physics object with no registry entry</b> — a real,
      *       live ship (or a stranded object), and re-using its identity would put two ships under one
      *       name; the physics mod throws on the second, out of the world tick. Refuse: log loudly,
-     *       naming both sides, and assemble under a fresh identity instead. A crossing that reaches
-     *       this point has ALREADY cut its source, so a throw here would leave the ship as loose
-     *       blocks; losing the identity keeps the craft flying and keeps the fault visible.</li>
+     *       naming both sides; the caller refuses the assembly. A fresh identity is not an option — it
+     *       would give one craft two ids (PORT-13).</li>
      * </ul>
      */
     private static UUID adoptOwnRemnant(World world, UUID wanted, Logger logger) {
@@ -191,8 +182,8 @@ final class VSBridge {
             return wanted;
         }
         logger.error("[SPACE] refusing to keep ship identity {} in dim {}: it is held by a LIVE ship "
-                        + "('{}', {} blocks, {} loaded) - the arriving ship gets a fresh identity and "
-                        + "everything keyed on the old one now names the wrong craft",
+                        + "('{}', {} blocks, {} loaded) - the assembly is refused: a fresh identity would "
+                        + "give one craft two ids",
                 wanted, world.provider.getDimension(),
                 existing == null ? "not registered" : existing.getName(), blocks,
                 loaded == null ? "not" : "IS");
@@ -302,53 +293,12 @@ final class VSBridge {
     }
 
     /**
-     * The physics mod's uuid for the ship carrying our DURABLE id {@code durableId}, or {@code null}
-     * when this world holds no such ship.
-     *
-     * <p>The translation between the two identities this mod pair keeps: ours is minted by a flight
-     * computer and persisted so it survives a re-assembly (the transit, the ledger and every aboard
-     * tag are keyed by it), theirs is the ship record's own uuid. A caller holding ours and needing
-     * theirs had no way across and fell back to "which ship is nearest this point", which is exact
-     * with one craft in the world and silently wrong with two.</p>
-     *
-     * <p>Indexed on their side, so this is a hash probe rather than a walk. See
-     * {@code QueryableShipData#getShipFromStellurgyDurableId}.</p>
+     * {@code shipId} when this world's registry holds the record of that ship, else {@code null}. The
+     * record's uuid IS the craft's durable name (PORT-13), so this is a registry lookup by id and
+     * nothing more.
      */
-    static UUID shipUuidOfDurableId(World world, UUID durableId) {
-        if (world == null || durableId == null) {
-            return null;
-        }
-        ShipData ship = ValkyrienUtils.getQueryableData(world)
-                .getShipFromStellurgyDurableId(durableId).orElse(null);
-        return ship == null ? null : ship.getUuid();
-    }
-
-    /**
-     * The durable id written on the RECORD of the ship {@code vsShipUuid}, read straight off the
-     * field, or {@code null}. The twin of {@link #shipUuidOfDurableId}, which asks the INDEX the same
-     * question from the other side - so a disagreement between the two separates "nothing was ever
-     * bound here" from "something was bound and the lookup cannot find it", which is otherwise one
-     * null covering both.
-     */
-    static UUID durableIdOf(World world, UUID vsShipUuid) {
-        ShipData ship = shipByUuid(world, vsShipUuid);
-        return ship == null ? null : ship.getStellurgyDurableId();
-    }
-
-    /**
-     * Record that the ship {@code vsShipUuid} is the craft our durable id {@code durableId} names, so
-     * later lookups can go straight from one to the other. Idempotent; a {@code null} durable id
-     * clears the binding.
-     *
-     * @return {@code true} when a ship was found and bound
-     */
-    static boolean bindDurableId(World world, UUID vsShipUuid, UUID durableId) {
-        ShipData ship = shipByUuid(world, vsShipUuid);
-        if (ship == null) {
-            return false;
-        }
-        ship.setStellurgyDurableId(durableId);
-        return true;
+    static UUID registeredShipUuid(World world, UUID shipId) {
+        return ValkyrienUtils.getQueryableData(world).getShip(shipId).isPresent() ? shipId : null;
     }
 
     /**
@@ -640,8 +590,6 @@ final class VSBridge {
         for (ShipData data : ValkyrienUtils.getQueryableData(world).getShips()) {
             java.util.Map<String, Object> one = new LinkedHashMap<>();
             one.put("id", data.getUuid().toString());
-            UUID durable = data.getStellurgyDurableId();
-            one.put("durableId", durable == null ? null : durable.toString());
             one.put("blocks", data.getBlockPositions() == null ? -1 : data.getBlockPositions().size());
             one.put("loaded", ValkyrienUtils.getServerShipManager(world)
                     .getPhysObjectFromUUID(data.getUuid()) != null);

@@ -120,7 +120,10 @@ may be loaded and ticking (PORT-16).
   extent is DERIVED from the snapshot every caller has just pasted `[V]`, never passed, so there is no
   second place for the snapshot's own layout to be wrong (an anchor on a deck block would return two ids
   for one ship — maintainer ruling 2026-09-11). A name that must cross a world boundary crosses IN THE
-  BLOCKS, including the restored-transit paste, which therefore mints no fresh identity.
+  BLOCKS, including the restored-transit paste, which therefore mints no fresh identity. A name already
+  held by a LIVE ship refuses the assembly at the bridge (`VSBridge#assembleTier2Ship`) rather than take a
+  substrate-minted uuid. "Is this craft in this world" is one registry lookup by that id,
+  `VSIntegration#registeredShipUuid`; there is no index and no field beside the record's uuid.
 - **PORT-14** `[V][BEH]` **A SHIP IS THE BLOCKS THAT WERE PASTED.** The same footprint PORT-13 scans for the
   flight computer BOUNDS the substrate's block search: `assembleInFootprint` builds it from the
   snapshot's own extent (`VSIntegration.java`), the bridge queues it with the spawn
@@ -213,11 +216,3 @@ may be loaded and ticking (PORT-16).
   `get`-prefixed member), `shipAttitudeAt(World, x,y,z)` and `shipAttitudeForId` are three conventions
   for one concept. Cosmetic; it is not a semantic distinction.
 - **No interface over the bridge surface.** Deliberate, per PORT-11 — one backend exists.
-- **PORT-13's "no translation" is not yet realised in the surface** (2026-10-07). The durable-id
-  translation layer still stands — `durableIdOfShip` / `shipUuidOfDurableId` / `bindDurableShipId`
-  (`VSIntegration`) and the record's separate `stellurgyDurableId` field — and its only reason left is
-  a branch no production caller reaches: `VSBridge.assembleTier2Ship` keeps a path where
-  `adoptOwnRemnant` refuses the name and the substrate mints its own uuid, but its one caller,
-  `VSIntegration.assembleTier2ShipAt`, has already re-minted the name on exactly the predicate that
-  refusal tests (`identityHeldByLiveShip`), in the same call on the same thread. With that branch gone
-  the two values cannot differ, and the layer is a candidate for deletion.

@@ -447,13 +447,6 @@ public class TileAdvancedFlightComputer extends TileEntity
         // Same reasoning for the drive readout: a pilot mid-jump is exactly the pilot whose HUD must
         // keep saying something, and every gate below can decline to run for a ship in hyperspace.
         refreshHudDrive(world.getTotalWorldTime());
-        // BEFORE the physics gate below, and that is the whole point of its position here: this ship's
-        // NAME is a property of its registry record, not of whether anybody is standing near enough
-        // for the physics mod to simulate it. Left after the gate, a craft that is parked, unattended
-        // or merely far from a player could never bind its durable id - and a jump, a login restore
-        // and every aboard tag resolve a ship BY that id, falling back to "whichever craft is nearest"
-        // exactly where the world holds more than one.
-        bindDurableIdToThisShip();
         // The mass this craft is actually carrying, re-measured on a slow round. Content and crew
         // change with no block ever changing - a tank empties, somebody steps aboard - so no block
         // event can catch them and there is nothing to subscribe to; a cadence is the only honest
@@ -1170,22 +1163,13 @@ public class TileAdvancedFlightComputer extends TileEntity
         return shipId;
     }
 
-    /**
-     * Whether this instance has made its one binding attempt. Not persisted on purpose: a tile is
-     * re-created whenever its ship is re-assembled, and that is exactly when the binding has to be
-     * made again, against a possibly NEW ship record.
-     */
-    private boolean durableIdBindAttempted;
-
-    /** Server ticks this computer has actually been given, and naming attempts made inside them.
-     *  Two counters rather than one because "this tile is never ticked" and "it is ticked and the
-     *  naming does not run" are opposite findings that a single zero cannot separate. */
+    /** Server ticks this computer has actually been given — "this tile is never ticked" is a finding of
+     *  its own, and a parked hull's computer is one (it sits in the ticking set and is never ticked). */
     private long serverTicks;
-    private long bindAttempts;
 
     /** @see #serverTicks */
     public String tickCensus() {
-        return serverTicks + "/" + bindAttempts;
+        return String.valueOf(serverTicks);
     }
 
     /**
@@ -1478,42 +1462,6 @@ public class TileAdvancedFlightComputer extends TileEntity
     /** Client side: how full the fullest reaction wheel was when the readout was sent, 0 to 1. */
     public double clientWheelFill() {
         return clientWheelFill;
-    }
-
-    /**
-     * Tell the physics mod which of its ships our durable id names, once per tile lifetime.
-     *
-     * <p>Two identities describe one craft: the id this computer mints and persists, which survives a
-     * re-assembly and is what the transits, the durable ledger and every aboard tag are keyed by, and
-     * the physics mod's own ship uuid, which does not survive one. A caller holding the first and
-     * needing the second had no translation, so it fell back to asking which ship is NEAREST a point —
-     * exact while the world holds one craft, and silently a stranger's craft once it holds two.
-     * Binding here puts the answer on the ship's own record, where it is indexed.</p>
-     *
-     * <p>ONE attempt per tile instance, on its first server tick, and no retry — because there is
-     * nothing to wait for. The attempt is asked of the ship's RECORD, and the record is in place
-     * before this tile can run: a spawn injects the claim's chunks and registers the record in one
-     * synchronous pass on the game thread ({@code WorldServerShipManager.spawnNewShips}), and a load
-     * finds the record in the world's saved data before the ship's chunks arrive. A tile whose block
-     * no record claims on its first tick is a computer standing on the ground, and it stays one for
-     * as long as this instance lives: assembling it into a ship re-creates the tile in the shipyard,
-     * and that new instance makes its own attempt.</p>
-     */
-    private void bindDurableIdToThisShip() {
-        bindAttempts++;
-        if (durableIdBindAttempted) {
-            return;
-        }
-        durableIdBindAttempted = true;
-        String vsShipId = VSIntegration.shipIdOfBlock(world, getPos());
-        if (vsShipId == null) {
-            return; // not aboard a ship: a computer on the ground has no record to bind
-        }
-        try {
-            VSIntegration.bindDurableShipId(world, java.util.UUID.fromString(vsShipId), getOrCreateShipId());
-        } catch (IllegalArgumentException notAUuid) {
-            // a record id that is not a uuid names nothing this binding could be written to
-        }
     }
 
     /** Whether THIS instance has already announced itself; see {@link #announceLiveOnce()}. */

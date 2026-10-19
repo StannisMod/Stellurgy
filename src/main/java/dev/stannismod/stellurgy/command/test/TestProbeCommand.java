@@ -1903,24 +1903,26 @@ public class TestProbeCommand extends CommandBase {
         // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
         // the durable id <durableShipId>, or null.
         //
-        // <p>The one honest bridge between the two identities a tier-2 craft has. A test that BUILT a
-        // ship knows its durable id — the assembler mints it on the pad and returns it — but every
-        // `vs` verb is keyed on the physics id, which the physics mod mints asynchronously and which a
-        // crossing REPLACES. Without this the only way across was `ship-info <dim> <x> <y> <z>`, a
-        // proximity lookup: it answers with a neighbour the moment a world holds two craft, and it
-        // reads identically when it does.
-        //
-        // <p>Resolved through the registry by name (`shipUuidOfDurableId`), never by distance. It
-        // answers `null` rather than a guess — a caller that gets null has an arrangement problem it
-        // can see, instead of a stranger's ship it cannot.
+        // <p>The craft's durable id IS its physics id (C11 PORT-13), so this answers whether this
+        // world's registry holds that craft — the id back when it does, `found:false` and a null id
+        // when it does not. Resolved through the registry by id (`registeredShipUuid`), never by
+        // distance; a caller that gets null has an arrangement problem it can see, instead of a
+        // stranger's ship it cannot. A name that is not a uuid is refused as such.
         if (args.length >= 3 && "ship-uuid".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
+            java.util.UUID named;
+            try {
+                named = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"not a ship id (a uuid): " + escapeJson(args[2]) + "\"}");
+                return;
+            }
             java.util.UUID vsId = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipUuidOfDurableId(world, args[2]);
+                    .registeredShipUuid(world, named);
             send(sender, "{\"ok\":true,\"durableId\":\"" + escapeJson(args[2]) + "\""
                     + ",\"found\":" + (vsId != null)
                     + ",\"id\":" + (vsId == null ? "null" : "\"" + vsId + "\"") + "}");
@@ -3783,8 +3785,7 @@ public class TestProbeCommand extends CommandBase {
     private static int blockCountOf(net.minecraft.world.WorldServer world, String shipId) {
         for (java.util.Map<String, Object> row
                 : dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShips(world)) {
-            if (String.valueOf(shipId).equals(String.valueOf(row.get("id")))
-                    || String.valueOf(shipId).equals(String.valueOf(row.get("durableId")))) {
+            if (String.valueOf(shipId).equals(String.valueOf(row.get("id")))) {
                 Object blocks = row.get("blocks");
                 return blocks instanceof Number ? ((Number) blocks).intValue() : -1;
             }
@@ -7142,7 +7143,7 @@ public class TestProbeCommand extends CommandBase {
             // (past the face that copy is saturated, so it misses the ship by the whole overshoot) and
             // never the ship nearest to it.
             java.util.UUID carryHull = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipUuidOfDurableId(slotWorld, carryShip.toString());
+                    .registeredShipUuid(slotWorld, carryShip);
             double[] live = carryHull == null ? null
                     : dev.stannismod.stellurgy.integration.vs.VSIntegration
                             .shipStateById(slotWorld, carryHull.toString());
@@ -7460,7 +7461,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             java.util.UUID keyHull = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipUuidOfDurableId(keyOrigin, keyShip.toString());
+                    .registeredShipUuid(keyOrigin, keyShip);
             net.minecraft.util.math.BlockPos keyAnchor = keyHull == null ? null
                     : dev.stannismod.stellurgy.integration.vs.VSIntegration
                             .shipBlockOf(keyOrigin, keyHull);
@@ -7570,7 +7571,7 @@ public class TestProbeCommand extends CommandBase {
                 // to. `shipBlockAt` at the ledger pose would answer with whatever hull is nearest, which
                 // at a shared arrival depth is the ship that got there first.
                 java.util.UUID jumpHull = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .shipUuidOfDurableId(originWorld, e.getKey().toString());
+                        .registeredShipUuid(originWorld, e.getKey());
                 net.minecraft.util.math.BlockPos anchor = jumpHull == null ? null
                         : dev.stannismod.stellurgy.integration.vs.VSIntegration
                                 .shipBlockOf(originWorld, jumpHull);
@@ -8407,7 +8408,7 @@ public class TestProbeCommand extends CommandBase {
                 // depth is deterministic, so the ship that settled there first answered for every
                 // ship that settled there since.
                 java.util.UUID hull = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .shipUuidOfDurableId(w, e.getKey().toString());
+                        .registeredShipUuid(w, e.getKey());
                 net.minecraft.util.math.BlockPos block = hull == null ? null
                         : dev.stannismod.stellurgy.integration.vs.VSIntegration.shipBlockOf(w, hull);
                 if (block != null) {
@@ -20246,7 +20247,7 @@ public class TestProbeCommand extends CommandBase {
         double[] craft = null;
         if (tw != null && transitDurableId != null) {
             java.util.UUID craftUuid = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipUuidOfDurableId(tw, transitDurableId.toString());
+                    .registeredShipUuid(tw, transitDurableId);
             craft = dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipPosition(tw, craftUuid);
         }
         String craftPos = craft == null ? "" : (long) craft[0] + "," + (long) craft[1] + "," + (long) craft[2];

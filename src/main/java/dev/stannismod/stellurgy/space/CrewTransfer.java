@@ -305,7 +305,7 @@ public final class CrewTransfer {
         // itself as "position-keyed by nature" while carrying the ship's name in the aboard record
         // it was driven by.
         if (vsShipUuid == null && expectedShipId != null) {
-            vsShipUuid = VSIntegration.shipUuidOfDurableId(dstWorld, expectedShipId.toString());
+            vsShipUuid = VSIntegration.registeredShipUuid(dstWorld, expectedShipId);
         }
         List<TilePilotSeat> seats = seatsOfShipAt(dstWorld, anchor, vsShipUuid);
         boolean allSeated = true;
@@ -562,8 +562,8 @@ public final class CrewTransfer {
                 // the two together separate "the wrong ship landed" from "the right ship landed
                 // under a name this jump does not know".
                 .append(" durableNames=").append(expectedShipId == null ? "n/a"
-                        : String.valueOf(VSIntegration.shipUuidOfDurableId(world,
-                                expectedShipId.toString())))
+                        : String.valueOf(VSIntegration.registeredShipUuid(world,
+                                expectedShipId)))
                 .append(" afcLoaded=").append(afc.computersLoaded)
                 .append(" afcInScope=").append(afc.computersInScope)
                 .append(" afcWrongShip=").append(afc.rejectedByShipId)

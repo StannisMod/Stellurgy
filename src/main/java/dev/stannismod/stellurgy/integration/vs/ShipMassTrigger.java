@@ -77,7 +77,7 @@ public final class ShipMassTrigger {
 
     private static void recompute(ShipLifecycleEvent.ShipNamed event) {
         ShipMassFrame authority =
-                new FlightComputerMassSource(event.world).massFrameOfPhysicsShip(event.shipUuid);
+                new FlightComputerMassSource(event.world).massFrame(event.shipUuid);
         if (authority == null) {
             return;
         }
@@ -114,7 +114,7 @@ public final class ShipMassTrigger {
      */
     public static void backgroundRound(net.minecraft.world.World world, java.util.UUID shipUuid) {
         try {
-            ShipMassFrame authority = new FlightComputerMassSource(world).massFrameOfPhysicsShip(shipUuid);
+            ShipMassFrame authority = new FlightComputerMassSource(world).massFrame(shipUuid);
             if (authority == null) {
                 return;
             }

@@ -75,18 +75,16 @@ name, and **refuses with an ERROR log and `null` when no computer is found** —
 not a craft". Then (`:221-279`): a name already held by a LIVE ship means a duplicated computer, so it is
 **re-minted** (`:235-244`); a missing name refuses (`:267-276`). The bridge in turn refuses a null name
 (`VSBridge.java:86-92`), adopts the craft's own **blockless remnant** (the registry entry a crossing's cut
-leaves behind) and keeps the identity (`:141-167`, branch `:152-158`), but if a LIVE ship holds the name it
-assembles under a **fresh** uuid with a loud ERROR and the two ids diverge (`:160-166`, `:113-114`). The
-durable name is written on the record before registration, without touching the index (`:110`); the spawn
-is queued and drains on the engine's own world tick, so it lands next tick or is dropped, not retried
-(`:112`; `valkyrienskies/.../WorldServerShipManager.java:183-187`, `:399`). `[V]` C11 PORT-13.
+leaves behind) and keeps the identity (`VSBridge#adoptOwnRemnant`), but if a LIVE ship holds the name the
+**assembly is refused** with a loud ERROR — a fresh uuid would give one craft two ids
+(`VSBridge#assembleTier2Ship`). The record is created under the name itself, so its uuid IS the name; the
+spawn is queued and drains on the engine's own world tick, so it lands next tick or is dropped, not retried
+(`valkyrienskies/.../WorldServerShipManager.java:183-187`, `:399`). `[V]` C11 PORT-13.
 
-**MECH-VSI-03 — The durable-id index is a cache; a miss is answered from the flight computer.**
-`shipUuidOfDurableId` probes the engine's reverse index (`VSBridge.java:204`); on a miss it walks the
-world's registered ships, resolves each one's flight computer, reads its `shipId`, and **binds** the index
-from what it finds (`VSIntegration.java:1390-1401`, `:1417-1439`, bind `:1456`). It answers `null` only when
-no craft carries the name, which a caller must read as "could not establish". The canonical copy is the
-computer's NBT; the engine-side field is the reverse index kept beside it. `[V]`
+**MECH-VSI-03 — RETIRED 2026-10-18.** It described a durable-id INDEX beside the record, answered from the
+flight computer on a miss. The record's uuid is the durable name (PORT-13), so there is nothing to index:
+"is this craft in this world" is `VSIntegration#registeredShipUuid`, a registry lookup by id, which answers
+the id back or `null`.
 
 **MECH-VSI-04 — Three ways to name a ship, with different liveness.** (a) By **id** — the engine uuid as a
 string; `physoById` walks LOADED ships (`VSBridge.java:1399`); every `…For` frame operation, the velocity
@@ -298,8 +296,8 @@ probe arms it for one entity id (`ShipLocalMoveControl.java:45-65`, `ServerState
 
 ## State & persistence
 
-Nothing in this package writes NBT of its own. What it touches: the engine's per-ship record
-(`ShipData.stellurgyDurableId` — written at assembly `VSBridge.java:110`, re-bound `:232`); the flight
+Nothing in this package writes NBT of its own. What it touches: the engine's per-ship record (created
+under the craft's name as its uuid at assembly, `VSBridge#assembleTier2Ship`); the flight
 computer's `shipId` (read, minted on a duplicate — `VSIntegration.java:176-182`, `:238`); the snapshot NBT
 a transit re-cuts (`:667-685`, owned by `space/`). The durable "aboard" record the deck hold reads is
 `space/ShipAboardTag` (`DeckHold.java:216`). Per-body capture, pending seeds, `Holds`, `DeckMovementBound`'s
@@ -416,7 +414,7 @@ Server e2e: `VSCrossingLeavesNoShipBehindTest`, `VSShipTransitPersistTest` (rest
 `TurretOnAShipTest`, `TurretStandaloneTest`. Client e2e: `VSCrewCaptureContractTest`,
 `VSCrewRidesRollingDeckTest`, `VSCrewInteriorBoardingTest`, `VSPilotSeatTakenWhileOfflineTest`,
 `VSCrewRelogPersistenceTest`, `VSDeckCaptureAndDismountTest` (several scenarios ignored — see above).
-**No test found** for: `ShipMeetingStop` and `shipsCollide`; `shipUuidOfDurableId` and its rebind; `flightComputerOfNamedShip`; `carryHeldBodies`;
+**No test found** for: `ShipMeetingStop` and `shipsCollide`; `flightComputerOfNamedShip`; `carryHeldBodies`;
 `DeckHold`'s give-up and ship-gone ends.
 
 ## Open questions

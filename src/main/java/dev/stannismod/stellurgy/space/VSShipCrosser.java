@@ -282,7 +282,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // came back "the shipyard holds no blocks": the box belonged to a stranger while the ship
         // that should have jumped sat untouched with its blocks elsewhere.
         double sax = srcAnchor.getX() + 0.5, say = srcAnchor.getY() + 0.5, saz = srcAnchor.getZ() + 0.5;
-        java.util.UUID srcByDurable = VSIntegration.shipUuidOfDurableId(src, shipId);
+        java.util.UUID srcByDurable = VSIntegration.registeredShipUuid(src, toUuid(shipId));
         // Only asked when the durable id could not answer: locating the computer force-loads the
         // ship's far subspace yard, and the resolved case does not need it.
         java.util.UUID srcAfcNames = srcByDurable != null ? null : afcShipIdAt(src, sax, say, saz);
@@ -351,7 +351,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // computer nearest the anchor is then a stranger's — whose deck this would empty into this
         // jump's stash, and whose cargo would be pasted onto our ship at the far end.
         BlockPos hyperAfc = VSIntegration.flightComputerOfNamedShip(hyper,
-                VSIntegration.shipUuidOfDurableId(hyper, shipId), toUuid(shipId),
+                VSIntegration.registeredShipUuid(hyper, toUuid(shipId)), toUuid(shipId),
                 hyperAnchor.getX() + 0.5, hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5);
         if (hyperAfc != null) {
             List<AboardBodies.Stowed> bodies = AboardBodies.capture(hyper, hyperAfc);
@@ -387,7 +387,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // silence covers the answer, its opposite and its absence alike. Each field is stated so the
         // reading is falsifiable: which craft the position picks, which craft the durable id names,
         // and what the computer standing at that anchor calls itself.
-        java.util.UUID meantToCut = VSIntegration.shipUuidOfDurableId(hyper, shipId);
+        java.util.UUID meantToCut = VSIntegration.registeredShipUuid(hyper, toUuid(shipId));
         java.util.UUID aboutToCut = VSIntegration.shipUuidAt(hyper, hyperAnchor.getX() + 0.5,
                 hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5);
         net.minecraft.tileentity.TileEntity hyperAfcTe =
@@ -423,15 +423,8 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // at once, so "the ship at this anchor" is a question with more than one answer by design.
         java.util.UUID arriving = identifyShipToCut("arrival", hyperAnchor, shipId,
                 hyper.provider.getDimension(), meantToCut, aboutToCut, hyperAfcNames);
-        // The same question from the other end: what the craft at the anchor carries on its own
-        // RECORD, read off the field rather than through the index. One null means "nobody ever
-        // named this hull"; a name here with nothing in the index above would mean the naming
-        // happened and the lookup cannot see it. They are different defects and they look identical
-        // from a single reading.
-        java.util.UUID anchorRecordName = VSIntegration.durableIdOfShip(hyper, aboutToCut);
         lastArrivalCut = "jump=" + shipId + " anchor=" + hyperAnchor + " ourLane=" + tile.index
                 + " byPosition=" + aboutToCut + " byDurableId=" + meantToCut
-                + " recordName=" + anchorRecordName
                 // Ticks this computer has been GIVEN, and naming attempts inside them. A parked hull's
                 // computer sits in its world's ticking set and is never ticked (0/0 through a whole
                 // jump), so nothing here may be explained by "its tick will sort it out" - the reason
@@ -519,7 +512,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      */
     private static net.minecraft.nbt.NBTTagCompound snapshotOfNamedShip(WorldServer world,
             String shipId, BlockPos anchor, String what) {
-        UUID named = VSIntegration.shipUuidOfDurableId(world, shipId);
+        UUID named = VSIntegration.registeredShipUuid(world, toUuid(shipId));
         if (named != null) {
             return VSIntegration.snapshotShipOf(world, named);
         }
@@ -579,7 +572,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // BY NAME, like the identify-what-to-cut check a few lines on: a cell can hold a second
         // craft, and capturing against a stranger's computer takes HIS crew and HIS cargo on our jump.
         BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(src,
-                VSIntegration.shipUuidOfDurableId(src, shipId), toUuid(shipId),
+                VSIntegration.registeredShipUuid(src, toUuid(shipId)), toUuid(shipId),
                 srcAnchor.getX() + 0.5, srcAnchor.getY() + 0.5, srcAnchor.getZ() + 0.5);
         if (afcPos == null) {
             // A departure that carries NOTHING — no crew, no loose body — because it could not find

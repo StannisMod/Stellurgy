@@ -132,12 +132,10 @@ public class ShipLifecycleEvent extends Event {
     public final UUID shipUuid;
 
     /**
-     * Stellurgy's DURABLE id for this craft, or {@code null} for a craft Stellurgy does not own (and
-     * for a genuinely new build that has not yet been given one by its flight computer).
-     *
-     * <p>Unlike {@link #shipUuid} this one survives a re-assembly, so it is what names the same vessel
-     * across a crossing, a restart and a re-registration. A consumer holding state that must follow
-     * the VESSEL rather than the registration keys on this.</p>
+     * Stellurgy's DURABLE id for this craft — the same value as {@link #shipUuid}. A craft's physics
+     * identity IS its durable name, kept across every re-assembly (a crossing, a restart, a
+     * re-registration), so the two fields cannot differ; both stay because this is public API and
+     * dependents read either. A consumer holding state that must follow the VESSEL keys on this one.
      */
     @Nullable
     public final UUID durableId;

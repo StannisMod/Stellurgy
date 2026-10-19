@@ -45,44 +45,15 @@ public final class FlightComputerMassSource implements ShipMassSource {
         if (shipId == null || world == null || world.isRemote) {
             return null;
         }
-        UUID physicsId = VSIntegration.shipUuidOfDurableId(world, shipId.toString());
-        if (physicsId == null || flightComputerOf(physicsId) == null) {
+        if (VSIntegration.registeredShipUuid(world, shipId) == null || flightComputerOf(shipId) == null) {
             return null;
         }
-        return ShipHullMass.frameOf(world, physicsId);
-    }
-
-    /**
-     * {@link #massFrame} for a caller that holds the physics engine's id for the craft rather than its
-     * durable one — the ship manager's events and the flight computer's own rounds.
-     *
-     * <p>The durable id is read from the physics record first, and from the flight computer where the
-     * record carries none. The record is a reverse index; the computer's own NBT is the copy that rides
-     * every relocation, so an unbound record is a missing index entry, not a craft without a name.</p>
-     */
-    @Nullable
-    public ShipMassFrame massFrameOfPhysicsShip(UUID physicsId) {
-        if (physicsId == null || world == null || world.isRemote) {
-            return null;
-        }
-        UUID durable = VSIntegration.durableIdOfShip(world, physicsId);
-        if (durable == null) {
-            TileEntity te = tileAt(flightComputerOf(physicsId));
-            durable = te instanceof TileAdvancedFlightComputer
-                    ? ((TileAdvancedFlightComputer) te).shipIdOrNull()
-                    : null;
-        }
-        return durable == null ? null : massFrame(durable);
+        return ShipHullMass.frameOf(world, shipId);
     }
 
     /** The subspace position of the loaded ship's flight computer, or {@code null}. */
     @Nullable
     private BlockPos flightComputerOf(UUID physicsId) {
         return VSBridge.flightComputerOfLoadedShip(world, physicsId);
-    }
-
-    @Nullable
-    private TileEntity tileAt(@Nullable BlockPos pos) {
-        return pos == null ? null : world.getTileEntity(pos);
     }
 }

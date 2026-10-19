@@ -105,24 +105,6 @@ public class ShipData {
      * that starts again at zero after a copy or a load is correctly read as "rebuild".
      */
     private transient volatile int constructionRevision;
-    /**
-     * Stellurgy's DURABLE ship id for this craft, or {@code null} for a craft Stellurgy does not
-     * own.
-     *
-     * <p>Stellurgy carries a second identity for a tier-2 ship: an id minted and persisted by its flight
-     * computer, chosen because it survives a re-assembly and therefore names the same vessel across
-     * a crossing, a restart and a re-registration under a fresh {@link #uuid}. Its transit records,
-     * its durable ledger and its aboard tags are all keyed by it, while everything in this mod is
-     * keyed by {@code uuid} — two spaces with no crossing, so a caller holding one of them had to
-     * fall back to asking WHICH SHIP IS NEAREST a point, which is exact until a cell holds a second
-     * craft (or a blockless remnant of one) and silently wrong afterwards.</p>
-     *
-     * <p>Kept HERE, beside the uuid and indexed with it, so that translation is one hash probe rather
-     * than a walk over every registered ship asking each for its computer. Set through
-     * {@link #setStellurgyDurableId} so the index is updated with the field.</p>
-     */
-    @Nullable
-    private UUID stellurgyDurableId;
 
     // endregion
     private ShipData( ConcurrentUpdatableIndexedCollection<ShipData> owner, ShipPhysicsData physicsData, @Nonnull ShipInertiaData inertiaData,  ShipTransform shipTransform,  ShipTransform prevTickShipTransform,  AxisAlignedBB shipBB, boolean physicsEnabled,  VSChunkClaim chunkClaim,  UUID uuid,  String name) {
@@ -172,40 +154,12 @@ public class ShipData {
         return this;
     }
 
-    /**
-     * Bind (or clear) Stellurgy's durable id for this craft — see {@link #stellurgyDurableId}.
-     *
-     * <p>Goes through the index the same way {@link #setName} does: a field written behind the
-     * collection's back leaves the index answering with the OLD value, which for an identity lookup
-     * means confidently naming the wrong ship.</p>
-     */
-    public ShipData setStellurgyDurableId(@Nullable UUID stellurgyDurableId) {
-        this.stellurgyDurableId = stellurgyDurableId;
-        owner.updateObjectIndices(this, AR_DURABLE_ID);
-        return this;
-    }
 
-    /**
-     * The same binding for a record that is NOT IN THE COLLECTION YET — a ship built or re-assembled
-     * but not yet spawned. The index is not touched, because there is nothing to update: the record
-     * is indexed on every attribute when it is added, so the name set here is carried in with it.
-     *
-     * <p>The distinction is not cosmetic. {@link #setStellurgyDurableId}'s index update inserts the object
-     * into the store as a side effect, so using it here would register the ship BEFORE its blocks
-     * exist — briefly answering position and identity lookups for a craft that is not there yet.</p>
-     */
-    public ShipData setStellurgyDurableIdBeforeRegistration(@Nullable UUID stellurgyDurableId) {
-        this.stellurgyDurableId = stellurgyDurableId;
-        return this;
-    }
 
     // endregion
     // region Attributes
     public static final Attribute<ShipData, String> NAME = nullableAttribute(ShipData::getName);
     public static final Attribute<ShipData, UUID> UUID = attribute(ShipData::getUuid);
-    /** {@link #stellurgyDurableId}, nullable because most craft carry none. */
-    public static final Attribute<ShipData, UUID> AR_DURABLE_ID =
-        nullableAttribute(ShipData::getStellurgyDurableId);
     public static final Attribute<ShipData, Long> CHUNKS = new MultiValueAttribute<ShipData, Long>() {
         @Override
         public Set<Long> getValues(ShipData physo, QueryOptions queryOptions) {
@@ -323,11 +277,6 @@ public class ShipData {
         return this.name;
     }
 
-    /** Stellurgy's durable id for this craft, or {@code null}. See {@link #stellurgyDurableId}. */
-    @Nullable
-    public UUID getStellurgyDurableId() {
-        return this.stellurgyDurableId;
-    }
 
     @java.lang.SuppressWarnings("all")
     private ShipData() {

@@ -128,7 +128,7 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         // an exact tie decided by registry iteration order, with a blockless remnant of a previous
         // crossing as a live candidate.
         java.util.UUID named = shipId == null
-                ? null : VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+                ? null : VSIntegration.registeredShipUuid(src, shipId);
         if (named == null) {
             LOGGER.error("[SPACE] crossing REFUSED: ship {} is not registered in dim {} under its own"
                             + " durable name. Cutting by position at {},{},{} would hand back"

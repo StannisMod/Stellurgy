@@ -615,14 +615,6 @@ public final class VSIntegration {
         // still both be about the wrong ship — that is what the identity-keyed form removes).
         java.util.UUID srcShipId = srcShipUuid != null
                 ? srcShipUuid : VSBridge.queryableShipUuidAt(srcWorld, sx, sy, sz);
-        // The ship's DURABLE name, read off the source record while it still exists, so it can be put
-        // on the record that replaces it. Nothing else carries it across: the re-assembly below mints
-        // a record whose name is empty, and the only other writer is the craft's own flight computer
-        // on a tick - which a hull that arrives with nobody near it does not get. The name is then
-        // gone for good, and every lookup keyed by it silently degrades to "whichever craft is
-        // nearest" in a world that may hold several. Null propagates as null: a craft that was never
-        // named crosses exactly as it did before.
-        java.util.UUID srcDurableName = VSBridge.durableIdOf(srcWorld, srcShipId);
         // DECLARE the departure before cutting. The cut is what makes this world's registry drop the
         // craft, and that drop is indistinguishable from a destruction to anything merely watching -
         // so the classification is made HERE, by the code that knows where the ship is going, and the
@@ -697,10 +689,9 @@ public final class VSIntegration {
             // Re-assemble under the identity the ship crossed with. Same world as the source on a
             // same-world reposition, where this ship's own blockless remnant is what holds the
             // identity - it is adopted rather than collided with.
-            // The paste footprint. The identity is no longer carried across by hand: the craft's
-            // flight computer crossed WITH its blocks and still holds the name, so the assembly
-            // reads it there — which is the same value `srcDurableName` used to carry, from the
-            // same tile, with no call site able to forget it. A paste, not a build: the naming
+            // The paste footprint. The identity is not carried across by hand: the craft's flight
+            // computer crossed WITH its blocks and still holds the name, so the assembly reads it
+            // there, with no call site able to forget it. A paste, not a build: the naming
             // announcement says so, so a consumer reattaches instead of minting a second record.
             shipUuid = pasteTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         } else {
@@ -1395,7 +1386,7 @@ public final class VSIntegration {
      */
     /**
      * Every ship in {@code world}'s REGISTRY — loaded or not, with blocks or without — each as a flat
-     * map of primitives: {@code id}, {@code durableId}, {@code blocks}, {@code loaded}, {@code dead}.
+     * map of primitives: {@code id}, {@code blocks}, {@code loaded}, {@code dead}.
      *
      * <p>The registry is the half no instrument could see: every other reading in the tree is about
      * LOADED ships, so a blockless craft nothing had loaded was invisible while still answering
@@ -1416,98 +1407,20 @@ public final class VSIntegration {
     }
 
     /**
-     * The physics mod's ship uuid for the craft carrying Stellurgy's DURABLE ship id {@code durableId}, or
-     * {@code null} when {@code world} holds no such craft.
+     * {@code shipId} when {@code world}'s ship registry holds a record of that ship, else {@code null}:
+     * whether the craft a caller NAMES is in this world.
      *
-     * <p>This is the translation between the two identities a tier-2 ship has, and the reason a
-     * caller that KNOWS which ship it means no longer has to ask which one is nearest a point. The
-     * durable id is minted by the ship's flight computer and persisted because it outlives a
-     * re-assembly; everything in the physics mod is keyed by its own uuid. Indexed on that side, so
-     * this costs one probe.</p>
+     * <p>The id is the craft's one identity (C11 PORT-13): the record's uuid IS the durable name its
+     * flight computer carries, so there is nothing to translate and no index to keep beside it. Asked
+     * of the registry, never of a physics object, so it answers for a craft nobody is near.</p>
      *
-     * <p><b>The index is a CACHE, and a miss is answered from the source of truth.</b> The durable id
-     * lives in the flight computer's own NBT — that is the canonical copy, it rides every relocation
-     * and every crossing verbatim, and the record on the physics side is a reverse index kept beside
-     * it so this question costs one probe instead of a shipyard scan. Two copies of one fact can
-     * disagree, and one did: the assembler minted the id and never bound it, so every craft that had
-     * not yet crossed was unfindable by its own name. So a miss here does NOT answer {@code null} —
-     * it walks this world's ships, reads each one's computer, and REPAIRS the index from what it
-     * finds. A call site that forgets to bind therefore costs one scan, not a wrong answer.</p>
-     *
-     * <p>Answers {@code null} only when no craft in {@code world} carries that name — which is every
-     * craft Stellurgy does not own. A caller must treat that as "could not establish", never as "not this
-     * ship".</p>
+     * <p>{@code null} means "not registered in this world" — a craft in another world, one already
+     * gone, or a name no craft ever carried. A caller holding the name as text parses it at its own
+     * edge; a string that is not a uuid names no ship and is that caller's arrangement, not this
+     * query's to absorb.</p>
      */
-    public static java.util.UUID shipUuidOfDurableId(World world, String durableId) {
-        if (world == null || durableId == null) {
-            return null;
-        }
-        try {
-            java.util.UUID wanted = java.util.UUID.fromString(durableId);
-            java.util.UUID indexed = VSBridge.shipUuidOfDurableId(world, wanted);
-            return indexed != null ? indexed : rebindFromFlightComputers(world, wanted);
-        } catch (IllegalArgumentException notAnIdentity) {
-            return null; // a synthetic id names no ship; the caller falls back as before
-        }
-    }
-
-    /**
-     * The durable id carried on the RECORD of the craft {@code vsShipUuid}, or {@code null}. The same
-     * question {@link #shipUuidOfDurableId} answers from the other end, and reading both separates a
-     * craft that was never bound from a binding the lookup cannot find.
-     */
-    /**
-     * The index repair: find the ship in {@code world} whose FLIGHT COMPUTER carries {@code wanted},
-     * bind it, and answer. {@code null} when no craft here does.
-     *
-     * <p>Deliberately the expensive path, and deliberately only on a miss. It resolves each candidate's
-     * computer, which force-loads that ship's subspace shipyard — affordable because a slot world holds
-     * a craft or two and hyperspace a handful of lanes, and because it happens once: the binding it
-     * writes is what every later question reads.</p>
-     */
-    private static java.util.UUID rebindFromFlightComputers(World world, java.util.UUID wanted) {
-        if (!(world instanceof net.minecraft.world.WorldServer)) {
-            return null;
-        }
-        net.minecraft.world.WorldServer server = (net.minecraft.world.WorldServer) world;
-        for (java.util.UUID candidate : registeredShipPoses(world).keySet()) {
-            BlockPos afc = flightComputerOf(server, candidate);
-            net.minecraft.tileentity.TileEntity te = afc == null ? null : server.getTileEntity(afc);
-            if (!(te instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)) {
-                continue;
-            }
-            java.util.UUID named = ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) te)
-                    .shipIdOrNull();
-            if (wanted.equals(named)) {
-                LOGGER.info("[VS] ship {} in dim {} carries durable id {} on its flight computer but "
-                                + "was not indexed under it; binding it now", candidate,
-                        server.provider.getDimension(), wanted);
-                VSBridge.bindDurableId(world, candidate, wanted);
-                return candidate;
-            }
-        }
-        return null;
-    }
-
-    public static java.util.UUID durableIdOfShip(World world, java.util.UUID vsShipUuid) {
-        return (world == null || vsShipUuid == null)
-                ? null : VSBridge.durableIdOf(world, vsShipUuid);
-    }
-
-    /**
-     * Bind Stellurgy's durable ship id {@code durableId} to the craft {@code vsShipUuid}, so
-     * {@link #shipUuidOfDurableId} can translate between them.
-     *
-     * <p>Called wherever a tier-2 craft becomes (or becomes again) the ship a durable id names: at
-     * assembly, and after a crossing re-assembles it at the far end. Cheap and idempotent, so binding
-     * again on a ship that already carries it costs nothing.</p>
-     *
-     * @return {@code true} when the ship was found and bound
-     */
-    public static boolean bindDurableShipId(World world, java.util.UUID vsShipUuid,
-                                            java.util.UUID durableId) {
-        return world != null && vsShipUuid != null
-                && VSBridge.bindDurableId(world, vsShipUuid, durableId);
+    public static java.util.UUID registeredShipUuid(World world, java.util.UUID shipId) {
+        return (world == null || shipId == null) ? null : VSBridge.registeredShipUuid(world, shipId);
     }
 
     /**

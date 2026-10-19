@@ -291,7 +291,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 ship.markUsableAnnounced();
                 ShipData data = ship.getShipData();
                 pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(world, data.getUuid(),
-                        data.getStellurgyDurableId()));
+                        data.getUuid()));
             }
         }
         publishLifecycleEvents();
@@ -602,7 +602,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             return;
         }
         pendingLifecycle.add(new ShipLifecycleEvent.ShipNamed(world, ship.getUuid(),
-                ship.getStellurgyDurableId(), cause));
+                ship.getUuid(), cause));
     }
 
     /**
@@ -614,7 +614,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             return;
         }
         pendingLifecycle.add(new ShipLifecycleEvent.ShipReleased(world, ship.getUuid(),
-                ship.getStellurgyDurableId()));
+                ship.getUuid()));
     }
 
     /** Record that the ship object of a still-registered craft was dropped. */
@@ -623,7 +623,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             return;
         }
         pendingLifecycle.add(new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
-                ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.UNLOADED));
+                ship.getUuid(), ShipLifecycleEvent.Cause.UNLOADED));
     }
 
     /**
@@ -641,9 +641,9 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         Integer destination = departing.remove(ship.getUuid());
         pendingLifecycle.add(destination != null
                 ? new ShipLifecycleEvent.ShipDeparted(world, ship.getUuid(),
-                        ship.getStellurgyDurableId(), destination)
+                        ship.getUuid(), destination)
                 : new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
-                        ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.DESTROYED));
+                        ship.getUuid(), ShipLifecycleEvent.Cause.DESTROYED));
     }
 
     /**

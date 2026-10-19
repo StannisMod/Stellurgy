@@ -35,7 +35,7 @@ public abstract class MixinQueryableShipDataEvents {
             return;
         }
         TestTrace.recordHere("ship_spawned", "\"vsShip\":\"" + ship.getUuid() + "\",\"name\":\""
-                + TestTrace.json(ship.getName()) + "\",\"stellurgyShip\":\"" + ship.getStellurgyDurableId() + "\"");
+                + TestTrace.json(ship.getName()) + "\",\"stellurgyShip\":\"" + ship.getUuid() + "\"");
     }
 
     @Inject(method = "removeShip(Ljava/util/UUID;)V", at = @At("HEAD"), remap = false)

@@ -102,7 +102,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                     slotDim, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
             return null;
         }
-        java.util.UUID named = VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+        java.util.UUID named = VSIntegration.registeredShipUuid(src, shipId);
         AxisAlignedBB yard = named == null ? null : VSIntegration.shipyardBoundsOf(src, named);
         if (yard == null) {
             LOGGER.error("[SPACE] descent REFUSED: ship {} is not registered in dim {} under its own "
