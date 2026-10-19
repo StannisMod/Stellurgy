@@ -198,6 +198,8 @@ public class VSWorldPhysicsLoop implements Runnable {
         }
         for (PhysicsObject wrapper : shipsWithPhysics) {
             try {
+                // The contacts the tasks above gathered, answered together for this ship.
+                wrapper.getPhysicsCalculations().getWorldCollision().resolveContacts();
                 wrapper.getPhysicsCalculations().rawPhysTickPostCol();
             } catch (Exception e) {
                 e.printStackTrace();

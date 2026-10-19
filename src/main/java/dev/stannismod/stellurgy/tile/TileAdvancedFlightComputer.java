@@ -86,11 +86,11 @@ public class TileAdvancedFlightComputer extends TileEntity
     private volatile boolean autoTakeoffEngaged = false;
 
     /**
-     * Whether this ship holds station (hover + attitude) while unmanned. Set true the first time a pilot
-     * flies it, and PERSISTED: the live {@link #attitudeReference} does not survive a world save/load, so
-     * without a saved flag a hovering ship dropped out of the sky the instant its world was reloaded and
-     * then tumbled inverted (live playtest 2026-07-11). Never auto-cleared - there is no engine-shutdown
-     * yet, and a parked ship holding position (in the air, or resting on the ground) is the intent.
+     * Whether this ship holds station (hover + attitude) while unmanned. Set true while a pilot flies it,
+     * and PERSISTED: the live {@link #attitudeReference} does not survive a world save/load, so without a
+     * saved flag a hovering ship dropped out of the sky the instant its world was reloaded and then
+     * tumbled inverted (live playtest 2026-07-11). Cleared on touchdown ({@link #touchedDown}): a craft
+     * resting on the ground is parked, and a parked craft holds nothing.
      */
     private boolean stationKeeping = false;
 
@@ -251,8 +251,9 @@ public class TileAdvancedFlightComputer extends TileEntity
      * <p>Two things it must do besides assigning, or it would be a setter that changes nothing:</p>
      * <ul>
      *   <li><b>Mark the ship as having been flown.</b> {@link #stationKeeping} is the persisted witness
-     *       the unmanned branch of {@link #update()} gates on — a never-flown ship stays deliberately
-     *       inert — so a cruise commanded without it would be silently ignored.</li>
+     *       the unmanned branch of {@link #update()} gates on — a never-flown ship is released, not held —
+     *       so a cruise commanded without it would be silently ignored. A touchdown seen before the command
+     *       is dropped with it.</li>
      *   <li><b>Cancel a pending Assist re-capture.</b> {@link #captureSetpointOnNextTick} would
      *       otherwise overwrite this on the very next tick from the ship's live velocity.</li>
      * </ul>
@@ -274,6 +275,9 @@ public class TileAdvancedFlightComputer extends TileEntity
         this.velocitySetpoint = new double[]{forward, right, up};
         this.captureSetpointOnNextTick = false;
         this.stationKeeping = true;
+        // A touchdown seen before this command is older than it: the command re-arms the hold, and only a
+        // touchdown the physics sees after it may disarm it again.
+        this.touchedDown = false;
         markDirty();
     }
 
@@ -702,6 +706,16 @@ public class TileAdvancedFlightComputer extends TileEntity
                 stellurgyLastPilotPresent = present;
             }
         }
+        // Touchdown disarms the hold: the controller saw the craft resting on the world under an idle
+        // command, so it is parked, not hovering. Left armed, a parked craft whose ground gave way would
+        // catch itself in mid-air and hang there burning propellant. A seated pilot re-arms it below.
+        if (touchedDown) {
+            touchedDown = false;
+            if (stationKeeping) {
+                stationKeeping = false;
+                markDirty();
+            }
+        }
         if (in == null) {
             // Nobody is flying. The craft keeps EXECUTING its retained Flight-Assist setting: with FA on and a
             // non-zero cruise setpoint it KEEPS CRUISING at that setpoint (that is what makes it an
@@ -723,7 +737,10 @@ public class TileAdvancedFlightComputer extends TileEntity
             // left it with. WITHOUT it, it is released and falls. Flight Assist IS the mode switch -
             // the pilot's own on/off choice, persisted, and the same one that decides whether he gets
             // cruise control while flying.
-            if (!flightAssistEnabled) {
+            // A craft nobody has flown holds nothing either: the hold is armed by a pilot's first command
+            // (stationKeeping), so a ship built and left alone is a body under gravity, not a hover that
+            // burns its tanks waiting for a pilot.
+            if (!flightAssistEnabled || !stationKeeping) {
                 // Released. Not "commanded to zero": commanding zero velocity is a hover, and a hover
                 // is assistance. The earlier revision did exactly that, on the reasoning that a
                 // coasting craft falls - which is the intended behaviour, read as a defect.
@@ -1855,6 +1872,31 @@ public class TileAdvancedFlightComputer extends TileEntity
 
     private int stellurgyFlightControllerPriority;
 
+    /**
+     * Set on the PHYSICS thread when the controller finds the craft resting on the world under an idle
+     * command; taken on the game thread by {@link #update()}, which disarms the hold. Not persisted: the
+     * hold it clears is.
+     */
+    private volatile boolean touchedDown = false;
+
+    /**
+     * Neither a velocity nor a turn is asked for — the hold's zero setpoint, or no linear command under an
+     * attitude hold. Exactly zero: an idle hold publishes literal zeros, and any input at all is a command.
+     */
+    private static boolean isIdle(double[] vCmd, double[] wCmd) {
+        return isZero(vCmd) && isZero(wCmd);
+    }
+
+    private static boolean isZero(double[] c) {
+        return c == null || c.length < 3 || (c[0] == 0.0 && c[1] == 0.0 && c[2] == 0.0);
+    }
+
+    private boolean isResting(Vector3dc v, double dt) {
+        Vector3dc g = dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(world);
+        double bound = 2.0 * g.length() * dt;
+        return v.lengthSquared() <= bound * bound;
+    }
+
     @Override
     public void onPhysicsTick(PhysicsObject physo, PhysicsCalculations calc, double dt) {
         if (dt <= 0.0) {
@@ -1872,12 +1914,25 @@ public class TileAdvancedFlightComputer extends TileEntity
         if (flying == null) {
             flying = flightCommand;
         }
+        // Taken every step, so a count never carries over from a step this controller skipped.
+        int contacts = calc.getWorldCollision().takeSupportingContacts();
         if (flying == null || flying.asksNothing()) {
             return;
         }
         double[] vCmd = flying.velocity();
         double[] wCmd = flying.angularVelocity();
         double[] attCmd = flying.attitude();
+        // A craft resting on the world under an idle command is held up by the blocks, not by its
+        // engines: commanding a hover there spends propellant to push against the ground. "Resting" is
+        // a floor that carried it in the last step and a speed no greater than two steps of free fall
+        // (a body standing on support carries about none into a step; one that has just landed, one).
+        // Any command that asks for motion lifts it as before.
+        // The flight law's own command only: a bring-up probe's is flown exactly as written.
+        if (flying != probeCommand && contacts > 0 && isIdle(vCmd, wCmd)
+                && isResting(calc.getLinearVelocity(), dt)) {
+            touchedDown = true;
+            return;
+        }
 
         // Linear: deadbeat toward the commanded world velocity, PLUS a gravity feed-forward; force =
         // mass * accel (mass cancels, so the ship accelerates as commanded regardless of how heavy it

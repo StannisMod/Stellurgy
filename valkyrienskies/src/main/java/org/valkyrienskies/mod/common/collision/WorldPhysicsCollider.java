@@ -66,6 +66,21 @@ public class WorldPhysicsCollider {
     private double ticksSinceCacheUpdate;
     private boolean updateCollisionTasksCache;
     private BlockPos centerPotentialHit;
+    // The closing speed below which this step's contacts take no restitution; set once per step from
+    // this world's gravity and the step length, before any contact is resolved.
+    private double restitutionThreshold = ContactSolve.ENGINE_SLOP;
+    // This step's contacts, gathered by the collision tasks and answered together by resolveContacts().
+    private final List<ContactSolve.Contact> stepContacts = new ArrayList<>();
+    // The previous step's contacts by key, each with the push it ended that step with: where the same
+    // contact appears again, the solve starts from it.
+    private final java.util.Map<ContactSolve.Key, ContactSolve.Contact> previousContacts = new java.util.HashMap<>();
+    // This step's gravity, set with the threshold above.
+    private final Vector3d gravity = new Vector3d();
+    // Contacts that carried the hull against gravity since the last takeSupportingContacts(): counted
+    // after each solve, taken by the ship's controller once per physics step, so a craft can tell it is
+    // resting ON the world and not merely touching it.
+    private final java.util.concurrent.atomic.AtomicInteger contactsSinceTaken =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     public WorldPhysicsCollider(PhysicsCalculations calculations) {
         this.calculator = calculations;
@@ -80,6 +95,15 @@ public class WorldPhysicsCollider {
     }
 
     public void tickUpdatingTheCollisionCache() {
+        // Once per step, before this step's contacts: the gravity the solver has just applied, through
+        // the same function it asked.
+        if (VSConfig.doGravity) {
+            gravity.set(dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(parent.getWorld()));
+        } else {
+            gravity.zero();
+        }
+        restitutionThreshold = ContactSolve.restitutionThreshold(gravity.length(),
+                calculator.getPhysicsTimeDeltaPerPhysTick());
         // Multiply by 20 to convert seconds (physTickSpeed) into ticks
         ticksSinceCacheUpdate += calculator.getPhysicsTimeDeltaPerPhysTick();
         for (int i = 0; i < cachedHitsToRemove.size(); i++) {
@@ -260,7 +284,8 @@ public class WorldPhysicsCollider {
                         response = axis.mul(zDownOffset, temp3);
                     }
                 }
-                handleCollision(shipBlockInGlobal, axis, response, 1);
+                handleCollision(shipBlockInGlobal, axis, response,
+                        new ContactSolve.Key(inWorldPos.toLong(), inLocalPos.toLong(), i));
             }
         }
 
@@ -289,141 +314,57 @@ public class WorldPhysicsCollider {
         return octree.get(posX & 15, posY & 15, posZ & 15);
     }
 
-    private void handleCollision(final Vector3dc collisionPos, final Vector3dc axis, final Vector3dc offsetVector, final double impulseApplied) {
+    // Records the contact for this step's solve (resolveContacts) instead of answering it at once: the
+    // contact's geometry is fixed for the step, its impulse is not.
+    private void handleCollision(final Vector3dc collisionPos, final Vector3dc axis, final Vector3dc offsetVector,
+                                 final ContactSolve.Key key) {
         Vector3d inBody = new Vector3d(
                 collisionPos.x() - parent.getShipTransform().getPosX(),
                 collisionPos.y() - parent.getShipTransform().getPosY(),
                 collisionPos.z() - parent.getShipTransform().getPosZ());
-        Vector3d momentumAtPoint = calculator
-                .getVelocityAtPoint(inBody);
-        calculateCollisionImpulseForce(inBody, momentumAtPoint, axis, offsetVector, false,
-                false, impulseApplied);
+        ContactSolve.Contact contact = new ContactSolve.Contact(key, inBody, axis, offsetVector.length());
+        ContactSolve.Contact previous = previousContacts.get(key);
+        if (previous != null) {
+            contact.carryOver(previous);
+        }
+        stepContacts.add(contact);
     }
 
-    // Finally, the end of all this spaghetti code! This step takes all of the math
-    // generated before, and it directly adds the result to Ship velocities
-    private void calculateCollisionImpulseForce(Vector3dc inBody,
-                                                Vector3d velocityAtPointOfCollision,
-                                                Vector3dc axis,
-                                                Vector3dc offsetVector,
-                                                boolean didBlockBreakInShip,
-                                                boolean didBlockBreakInWorld,
-                                                double impulseApplied) {
-        // Our ideal velocity is to negate the velocity at the point, and the collision offset.
-        final double multiplier = 2;
-
-        velocityAtPointOfCollision.add(offsetVector.x() * multiplier, offsetVector.y() * multiplier, offsetVector.z() * multiplier);
-
-
-
-        Vector3d firstCross = inBody.cross(axis, new Vector3d());
-
-        calculator.getPhysInvMOITensor().transform(firstCross);
-
-        Vector3d secondCross = firstCross.cross(inBody);
-
-        double impulseMagnitude = -velocityAtPointOfCollision.dot(axis)
-            / (calculator.getInvMass() + secondCross.dot(axis));
-
-        // Below this speed our collision coefficient of restitution is zero.
-        final double slopR = .5D;
-        double collisionSpeed = Math.abs(velocityAtPointOfCollision.dot(axis));
-        if (collisionSpeed > slopR) {
-            impulseMagnitude *= (1 + COEFFICIENT_OF_RESTITUTION);
-        } else {
-            // TODO: Need to reduce this value by some factor
-            // impulseMagnitude *= .5D;
-        }
-
-        Vector3d collisionImpulseForce = axis.mul(impulseMagnitude, new Vector3d());
-
-        // This is just an optimized way to add this force as quickly as possible.
-        // Added collisionImpulseForce.dot(inBody) > 0 to force all collision to move in
-        // the direction towards the in body vector.
-        if (collisionImpulseForce.dot(offsetVector) < 0 && collisionImpulseForce.dot(inBody) < 0) {
-            // collisionImpulseForce.multiply(1.8D);
-            double collisionVelocity = velocityAtPointOfCollision.dot(axis);
-
-            addFrictionToNormalForce(velocityAtPointOfCollision, collisionImpulseForce, inBody);
-            calculator.getLinearVelocity().add(collisionImpulseForce.mul(calculator.getInvMass(), new Vector3d()));
-            Vector3d thirdCross = inBody.cross(collisionImpulseForce, new Vector3d());
-
-            calculator.getPhysInvMOITensor().transform(thirdCross);
-
-            calculator.getAngularVelocity().add(thirdCross, calculator.getAngularVelocity());
+    /**
+     * Answers every contact this step found, together ({@link ContactSolve}), then forgets them. Called
+     * once per physics step, after every collision task of the step has been processed and before the
+     * step integrates.
+     */
+    public void resolveContacts() {
+        previousContacts.clear();
+        try {
+            if (!stepContacts.isEmpty()) {
+                ContactSolve.solve(stepContacts, calculator.getLinearVelocity(), calculator.getAngularVelocity(),
+                        calculator.getInvMass(), calculator.getPhysInvMOITensor(), restitutionThreshold,
+                        COEFFICIENT_OF_RESTITUTION, KINETIC_FRICTION_COEFFICIENT, CONTACT_SOLVER_PASSES);
+                int supporting = 0;
+                for (int i = 0; i < stepContacts.size(); i++) {
+                    ContactSolve.Contact c = stepContacts.get(i);
+                    previousContacts.put(c.key(), c);
+                    // The world block lies the way gravity pulls, and the contact pushed: a floor that
+                    // carried the hull, never a wall it brushed.
+                    if (c.pushed() > 0.0D && c.axis.dot(gravity) > 0.0D) {
+                        supporting++;
+                    }
+                }
+                contactsSinceTaken.addAndGet(supporting);
+            }
+        } finally {
+            stepContacts.clear();
         }
     }
 
-    // Applies the friction force generated by the collision.
-    // The magnitude of this vector must be adjusted to minimize energy
-    private void addFrictionToNormalForce(Vector3dc momentumAtPoint, Vector3d impulseVector, Vector3dc inBody) {
-        Vector3d contactNormal = new Vector3d(impulseVector);
-        contactNormal.normalize();
-
-        Vector3d frictionVector = new Vector3d(momentumAtPoint);
-        frictionVector.normalize();
-        frictionVector.mul(impulseVector.length() * KINETIC_FRICTION_COEFFICIENT);
-
-        if (frictionVector.dot(momentumAtPoint) > 0) {
-            frictionVector.mul(-1D);
-        }
-
-        // Remove all friction components along the impulse vector
-        double frictionImpulseDot = frictionVector.dot(contactNormal);
-        Vector3d toRemove = contactNormal.mul(frictionImpulseDot, new Vector3d());
-        frictionVector.sub(toRemove);
-
-        double inertiaScalarAlongAxis = parent.getPhysicsCalculations()
-            .getInertiaAlongRotationAxis();
-        // The change in velocity vector
-        Vector3dc initialVelocity = parent.getPhysicsCalculations().getLinearVelocity();
-        // Don't forget to multiply by delta t
-        Vector3d deltaVelocity = new Vector3d(frictionVector);
-        deltaVelocity.mul(parent.getPhysicsCalculations().getInvMass() * parent.getPhysicsCalculations()
-                .getDragForPhysTick());
-
-        double A = initialVelocity.lengthSquared();
-        double B = 2 * initialVelocity.dot(deltaVelocity);
-        double C = deltaVelocity.lengthSquared();
-
-        Vector3d initialAngularVelocity = new Vector3d(parent.getPhysicsCalculations().getAngularVelocity());
-        Vector3d deltaAngularVelocity = inBody.cross(frictionVector, new Vector3d());
-        // This might need to be 1 / inertiaScalarAlongAxis
-        deltaAngularVelocity.mul(parent.getPhysicsCalculations().getDragForPhysTick() / inertiaScalarAlongAxis);
-
-        double D = initialAngularVelocity.lengthSquared();
-        double E = 2 * deltaAngularVelocity.dot(initialAngularVelocity);
-        double F = deltaAngularVelocity.lengthSquared();
-
-        // This is tied to PhysicsCalculations line 430
-        if (initialAngularVelocity.lengthSquared() < .05 && initialVelocity.lengthSquared() < .05) {
-            // Remove rotational friction if we are rotating slow enough
-            D = E = F = 0;
-        }
-
-        // The coefficients of energy as a function of energyScaleFactor in the form (A
-        // + B * k + c * k^2)
-        double firstCoefficient =
-            A * parent.getPhysicsCalculations().getMass() + D * inertiaScalarAlongAxis;
-        double secondCoefficient =
-            B * parent.getPhysicsCalculations().getMass() + E * inertiaScalarAlongAxis;
-        double thirdCoefficient =
-            C * parent.getPhysicsCalculations().getMass() + F * inertiaScalarAlongAxis;
-
-        double scaleFactor = -secondCoefficient / (thirdCoefficient * 2);
-
-        if (new Double(scaleFactor).isNaN()) {
-            scaleFactor = 0;
-        } else {
-            scaleFactor = Math.max(0, Math.min(scaleFactor, 1));
-            frictionVector.mul(scaleFactor);
-        }
-
-        // System.out.println(scaleFactor);
-        // ===== Friction Scaling Code End =====
-
-        impulseVector.add(frictionVector);
-    }
+    /**
+     * Passes of the contact solve per step: 8, the velocity iteration count Box2D's manual recommends for
+     * its sequential-impulse solver ("The suggested iteration count for Box2D is 8 for velocity", Box2D
+     * v2 manual, "Simulating the World"). A cited value, not a measurement.
+     */
+    private static final int CONTACT_SOLVER_PASSES = 8;
 
     // TODO: The greatest physics lag starts here.
     private void updatePotentialCollisionCache() {
@@ -702,6 +643,14 @@ public class WorldPhysicsCollider {
             // }
         }
         return false;
+    }
+
+    /**
+     * How many contacts carried this ship against gravity since the previous call — a floor under it
+     * that pushed — and resets the count. Zero where there is no gravity: nothing can rest on anything.
+     */
+    public int takeSupportingContacts() {
+        return contactsSinceTaken.getAndSet(0);
     }
 
     public BlockPos getCenterPotentialHit() {

@@ -16,9 +16,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p>Taken in {@code TileAdvancedFlightComputer#update}, in the stretch that runs only when nobody is
  * at the helm: between that branch's call to {@code VSIntegration.ensureShipPhysicsEnabled} and the
- * piloted branch's own. Inside it the first write of {@code flightCommand} is the Flight-Assist-off
- * release (a command with no velocity) and the second is the Flight-Assist-on hold (the retained
- * setting executed). So a record names the branch production TOOK, not the flag a probe set: a craft
+ * piloted branch's own. Inside it the first write of {@code flightCommand} is the release (a command with
+ * no velocity: Flight Assist off, or a craft whose hold is not armed) and the second is the hold (the
+ * retained setting executed). So a record names the branch production TOOK, not the flag a probe set: a craft
  * whose release branch is broken is recorded as {@code held} however its flag reads.</p>
  *
  * <p>One record per CHANGE of mode on a given computer, not one per tick — the branch runs twenty times

@@ -189,9 +189,10 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      *  seats him. A link's budget: its expiry means the seating never happened. */
     protected static final int SEAT_LINK_BUDGET_TICKS = 200;
 
-    /** {@link #liftClearOfThePad}'s two stretches of the hull's world clock: before the unpark,
-     *  for the physics object to adopt the teleported pose; after it, for a failed adoption to
-     *  show as a craft back on its pad. The 30 and 10 client ticks they were. */
+    /** {@link #liftClearOfThePad}'s two numbers of the hull's world clock: the deadline of the LINK on the
+     *  physics object adopting the teleported pose (its expiry means no tick adopted it; the 30 ticks
+     *  this was given as a plain stretch before it became a link); and the stretch after the unpark, for
+     *  a failed adoption to show as a craft back on its pad. */
     private static final int LIFT_ADOPTION_TICKS = 30;
     private static final int LIFT_UNPARKED_TICKS = 10;
 
@@ -489,15 +490,6 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * a true sentence about the wrong world, which reads as a craft that has unloaded. The dim is
      * now a parameter and the refusal names it.</p>
      */
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);",
-            why = "the write above is the GAME-side transform; the loaded physics object is told to adopt it and"
-                    + " does so on a later tick, and VSBridge.teleportShip says its caller unparks \"once the"
-                    + " adoption has propagated\". Unparked sooner, the physics re-integrates its OWN pose and"
-                    + " the craft is back on its pad. Thirty ticks of the hull's world clock is the stretch"
-                    + " this helper has always given it; the read below, taken after the craft has flown"
-                    + " unparked, is what reports a stretch that was too short.")
-    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);",
-            why = "the transform is adopted by the server's physics object; the read is the server's ship report.")
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);",
             why = "physics running unparked — a craft whose adoption did not take is back at its pad here, and the"
                     + " gate below names where it was sent and where it is.")
@@ -535,11 +527,24 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         scenario().record("liftFrom", fromY);
         scenario().record("liftClearance", clearanceBlocks);
 
+        // The write is the GAME-side transform; the loaded physics object adopts it on a later tick
+        // (VSBridge.teleportShip's caller unparks "once the adoption has propagated"). That adoption is
+        // the link, recorded for this craft by a test mixin at the tick that consumes it.
+        long teleportMark = serverEvents().markInstrumented();
         String moved = arrange("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId
                 + " " + x + " " + toY + " " + z).raw();
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
                 + " window in ground contact: " + moved, Reply.of(moved).ok());
-        GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
+        ArrangementFailure.arranged(() -> serverEvents().awaitRecordWithFields(teleportMark, "ship_pose_adopted",
+                "the game tick must adopt the lifted pose before the craft is flown and unparked",
+                LIFT_ADOPTION_TICKS, "vsShip", shipId, "dim", String.valueOf(dim)));
+        // Left in the air, a craft only built is released by its computer and falls back to its pad: it is
+        // FLOWN here — a zero cruise through its own computer arms the hold, as a pilot braking to a stop
+        // leaves it — once its pose is the lifted one, so no step on the pad can disarm it.
+        String flown = arrange("stellurgytest vs ff-cruise-by-id " + dim + " " + shipId + " 0 0 0").raw();
+        // absence is the answer "not flown": a verb that resolves no flight computer answers without the field.
+        scenario().requireArranged("the lifted craft must be flown — its hold armed — or it falls back to its"
+                + " pad: " + flown, Reply.of(flown).boolOr("afcResolved", false));
         String unparked = arrange("stellurgytest vs unpark-by-id " + dim + " " + shipId).raw();
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,

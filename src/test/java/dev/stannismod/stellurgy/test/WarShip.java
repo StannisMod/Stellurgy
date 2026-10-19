@@ -95,8 +95,9 @@ public final class WarShip {
     }
 
     /**
-     * Rigid-teleport this hull to {@code (x,y,z)} and leave it PARKED there — physics off, so nothing
-     * moves it between this call and the scenario's own readings.
+     * Rigid-teleport this hull to {@code (x,y,z)} and leave it HOLDING there: its flight computer keeps its
+     * physics on, so what keeps it at the spot between this call and the scenario's own readings is its own
+     * armed hold (a zero cruise, commanded once the pose is adopted).
      *
      * <p>The teleport only WRITES the pose and raises the physics object's force-adopt flag; the
      * physics object consumes that flag on its own next tick ({@code PhysicsObject#onTick}), and
@@ -123,6 +124,13 @@ public final class WarShip {
         String adopted = log.awaitRecordWithField(mark, "ship_teleport_adopted", "vsShip", vsShip,
                 "hull " + vsShip + " was teleported to " + x + "," + y + "," + z
                         + " and its physics object never adopted the written pose", LINK_TICKS);
+        // Still in mid-air means FLOWN: a craft only built is released by its computer and falls from the
+        // spot. A zero cruise through its own computer arms the hold, as a pilot braking to a stop leaves it;
+        // armed after the adoption, so no touchdown on the pad it was teleported from can disarm it.
+        Reply flown = commands.arrange("stellurgytest vs ff-cruise-by-id 0 " + vsShip + " 0 0 0");
+        // absence is the answer "not flown": a verb that resolves no flight computer answers without the field.
+        ArrangementFailure.requireArranged("hull " + vsShip + " must be flown — its hold armed — to stand at "
+                + x + "," + y + "," + z + ": " + flown, flown.boolOr("afcResolved", false));
         Reply at = info();
         double away = Math.sqrt(sq(at.number("posX") - x) + sq(at.number("posY") - y) + sq(at.number("posZ") - z));
         ArrangementFailure.requireArranged("hull " + vsShip + " was teleported to " + x + "," + y + ","

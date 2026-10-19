@@ -2331,6 +2331,231 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         }
     }
 
+    // ---- 4b. a parked craft does not burn its tanks (C9 SHIPCTL-21) ---------------------------------
+
+    /**
+     * EXPERIMENT dose of a parked window, game ticks: two seconds of a craft standing on its pad. Derived: a
+     * hold against the ground burns at hover flow, weight over exhaust speed — about 850 kg/s for the one-seat
+     * craft at one gee, scaled from the drain measured at a quarter gee (2026-10-19,
+     * logs/t494-server3-result.xml) — so the tank's cubic metre (1 021 kg of hydrazine) is gone in about a
+     * second, and two seconds leave no burn unseen. With the resting decision broken every parked method
+     * below went red inside it (2026-10-19, their records).
+     */
+    private static final int PARKED_TICKS = 40;
+
+    /**
+     * THE TEST'S OWN: how far a craft told to climb must have risen off its pad, blocks — a quarter block,
+     * two orders above a hull settling on its pad (measured 2026-10-19: under 0.01 blocks, the contact solve's
+     * own settling) and below anything a climb that left the pad clears.
+     */
+    private static final double LIFTED_BLOCKS = 0.25;
+
+    /** A metered craft standing on its pad with a full tank of the propellant its motors wait for. */
+    private static final class Parked {
+        final AssembledCraft craft;
+        final int[] tank;
+
+        Parked(AssembledCraft craft, int[] tank) {
+            this.craft = craft;
+            this.tank = tank;
+        }
+    }
+
+    /**
+     * Lay and assemble a decked craft with a rocket fuel tank where the world has its standard gravity and air,
+     * fill the tank with what its motors wait for, and leave it on its pad. Metering is the caller's switch.
+     */
+    private Parked parkedFuelledCraft(String what) throws Exception {
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck-and-fuel-tank", what);
+        int[] tank = fixture.intArray("tankFromFlightComputer");
+        requireArranged(what + " — the fixture must say where its tank stands: " + fixture,
+                tank != null && tank.length == 3);
+        AssembledCraft craft = assembleLaid(site, fixture, what);
+        String[] waitsFor = readout(craft, what + ", dry").textArray("starvedFor");
+        requireArranged(what + " — dry, its motors must wait for one propellant", waitsFor.length == 1);
+        long pourMark = events.mark();
+        pour(craft, tank, waitsFor[0], PROPELLANT_MB, what);
+        events.awaitMatching(pourMark, "flight_model_changed",
+                reply -> Events.recordsWhereAll(reply, "ship", craft.durable).stream()
+                        .anyMatch(r -> Events.number(r, "liveSurgeN") > 0),
+                "for this craft, with live motors",
+                what + " — the craft's flight model must be solved again with its tank full", LINK_BUDGET_TICKS);
+        events.awaitRecordWithFields(pourMark, "ship_mass_measured",
+                what + " — the craft must be weighed with its propellant aboard", LINK_BUDGET_TICKS,
+                "ship", craft.physicsId, "path", "round");
+        Reply full = readout(craft, what + ", fuelled");
+        // The positive half every "kept its propellant" below needs: fed motors that CAN hold this craft up,
+        // under a field that pulls it down — a hold against the pad would burn.
+        requireArranged(what + " — fuelled, under gravity, its live motors must be able to hold it up: " + full,
+                full.number("gravity") > 0.0 && full.bool("canHoverLIVE"));
+        return new Parked(craft, tank);
+    }
+
+    /**
+     * Watch the craft's controller through a physics-step window for {@code doseTicks} with NO probe command
+     * standing — what it flies is its own flight law's — and answer the window's record.
+     */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), doseTicks);",
+            why = "the dose of the experiment: how long the craft stands (or climbs) under its own law; what is read"
+                    + " after it is the tank and the window, which no record announces")
+    private String watch(AssembledCraft craft, int doseTicks, String what) throws Exception {
+        ServerWindow window = ServerWindow.open(c -> read(c).raw(),
+                "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
+                craft.afcX, craft.afcY, craft.afcZ);
+        GameTicks.advance(client(), GameTicks.server(), doseTicks);
+        long closeMark = events.mark();
+        window.close();
+        String reply = events.since(closeMark, "physics_step_window");
+        List<String> records = Events.records(reply);
+        requireArranged(what + " — closing the window must write exactly its one record: " + reply,
+                records.size() == 1);
+        Events.assertInstrumentRan(reply, "server_flight_controller_physics_step",
+                what + " — the controller's own steps are what the window reads");
+        String record = records.get(0);
+        requireArranged(what + " — the physics solver must have stepped this craft's controller while the window"
+                + " was open: " + record, Events.number(record, "steps") > 1);
+        return record;
+    }
+
+    /** Hand the craft's computer a seated pilot's input ({@code forward vertical strafe yaw pitch roll}), or none. */
+    private void pilotInput(AssembledCraft craft, String input, String what) throws Exception {
+        Reply r = Reply.of(arrange("stellurgytest vs ff-input-by-id " + DIM + " " + craft.physicsId
+                + (input.isEmpty() ? "" : " " + input)).raw());
+        // absence is the answer "not handed over": a verb that resolves no flight computer answers without
+        // either field, and that is what this refuses.
+        requireArranged(what + " — the pilot's input must reach this craft's computer: " + r,
+                r.boolOr("afcResolved", false) && (input.isEmpty() ? "null" : "SET").equals(r.textOr("input", "")));
+    }
+
+    /**
+     * A metered craft that has been FLOWN — Flight Assist on, a zero cruise commanded through its computer, the
+     * hold armed — and left on its pad with nobody aboard keeps every millibucket of its propellant, and its
+     * computer disarms the hold: touchdown (C9 SHIPCTL-21, region {@code nobody aboard}).
+     *
+     * <p>Seen on the server: the tank's own capability before and after the window, the window's contacts
+     * (the pad really carried the craft) and its steps, and the computer's {@code unmanned_mode} branch records
+     * for this craft from a mark taken before it was flown. Not seen: a player's dismount (the hold is armed
+     * through the computer's own cruise seam).</p>
+     */
+    @Pins("SHIPCTL-21")
+    @Regions(of = "SHIPCTL-21", value = {"nobody aboard"})
+    @RedWitness(verdict = "SHIPCTL-21 nobody aboard", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "contacts > 0 && isIdle(vCmd, wCmd)", replacedBy = "contacts < 0 && isIdle(vCmd, wCmd)",
+            fails = "SHIPCTL-21 nobody aboard", on = "2026-10-19")
+    @RedWitness(verdict = "SHIPCTL-21 touchdown", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "touchedDown = true;", replacedBy = "", fails = "SHIPCTL-21 touchdown", on = "2026-10-19")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = watch(craft, PARKED_TICKS,",
+            why = "the dose: two seconds of the craft standing under its own law; the tank and the window are read"
+                    + " after it, and no record announces a burn that did not happen")
+    @Test
+    public void aParkedCraftWithNobodyAboardKeepsItsPropellant() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            Parked parked = parkedFuelledCraft("a flown craft parked on its pad with nobody aboard");
+            AssembledCraft craft = parked.craft;
+
+            long armMark = events.markInstrumented();
+            Reply assist = Reply.of(arrange("stellurgytest vs fa-by-id " + DIM + " " + craft.physicsId + " true").raw());
+            // absence is the answer "not switched" / "not flown": a verb that resolves no flight computer
+            // answers without these fields, and that is what both requirements refuse.
+            requireArranged("Flight Assist must be on: " + assist,
+                    assist.boolOr("afcResolved", false) && assist.boolOr("flightAssist", false));
+            Reply flown = Reply.of(arrange("stellurgytest vs ff-cruise-by-id " + DIM + " " + craft.physicsId
+                    + " 0 0 0").raw());
+            requireArranged("the craft must be flown — a zero cruise through its own computer: " + flown,
+                    flown.boolOr("afcResolved", false));
+            int before = storedMb(craft, parked.tank, "the full tank");
+            String window = watch(craft, PARKED_TICKS, "the craft parked with nobody aboard");
+            int after = storedMb(craft, parked.tank, "the tank after standing");
+            String modes = events.since(armMark, "unmanned_mode");
+            measured("parked, nobody aboard", "before=" + before, "after=" + after, window, modes);
+
+            requireArranged("the pad must have carried the craft through the window: " + window,
+                    Events.number(window, "colliderTicks") > 0 && Events.number(window, "contacts") > 0);
+            assertEquals("SHIPCTL-21 nobody aboard: a flown craft standing on its pad must keep its propellant — "
+                    + window, before, after);
+
+            Events.assertInstrumentRan(modes, "flight_computer_unmanned_mode",
+                    "the computer's branch records are what touchdown is read from");
+            List<String> mine = Events.recordsWhereAll(modes, "afcX", String.valueOf(craft.afcX),
+                    "afcY", String.valueOf(craft.afcY), "afcZ", String.valueOf(craft.afcZ));
+            requireArranged("the flown craft's computer must have HELD at some point after it was flown, or its"
+                    + " release says nothing about touchdown: " + modes,
+                    Events.anyRecordHasAll(modes, "mode", "held", "afcX", String.valueOf(craft.afcX),
+                            "afcY", String.valueOf(craft.afcY), "afcZ", String.valueOf(craft.afcZ)));
+            assertEquals("SHIPCTL-21 touchdown: standing on its pad, the craft's hold must end disarmed — its"
+                    + " computer's last branch released: " + modes,
+                    "released", Events.text(mine.get(mine.size() - 1), "mode"));
+        }
+    }
+
+    /**
+     * A metered craft parked on its pad with a pilot seated and giving no input keeps its propellant
+     * (C9 SHIPCTL-21, region {@code pilot seated idle}). The seat's delivery is not seen: the idle input is
+     * handed to the computer the way the seat hands it.
+     */
+    @Pins("SHIPCTL-21")
+    @Regions(of = "SHIPCTL-21", value = {"pilot seated idle"})
+    @RedWitness(member = "TileAdvancedFlightComputer#isIdle", at = "return isZero(vCmd) && isZero(wCmd);",
+            replacedBy = "return vCmd == null && isZero(wCmd);", fails = "SHIPCTL-21 pilot seated idle",
+            on = "2026-10-19")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = watch(craft, PARKED_TICKS,",
+            why = "the dose: two seconds of the craft standing under an idle pilot; the tank and the window are"
+                    + " read after it, and no record announces a burn that did not happen")
+    @Test
+    public void aParkedCraftWithAnIdlePilotKeepsItsPropellant() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            Parked parked = parkedFuelledCraft("a craft parked on its pad with an idle pilot");
+            AssembledCraft craft = parked.craft;
+            try {
+                pilotInput(craft, "0 0 0 0 0 0", "the seated pilot, idle");
+                int before = storedMb(craft, parked.tank, "the full tank");
+                String window = watch(craft, PARKED_TICKS, "the craft parked with an idle pilot");
+                int after = storedMb(craft, parked.tank, "the tank after standing");
+                measured("parked, pilot idle", "before=" + before, "after=" + after, window);
+                requireArranged("the pad must have carried the craft through the window: " + window,
+                        Events.number(window, "colliderTicks") > 0 && Events.number(window, "contacts") > 0);
+                assertEquals("SHIPCTL-21 pilot seated idle: a craft standing on its pad under an idle pilot must keep"
+                        + " its propellant — " + window, before, after);
+            } finally {
+                pilotInput(craft, "", "the pilot gone");
+            }
+        }
+    }
+
+    /**
+     * The matched positive: the same metered craft on its pad, its seated pilot holding the climb, spends
+     * propellant and rises off the pad (C9 SHIPCTL-21, region {@code climb}) — the resting decision asks
+     * nothing only of a craft asked for nothing.
+     */
+    @Pins("SHIPCTL-21")
+    @Regions(of = "SHIPCTL-21", value = {"climb"})
+    @RedWitness(member = "TileAdvancedFlightComputer#isIdle", at = "return isZero(vCmd) && isZero(wCmd);",
+            replacedBy = "return true;", fails = "SHIPCTL-21 climb", on = "2026-10-19")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "String window = watch(craft, PARKED_TICKS,",
+            why = "the dose: two seconds of the climb held; how far it rose is the window's own record, and the"
+                    + " tank is read after it")
+    @Test
+    public void aParkedCraftToldToClimbSpendsPropellantAndLifts() throws Exception {
+        try (ConfigFlag metered = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            Parked parked = parkedFuelledCraft("a craft on its pad told to climb");
+            AssembledCraft craft = parked.craft;
+            try {
+                pilotInput(craft, "0 1 0 0 0 0", "the seated pilot, holding the climb");
+                int before = storedMb(craft, parked.tank, "the full tank");
+                String window = watch(craft, PARKED_TICKS, "the craft climbing off its pad");
+                int after = storedMb(craft, parked.tank, "the tank after the climb");
+                double rose = Events.number(window, "maxY") - Events.number(window, "y0");
+                measured("climb", "before=" + before, "after=" + after, "rose=" + rose, window);
+                assertTrue("SHIPCTL-21 climb: told to climb, the craft must spend propellant (" + before + " -> "
+                        + after + " mB) and rise off its pad at least " + LIFTED_BLOCKS + " blocks (rose " + rose
+                        + "): " + window, after < before && rose >= LIFTED_BLOCKS);
+            } finally {
+                pilotInput(craft, "", "the pilot gone");
+            }
+        }
+    }
+
     /**
      * With consumption switched off ({@code rocketRequireFuel} false) a burn takes nothing out of the
      * tank and nothing off the physics record, and an empty-tanked craft's motors are live as designed —
@@ -2825,6 +3050,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private static final int ASSIST_SAMPLE_TICKS = 60;
 
     /**
+     * EXPERIMENT dose, game ticks: how long a craft's hold is given to arrest the fall it took between being
+     * lifted and being flown — a craft only built is released, so it falls from the lift until its hold is
+     * armed. A second of it: the fall is under one wall second of free fall at its arming (32 blocks/s at most),
+     * and the craft's hover surplus stops that within a fraction of a second. Its sufficiency is not trusted
+     * to this number: the held window after it says whether the craft is at rest.
+     */
+    private static final int HOLD_ARREST_TICKS = 20;
+
+    /**
      * The gravity the authored body is given, as a fraction of the configured field. A quarter is far
      * enough from one that no plausible tolerance can hide it, and far enough from zero that the
      * craft must still visibly fall — a body a test cannot tell apart from a void would witness
@@ -2891,8 +3125,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private static final int SCAFFOLDING_BLOCKS = 36 + 7 + 2;
 
     /**
-     * Flight Assist is the unmanned mode switch: with it ON an unpiloted craft holds, with it OFF the
-     * craft is released and falls.
+     * Flight Assist is the unmanned mode switch: with it ON an unpiloted craft that has been flown holds,
+     * with it OFF the craft is released and falls. (The hold is armed by a pilot's command, so the craft
+     * is flown before it is asked to hold — {@link #hold}.)
      *
      * <p>A ship left at altitude with nobody at the controls used not to fall — and not because anything
      * was holding it up. The solver steps only bodies whose physics has been switched on, and that switch
@@ -2907,12 +3142,16 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * and asserted to fall. The control comes first deliberately: if the hold is already broken, the test
      * says so instead of reporting a successful fall.</p>
      */
-    @LegacyWitness(prose = "with the unmanned branch's {@code !flightAssistEnabled} release in"
-            + " {@code TileAdvancedFlightComputer} ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)}) never taken, the fall verdict fails — \"sank only"
-            + " 0.0 blocks in 61 ticks\" — after the hold passed, 2026-09-29. With that branch taken ALWAYS"
-            + " ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — \"must keep station, and this one moved"
-            + " from 235.7 to 57.1\" — 2026-09-30.")
+    @RedWitness(verdict = "the hold", member = "TileAdvancedFlightComputer#commandCruise",
+            at = "this.stationKeeping = true;", replacedBy = "",
+            fails = "with Flight Assist ON an unpiloted craft must keep station", on = "2026-10-19")
+    @RedWitness(verdict = "the fall", member = "TileAdvancedFlightComputer#setFlightAssistEnabled",
+            at = "this.flightAssistEnabled = enabled;", replacedBy = "",
+            fails = "with Flight Assist OFF and nobody at the controls", on = "2026-10-19")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceObserved(client(), GameTicks.server(), HOLD_ARREST_TICKS);",
+            why = "the dose the freshly armed hold is given to stop the fall since the lift; the held window"
+                    + " read after it is the control that it did")
     @Wait(shape = Wait.Shape.WINDOW, at = "long heldTicks = GameTicks.advanceObserved(client(),"
             + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
             why = "the altitude is read before and after this stretch and the claim is an UPPER bound on the"
@@ -2934,6 +3173,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- first half: Flight Assist ON must HOLD ----------------------------------------------
         Released craft = new Released(DIM, shipId);
         hold(craft);
+        GameTicks.advanceObserved(client(), GameTicks.server(), HOLD_ARREST_TICKS);
         double heldFrom = altitudeOf(craft);
         long heldTicks = GameTicks.advanceObserved(client(), GameTicks.server(), ASSIST_SAMPLE_TICKS);
         double heldTo = altitudeOf(craft);
@@ -2985,10 +3225,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the feed-forward were left on Earth's field while the solver used the body's, a held craft over a
      * quarter-gravity body would CLIMB by the difference.</p>
      */
-    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return VSConfig.gravity().mul(multiplier, new Vector3d());} answering the configured vector instead of"
-            + " scaling it by the body's multiplier, the ratio verdict fails at 1.015 (\"outside [0.125, 0.5]\"),"
-            + " 2026-09-29.")
+    @RedWitness(member = "StellurgyWorldGravity#of", at = "return VSConfig.gravity().mul(multiplier, new Vector3d());",
+            replacedBy = "return VSConfig.gravity();", fails = "a craft released over a body of gravity",
+            on = "2026-10-19")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceObserved(client(), GameTicks.server(), HOLD_ARREST_TICKS);",
+            why = "the dose the freshly armed holds are given to stop the falls since the lifts; the held window"
+                    + " read after it is the control that they did")
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceObserved(client(), GameTicks.server(),"
             + " COMPARISON_SAMPLE_TICKS); double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);",
             why = "both altitudes are read before and after this stretch and the claim is an UPPER bound on each"
@@ -3002,13 +3245,16 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         int lowGravityDim = authorLowGravityBody();
 
+        // Each craft is flown as soon as it is up: a craft only built is released, and left so while the
+        // other is built it falls back onto its pad and parks there.
         Released earth = buildAndLift(plot().site(), "the craft released over Earth is built here");
+        hold(earth);
         Released low = buildAndLift(plot().inDimension(lowGravityDim).site(),
                 "the craft released over the low-gravity body is built here");
+        hold(low);
 
         // --- premise: both craft are simulated, controllable, and at rest ---------------------------
-        hold(earth);
-        hold(low);
+        GameTicks.advanceObserved(client(), GameTicks.server(), HOLD_ARREST_TICKS);
         double earthFrom = altitudeOf(earth), lowFrom = altitudeOf(low);
         GameTicks.advanceObserved(client(), GameTicks.server(), COMPARISON_SAMPLE_TICKS);
         double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);
@@ -3067,15 +3313,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * a test mixin at that branch): in a cell a HELD craft is as still as a released one and cancels any
      * field it is given, so without the link a broken release would leave this verdict unable to fail.</p>
      */
-    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return WEIGHTLESS;} answering the configured vector for a space"
-            + " slot instead of zero, the stillness verdict fails — \"moved 74.2 blocks vertically in 41 ticks\" —"
-            + " on a craft that was {@code ready:true} when released, 2026-09-29; again on the piloted fixture"
-            + " assembled in the cell with its scaffolding removed, \"This one moved 64.53 blocks vertically in 41"
-            + " ticks\", 2026-09-30. With the scaffolding left in place that break stayed GREEN — sank 1.0 and"
-            + " stopped on the launchpad — which is why the arrangement removes it.")
-    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} never taken,"
-            + " the scenario stops at that premise — \"no `unmanned_mode` released, for this craft's flight"
-            + " computer … within 200 ticks\" — 2026-10-04.")
+    @RedWitness(verdict = "the stillness", member = "StellurgyWorldGravity#of", at = "return WEIGHTLESS;",
+            replacedBy = "return VSConfig.gravity();", fails = "a released craft in a space cell must keep its altitude",
+            on = "2026-10-19")
+    @RedWitness(verdict = "the release link", member = "TileAdvancedFlightComputer#setFlightAssistEnabled",
+            at = "this.flightAssistEnabled = enabled;", replacedBy = "",
+            fails = "the craft's flight computer must take the release branch", on = "2026-10-19")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "long stillTicks = GameTicks.advanceObserved(client(),"
             + " GameTicks.server(), CELL_SAMPLE_TICKS);",
@@ -3132,8 +3375,19 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         String afcX = String.valueOf(model.integer("afcX"));
         String afcY = String.valueOf(model.integer("afcY"));
         String afcZ = String.valueOf(model.integer("afcZ"));
-        long releaseMark = events.markInstrumented();
+        // A craft nobody has flown is released already, so releasing it changes nothing and the branch
+        // it takes is not news. It is FLOWN first — the hold armed by a pilot's command — and seen to
+        // hold, so that the release below is a decision the computer makes in this window.
         Released craft = new Released(cellDim, shipId);
+        long holdMark = events.markInstrumented();
+        hold(craft);
+        ArrangementFailure.arranged(() -> events.awaitMatching(holdMark, "unmanned_mode",
+                reply -> Events.anyRecordHasAll(reply, "mode", "held", "afcX", afcX, "afcY", afcY,
+                        "afcZ", afcZ),
+                "held, for this craft's flight computer at " + afcX + "," + afcY + "," + afcZ,
+                "a flown craft with Flight Assist on must hold before its release can be seen",
+                LINK_BUDGET_TICKS));
+        long releaseMark = events.markInstrumented();
         release(craft);
         ArrangementFailure.arranged(() -> events.awaitMatching(releaseMark, "unmanned_mode",
                 reply -> Events.anyRecordHasAll(reply, "mode", "released", "afcX", afcX, "afcY", afcY,
@@ -3231,10 +3485,21 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return new Released(dim, id);
     }
 
+    /**
+     * Flight Assist on, and the craft FLOWN: a cruise of zero is commanded through its computer, which
+     * is what a pilot braking to a stop leaves behind. The hold is armed by a pilot's command and by
+     * nothing else, so a craft that has only been built holds nothing whatever the switch says.
+     */
     private void hold(Released craft) throws Exception {
         requireArranged("could not reach the flight computer of the craft in dim " + craft.dim,
                 Reply.of(arrange("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " true").raw())
                         .bool("afcResolved"));
+        Reply flown = Reply.of(arrange("stellurgytest vs ff-cruise-by-id " + craft.dim + " " + craft.id
+                + " 0 0 0").raw());
+        // absence is the answer "not flown": a verb that resolves no flight computer answers without the field.
+        requireArranged("the craft in dim " + craft.dim + " must be flown — a zero cruise commanded through"
+                + " its own computer — before a hold can be asked of it: " + flown,
+                flown.boolOr("afcResolved", false));
     }
 
     private void release(Released craft) throws Exception {

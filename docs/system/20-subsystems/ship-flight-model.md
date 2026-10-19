@@ -90,7 +90,10 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   and angular accel (attitude law, rate capped at `min(old cap, max(sqrt(2·α·angle), |ff|))`) →
   SI ÷ `PhysicsUnits.ACCELERATION` → ship frame → `scheme.allocate(live, …)` → wrench ×
   factor → world → applied (`TileAdvancedFlightComputer.java:1725-1850,1891`) `[V]`. No model ⇒ no
-  force, saturated.
+  force, saturated. A craft the world carried in the last step (`WorldPhysicsCollider#takeSupportingContacts`),
+  moving no faster than two steps of free fall, under its own flight law's idle command (zero velocity and
+  zero turn) is asked for NOTHING — no force, no torque, no propellant — and that is touchdown, which
+  disarms the unmanned hold (C9 SHIPCTL-21) `[T]` (`TileAdvancedFlightComputer#onPhysicsTick`, `#isResting`).
 - **MECH-SFM-09 — readout channels.** Pilot-seat occupant and open-console viewers get
   `PacketShipReadout` on a new revision, and the live slice at most every `READOUT_PUSH_TICKS`
   (`:1414`) `[V]`; the assembler sends its scan readout to whoever pressed Scan/Build

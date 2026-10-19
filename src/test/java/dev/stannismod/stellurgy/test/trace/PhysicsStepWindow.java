@@ -44,8 +44,8 @@ import java.util.List;
  *
  * <p>A verdict about how a craft moves under its own authority, or falls under gravity alone, holds
  * only if nothing else touched it. So the window also counts, for the ship it is watching, the physics
- * mod's collider ticks ({@code colliderTicks} — the instrument was listening) and the collision impulses
- * that collider applied ({@code contacts}), both fed by a test mixin at the collider's own decision. A
+ * mod's collider ticks ({@code colliderTicks} — the instrument was listening) and the contacts with the
+ * world that collider found ({@code contacts}), both fed by a test mixin at the collider's own decision. A
  * zero {@code contacts} means "free air" only beside a non-zero {@code colliderTicks}. The ship is bound
  * at the window's first sample, so a contact before that sample is not counted.</p>
  *
@@ -131,7 +131,7 @@ public final class PhysicsStepWindow implements TraceWindow {
         }
     }
 
-    /** The collider applied a collision impulse to {@code ship} — called by the collider mixin. */
+    /** The collider found a contact between {@code ship} and the world — called by the collider mixin. */
     public static void contact(World world, Object ship) {
         List<PhysicsStepWindow> open = SideTrace.of(world).windows(PhysicsStepWindow.class);
         for (int i = 0; i < open.size(); i++) {

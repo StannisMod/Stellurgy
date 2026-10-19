@@ -129,7 +129,9 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   the unmanned MODE SWITCH.** On a VOLUNTARY dismount the INPUT is released (the SHIPCTL-6 one-shot)
   and the SETTING is retained **and keeps EXECUTING**:
   - **FA ON** — an unmanned ship with a non-zero retained setpoint KEEPS CRUISING at it; a zero
-    setpoint degenerates to station-hold (hover).
+    setpoint degenerates to station-hold (hover). Only a craft whose hold is ARMED does either: the hold
+    is armed by a pilot flying it (or a cruise commanded through its computer) and disarmed on touchdown
+    (SHIPCTL-21), so a craft only built, or parked on the ground, is released like FA OFF.
   - **FA OFF** — the craft is **RELEASED and FALLS**. Only the linear command is dropped; attitude
     hold remains, so it falls flat rather than tumbling.
 
@@ -166,6 +168,26 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   рядом с игроком можно оставить как требование, но чистить надо как-то автоматически"* (the dummy near
   the player may stay a requirement, but it must be cleaned up automatically), and the choice of the
   dummy-side check the same day (*"1"*).
+- **SHIPCTL-21** `[T][BEH]` **A craft resting on the ground asks nothing of its engines.** While the world
+  carried the craft in the last physics step (a floor under it pushed, `valkyrienskies` MECH-VSK-17), it
+  moves no faster than two steps of free fall, and the command it flies asks for no velocity and no turn
+  (exact zeros — the hold's zero setpoint, a released craft's attitude hold, a seated pilot's idle input),
+  the controller applies no force and no torque, so a metered craft parked on its pad keeps its propellant —
+  nobody aboard or a pilot seated with no throttle alike. That observation is also TOUCHDOWN: it disarms the
+  unmanned hold (SHIPCTL-18), so a parked craft whose ground gives way falls instead of catching itself in
+  mid-air; a seated pilot re-arms it. Any command that asks for motion is flown as before, and a probe's
+  bring-up command is flown exactly as written. Pinned by
+  `TierTwoCraftFlightModelGroupTest#aParkedCraftWithNobodyAboardKeepsItsPropellant`,
+  `TierTwoCraftFlightModelGroupTest#aParkedCraftWithAnIdlePilotKeepsItsPropellant`,
+  `TierTwoCraftFlightModelGroupTest#aParkedCraftToldToClimbSpendsPropellantAndLifts`.
+  REGIONS: `nobody aboard`, `pilot seated idle`, `climb`.
+
+  > **FOR (maintainer ruling 2026-10-19)** — the hold arms at the pilot's first command and disarms on
+  > touchdown; while a craft rests on support, Flight Assist asks for nothing (the ruled option, recorded as
+  > given in English); and, on how a released ship is kept from creeping on the ground, *"И починку в VS
+  > тогда"* (then the fix in VS too) — physics stays on, the substrate's terrain contact gets a resting
+  > regime (`valkyrienskies` INV-VSK-14/15). Before it, a craft fuelled on its pad emptied its tanks holding
+  > a hover against the ground: about 850 kg/s for a one-seat craft at one gee.
 
 ## Rulings index (R1-R22, all maintainer, 2026-07-19 / 2026-07-20)
 
@@ -235,7 +257,9 @@ Which test pins which clause, and what is still violated.
   `VSPilotStationDestructionTest` (client, both targets).
 - **SHIPCTL-18** `[T]`: the unmanned branch EXECUTES the retained FA setting (FA-on + setpoint =
   cruise via `shipVelocityCommand` over an idle input; zero setpoint = station-hold; FA-off =
-  released and falls); no zeroing, no re-capture. Pinned by `VSShipUnmannedCruiseTest` (client).
+  released and falls); no zeroing, no re-capture. Pinned by `VSShipUnmannedCruiseTest` (client). The
+  hold is gated on `stationKeeping` (armed by a pilot or `commandCruise`, cleared on touchdown) —
+  `TileAdvancedFlightComputer#update`, the unmanned branch.
 - **SHIPCTL-4** `[T]`: every dummy-producing path (right-click, probes, crossing reseat, assembly
   rebind) reuses the seat's single bound dummy via `BlockPilotSeat.boundDummyAt`. Pinned by
   `VSPilotSeatDummyReuseTest` (server).

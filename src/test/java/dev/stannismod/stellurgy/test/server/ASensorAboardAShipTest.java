@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
@@ -85,15 +85,17 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         }
     }
 
-    @LegacyWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
-            + " inverted so no body is ever aboard, this fails with \"the sensor holds the creeper standing on"
-            + " its own deck ... tracks:[{entityId:2102,distance:1.35...,quality:1.0},{entityId:2103,"
-            + " distance:20.018...}]\"; with {@code TileFireControlSensor.worldPosition}"
-            + " ({@code TileFireControlSensor#worldPosition} at {@code return TurretFireControl.worldPositionOf(world, pos, shipId());}) passing no ship, so the sweep looks out from the"
-            + " block's shipyard address, it fails with \"the sensor aboard the hull never held the creeper in"
-            + " open air beside it ... within 200 ticks\"; and with that line's result moved two blocks along Z,"
-            + " it fails with \"the sensor reports the open-air creeper at 20.1177... blocks, and it stands"
-            + " 20.0180... blocks from where the hull puts the sensor\". 2026-09-30.")
+    @RedWitness(verdict = "its own deck", member = "TacticalScan#trackOf",
+            at = "if (isAboard(world, ownShipId, candidate)) {", replacedBy = "if (false) {",
+            fails = "the sensor holds the creeper standing on its own deck", on = "2026-10-19")
+    @RedWitness(verdict = "held at all", member = "TileFireControlSensor#worldPosition",
+            at = "TurretFireControl.worldPositionOf(world, pos, shipId())",
+            replacedBy = "TurretFireControl.worldPositionOf(world, pos, null)",
+            fails = "the sensor aboard the hull never held the creeper in open air beside it", on = "2026-10-19")
+    @RedWitness(verdict = "the range", member = "TileFireControlSensor#worldPosition",
+            at = "return TurretFireControl.worldPositionOf(world, pos, shipId());",
+            replacedBy = "return TurretFireControl.worldPositionOf(world, pos, shipId()).addVector(0, 0, 2);",
+            fails = "the sensor reports the open-air creeper at", on = "2026-10-19")
     @Test
     public void aSensorOnAShipHoldsWhatIsOffItAndNeverItsOwnDeck() throws Exception {
         // The sensor's update refuses to sweep unless its switch is on
@@ -234,6 +236,12 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
     private void parkStill(String hull) throws Exception {
         arrange("stellurgytest vs teleport-ship-by-id " + DIM + " " + hull + " " + PARK_X + " " + PARK_Y + " "
                 + PARK_Z).requireOk("park hull " + hull);
+        // Still in mid-air means FLOWN: a craft only built is released by its computer and falls. A zero
+        // cruise through its own computer arms its hold, as a pilot braking to a stop leaves it.
+        Reply flown = arrange("stellurgytest vs ff-cruise-by-id " + DIM + " " + hull + " 0 0 0");
+        // absence is the answer "not flown": a verb that resolves no flight computer answers without the field.
+        requireArranged("hull " + hull + " must be flown — its hold armed — to stand still: " + flown,
+                flown.boolOr("afcResolved", false));
         Reply first = shipInfo(hull);
         GameTicks.advanceWorld(client(), DIM, 1);
         Reply second = shipInfo(hull);

@@ -16,8 +16,8 @@ import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
  * where a contact between a ship and the world is decided, so it is read there.
  *
  * <p>{@code tickUpdatingTheCollisionCache} runs once per physics step for every ship with physics —
- * the collider was LISTENING for that ship; {@code calculateCollisionImpulseForce} runs once per
- * collision impulse it applies to that ship's velocity — the ship was TOUCHED. Both feed the windows
+ * the collider was LISTENING for that ship; {@code handleCollision} runs once per contact between that
+ * ship and the world the collider finds in a step — the ship was TOUCHED. Both feed the windows
  * watching that ship, so a window's zero contacts can be told from a collider that never ran.</p>
  *
  * <p>What it is silent about: contacts between two ships (another collider path), and a ship no window
@@ -36,7 +36,7 @@ public abstract class MixinWorldPhysicsColliderContacts {
         PhysicsStepWindow.colliderTick(parent.getWorld(), parent);
     }
 
-    @Inject(method = "calculateCollisionImpulseForce", at = @At("HEAD"), remap = false)
+    @Inject(method = "handleCollision", at = @At("HEAD"), remap = false)
     private void stellurgyTest$contact(CallbackInfo ci) {
         PhysicsStepWindow.contact(parent.getWorld(), parent);
     }

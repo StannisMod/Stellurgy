@@ -145,7 +145,8 @@ each step reads the immutable list the manager built at the end of its last tick
 `WorldServerShipManager.java:179`. Ships step only after 20 existing ticks, with physics enabled and a surrounding chunk cache [V]
 `VSWorldPhysicsLoop.java:133-137`, `PhysicsObject.java:51`, `:441-443`. Step order [V] `VSWorldPhysicsLoop.java:124-157`, `:162-206`: recurring and queued tasks;
 per ship, `rawPhysTickPreCol` (forces), water and terrain collision caches; the collision and water tasks fan out on the pool
-(`threadCount` threads, built in pre-init); results are applied sequentially; `rawPhysTickPostCol` integrates. A step that produces
+(`threadCount` threads, built in pre-init); their contacts are gathered sequentially and each ship's are solved together (MECH-VSK-17);
+`rawPhysTickPostCol` integrates. A step that produces
 velocity² > 50 000 or a non-finite value freezes the ship and clears its velocities [V] `VS/mod/common/physics/PhysicsCalculations.java:99-109`, `:131-137`.
 Per-ship exceptions are caught and printed, never rethrown [V] `VSWorldPhysicsLoop.java:177-179`, `:202-204`.
 
@@ -216,6 +217,26 @@ write stores an empty array [V] `VSDefaultCapability.java:96-98`, `:108-117`. Th
 `ShipData.java:100-117`, `:174-178`, `VS/mod/common/ships/QueryableShipData.java:65-71`, `:142-158`. `setStellurgyDurableIdBeforeRegistration` exists because the indexed setter
 would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-used when a ship crosses worlds (MECH-VSK-04's remnant rule).
 
+### MECH-VSK-17 — Ship against terrain: one contact solve per step, with a resting regime
+The collider finds each step's contacts — eight sample points per hull block against the world blocks near them, each with the axis of least
+overlap and its depth — and answers them **together**, once every collision task of the step has run and before the step integrates
+[V] `VS/mod/common/collision/WorldPhysicsCollider.java` (`handleCollision`, `resolveContacts`), `VSWorldPhysicsLoop.java` (`tickThePhysicsAndCollision`).
+The solve is a sequential-impulse one with accumulated, warm-started impulses: every contact is visited in each of 8 passes, its total push
+is moved toward what its point needs and never below zero, and a contact present in the previous step (same world block, hull block and
+sample point) starts from the push it ended that step with [V] `VS/mod/common/collision/ContactSolve.java` (`solve`). Per contact:
+- **restitution only for an impact** — a contact closing at or below `max(0.5, 3·|g|·dt)` blocks per engine second does not bounce
+  (INV-VSK-14); one closing faster leaves at 0.52 of its closing speed;
+- **position correction** — a sunken point is asked to separate at 2 × its depth per second;
+- **Coulomb friction with a static cone** — friction up to 0.74 × the contact's push stops the point sliding; beyond it the point slides
+  against the kinetic 0.15.
+A contact takes part only when its point lies on the centre-of-mass side of the block it touches (the engine's own rule). Gravity for the
+threshold is asked of `StellurgyWorldGravity`, the function the integrator applies (MECH-VSK-09). After the solve the collider counts the
+contacts that **carried** the hull — pushed, against a world block lying the way gravity pulls — for the ship's controller to take once per
+step (`takeSupportingContacts`); a wall brushed sideways is not support, and nothing rests on anything without gravity [V].
+Before this solve each contact was answered once from whatever velocity the contacts before it left behind, with restitution above an
+absolute 0.5 — under a gravity of 32 blocks per engine second², below one step's gain (0.533) — so a released hull standing on its pad
+hopped, rocked at 0.1–0.3 rad/s and walked 0.04–0.1 blocks in two seconds (measured 2026-10-19; INV-VSK-15).
+
 ## State & persistence
 
 | state | owner | where it is saved |
@@ -253,6 +274,15 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **INV-VSK-12** [V] Block damage records travel with their blocks through assembly and copy-back (`WorldServerShipManager.java:272`, `:308-314`; `MoveBlocks.java:54`).
 - **INV-VSK-13 [V]**  A VS ship is present and the registry answers on a loaded server (`src/test/java/dev/stannismod/stellurgy/test/server/VsVendorSmokeTest.java:42`) and
   a commanded ship translates under the physics loop (`src/test/java/dev/stannismod/stellurgy/test/server/VSShipMotionServerTest.java:94`).
+- **INV-VSK-14** `[T][SYS]` A contact closing no faster than three steps of the world's gravity (and never less than 0.5 blocks per engine
+  second) takes no restitution; one closing faster bounces at the coefficient of restitution. Pinned by
+  `ContactSolveLawsTest#aHullSettlingOntoItsSupportDoesNotBounceAndOneDroppedOntoItDoes`. REGIONS: `settling`, `dropped`, `weak gravity`.
+  FOR: maintainer ruling 2026-10-19, *"И починку в VS тогда"* — a released ship on the ground must not creep (the resting-contact regime of the
+  fork it chose).
+- **INV-VSK-15** `[T][SYS]` A hull standing at rest on its support under gravity, step after step, is left with no velocity across the
+  support and no turn — under one texture pixel (1/16 block) of drift per hour — whatever order its contacts are visited in; and nudged
+  sideways within its friction cone, it stops. Pinned by `ContactSolveLawsTest#aHullAtRestOnItsSupportStaysWhereItStands`,
+  `ContactSolveLawsTest#aHullNudgedOnItsSupportStopsInTheStep`. REGIONS: `at rest`, `nudged`. FOR: the same ruling.
 
 ## Failure modes & edge cases
 
