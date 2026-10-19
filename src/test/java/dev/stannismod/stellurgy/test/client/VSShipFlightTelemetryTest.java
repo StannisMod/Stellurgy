@@ -282,25 +282,26 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
      * it.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}"
-            + " returning no lines for a tier-2 craft: \"a seated tier-2 pilot must get"
-            + " a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line\". THE LIFT — the linear"
-            + " force ({@code TileAdvancedFlightComputer#onPhysicsTick} at"
-            + " {@code force.set(command.force()).mul(k);}) multiplied by 0: \"must lift the ship: 155.0"
-            + " -&gt; 152.82\" — taken on the pre-actuator form, when the controller was a mixin and its force"
-            + " was the wanted acceleration times the mass; the force is now the hull's allocated command, at the"
-            + " line cited. THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at"
-            + " {@code I18n.format(\"msg.ff.hud.speed\", String.format(\"%.1f\", state.speed() * 20.0))}) printing 0 for tier"
-            + " 2: \"no `ff_hud` whose latest line carries a non-zero speed readout\"; that inversion first left"
-            + " the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the"
-            + " vector line supplied one — it now parses the speed line alone. THE CURSOR —"
-            + " {@code KeyBindings#acceptShipPilotMouseDelta} at {@code float degPerUnit = f * f * f * 8.0F * 0.15F}"
-            + " scaling every delta by 0: \"must"
-            + " deflect the client's flight cursor (got 0.0)\". THE TURN — {@code TileAdvancedFlightComputer}'s"
-            + " roll rate ({@code TileAdvancedFlightComputer#update} at"
-            + " {@code double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE}) multiplied by 0: \"largest omega over the window=0.0\". The cursor-centred and brake"
-            + " verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}"
-            + " since this method was split.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the HUD", member = "KeyBindings#freeFlightHudLines",
+            at = "java.util.List<String> lines = new java.util.ArrayList<>(); if (!state.inFlight) {",
+            replacedBy = "java.util.List<String> lines = new java.util.ArrayList<>(); if (state.tier == 2) return lines;"
+                    + " if (!state.inFlight) {",
+            fails = "a seated tier-2 pilot must get a Free Flight HUD at all", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the lift", member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "force.set(command.force()).mul(k);", replacedBy = "force.set(command.force()).mul(k * 0.0);",
+            fails = "ticks must lift the ship", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the speed readout", member = "KeyBindings#freeFlightHudLines",
+            at = "lines.add(I18n.format(\"msg.ff.hud.speed\", String.format(\"%.1f\", state.speed() * 20.0)));",
+            replacedBy = "lines.add(I18n.format(\"msg.ff.hud.speed\", String.format(\"%.1f\","
+                    + " state.tier == 2 ? 0.0 : state.speed() * 20.0)));",
+            fails = "whose latest line carries a non-zero speed readout", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the cursor", member = "KeyBindings#acceptShipPilotMouseDelta",
+            at = "float degPerUnit = f * f * f * 8.0F * 0.15F;", replacedBy = "float degPerUnit = 0.0F;",
+            fails = "a raw mouse delta must deflect the client's flight cursor", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the turn", member = "TileAdvancedFlightComputer#update",
+            at = "double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE;",
+            replacedBy = "double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE * 0.0;",
+            fails = "a deflected flight cursor must actually spin the ship", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS,",
             why = "a dose of thrust from the key's arrival, then one reading with it cut. The key REACHING the"
@@ -417,12 +418,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
      * is already near zero on the tick the cursor reaches the dead-zone.</p>
      */
-    @LegacyWitness(prose = "with the controller forbidden any angular acceleration against the current spin"
-            + " — spin-up allowed, braking not — this fails with \"its worst rate over the hold was 1.9025…\","
-            + " every one of the ten readings the same: nothing else in a cell touches it. The identical"
-            + " inversion left the overworld form of this verdict GREEN — 2026-09-28. Taken on the pre-actuator"
-            + " form, when the controller was a mixin; the torque it applies now stands in"
-            + " {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code torque.set(command.torque()).mul(k);}.")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "TileAdvancedFlightComputer#onPhysicsTick at `Vector3d alpha"
+            + " = angAccel == null ? new Vector3d() : …` -> the wanted angular acceleration zeroed whenever it opposes the"
+            + " spin (spin-up allowed, braking not), then at `if (attCmd != null && attCmd.length >= 4) {` -> the attitude"
+            + " hold run only while the pilot commands a turn — green under both (logs/fix-tests/w3-replay-12.log, -13.log),"
+            + " 2026-10-19: on the actuator form something besides the commanded torque stops the spin once the cursor"
+            + " is centred.")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 12; i++) {",
             why = "the deflection — an input, not a wait.")
@@ -546,14 +547,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * An inverted ship turns its seated pilot's camera over with it, and his eye stays on the ship's
      * side of the deck.
      */
-    @LegacyWitness(prose = "with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}"
-            + " at {@code event.setRoll(e[2])}, the tier-2 seat branch's — taken on the pre-refactor form, when"
-            + " that branch slerped the attitude the client had sampled rather than asking"
-            + " {@code VSIntegration.getShipAttitude}) given an extra 30 degrees, this fails at the upright control: \"an upright ship must leave the camera"
-            + " level (roll=30.0)\", 2026-09-28. The other verdict the wave touched is the screenshot's"
-            + " existence — a check on the harness's own capture, which no production line decides. The"
-            + " camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at"
-            + " \"the ship must actually have rolled past vertical\", an arrangement.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "RocketEventHandler#onFreeFlightCameraSetup",
+            at = "eulerFromQuat(cq); event.setYaw(e[0] + 180f); event.setPitch(e[1]); event.setRoll(e[2]);",
+            replacedBy = "eulerFromQuat(cq); event.setYaw(e[0] + 180f); event.setPitch(e[1]); event.setRoll(e[2] + 30.0F);",
+            fails = "an upright ship must leave the camera level", on = "2026-10-18")
     @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the pilot's cursor held hard over must roll his ship past vertical",
             member = "KeyBindings#handleShipPilotInput", at = "float roll = deadzone(command.cursorX);",
             replacedBy = "float roll = 0f;",
@@ -788,11 +785,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A body on a deck with world ground laid right under its feet is not handed to vanilla.
      */
-    @LegacyWitness(prose = "{@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its"
-            + " {@code !isSupportedByShipAt} half removed (the original defect) fails \"laying world ground under"
-            + " the deck must not hand this body … to vanilla\" with a {@code steppedOntoTerrain} release,"
-            + " 2026-09-30 — on the one-block floor this scenario now lays. Only the release verdict is"
-            + " witnessed by that break.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipFrameTravel#handles",
+            at = "if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))",
+            replacedBy = "if (isSupportedByWorldTerrain(entity))",
+            fails = "laying world ground under the deck must not hand this body", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(60);",
             why = "the body stands 60 ticks over ground that was not there before, and the claim is that no tick"
@@ -888,11 +884,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A parked, unmanned ship holds its altitude instead of sinking.
      */
-    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#onPhysicsTick} at"
-            + " {@code gx = g.x(); gy = g.y(); gz = g.z();}, the gravity feed-forward, multiplied"
-            + " by {@code 0.0} — the original defect — this fails with \"its vertical velocity peaked at"
-            + " -0.1633 blk/s\", drift -1.33 blocks over the window — 2026-09-28, taken on the pre-actuator form,"
-            + " when the same feed-forward line lived in the controller mixin.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "gx = g.x(); gy = g.y(); gz = g.z();", replacedBy = "gx = 0.0; gy = 0.0; gz = 0.0;",
+            fails = "a station-keeping ship must not sink", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(60);",
             why = "the hold brakes out the climb's residual motion before the window below judges it. The defect"
@@ -1465,12 +1459,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * <p>Contract: this fails if production breaks the contract that a ship's readout is sent to its
      * pilot and to no passenger.</p>
      */
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the"
-            + " audience) fails \"seated at the helm, the pilot must receive his ship's readout\" with no readout"
-            + " inside 200 ticks, 2026-09-30")
-    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the"
-            + " audience) fails \"standing on the deck, off the helm and with no console open, a passenger must"
-            + " receive none of his ship's readouts\" with 4 received against the pilot's 4, 2026-09-30")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the pilot receives", member = "TileAdvancedFlightComputer#isReadoutAudience",
+            at = "return seat != null && seat.getFlightComputer() == this;", replacedBy = "return false;",
+            fails = "seated at the helm, the pilot must receive his ship's readout", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "a passenger receives none", member = "TileAdvancedFlightComputer#isReadoutAudience",
+            at = "return seat != null && seat.getFlightComputer() == this;", replacedBy = "return true;",
+            fails = "a passenger must receive none of his ship's readouts", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(ROLE_DOSE_TICKS);",
             why = "the dose both legs are compared over; the server sends, the client records.")

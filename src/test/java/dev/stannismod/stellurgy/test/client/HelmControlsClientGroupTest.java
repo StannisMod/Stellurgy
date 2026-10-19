@@ -73,11 +73,14 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * being a candidate, and the second T names the decoy. A designation that chose by distance names
      * the decoy first; one that ignored the heading would name the quarry behind him second.</p>
      */
-    @LegacyWitness(prose = "with {@code ShipDesignation#designate} at"
-            + " {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by"
-            + " DISTANCE instead, this fails at \"with a ship dead ahead and a nearer one forty-five degrees off,"
-            + " another was named\" (2026-10-05).")
-    @LegacyWitness(prose = "with {@code HullAllegianceRule#isFriend} at"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the ship ahead is named", member = "ShipDesignation#designate",
+            at = "double angle = angleFromSight(eye, look, ship.getValue());",
+            replacedBy = "double angle = Math.atan(1e-6 * eye.distanceTo(new Vec3d("
+                    + "(ship.getValue().minX + ship.getValue().maxX) / 2, (ship.getValue().minY + ship.getValue().maxY) / 2,"
+                    + " (ship.getValue().minZ + ship.getValue().maxZ) / 2)));",
+            fails = "with a ship dead ahead and a nearer one forty-five degrees off, another was named", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the member is an enum constant's body, which the replay cannot address)"
+            + " with {@code HullAllegianceRule#isFriend} at"
             + " {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,"
             + " this fails at \"with him aboard carrying the code, his battery never decided about that ship again"
             + " — no `turret_fire_decided` carrying … friendly = true\" (2026-10-05).")
@@ -219,13 +222,14 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * this run in client ticks (an upper bound: read before the press and after the record arrived).
      * Measured 2026-10-05: the slowest act landed within 6 client ticks, so the window was 60.</p>
      */
-    @LegacyWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
-            + " {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its"
-            + " two siblings for use and pick removed, this fails at \"from the helm the cursor acted on the world"
-            + " (held 60 ticks)\" (2026-10-05).")
-    @LegacyWitness(prose = "with {@code KeyBindings#onHelmBlockHighlight} at"
-            + " {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at"
-            + " \"from the helm a block was outlined as the one about to be hit (over 60 ticks)\" (2026-10-05).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "acts on nothing", member = "KeyBindings#scopeSteeringKeysToCockpit",
+            at = "gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);"
+                    + " gs.keyBindUseItem.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);"
+                    + " gs.keyBindPickBlock.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);",
+            replacedBy = "", fails = "from the helm the cursor acted on the world", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "outlines nothing", member = "KeyBindings#onHelmBlockHighlight",
+            at = "if (StellurgyKeyConflictContext.PILOTING.isActive()) {", replacedBy = "if (false) {",
+            fails = "from the helm a block was outlined as the one about to be hit", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(1);",
             why = "one client tick after the block reached his client's world (linked above): the tick in which"

@@ -418,10 +418,10 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
      */
-    @LegacyWitness(prose = "with {@code AtmosphereHandler#onTick} at {@code if (atmosType.canTick() &&}"
-            + " given an else branch asking {@code VACUUM.isImmune} of every body in a breathable atmosphere"
-            + " every ten ticks (it spends a suit's air, hurts nobody), this fails with"
-            + " \"a breathable atmosphere must never reach the suit's tank at all; drains recorded\" — 2026-09-28.")
+    @RedWitness(member = "AtmosphereHandler#onTick", at = "atmosType.onTick(event.getEntityLiving()); }",
+            replacedBy = "atmosType.onTick(event.getEntityLiving()); } else if (atmosType.isBreathable()"
+                    + " && event.getEntityLiving().ticksExisted % 10 == 0) { Atmosphere.VACUUM.isImmune(event.getEntityLiving()); }",
+            fails = "a breathable atmosphere must never reach the suit's tank at all", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), plot().dim,"
             + " ABSENCE_WINDOW_TICKS);",
@@ -485,9 +485,10 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * is not recorded — and only the flip itself is guaranteed to be an edge: the tank starts with
      * oxygen, so the run of {@code true}s before it is what makes the {@code false} a change.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. DAMAGE — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)}"
-            + " no longer applying a row's damage: \"vacuum damage must apply once the tank is drained … no"
-            + " `living_hurt` carrying source = Vacuum\". REFUSAL RECORDED — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying"
+    @RedWitness(verdict = "damage", member = "HazardExposure#applyTo", at = "if (row.damage() != null)",
+            replacedBy = "if (Boolean.FALSE)", fails = "vacuum damage must apply once the tank is drained", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the replay's locator takes the comment \"Calls onTick(EntityLiving"
+            + " base)\" in Atmosphere for the member's declaration) 2026-09-30. REFUSAL RECORDED — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying"
             + " the exposure even to a player the suit protects: \"the suit gate must be recorded turning the"
             + " player DOWN — that flip is the contract …\". Not witnessed: the drain link, the client's health"
             + " and the emptied tank.")
@@ -558,10 +559,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      *
      * <p>Pins the END STATE (air rises over the window) rather than a per-tick mB rate.</p>
      */
-    @LegacyWitness(prose = "with {@code TileGasChargePad#canPerformFunction} at"
-            + " {@code fillable.increment(stack, drained.amount);} removed, so the pad still drains its tank"
-            + " but fills nothing, this fails with \"no `suit_air_filled` whose 'filled' is not 0\" —"
-            + " 2026-09-28.")
+    @RedWitness(member = "TileGasChargePad#canPerformFunction", at = "fillable.increment(stack, drained.amount);",
+            replacedBy = "", fails = "the pad must actually transfer oxygen into the suit", on = "2026-10-18")
     @Test
     public void standingOnPoweredPadRefillsSuitAir() throws Exception {
         int dim = plot().dim;
@@ -636,11 +635,10 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * breathable atmosphere. The breathable type's {@code onTick} is a no-op, so the
      * {@code protectsFrom} branch is never evaluated and no decrement fires.
      */
-    @LegacyWitness(prose = "with the same breathable-drain inversion as"
-            + " {@link #breathableAtmosphereDoesNotDrainChestTank} — {@code AtmosphereHandler#onTick} at"
-            + " {@code if (atmosType.canTick() &&} given an else branch asking {@code VACUUM.isImmune} of every"
-            + " body in a breathable atmosphere every ten ticks — this fails with \"a breathable atmosphere must"
-            + " never reach the enchanted suit's buffer; drains recorded\" — 2026-09-28.")
+    @RedWitness(member = "AtmosphereHandler#onTick", at = "atmosType.onTick(event.getEntityLiving()); }",
+            replacedBy = "atmosType.onTick(event.getEntityLiving()); } else if (atmosType.isBreathable()"
+                    + " && event.getEntityLiving().ticksExisted % 10 == 0) { Atmosphere.VACUUM.isImmune(event.getEntityLiving()); }",
+            fails = "a breathable atmosphere must never reach the enchanted suit's buffer", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(plot().dim, ABSENCE_WINDOW_TICKS);",
             why = "the same absence window, on the player's own world clock. Both clocks: the verdict below also"
@@ -691,9 +689,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * whole suit was consulted and the chest was asked to pay. Only then does the silence in
      * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
      */
-    @LegacyWitness(prose = "with {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger(\"air\", newAmt);}"
-            + " skipped, so it reports the air spent without spending it (protection intact), this fails with \"the drained buffer must reach the client's"
-            + " chest slot — no `client_slot_tag_set`\" — 2026-09-28.")
+    @RedWitness(member = "ItemAirUtils#decrementAir", at = "nbt.setInteger(\"air\", newAmt);", replacedBy = "",
+            fails = "the drained buffer must reach the client's chest slot", on = "2026-10-18")
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -773,9 +770,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * {@code living_hurt} from {@code Vacuum} proves the atmosphere tick ran on THIS player, and the
      * empty drain log then says the missing chest never entered a decrement path.</p>
      */
-    @LegacyWitness(prose = "with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: \"vacuum"
-            + " damage must apply to a bare-skinned player — no `living_hurt`\", 2026-09-30. Only that link is"
-            + " witnessed; the empty drain log, the client's health and the chest reading are not.")
+    @RedWitness(member = "HazardExposure#applyTo", at = "if (row.damage() != null)", replacedBy = "if (Boolean.FALSE)",
+            fails = "vacuum damage must apply to a bare-skinned player", on = "2026-10-18")
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -828,9 +824,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * same damage plus the no-chest decrement contract: this one is the narrower, older pin and the
      * one the suit tests cross-check themselves against.</p>
      */
-    @LegacyWitness(prose = "with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: \"the"
-            + " vacuum must damage the player at all before the client can be shown it — no `living_hurt`\","
-            + " 2026-09-30. The client-health link after it is not witnessed.")
+    @RedWitness(member = "HazardExposure#applyTo", at = "if (row.damage() != null)", replacedBy = "if (Boolean.FALSE)",
+            fails = "the vacuum must damage the player at all before the client can be shown it", on = "2026-10-18")
     @Test
     public void vacuumDamageReachesTheClient() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -879,10 +874,9 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * mean the suit held. The gate's own {@code immune:true} is not asserted, because that recorder
      * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
      */
-    @LegacyWitness(prose = "with {@code ItemSpaceChest#decrementAir} at"
-            + " {@code fluidDrained = fluidItem.drain(amtDrained, true);} made a simulated drain, so it reports"
-            + " the air spent without draining its tank (protection intact), this fails with \"the drained tank must reach the client's"
-            + " chest slot — no `client_slot_tag_set`\" — 2026-09-28.")
+    @RedWitness(member = "ItemSpaceChest#decrementAir", at = "fluidDrained = fluidItem.drain(amtDrained, true);",
+            replacedBy = "fluidDrained = fluidItem.drain(amtDrained, false);",
+            fails = "the drained tank must reach the client's chest slot", on = "2026-10-18")
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -1089,19 +1083,21 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * Pins INV-HEAT-24 (The rung reaches a real person).
      */
     @Pins("INV-HEAT-24")
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. CONTROL — {@code PressurizedAir}"
+    @LegacyWitness(prose = "(kept as prose: the break now reddens an earlier verdict — with the heat row dropped"
+            + " the room deals no heat damage, and \"the overheated room must itself deal him heat damage\" fails"
+            + " first (logs/fix-tests/w3-replay-14.log); the client-health link behind it is vanilla's health sync,"
+            + " which no line of ours decides) HURTS — {@code AtmosphereHazards#byAtmosphere} at"
+            + " {@code put(table, Atmosphere.VERYHOT, HEAT);} dropping the heat row: \"a compartment past the crew"
+            + " threshold must hurt the person in it … no `client_health_updated` below 20.0\", 2026-09-30.")
+    @RedWitness(verdict = "heat itself", member = "HazardExposure#applyTo", at = "if (row.damage() != null)",
+            replacedBy = "if (row.damage() != null && !row.ignites())",
+            fails = "the overheated room must itself deal him heat damage", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the break is in a field initializer, which the replay cannot address)"
+            + " 2026-09-30. CONTROL — {@code PressurizedAir}"
             + " made a ticking, unbreathable atmosphere (the {@code Atmosphere#PRESSURIZEDAIR} at {@code new Atmosphere(false, true, true, \"PressurizedAir\")} constant) that"
             + " raises the heat row (the row {@code AtmosphereHazards#byAtmosphere} at"
             + " {@code put(table, Atmosphere.VERYHOT, HEAT);} names): \"control leg: the room itself must"
-            + " not hurt him while it is at cabin temperature … start=20.0 after=16.0\". HURTS —"
-            + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} dropping"
-            + " the heat row (taken while that table was a static block; the row is unchanged): \"a compartment past the crew threshold must hurt the person in it … no"
-            + " `client_health_updated` below 20.0\". HEAT ITSELF — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} skipping the damage"
-            + " of the heat row only, so it still sets him alight: \"the overheated room must itself deal him"
-            + " heat damage — not only set him alight — no `living_hurt` carrying who = ForgeTestClient and"
-            + " source = Heat was recorded within 200 ticks\", with the fire's own {@code living_hurt} records"
-            + " in the window, 2026-09-30. The rung, cabin and player-name premises are arrangements and are"
-            + " not witnessed.")
+            + " not hurt him while it is at cabin temperature … start=20.0 after=16.0\".")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
             why = "the interval is how long the room at cabin temperature had to hurt.")
@@ -1207,9 +1203,11 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * already requires a client health below the start, so the comparison could not go red on its
      * own.</p>
      */
-    @LegacyWitness(prose = "with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: \"a"
-            + " pressurised room below the breathable oxygen floor must hurt an unsuited player, and the CLIENT"
-            + " must be told it (he started at 20.0) — no `client_health_updated` below 20.0\", 2026-09-30.")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "HazardExposure#applyTo at `if (row.damage() != null)` ->"
+            + " `if (Boolean.FALSE)` (no row deals damage), then Poisoning#tick at `double index = air == null ? 0.0D :"
+            + " air.toxicIndex();` -> `double index = 0.0D;` (nothing poisons) — green under both"
+            + " (logs/fix-tests/w3-replay-14.log, -15.log), 2026-10-19: the stale room hurts him by each path alone,"
+            + " so one break per run cannot take the verdict.")
     @Test
     public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -1247,16 +1245,22 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * rules out), and a falling air buffer alone is what a suit draining without protecting anybody
      * looks like.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. DRAIN — {@code AtmosphereHazards#byAtmosphere}"
-            + " at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} dropping the low-oxygen row (taken while"
-            + " that table was a static block; the row is unchanged): \"the stale air must reach the suit's buffer … no"
-            + " `suit_air_drained` carrying route = enchanted\". NO REFUSAL — {@code ItemAirWrapper#protectsFrom} at {@code return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;} spending"
-            + " the air and then refusing protection anyway: \"the suit must protect its wearer from stale zone"
-            + " air; decisions since the window opened: …\". NO HEALTH — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying the"
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "the drain verdict (\"the stale air must reach the suit's"
+            + " buffer\"): AtmosphereHazards#byAtmosphere at `put(table, Atmosphere.LOWOXYGEN, THIN_AIR);` dropped, then"
+            + " at `put(table, Atmosphere.NOO2, SUFFOCATION);` dropped — green under both"
+            + " (logs/fix-tests/w3-replay-14.log, -15.log), 2026-10-19: the suit is drained by another row the stale"
+            + " room raises.")
+    @RedWitness(verdict = "no refusal", member = "ItemAirWrapper#protectsFrom",
+            at = "return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;",
+            replacedBy = "{ if (commitProtection) decrementAir(stack, 1); return false; }",
+            fails = "the suit must protect its wearer from stale zone air", on = "2026-10-18")
+    @RedWitness(verdict = "pays", member = "ItemAirUtils#decrementAir", at = "nbt.setInteger(\"air\", newAmt);", replacedBy = "",
+            fails = "and it must PAY for that protection", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the replay's locator takes the comment \"Calls onTick(EntityLiving"
+            + " base)\" in Atmosphere for the member's declaration) 2026-09-30. NO HEALTH — {@code Atmosphere#onTick} at"
+            + " {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying the"
             + " exposure even to a protected player: \"and no health may have been spent on it;"
-            + " healthStart=20.0 healthAfter=19.0\". PAYS — {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger(\"air\", newAmt);} reporting the air spent"
-            + " without writing it: \"and it must PAY for that protection … before=1000 after=1000\". Not"
-            + " witnessed: the client's rendering of the drained suit, and the full-suit premise.")
+            + " healthStart=20.0 healthAfter=19.0\".")
     @Test
     public void staleZoneAirDrainsTheSuitAndNotTheCrew() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
@@ -1354,23 +1358,15 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * <p>What it does not see: a mask alone (ruled insufficient; not pinned here), a tank running dry
      * mid-window, and poison inside a sealed zone rather than in a planet's open air.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-10-04, each run alone against a healthy run of"
-            + " the same method. KEPT OUT — {@code Poisoning#tick} at {@code index = 0.0D;} made"
-            + " {@code index = index + 0.0D;} (the gate still answering immune, its answer no longer acted on): \"a"
-            + " whole sealed suit with a supply must keep poisoned air out: no second judged him exposed, and the"
-            + " dose he carried never rose\" — and, under {@code AtmosphereHazards#immune} at"
-            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)} answering false (taken"
-            + " on the form before 2026-10-06, when that body was {@code isImmune}'s own), the same"
-            + " verdict after one exposed second rather than a whole window. BREATHING IT — {@code Poisoning#tick}"
-            + " at {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: \"a player"
-            + " standing in poisoned air must be breathing it … no `poison_breathed` 6 records carrying who ="
-            + " ForgeTestClient, or one judging him exposed was recorded within 320 ticks\". CONTROL EXPOSED — {@code AtmosphereHazards#immune}"
-            + " at {@code if (exposure.isEmpty())} made always to hold (taken when that line was"
-            + " {@code isImmune}'s, before 2026-10-06): \"CONTROL: the same air must judge him"
-            + " exposed, second after second, once the suit is off — no `poison_breathed` 3 records carrying who ="
-            + " ForgeTestClient and immune = false was recorded within 260 ticks\". CONTROL RISES —"
-            + " {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made {@code return dose;}: \"the dose"
-            + " he carries must climb second by second … doses=[0.0, 0.0, 0.0]\".")
+    @RedWitness(verdict = "kept out", member = "Poisoning#tick", at = "index = 0.0D;", replacedBy = "index = index + 0.0D;",
+            fails = "a whole sealed suit with a supply must keep poisoned air out", on = "2026-10-18")
+    @RedWitness(verdict = "breathing it", member = "Poisoning#tick",
+            at = "double index = air == null ? 0.0D : air.toxicIndex();", replacedBy = "double index = 0.0D;",
+            fails = "a player standing in poisoned air must be breathing it", on = "2026-10-18")
+    @RedWitness(verdict = "control exposed", member = "AtmosphereHazards#immune", at = "if (exposure.isEmpty())",
+            replacedBy = "if (Boolean.TRUE)", fails = "CONTROL: the same air must judge him exposed", on = "2026-10-18")
+    @RedWitness(verdict = "control rises", member = "Poisoning#nextDose", at = "return dose + toxicIndex;",
+            replacedBy = "return dose;", fails = "the dose he carries must climb second by second", on = "2026-10-18")
     @NotYetRed(prose = "NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on"
             + " {@code poison_events}). Attempted as {@code Poisoning#tick} at"
             + " {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero, which keeps the"
@@ -1466,20 +1462,17 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * nothing, and the head-and-chest case is the one a mask would be), and the suit's tank running
      * dry.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-10-04, each against a healthy run of the same"
-            + " method; the {@code AtmosphereHazards} lines were taken on the form before 2026-10-06, when the"
-            + " body now in {@code immune} was {@code isImmune}'s own. PARTIAL EXPOSED — {@code"
-            + " AtmosphereHazards#immune} at {@code if (exposure.needsFullSuit()}"
-            + " made never to hold: \"a helmet and a chest with a supply must NOT keep poisoned air out … no"
-            + " `poison_breathed` 3 records carrying who = ForgeTestClient and immune = false was recorded within"
-            + " 260 ticks\". PARTIAL RISES — {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made"
-            + " {@code return dose;}: \"and the poison must get in: the dose must climb second by second;"
-            + " doses=[0.0, 0.0, 0.0]\". WHOLE PROTECTED — {@code AtmosphereHazards#immune} at"
-            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)} answering false: \"CONTROL: the"
-            + " same air must judge him protected once the whole suit is on — every second in it\". WHOLE KEPT OUT"
-            + " — {@code Poisoning#tick} at {@code index = 0.0D;} made {@code index = index + 0.0D;}: \"CONTROL: in"
-            + " the whole suit nothing more gets in — the dose he carried in must not rise; doses=[12.0, 16.0,"
-            + " 20.0]\".")
+    @RedWitness(verdict = "partial exposed", member = "AtmosphereHazards#immune", at = "if (exposure.needsFullSuit()",
+            replacedBy = "if (false", fails = "a helmet and a chest with a supply must NOT keep poisoned air out", on = "2026-10-18")
+    @RedWitness(verdict = "partial rises", member = "Poisoning#nextDose", at = "return dose + toxicIndex;",
+            replacedBy = "return dose;", fails = "and the poison must get in", on = "2026-10-18")
+    @RedWitness(verdict = "whole protected", member = "AtmosphereHazards#immune",
+            at = "return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)"
+                    + " && protects(exposure, entity, EntityEquipmentSlot.CHEST, commit);",
+            replacedBy = "return false;",
+            fails = "CONTROL: the same air must judge him protected once the whole suit is on", on = "2026-10-18")
+    @RedWitness(verdict = "whole kept out", member = "Poisoning#tick", at = "index = 0.0D;", replacedBy = "index = index + 0.0D;",
+            fails = "CONTROL: in the whole suit nothing more gets in", on = "2026-10-18")
     @NotYetRed(prose = "NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on"
             + " {@code poison_events}). Attempted as {@code Poisoning#tick} at"
             + " {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: the run stops at"

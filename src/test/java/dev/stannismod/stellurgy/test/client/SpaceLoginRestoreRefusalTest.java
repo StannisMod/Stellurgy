@@ -36,11 +36,13 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
      * produced by an oracle that answers "aboard" unconditionally, or by a restore that drags every
      * logging-in player to the nearest ship.</p>
      */
-    @LegacyWitness(prose = "with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at"
-            + " {@code ShipAboardTag.Aboard aboard = ShipAboardTag.of(player)}) giving a player who has no"
-            + " aboard record a standing one on the first settled ship in the ledger — the restore that drags"
-            + " everyone aboard: \"a player who was never aboard must come back where vanilla puts him …"
-            + " expected:&lt;0&gt; but was:&lt;3&gt;\", 2026-09-28. The line before it is an arrangement.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "SpaceEventHandler#onPlayerLoadFromFile",
+            at = "ShipAboardTag.Aboard aboard = ShipAboardTag.of(player);",
+            replacedBy = "ShipAboardTag.Aboard aboard = ShipAboardTag.of(player); if (aboard == null && Stellurgy.spaceSubsystem() != null) {"
+                    + " for (java.util.Map.Entry<java.util.UUID, ShipLedger.Entry> e : Stellurgy.spaceSubsystem().ledger.snapshot().entrySet()) {"
+                    + " if (e.getValue().state == ShipLedger.State.SETTLED) {"
+                    + " aboard = ShipAboardTag.Aboard.standing(e.getKey(), e.getValue().coord, 0, 0, 0); break; } } }",
+            fails = "a player who was never aboard must come back where vanilla puts him", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RESTORE_LINK_BUDGET_TICKS);",
             why = "an ABSENCE watched for exactly as long as every positive leg waits for the presence"

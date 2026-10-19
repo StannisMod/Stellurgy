@@ -79,10 +79,9 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
                 "the hull, the deck a crew member rides, and the air it rolls through");
     }
 
-    @LegacyWitness(prose = "with {@code ShipFrameTravel#followShipPoses} (the pass that re-images a held"
-            + " body at its deck point after the craft moves) doing nothing: \"the crew member must ride the"
-            + " deck, not the world: he moved 1.95 relative to the ship but only 0.37 in the world\","
-            + " 2026-09-28. The lines the wait rewrite touched are the arrangement links before the roll.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipFrameTravel#followShipPoses",
+            at = "int reseated = 0;", replacedBy = "if (Boolean.TRUE) return 0; int reseated = 0;",
+            fails = "the crew member must ride the deck, not the world", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, ROLL_WINDOW_TICKS);",
             why = "on the hull's world clock and the client's ticks — the world rolls the deck, the client moves"

@@ -1811,11 +1811,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * A body standing on a ship stands on the surface the renderer draws: parked (the control), and
      * hull-standing on a hovering, inverted ship (the subject).
      */
-    @LegacyWitness(prose = "with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at"
-            + " {@code feet[0] - half, feet[1], feet[2] - half}) centred on the SHIP's up rather than the world's — the subspace-aligned phantom: \"the largest"
-            + " gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)\","
-            + " 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the"
-            + " body starts falling).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipFrameTravel#hullStandTravel",
+            at = "double[] box = {feet[0] - half, feet[1], feet[2] - half,"
+                    + " feet[0] + half, feet[1] + entity.height, feet[2] + half};",
+            replacedBy = "double hh = entity.height / 2.0; double[] box = new double[6]; for (int i = 0; i < 3; i++) {"
+                    + " double c = feet[i] + axes[1][i] * hh; double e = Math.abs(axes[0][i]) * half"
+                    + " + Math.abs(axes[1][i]) * hh + Math.abs(axes[2][i]) * half; box[i] = c - e; box[i + 3] = c + e; }",
+            fails = "the largest gap between the swept solid and the", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 5; i++) {",
             why = "the MAXIMUM cross-side delta at rest — a difference between two rendered sides, which no record"

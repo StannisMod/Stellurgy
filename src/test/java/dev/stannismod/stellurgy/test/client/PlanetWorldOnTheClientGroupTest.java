@@ -220,7 +220,8 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * A player who crosses a dimension boundary has his client told the destination's spawn point,
      * rather than keeping a placeholder from a freshly constructed client world.
      */
-    @LegacyWitness(prose = "taken on the pre-fix form, with {@code MixinPlayerList} cancelling"
+    @LegacyWitness(prose = "(kept as prose: taken on a form no longer in the tree, and no member of ours now sits on"
+            + " the spawn packet's path) taken on the pre-fix form, with {@code MixinPlayerList} cancelling"
             + " {@code updateTimeAndWeatherForPlayer} for a copy that dropped vanilla's spawn packet; the mixin now"
             + " stands as {@code MixinPlayerList#rainFlagInsteadOfLerpedStrength} at"
             + " {@code return world.getWorldInfo().isRaining()}, redirecting one call instead of replacing the method:"
@@ -312,15 +313,16 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
      * overworld's rain.
      */
-    @LegacyWitness(prose = "the fresh-dim packet verdicts and the overworld control, 2026-09-28, one"
-            + " inversion per verdict. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag:"
-            + " \"overworld should still be raining\". NEVER TOLD IT IS RAINING — {@code"
-            + " PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after wrapping:"
-            + " \"client must never be told it is raining on fresh clear dim C\". NEVER TOLD A STRENGTH — the re-seed"
-            + " ({@code PlanetWeatherManager#wrapWorldInfoIfNeeded} at {@code float rain = wrapped.isRaining() ? 1.0F : 0.0F})"
-            + " leaving dim C at 0.15: \"client must never be told a rain strength above 0 on fresh dim C\". The"
-            + " told-rain link on A has not been reddened: the rain reaches an arriving client by more paths than"
-            + " any one inversion removed.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the overworld control", member = "PlanetWeatherManager#wrapWorldInfoIfNeeded",
+            at = "world.worldInfo = wrapped;",
+            replacedBy = "world.worldInfo = wrapped; world.getMinecraftServer().getWorld(0).getWorldInfo().setRaining(false);",
+            fails = "overworld should still be raining", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "never told it is raining", member = "PlanetWeatherManager#wrapWorldInfoIfNeeded",
+            at = "world.prevRainingStrength = rain; world.rainingStrength = rain;", replacedBy = "",
+            fails = "client must never be told it is raining on fresh clear dim C", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "never told a strength", member = "PlanetWeatherManager#wrapWorldInfoIfNeeded",
+            at = "float rain = wrapped.isRaining() ? 1.0F : 0.0F;", replacedBy = "float rain = wrapped.isRaining() ? 1.0F : 0.15F;",
+            fails = "client must never be told a rain strength above 0 on fresh dim C", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(SYNC_C, FADE_WINDOW_TICKS);",
             why = "dim C's clock and the client's, which applies what dim C sends. What it cannot see: a packet"
@@ -410,12 +412,15 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * hard-codes {@code server.worlds[0]}; a console sender stands in the overworld, so this needs the
      * real chat path with the planet-standing player as sender.
      */
-    @LegacyWitness(prose = "one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at"
-            + " {@code worldinfo.setRaining(true)} not setting the flag: \"no `planet_weather_changed` carrying dim ="
-            + " 9304 and raining = true\". CLEAR — the clear branch ({@code WeatherCommand#execute} at"
-            + " {@code if (\"clear\".equals(action))}) writing nothing: \"… raining = false was recorded within 200"
-            + " ticks\". Dropping only its {@code setRaining(false)} stays GREEN: the {@code setRainTime(0)} beside it"
-            + " makes vanilla's weather cycle flip the flag off on the next tick.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "rain", member = "WeatherCommand#execute",
+            at = "worldinfo.setThunderTime(i); worldinfo.setRaining(true); worldinfo.setThundering(false);",
+            replacedBy = "worldinfo.setThunderTime(i); worldinfo.setThundering(false);",
+            fails = "carrying dim = 9304 and raining = true", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "clear", member = "WeatherCommand#execute",
+            at = "if (\"clear\".equals(action)) { worldinfo.setCleanWeatherTime(i); worldinfo.setRainTime(0);"
+                    + " worldinfo.setThunderTime(0); worldinfo.setRaining(false); worldinfo.setThundering(false);",
+            replacedBy = "if (\"clear\".equals(action)) {",
+            fails = "carrying dim = 9304 and raining = false", on = "2026-10-18")
     @Test
     public void slashWeatherOnPlanetRainsThePlanetNotTheOverworld() throws Exception {
         // /weather (and the redirect target) require permission level 2 — granted as an admin would, and

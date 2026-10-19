@@ -296,45 +296,57 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * build at the assembler, board, fly up into space, aim at the console, arm, jump beside the Moon,
      * be taken into its zone and keep station there, approach, descend onto it, and leave it.
      */
-    @LegacyWitness(prose = "the MOON links (2026-09-30, one inversion per run, each red at its own line with"
-            + " the earlier legs green): {@code CrystalSeeding#starterFor} at"
-            + " {@code if (home != null && isInZoneOf(coord, home))} — the zone skip — reverted to cell equality —"
-            + " leg T, \"…and must NOT carry the home world's moon … starter … [0,2]\"; {@code CrystalSeeding#starterFor}"
-            + " at {@code memory.record(new CrystalEntry(home, nameOf(0), SystemBodyKind.PLANET,} — the home record —"
-            + " disabled — leg T, \"a first crystal must carry the home world … crystalDims:[]\";"
-            + " {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}"
+    @RedWitness(verdict = "leg T: no home moon in the starter", member = "CrystalSeeding#starterFor",
+            at = "if (home != null && isInZoneOf(coord, home))",
+            replacedBy = "if (home != null && coord.cellKey().equals(home.cellKey()))",
+            fails = "must NOT carry the home world's moon", on = "2026-10-18")
+    @RedWitness(verdict = "leg T: the home world in the starter", member = "CrystalSeeding#starterFor",
+            at = "memory.record(new CrystalEntry(home, nameOf(0), SystemBodyKind.PLANET, InfoTier.TELESCOPE, now, 0));",
+            replacedBy = "", fails = "a first crystal must carry the home world", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the break reddens an arrangement, two attempts — with the ring and the"
+            + " clearance dropped, and with the ring alone, the replay fails at \"the moon he jumped to must be in his"
+            + " sky on arrival\" (logs/fix-tests/w3-replay-17.log, -18.log)) {@code SpaceSubsystem.arrivalStandoff} back on"
+            + " the flat 1 024 ring — leg 7b, \"a jump must stand the ship OFF its destination … range=1024 shell=7066\","
+            + " 2026-09-30.")
+    @RedWitness(verdict = "leg 7b: carried into the moon's zone", member = "CellSeam#hasEnteredZone",
+            at = "return zoneRadiusBlocks > 0d", replacedBy = "return Boolean.FALSE && zoneRadiusBlocks > 0d",
+            fails = "a granted carry into the moon's zone", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: under its replayable form — {@code UniverseRegistry#originAt} at"
+            + " {@code return originAt(zone, tick).plus(} -> {@code return originAt(zone, 0L).plus(}, a moon-zone cell that"
+            + " no longer follows its moon — the run exceeded the replay tool's 2400 s cap twice"
+            + " (logs/fix-tests/w3-replay-17.log, -19.log), so no verdict was read) {@code UniverseRegistry#originAt} at"
+            + " {@code return originAt(zone, tick).plus(name.sectorX() * width, name.sectorY() * width,} placing a"
+            + " moon-zone cell on the PLANET's origin — leg 7b, \"must keep station with it … range 15235 -> 76112"
+            + " (drift 60877.0) while the moon travelled 60878\", 2026-09-30.")
+    @RedWitness(verdict = "leg 8: taken down", member = "TileAdvancedFlightComputer#descendTargetsIn",
+            at = "for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))",
+            replacedBy = "for (dev.stannismod.stellurgy.universe.SystemBody b : reg.bodiesAt(shipCoord))",
+            fails = "must be taken DOWN off the space cell", on = "2026-10-18")
+    @RedWitness(verdict = "the build", member = "TileRocketAssemblingMachine#assembleRocket",
+            at = "VSIntegration.assembleBuiltTier2Ship(world, rocketBB);", replacedBy = "",
+            fails = "the BUILD pass must add a ship to the registry", on = "2026-10-18")
+    @RedWitness(verdict = "the crystal's addresses", member = "TileNavigationComputer#shipCrystal",
+            at = "return ItemMemoryCrystal.memoryOf(getStackInSlot(SLOT_SHIP));",
+            replacedBy = "return ItemMemoryCrystal.memoryOf(net.minecraft.item.ItemStack.EMPTY);",
+            fails = "putting a memory crystal into the console's SHIP slot must give the pilot a list", on = "2026-10-18")
+    @RedWitness(verdict = "the pick", member = "TileNavigationComputer#useNetworkData",
+            at = "setTargetBody(entry.dimId(), entry.coord());", replacedBy = "",
+            fails = "a click on a listed address must reach the navigation computer", on = "2026-10-18")
+    @RedWitness(verdict = "the arm", member = "TileNavigationComputer#useNetworkData",
+            at = "} else if (arm()) {", replacedBy = "} else if (Boolean.FALSE) {",
+            fails = "pressing ARM must reach the navigation computer and be ANSWERED", on = "2026-10-18")
+    @RedWitness(verdict = "the jump key", member = "TileAdvancedFlightComputer#onJumpKey",
+            at = "if (world == null || world.isRemote) {", replacedBy = "if (Boolean.TRUE) {",
+            fails = "the jump key, pressed by a seated pilot of a ARMED ship, must be ANSWERED", on = "2026-10-18")
+    @RedWitness(verdict = "the latch", member = "TileAdvancedFlightComputer#update",
+            at = "if (latchPos != null && latchPos[1] <= line.getAsInt()) {",
+            replacedBy = "if (latchPos != null && latchPos[1] < -1.0e9) {",
+            fails = "no `entry_latch_released` carrying ship", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: TelescopeScan#characterise's first declaration is the delegating overload,"
+            + " which the replay takes for the member) the MOON links, 2026-09-30: {@code TelescopeScan#characterise}"
+            + " at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}"
             + " — the body loop — skipping a {@code MOON} — leg T, \"the observatory's"
-            + " local radar, run at home, must write the home world's moon … crystal names [0]\";"
-            + " {@code SpaceSubsystem.arrivalStandoff} back on the flat 1 024 ring — leg 7b, \"a jump must"
-            + " stand the ship OFF its destination … range=1024 shell=7066\"; {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d}"
-            + " answering {@code false} — leg 7b, \"…no `carry_requested` a granted carry into the moon's zone\";"
-            + " {@code UniverseRegistry#originAt} at {@code return originAt(zone, tick).plus(name.sectorX() * width, name.sectorY() * width,} placing a moon-zone cell on the PLANET's origin — leg 7b,"
-            + " \"must keep station with it … range 15235 -> 76112 (drift 60877.0) while the moon travelled"
-            + " 60878\"; {@code TileAdvancedFlightComputer#descendTargetsIn} at"
-            + " {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))} reading the cell ({@code bodiesAt}) instead of"
-            + " the sky — leg 8, \"…must be taken DOWN off the space cell … rangeAtArrival=14132 rangeNow=43\"."
-            + " NOT witnessed at their own lines: leg 7b's client-follows-into-the-zone wait and seat check, the"
-            + " console listing the moon (leg 6's pick), and the ledger still naming the moon's zone after the"
-            + " station window — each sits behind a link above whose inversion fails first.")
-    @LegacyWitness(prose = "one inversion per rung, each red at its own rung with the earlier ones green."
-            + " THE BUILD (2026-09-28, taken on the pre-2026-10-07 form that handed over a pasted snapshot) —"
-            + " the assembler's hand-over ({@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}) skipped: the rung's helper link fails first, \"the BUILD"
-            + " pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks\"; the"
-            + " rung's own ship count restates that link. THE CRYSTAL'S ADDRESSES —"
-            + " {@code TileNavigationComputer.shipCrystal} reading an empty stack: \"putting a memory crystal into"
-            + " the console's SHIP slot must give the pilot a list of places he can fly to … listed=0\"; the wait"
-            + " before it is the server's receipt of the click, a barrier. THE PICK — the {@code NET_PICK} branch"
-            + " of {@code TileNavigationComputer.useNetworkData} not calling {@code setTargetBody}: \"a click on a"
-            + " listed address must reach the navigation computer … no `nav_target_picked`\". THE ARM — the"
-            + " {@code NET_ARM} branch never calling {@code arm()}: \"pressing ARM must reach the navigation"
-            + " computer and be ANSWERED … no `nav_arm_decided`\". THE JUMP KEY —"
-            + " {@code TileAdvancedFlightComputer.onJumpKey} returning at once: \"the jump key, pressed by a"
-            + " seated pilot of a ARMED ship, must be ANSWERED … no `jump_press_decided`\". THE LATCH"
-            + " (2026-09-24) — {@code TileAdvancedFlightComputer#update} at {@code entryLatched = false} removed: leg"
-            + " 9 fails with \"no `entry_latch_released` carrying ship = …\" after the pilot has flown down through"
-            + " the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at"
-            + " their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and"
-            + " without the on-ramp the client-world wait fails before the {@code STARTED} read.")
+            + " local radar, run at home, must write the home world's moon … crystal names [0]\".")
     @RedWitness(verdict = "the rocket assembler opens on one real use press",
             member = "BlockTile#onBlockActivated",
             at = "player.openGui(Constants.modId, guiId, world, pos.getX(), pos.getY(), pos.getZ());",

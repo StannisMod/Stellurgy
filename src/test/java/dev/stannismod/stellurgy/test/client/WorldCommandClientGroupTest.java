@@ -258,16 +258,15 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * harness client is always remote (a separate server JVM), so this does not see the single-player
      * branch, where the registration is the integrated server's and must be left alone.</p>
      */
-    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
-            + " {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every"
-            + " client only forgetting, the shape it shipped with — this fails with \"the client forgot the"
-            + " deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,"
-            + " withdraw:false,forgeRegistered:true}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
-            + " {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails"
-            + " at \"the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14\";"
-            + " with its {@code if (deleteDim)} branch never taken, at \"the client was never told the planet was"
-            + " deleted — no `client_dim_forgotten` carrying dim = 14\" (2026-10-06).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "withdrawn from Forge", member = "PacketDimInfo#executeClient",
+            at = "if (dev.stannismod.stellurgy.client.ServerView.current().remote())", replacedBy = "if (Boolean.FALSE)",
+            fails = "the client forgot the deleted planet but its Forge registry still holds dimension", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "learned", member = "PacketDimInfo#executeClient",
+            at = "DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);", replacedBy = "",
+            fails = "the client never learned of the generated planet", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "told of the deletion", member = "PacketDimInfo#executeClient",
+            at = "if (deleteDim)", replacedBy = "if (Boolean.FALSE)",
+            fails = "the client was never told the planet was deleted", on = "2026-10-18")
     @Test
     public void aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient() throws Exception {
         scenario().arranging("op the bot and generate a planet the client learns of");
@@ -409,10 +408,9 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
      * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
      */
-    @LegacyWitness(prose = "with {@code FetchCommand#execute} at {@code new"
-            + " BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's"
-            + " placement at the teleporter's target passes and this fails on the position assertion with"
-            + " \"preX=4096.5 … postX=4116.5\" (2026-09-30).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "FetchCommand#execute",
+            at = "new BasicTeleporter(destPlayer.getPosition())", replacedBy = "new BasicTeleporter(destPlayer.getPosition().east(20))",
+            fails = "self-fetch must leave bot within 1 block of its prior position", on = "2026-10-18")
     @Test
     public void selfFetchCompletesAndPreservesPosition() throws Exception {
         scenario().arranging("op the bot and read its own username back");

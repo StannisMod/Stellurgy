@@ -70,15 +70,17 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
      * Pins INV-SHD-24 (An emitter holds a player at its membrane on the side of ITS OWN shell he was last seen clear of).
      */
     @Pins("INV-SHD-24")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#shouldRepelEntity} at"
+    @LegacyWitness(prose = "(kept as prose: the break is in the field's declaration, which no fragment of a member"
+            + " carries) with {@code TileEntityFieldGenerator#shouldRepelEntity} at"
             + " {@code Boolean outside = playerOutsideShell.get(entity.getUniqueID());} reading a map made"
             + " {@code static} again — one record per player for every emitter, the shape it replaced — this"
             + " fails at \"shield B let in a player who walked at it from outside ... no `shield_player_held`"
             + " carrying pos = 4026,150,4020 was recorded within 200 ticks\" (2026-10-03).")
-    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#pushEntityBack} at"
-            + " {@code Vec3d targetCenter = fieldCenter.add(} replaced by the field's own centre — B holds him, but"
-            + " puts him INSIDE — this fails at \"shield B held the player but did not keep him OUT: after the hold"
-            + " he stands 1.0584229873233446 from B's centre, inside its inner surface at 3.5\" (2026-10-03).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "kept out", member = "TileEntityFieldGenerator#pushEntityBack",
+            at = "Vec3d targetCenter = fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius()"
+                    + " + FieldSurfaceMath.FIELD_HALF_THICKNESS + entityRadius + 0.05D));",
+            replacedBy = "Vec3d targetCenter = fieldCenter;",
+            fails = "shield B held the player but did not keep him OUT", on = "2026-10-18")
     @Test
     public void aShieldHoldsOutAPlayerWhoCameFromOutsideEvenFromInsideAnother() throws Exception {
         FixtureSite here = site();

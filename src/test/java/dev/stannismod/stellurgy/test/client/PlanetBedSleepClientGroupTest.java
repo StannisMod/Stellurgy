@@ -173,11 +173,12 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
 
     // ── the shipped default: a bed does not bring a planet's morning ─────────────────────────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy#allows} at {@code return allowOnPlanets}"
-            + " allowing the skip on every planet: \"no `time_skip_decided` refusing the skip on dim 9502\". THE"
-            + " CLOCK — {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at {@code ar$tellSleepersWhenDawnIs(self); return}"
-            + " — the return after a refusal — dropped, so the refused"
-            + " skip happens anyway: \"The clock was at 20006 before the sleep and 30006 after it\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the policy", member = "TimeSkipPolicy#allows",
+            at = "return allowOnPlanets;", replacedBy = "return true;",
+            fails = "no `time_skip_decided` refusing the skip on dim", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the clock", member = "MixinWorldServer#ar$roundSleepWakeToRotationalPeriod",
+            at = "ar$tellSleepersWhenDawnIs(self); return;", replacedBy = "ar$tellSleepersWhenDawnIs(self);",
+            fails = "The clock was at", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_LOCKED,"
             + " SKYLIGHT_WORLD_TICKS);",
@@ -261,11 +262,10 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
      * A completed sleep on a planet whose skip is allowed wakes it at the PLANET's dawn — the next
      * multiple of its rotational period — and leaves the overworld's clock alone.
      */
-    @LegacyWitness(prose = "with {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at"
-            + " {@code self.setWorldTime(StellurgyDimensionWorldInfo.computeSleepWakeTime(self.getWorldTime(), rotationalPeriod))}"
-            + " — the planetary rounding in the per-dim branch — replaced by vanilla's"
-            + " {@code setWorldTime(vanillaRounded)}, this fails with \"sleep skip must"
-            + " land at/after the next planetary dawn (30000), got 24007\" — 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "MixinWorldServer#ar$roundSleepWakeToRotationalPeriod",
+            at = "self.setWorldTime(StellurgyDimensionWorldInfo.computeSleepWakeTime(self.getWorldTime(), rotationalPeriod));",
+            replacedBy = "self.setWorldTime(vanillaRounded);",
+            fails = "sleep skip must land at/after the next planetary dawn", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_SKIP,"
             + " SKYLIGHT_WORLD_TICKS);",

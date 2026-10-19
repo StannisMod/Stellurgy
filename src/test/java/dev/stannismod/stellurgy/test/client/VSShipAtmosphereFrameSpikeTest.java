@@ -115,13 +115,10 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
      */
-    @LegacyWitness(prose = "with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any"
-            + " block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: \"RESULT-1: a vent in a"
-            + " sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…"
-            + " \\\"blobSize\\\":0)\", 2026-09-28, and again on 2026-09-30 after the gate read gained its"
-            + " resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The"
-            + " two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a"
-            + " premise; none of them is witnessed.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "AtmosphereBlob#addBlock",
+            at = "if (blobHandler.canFormBlob()) {",
+            replacedBy = "if (blobHandler.canFormBlob() && Math.abs(blockPos.x) <= 1000000) {",
+            fails = "RESULT-1: a vent in a sealed cabin built on an ASSEMBLED ship must still seal", on = "2026-10-18")
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
 

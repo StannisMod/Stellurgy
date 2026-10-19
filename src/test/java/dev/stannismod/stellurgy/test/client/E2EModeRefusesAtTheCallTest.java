@@ -169,41 +169,50 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#handleCommand",
             at = "JsonObject refusal = refusedInE2E(known, request);", replacedBy = "JsonObject refusal = null;",
             fails = "these were not: [interact_block RAN", on = "2026-10-12")
-    @LegacyWitness(prose = "round 4, one run with every new refusal inverted at its own branch (2026-10-09,"
-            + " logs/t564r4-refusal-witnessW1.log): {@code E2EModeGate#staticCallRefusal} at"
-            + " {@code if (E2EInstrument.named(className, methodName) != null)} -> {@code if (true)}; the {@code give} tag"
-            + " branch, the {@code clear} tag branch and the {@code fill} tag test {@code args[i].indexOf('{') >= 0}"
-            + " -> {@code false}; {@code E2EModeGate#unobtainableBlock} answering no refusal and"
-            + " {@code #unobtainableItem} returning at once; {@code drive info}, {@code chunk forceload} and"
-            + " {@code vs permaload} filed READ in {@code ProbeVerbKind#row}; {@code ForgeTestClientBootstrap#refusedInE2E} at"
-            + " {@code if (ClientInstruments.kindOf(className, methodName) == null)} -> {@code if (false)} (taken on the"
-            + " pre-static-table form, which asked an instance field {@code instruments} the same question), the set_look NaN /"
-            + " infinity test -> {@code false}, and {@code #deliverInput} ignoring {@code inputNoHandProduces}. Fails:"
+    @LegacyWitness(prose = "round 4 (2026-10-09, logs/t564r4-refusal-witnessW1.log): {@code drive info},"
+            + " {@code chunk forceload} and {@code vs permaload} filed READ in {@code ProbeVerbKind#row} fail"
             + " \"every act an e2e may not perform must be refused … these were not: [`stellurgytest vs permaload true`"
-            + " RAN, `stellurgytest vs permaload false` RAN, … SpawnMemory reset` RAN, … clearProperty forge.test.e2e`"
-            + " RAN, `give @a minecraft:stone 1 0 {display:…}` RAN, `give @a minecraft:bedrock 1` RAN, … creativePowerBattery"
-            + " 1` RAN, `clear …{display:{}}` RAN, `fill … {Lock:\"k\"}` RAN, `fill … bedrock` RAN, `stellurgytest place …"
-            + " minecraft:bedrock` RAN, `stellurgytest fill … creativePowerBattery` RAN, `stellurgytest drive info …` RAN,"
-            + " `stellurgytest chunk forceload …` RAN, invoke_static_int RAN, invoke_static_int RAN, set_look RAN,"
-            + " set_look RAN, input failed, but not by the e2e gate … key code 256 …, input failed … mouse button 16 …,"
-            + " input RAN]\" — each new form at its own entry. And the run shows the mode FIXED at the start: with"
-            + " {@code forge.test.e2e} cleared in the server child by the inverted static call, every later bypass"
-            + " ({@code summon}, {@code tp}, {@code execute}, {@code forge tps}, the reflective {@code tp}) was still"
-            + " refused.")
-    @LegacyWitness(prose = "round 4, the console (2026-10-09, logs/t564r4-refusal-witnessW2.log):"
-            + " {@code E2EModeGate#onCommand} at {@code if (HARNESS_BRIDGE_SENDER.equals(sender.getClass().getName()))}"
-            + " -> {@code if (true)} — the refusal thrown at every sender, as before round 4 — fails at the console"
-            + " wait: \"Server bridge exchange failed for: stellurgytest invoke-static … ServerEventLog sinceReply …"
-            + " command_refused\", the server having crashed with \"Encountered an unexpected exception"
-            + " … E2EModeRefusal: {\\\"refused\\\":true,\\\"command\\\":\\\"tp\\\"…\".")
-    @LegacyWitness(prose = "with {@code ProbeVerbKind#admittedInE2E} at {@code return admittedInE2E;} replaced by {@code return false;}"
-            + " and {@code Kind#admittedInE2E} at {@code return admittedInE2E;}"
-            + " replaced by {@code return this == HARNESS;}, the refusal verdict"
-            + " holds and fails: \"every read, build and input an e2e is made of must be answered … `stellurgytest"
-            + " space bodies` was refused … report_state … READS\" (2026-10-08, logs/t564-refusal-witnessB.log)."
-            + " Both runs were taken before the two"
-            + " {@code vs permaload} rows were added (the release is admitted, its opposite is not); each row sits in"
-            + " the list the corresponding inversion reddened.")
+            + " RAN, `stellurgytest vs permaload false` RAN, … `stellurgytest drive info …` RAN,"
+            + " `stellurgytest chunk forceload …` RAN …]\" — each row at its own entry. ProbeVerbKind is a probe-side"
+            + " table (command/test), no member a replayable record may name.")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#staticCallRefusal",
+            at = "if (E2EInstrument.named(className, methodName) != null)", replacedBy = "if (true)",
+            fails = "these were not: [`stellurgytest invoke-static", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#refusalOf",
+            at = "if (args.length > ITEM_TAG_FROM) { return refusal(name, name, \"COMMAND\", \"a give",
+            replacedBy = "if (false) { return refusal(name, name, \"COMMAND\", \"a give",
+            fails = "these were not: [`give @a minecraft:stone 1 0 {display:", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#refusalOf",
+            at = "return args.length > ITEM_TAG_FROM ? refusal(name, name, \"COMMAND\", \"a clear",
+            replacedBy = "return false ? refusal(name, name, \"COMMAND\", \"a clear",
+            fails = "these were not: [`clear @a minecraft:stone 0 1 {display:{}}`", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#refusalOf",
+            at = "if (args[i].indexOf('{') >= 0)", replacedBy = "if (false)",
+            fails = "these were not: [`fill 300 90 300 300 90 300 minecraft:chest", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#unobtainableBlock",
+            at = "return UNOBTAINABLE.contains(id) ? refusal(", replacedBy = "return false ? refusal(",
+            fails = "these were not: [`fill 300 90 300 300 90 300 bedrock`", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#unobtainableItem",
+            at = "Item item = Item.getByNameOrId(text);", replacedBy = "Item item = null;",
+            fails = "these were not: [`give @a minecraft:bedrock 1` RAN", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#refusedInE2E",
+            at = "if (ClientInstruments.kindOf(className, methodName) == null)", replacedBy = "if (false)",
+            fails = "these were not: [invoke_static_int RAN", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#handleCommand",
+            at = "if (Float.isNaN(askedYaw) || Float.isInfinite(askedYaw)"
+                    + " || Float.isNaN(askedPitch) || Float.isInfinite(askedPitch))",
+            replacedBy = "if (false)", fails = "these were not: [set_look RAN", on = "2026-10-18")
+    @RedWitness(verdict = "answered", member = "ForgeTestClientBootstrap#refusedInE2E",
+            at = "if (ClientInstruments.kindOf(className, methodName) == null)", replacedBy = "if (true)",
+            fails = "every read, build and input an e2e is made of must be answered; these were not: [the client"
+                    + " refused an admitted command", on = "2026-10-18")
+    @RedWitness(verdict = "answered", member = "E2EModeGate#refusalOf",
+            at = "if (!kind.admittedInE2E()) {", replacedBy = "if (!kind.admittedInE2E() || kind == ProbeVerbKind.READ) {",
+            fails = "every read, build and input an e2e is made of must be answered; these were not: [`stellurgytest"
+                    + " space bodies`", on = "2026-10-18")
+    @RedWitness(verdict = "refused at the console, not thrown", member = "E2EModeGate#refuse",
+            at = "if (HARNESS_BRIDGE_SENDER.equals(sender.getClass().getName())) {", replacedBy = "if (true) {",
+            fails = "Server bridge exchange failed for:", on = "2026-10-18")
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#placeRefusal",
             at = "if (dx > BUILD_REACH || dy > BUILD_REACH || dz > BUILD_REACH)", replacedBy = "if (false)",
             fails = "these were not: [`stellurgytest place 0 ", on = "2026-10-12")

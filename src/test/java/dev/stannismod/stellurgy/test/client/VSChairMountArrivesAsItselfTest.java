@@ -68,12 +68,11 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
     private static final String CHAIR_ENTITY =
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
-    @LegacyWitness(prose = "with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}"
-            + " answering the mount dummy's id for the chair"
-            + " — the collision this pins: red at the server's {@code mount} link with \"Connection reset\", the"
-            + " client having died on the chair it built as the other class, 2026-09-28. Earlier than the"
-            + " named failure in {@code ridingOrDie}: the server-log wait's step also waits on the client's"
-            + " ticks, so a dead client ends it first, and the socket error does not name the cause.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "EntityNetworkIds#of",
+            at = "Integer id = IDS.get(key(name.toString()));",
+            replacedBy = "Integer id = IDS.get(key(\"valkyrienskies:entity_mountable_chair\".equals(name.toString())"
+                    + " ? \"stellurgy:mountDummy\" : name.toString()));",
+            fails = "Connection reset", on = "2026-10-18")
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
 

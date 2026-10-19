@@ -352,17 +352,9 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
      */
-    @LegacyWitness(prose = "with the satellite gate of {@code ItemOreScanner#onItemRightClick} at"
-            + " {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}"
-            + " removed, so an unbound"
-            + " scanner opens its GUI: \"an unbound ore scanner must never ask the server for a GUI; GUI"
-            + " requests since the click: …\", 2026-09-28. The same inversion first left this test GREEN while"
-            + " it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}"
-            + " substitutes {@code null} for a satellite it cannot resolve,"
-            + " {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at"
-            + " {@code inv.setSelectedSlot(-1)} dereferences it, and the exception"
-            + " leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as"
-            + " \"nothing asked\". It counts requests now ({@code gui_container_requested}, recorded at HEAD).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ItemOreScanner#onItemRightClick",
+            at = "if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())",
+            replacedBy = "if (true)", fails = "an unbound ore scanner must never ask the server for a GUI", on = "2026-10-18")
     @Test
     public void rightClickWithEmptySatelliteIdOpensNoGuiAndDoesNotCrash() throws Exception {
         scenario().arranging("equip an ore scanner with no satellite bound");
@@ -470,12 +462,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
      */
-    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick} at"
-            + " {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:"
-            + " \"a right-click at a block must reach the server and spawn the hovercraft into the world — no"
-            + " `entity_joined_world` was recorded within 200 ticks\", 2026-09-28. (A census of verdicts by call"
-            + " pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real"
-            + " verdict after the rewritten wait is this chain.)")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ItemHovercraft#onItemRightClick",
+            at = "worldIn.spawnEntity(entityboat);", replacedBy = "",
+            fails = "a right-click at a block must reach the server and spawn the hovercraft into the world",
+            on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(1);",
             why = "one client tick — the one in which the client REPORTS the new look. Vanilla sends a changed"
@@ -589,9 +579,12 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
      */
-    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at"
-            + " {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: \"no hovercraft must be spawned on an empty ray-trace; entities that"
-            + " joined the server world since the click: …\", 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ItemHovercraft#onItemRightClick",
+            at = "if (raytraceresult == null) { return new ActionResult<>(EnumActionResult.PASS, itemstack);",
+            replacedBy = "if (raytraceresult == null) { if (!worldIn.isRemote) worldIn.spawnEntity(new EntityHoverCraft("
+                    + "worldIn, playerIn.posX, playerIn.posY, playerIn.posZ));"
+                    + " return new ActionResult<>(EnumActionResult.PASS, itemstack);",
+            fails = "no hovercraft must be spawned on an empty ray-trace", on = "2026-10-18")
     @Test
     public void rightClickIntoEmptyAirReturnsPassWithoutSpawn() throws Exception {
         int x = plot().x(FIXTURE_DX);

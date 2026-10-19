@@ -45,12 +45,12 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
         return "knowledge-deposit";
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —"
-            + " {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the"
-            + " button without calling {@code uploadCrystalHere}: \"no"
-            + " `crystal_deposited` carrying pos = … was recorded within 200 ticks\". THE WORLD LEARNS —"
-            + " {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: \"after the click a pad here must"
-            + " be offered that world: … known:false\".")
+    @RedWitness(verdict = "the button deposits", member = "TileObservatory#useNetworkData",
+            at = "int[] result = uploadCrystalHere();", replacedBy = "int[] result = new int[] {0, 0};",
+            fails = "no `crystal_deposited` carrying pos", on = "2026-10-18")
+    @RedWitness(verdict = "the world learns", member = "TileObservatory#uploadCrystalHere",
+            at = "teachThisBody(landed);", replacedBy = "",
+            fails = "after the click a pad here must be offered that world", on = "2026-10-18")
     @RedWitness(verdict = "a right-click on the complete observatory opens its GUI",
             member = "BlockMultiblockMachine#onBlockActivated",
             at = "playerIn.openGui(Constants.modId, guiId, worldIn, pos.getX(), pos.getY(), pos.getZ());",

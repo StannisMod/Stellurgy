@@ -148,7 +148,8 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
      * Pins INV-EVT-07 (a server-side teleport of a PLAYER is never made from a handler that runs inside NetHandlerPlayServer.update).
      */
     @Pins("INV-EVT-07")
-    @LegacyWitness(prose = "with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at"
+    @LegacyWitness(prose = "(kept as prose: the break edits two members in one run) with the guard's call"
+            + " ({@code PlanetEventHandler#spaceDimensionGuard} at"
             + " {@code evictIfOffStation(player)}) moved back into {@code PlanetEventHandler.playerTick}"
             + " (the living update, inside the network handler's update) and {@code spaceDimensionGuard}"
             + " disabled, this fails with \"the guard must move a body off a given point ONCE … origin=206,64,154\""

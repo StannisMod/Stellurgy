@@ -192,14 +192,15 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A pilot dismounted inside an inverted ship and moved about inside it stays held by that ship
      * with deck semantics, at his deck spot, with the ship camera engaged.
      */
-    @LegacyWitness(prose = "2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}"
-            + " at {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the inversion\". THE"
-            + " CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: \"the"
-            + " client camera must engage for the re-seated interior body (shipCamActive=false)\". The other"
-            + " verdicts the wait rewrite touched are the arrangement's: the ABOARD commit after the dismount"
-            + " (server-committed; the seed inversion left it green), the client applying the in-hull teleport"
-            + " and taking a census after it, and the region check that the teleport did not carry him out"
-            + " through the doorway.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the inversion is accepted", member = "VSIntegration#flightComputerOf",
+            at = "return VSBridge.flightComputerOfLoadedShip(world, shipUuid);", replacedBy = "return null;",
+            fails = "attitude hold must accept the inversion", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.NotYetRed(prose = "the contract verdict (\"the client camera must engage for"
+            + " the re-seated interior body\"): ShipFrameTravel#applySeedCapture at `installed.seedAnchored = true;` ->"
+            + " `installed.seedAnchored = true; installed.hullStand = true;`, then at"
+            + " `captureState(entity, shipId, subX, subY, subZ, 0.0, 0.0, 0.0);` dropped — green under both"
+            + " (logs/fix-tests/w3-replay-9.log, -11.log), 2026-10-19: the re-seat reaches the deck by another path"
+            + " than the seed's capture.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
             why = "the same slew window the roofed-deck scenario below argues.")
@@ -425,10 +426,9 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A body unsupported mid-cavity of an enclosed, inverted cockpit is claimed by the deck below it.
      */
-    @LegacyWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
-            + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))}"
-            + " answering null: \"attitude hold must accept the inversion\", 2026-09-28 — the one verdict the wait"
-            + " rewrite touched here. The interior gate's own claim after it is not witnessed.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "VSIntegration#flightComputerOf",
+            at = "return VSBridge.flightComputerOfLoadedShip(world, shipUuid);", replacedBy = "return null;",
+            fails = "attitude hold must accept the inversion", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
             why = "then the attitude READ — the pair that replaces a fixed 200 CLIENT ticks and the re-stepping"
@@ -654,20 +654,23 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the roll is accepted", member = "VSIntegration#flightComputerOf",
+            at = "return VSBridge.flightComputerOfLoadedShip(world, shipUuid);", replacedBy = "return null;",
+            fails = "attitude hold must accept the roll", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the capture is kept", member = "ShipFrameTravel#excludedStateOf",
+            at = "if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()) {",
+            replacedBy = "if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()"
+                    + " || (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying)) {",
+            fails = "starting flight on the deck must NOT release the capture", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the descent", member = "ShipFrameTravel#flyingAboardTravel",
+            at = "motion[1] += flyImpulse * fly;", replacedBy = "motion[1] += Math.max(0.0, flyImpulse * fly);",
+            fails = "holding descend must sink along the DECK NORMAL", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: the replay's locator takes the comment \"… gate on travel(): …\" in"
+            + " ShipFrameTravel#handles for the member's declaration) 2026-09-28. THE LANDING — the walking path's deck"
             + " gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any"
             + " body that has flown aboard: \"turning"
             + " flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …"
-            + " no `deck_contact` carrying ship = … was recorded within 240 ticks\". THE ROLL IS ACCEPTED —"
-            + " {@code VSIntegration#flightComputerOf} answering null:"
-            + " \"attitude hold must accept the roll\". THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf}"
-            + " at {@code if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying())} treating a"
-            + " creative flyer as excluded even when aboard: \"starting"
-            + " flight on the deck must NOT release the capture\". THE DESCENT — the aboard fly impulse"
-            + " ({@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}) dropped for"
-            + " descend: \"holding descend must sink along the DECK"
-            + " NORMAL (subspace -Y): 131.0 -&gt; 132.0\". The ABOARD commit after the dismount is the"
-            + " arrangement's link (server-committed).")
+            + " no `deck_contact` carrying ship = … was recorded within 240 ticks\".")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);",
             why = "the gate's angle is not a choice: the ascent bounds below (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along"

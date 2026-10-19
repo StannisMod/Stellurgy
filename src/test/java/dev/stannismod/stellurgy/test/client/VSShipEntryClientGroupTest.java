@@ -202,26 +202,17 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
      * A pilot who flies his own ship through the orbit line arrives in its cell still seated, not
      * falling, in control of it, and carrying the aboard record.
      */
-    @LegacyWitness(prose = "the entry chain and the IN-CONTROL verdict, both halves, 2026-09-28 — the two"
-            + " the wait rewrite touched; the seated, not-falling and aboard-record verdicts are not witnessed."
-            + " THE ENTRY — with {@code requestEntry} deciding {@code COOLDOWN} before anything else"
-            + " (inserted in {@code ShipEntryController#requestEntry} ahead of its first decision,"
-            + " {@code return decided(Decision.NO_SHIP_ID, null, now)}): \"a ship climbing under its own power"
-            + " past the orbit line (255)"
-            + " must be taken by the entry crossing … no `cell_crossing_begun` was recorded within 4000 ticks\"."
-            + " THE KEY REACHES THE COMPUTER — with"
-            + " {@code CrewTransfer#boundDummyForMount} at {@code dummy.setSeatPos(seatPos)} binding the"
-            + " arrival's fresh mount to"
-            + " {@code seatPos.up(3)}: \"no `pilot_input_set` with input = set in dim 3\". THE KEY LIFTS THE SHIP —"
-            + " with {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input}"
-            + " replacing every input off the overworld by"
-            + " an idle one: \"clientY 77.99 -> 77.99 after 20 ticks of thrust\". That second inversion first left"
-            + " this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it"
-            + " climbed on that alone. The cruise is now zeroed by probe before the key is judged.")
-    @LegacyWitness(prose = "{@code ShipEntryController} returning {@code COOLDOWN} before every other"
-            + " decision (inserted at {@code ShipEntryController#requestEntry} at {@code if (shipId == null)}) fails the entry chain — the window now opened before the control leg's key — \"…must be"
-            + " taken by the entry crossing and SETTLE in a cell … `cell_crossing_begun` is missing from the"
-            + " chain\" within 4000 ticks, 2026-09-30.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the entry", member = "ShipEntryController#requestEntry",
+            at = "if (shipId == null) {", replacedBy = "if (Boolean.TRUE) return decided(Decision.COOLDOWN, shipId, now); if (shipId == null) {",
+            fails = "a ship climbing under its own power past the orbit line", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the key reaches the computer", member = "CrewTransfer#boundDummyForMount",
+            at = "dummy.setSeatPos(seatPos);", replacedBy = "dummy.setSeatPos(seatPos.up(3));",
+            fails = "with input = set in dim 3", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the key lifts the ship", member = "TileAdvancedFlightComputer#setPilotInput",
+            at = "this.pilotInput = input;",
+            replacedBy = "this.pilotInput = world != null && world.provider.getDimension() != 0 && input != null"
+                    + " ? FreeFlightInput.zero() : input;",
+            fails = "the pilot must still CONTROL his ship after the crossing", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
             why = "a fall is a value, not an event; no record answers.")
@@ -451,11 +442,10 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
      * A ship that climbs through the orbit line while every slot is held is refused, and its pilot
      * keeps his seat.
      */
-    @LegacyWitness(prose = "with the pool-full catch of {@code ShipEntryController#requestEntry} at"
-            + " {@code return decided(Decision.REFUSED_POOL_FULL, shipId, now)} deciding {@code NO_SHIP_POSITION} instead of"
-            + " {@code REFUSED_POOL_FULL}: \"with the pool held full, the entry gate must REFUSE for a full pool -"
-            + " its first decision was NO_SHIP_POSITION instead\", 2026-09-28. The wait before it is the link"
-            + " that the gate decided at all, which that inversion passes by construction.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipEntryController#requestEntry",
+            at = "return decided(Decision.REFUSED_POOL_FULL, shipId, now);",
+            replacedBy = "return decided(Decision.NO_SHIP_POSITION, shipId, now);",
+            fails = "with the pool held full, the entry gate must REFUSE for a full pool", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS,",
             why = PilotThrust.THRUST_DOSE_CLAIM)

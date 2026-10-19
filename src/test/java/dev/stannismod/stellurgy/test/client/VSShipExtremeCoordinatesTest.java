@@ -183,27 +183,31 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
     /**
      * A seated pilot keeps control of his ship at an extreme Y, through two teleports.
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE SECOND UNPARK — the id-keyed"
-            + " {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} failing a ship's second unpark"
-            + " only: \"the second teleport leaves the"
-            + " craft PARKED … {\\\"ok\\\":false}\". THE SECOND LANDING — {@code VSBridge.teleportShipToByUuid}'s"
-            + " transform writes ({@code VSBridge#teleportShip} at"
-            + " {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}) skipped on the second"
-            + " extreme-Y move: \"the second"
-            + " teleport must leave the craft where it was sent: commanded X 53400 ship=… posX 3400.0\". THE"
-            + " SECOND TELEPORT —"
-            + " {@code teleportShipAndEveryoneAboard} refusing its second call only: \"the second teleport must"
-            + " succeed: {\\\"ok\\\":false,…}\". THE RIDER STAYS WITH HIS SHIP — the server seat glue"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the teleport", member = "VSShipCrossingOps#teleportShipAndEveryoneAboard",
+            at = "if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {", replacedBy = "if (Boolean.TRUE) {",
+            fails = "teleport-ship to extreme Y must succeed", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the unpark", member = "VSBridge#unparkShip",
+            at = "ship.setPhysicsEnabled(true); return true;", replacedBy = "return false;",
+            fails = "the unpark must take", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the second teleport", member = "VSShipCrossingOps#teleportShipAndEveryoneAboard",
+            at = "if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {",
+            replacedBy = "if (Math.abs(px - sx) > 10000.0 || !teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {",
+            fails = "the second teleport must succeed", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the second landing", member = "VSBridge#teleportShip",
+            at = "ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved);",
+            replacedBy = "if (Math.abs(dx) < 10000.0) { ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved); }",
+            fails = "the second teleport must leave the craft where it was sent", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: THE SECOND UNPARK needs state the member has no place for — which unpark"
+            + " is the second — and both rider records break two members in one run) 2026-09-28. THE SECOND UNPARK —"
+            + " the id-keyed {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} failing a ship's second"
+            + " unpark only: \"the second teleport leaves the"
+            + " craft PARKED … {\\\"ok\\\":false}\". THE RIDER STAYS WITH HIS SHIP — the server seat glue"
             + " ({@code EntityDummy#onUpdate} at {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])})"
             + " putting the mount 10 above its seat at extreme Y, and the mount's rider"
             + " offset lowered by 10 so the rider himself still arrives at the seat: \"the CLIENT-rendered rider"
             + " must arrive WITH his ship … apart by 12.54 blocks\". A client-side-only glue offset stayed green:"
-            + " the client's mount is placed by the server's entity tracker, not by its own glue. THE TELEPORT —"
-            + " {@code VSShipCrossingOps#teleportShipAndEveryoneAboard} at"
-            + " {@code if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz))} refusing:"
-            + " \"teleport-ship to extreme Y must succeed: {\\\"ok\\\":false,…}\". THE UNPARK — the id-keyed"
-            + " {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} never taking: \"the unpark must take:"
-            + " {\\\"ok\\\":false}\". THE RIDER ARRIVES — BOTH carriers off, the mount loop of"
+            + " the client's mount is placed by the server's entity tracker, not by its own glue."
+            + " THE RIDER ARRIVES — BOTH carriers off, the mount loop of"
             + " {@code VSShipCrossingOps#teleportShipAndItsMounts} at"
             + " {@code d.setPositionAndUpdate(d.posX + (px - sx), d.posY + (py - sy), d.posZ + (pz - sz))} and the"
             + " seat glue of {@code EntityDummy#onUpdate} at"
@@ -636,11 +640,11 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * findable and mountable, a real held vertical-up key lifts the server ship by more than one block,
      * and the CLIENT-rendered rider tracks that climb within 3 blocks.</p>
      */
-    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
-            + " {@code this.pilotInput = input} discarding every input in the overworld: \"the x=0 control failed - the instrument, not the coordinate: the vertical-up"
-            + " key did not lift the ship (serverLift=0.0000 …)\", 2026-09-28. The waits each turn an expiry into"
-            + " that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at"
-            + " x=0 surfaces — the path this red went through.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "TileAdvancedFlightComputer#setPilotInput",
+            at = "this.pilotInput = input;",
+            replacedBy = "this.pilotInput = world != null && world.provider.getDimension() == 0 && input != null"
+                    + " ? FreeFlightInput.zero() : input;",
+            fails = "the x=0 control failed - the instrument, not the coordinate", on = "2026-10-18")
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int x : xLadder) {",
             why = "a pass over the rungs, one scenario each; the clock a rung spends of its own is the climb's"
                     + " held-key dose (farClimbLeg), the number the climb is measured over, and every other wait"

@@ -109,13 +109,12 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
      * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
      * it being inert.</p>
      */
-    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}"
-            + " replaced by {@code WorldFieldFrame.INSTANCE}, this fails \"the ship's emitter must resolve a SHIP"
-            + " frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true"
-            + " was recorded within 200 ticks\" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at"
-            + " {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and"
-            + " fails \"the shell's surface velocity stayed zero on a moving ship (speed=0.0)\" — 2026-10-06. The"
-            + " two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "ship frame", member = "FieldFrames#forBlock",
+            at = "new ShipFieldFrame(world, shipId)", replacedBy = "WorldFieldFrame.INSTANCE",
+            fails = "the ship's emitter must resolve a SHIP frame", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "surface velocity", member = "ShipFieldFrame#surfaceVelocityAt",
+            at = "new Vec3d(v[0], v[1], v[2])", replacedBy = "ZERO",
+            fails = "the shell's surface velocity stayed zero on a moving ship", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);",
             why = "the dose of drive the hull is given; the displacement it buys is read below and gated as an"

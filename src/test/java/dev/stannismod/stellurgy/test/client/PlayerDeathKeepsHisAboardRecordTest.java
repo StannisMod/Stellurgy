@@ -54,9 +54,9 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTes
     /**
      * The record survives a death and a respawn through the death screen.
      */
-    @LegacyWitness(prose = "with {@code CapabilityPlayerBindings#carryAcrossDeath} at"
-            + " {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: \"a player who dies must still know which ship he belongs to …"
-            + " {\\\"bound\\\":[]}\", 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "CapabilityPlayerBindings#carryAcrossDeath",
+            at = "fresh.setAboard(old.aboard());", replacedBy = "",
+            fails = "a player who dies must still know which ship he belongs to", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);",
             why = "the death screen's own enabling timer, counted on the clock that runs it.")

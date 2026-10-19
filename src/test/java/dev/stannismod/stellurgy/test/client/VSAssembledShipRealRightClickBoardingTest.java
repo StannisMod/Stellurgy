@@ -126,11 +126,10 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
     /**
      * A real use-key press at an assembled ship's seat boards the pilot.
      */
-    @LegacyWitness(prose = "with the vendored {@code MixinWorld#preRayTraceBlocks} at"
-            + " {@code callbackInfo.setReturnValue(rayTraceBlocksIgnoreShip(vec31, vec32, stopOnLiquid,} (Valkyrien"
-            + " Skies) no longer intercepting the ray, so it passes through the ship: \"HOP 1 (aim):"
-            + " the client's crosshair must resolve to a BLOCK\", 2026-09-28. The two waits before it are"
-            + " arrangement links (the ship usable, the client standing at the seat).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "MixinWorld#preRayTraceBlocks",
+            at = "callbackInfo.setReturnValue(rayTraceBlocksIgnoreShip(vec31, vec32, stopOnLiquid,"
+                    + " ignoreBlockWithoutBoundingBox, returnLastUncollidableBlock, this.dontInterceptShip));",
+            replacedBy = "", fails = "HOP 1 (aim): the client's crosshair must resolve to a BLOCK", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < budget; attempt++) {",
             why = "each pass stands and aims against the ship's live pose, and ends on the crosshair resting on"
@@ -445,10 +444,11 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      * the interaction rather than a mining-speed budget. The block read back is the one the crosshair
      * itself named.</p>
      */
-    @LegacyWitness(prose = "one break per verdict — with {@code MixinCPacketPlayerDigging#getPacketParent} at {@code if (physicsObject.isPresent())}"
-            + " ({@code getPacketParent}, Valkyrien Skies, vendored) answering null, so the digging packet is"
-            + " served with the player left in the world frame, the wait fails — no {@code block_broken} at the"
-            + " aimed subspace position — 2026-09-29. With {@code MixinChunk:62} refusing to write AIR into a"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "broken on the server", member = "MixinCPacketPlayerDigging#getPacketParent",
+            at = "return physicsObject.get().getShipData();", replacedBy = "return null;",
+            fails = "a real attack-key press aimed at an ASSEMBLED ship's block must BREAK it on the server", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: it names a line, not a member, and no member of MixinChunk can refuse the"
+            + " write — its setBlockState hook is not cancellable) With {@code MixinChunk:62} refusing to write AIR into a"
             + " ship's chunk, the break event still stands and the read-back fails — \"the block must be gone"
             + " now\" ({@code minecraft:iron_block}) — 2026-09-30.")
     @Test
@@ -486,7 +486,8 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      * A real use-key press with a block in hand, aimed at an assembled ship's deck, places that block
      * onto the ship — at the subspace position the crosshair's own side-hit names.
      */
-    @LegacyWitness(prose = "the placement passes the server's reach check by TWO routes, and only with"
+    @LegacyWitness(prose = "(kept as prose: a double defence, two members broken in one run) the placement passes"
+            + " the server's reach check by TWO routes, and only with"
             + " both removed does the wait fail — no {@code block_placed} at the aimed position — 2026-09-30:"
             + " the packet transform ({@code MixinCPacketPlayerTryUseItemOnBlock#getPacketParent} at {@code if (physicsObject.isPresent())}, {@code getPacketParent}"
             + " answering null) and the ship-aware distance ({@code MixinEntity#getDistanceSq} at {@code if (vanilla < 64.0D)}, whose {@code @Overwrite}"

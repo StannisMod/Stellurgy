@@ -146,12 +146,12 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A jump craft assembles whole, and both its consoles answer a real key press.
      */
-    @LegacyWitness(prose = "with the vendored {@code ShipBlockPosFinder#isValidExpansion} at"
-            + " {@code return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock())}"
-            + " (Valkyrien Skies) refusing the navigation computer's block: \"the"
-            + " navigation computer must have joined the ship: the flood fill out of the flight computer"
-            + " decides what comes along\", 2026-09-28. The other two waits the rewrite touched are arrangement"
-            + " links (the ship usable, the client standing at the console).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipBlockPosFinder#isValidExpansion",
+            at = "return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock());",
+            replacedBy = "return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock())"
+                    + " && cache.getBlockState(mutablePos).getBlock()"
+                    + " != dev.stannismod.stellurgy.api.StellurgyBlocks.blockNavigationComputer;",
+            fails = "the navigation computer must have joined the ship", on = "2026-10-18")
     @Test
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
 

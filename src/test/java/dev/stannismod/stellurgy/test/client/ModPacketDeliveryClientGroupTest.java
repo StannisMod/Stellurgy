@@ -57,7 +57,9 @@ public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientTest {
      * not sent), and the server's handler, which is the same shape on the other side and needs a
      * server-side respawn to exercise.</p>
      */
-    @LegacyWitness(prose = "with {@code BasePacketHandlerClient#onMessage} at"
+    @LegacyWitness(prose = "(kept as prose: BasePacketHandlerClient is nested in BasePacket.java, whose first"
+            + " onMessage is the server handler's, so the replay cannot address this one) with"
+            + " {@code BasePacketHandlerClient#onMessage} at"
             + " {@code mc.addScheduledTask(() -> message.executeClient(mc.player));} put back to the shape it had"
             + " — the player read into a local on arrival and that local handed to the task — this fails at \"a"
             + " mod packet queued behind a respawn ran for the player the client had when it ARRIVED, in the"

@@ -567,10 +567,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
      */
-    @LegacyWitness(prose = "with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:"
-            + " \"`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0\","
-            + " 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's"
-            + " quick-move never asks it.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "TileGuidanceComputer#setInventorySlotContents",
+            at = "super.setInventorySlotContents(slot, stack);", replacedBy = "",
+            fails = "`slots` holds no element whose `item` is stellurgy:planetidchip", on = "2026-10-18")
     @Test
     public void shiftClickingChipMovesItIntoTheGuidanceComputer() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:guidanceComputer");
@@ -692,9 +691,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
      */
-    @LegacyWitness(prose = "with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")))}) skipped:"
-            + " \"clicking the distance button twice must move the aim out from 1: … aimDistance:1\","
-            + " 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "TileObservatory#useNetworkData",
+            at = "scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")));", replacedBy = "",
+            fails = "clicking the distance button twice must move the aim out from 1", on = "2026-10-18")
     @NotYetRed(prose = "NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at"
             + " {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in"
             + " {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}"
@@ -805,10 +804,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * Pins INV-IVC-03 (clicking a planet button on the selector registers a server-side selection).
      */
     @Pins("INV-IVC-03")
-    @LegacyWitness(prose = "with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:"
-            + " \"clicking planet button 0 did not register a selection server-side: … hasSelection:false\","
-            + " 2026-09-28. The link before it records at the handler's RETURN and stays green by design —"
-            + " it says the packet arrived, not that it was applied.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "TilePlanetSelector#useNetworkData",
+            at = "container.setSelectedSystem(dimId); selectSystem(dimId);", replacedBy = "",
+            fails = "clicking planet button 0 did not register a selection server-side", on = "2026-10-18")
     @Test
     public void selectingPlanetUpdatesServerSelection() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -865,11 +863,11 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * {@link #thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150}, and the rocket's own selector, which
      * opens the same module over a rocket.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit"
-            + " radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):"
-            + " \"Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:"
-            + " &lt;150.0&gt; but was:&lt;1496028.93842148&gt;\". The two {@code requireArranged} lines are"
-            + " arrangements.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ModulePlanetSelector#renderStarSystem",
+            at = "double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU"
+                    + " * MAP_PIXELS_PER_AU * distanceZoomMultiplier;",
+            replacedBy = "double orbitPx = properties.getOrbitalDist() * distanceZoomMultiplier;",
+            fails = "Earth (1.0 AU) must be drawn 150.0 pixels from its star", on = "2026-10-18")
     @Test
     public void theStarMapDrawsAPlanetAtAHundredPixelsPerAu() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -937,13 +935,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * at any distance but the one the world's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
      */
-    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at"
-            + " {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}"
-            + " back on the raw distance ({@code properties.orbitalDist}), this fails with \"each moon must be"
-            + " drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:"
-            + " expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];"
-            + " expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;\". The {@code requireArranged} lines are"
-            + " arrangements.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ModulePlanetSelector#renderPlanetarySystem",
+            at = "AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT",
+            replacedBy = "properties.orbitalDist",
+            fails = "each moon must be drawn 0.5 x moonViewUnits", on = "2026-10-18")
     @Test
     public void thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -1263,24 +1258,22 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * the screen's own button, which {@code WeaponClientGroupTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      */
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
-            + " answering {@code true} unconditionally (the shape it shipped with), this fails at \"the console"
-            + " judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,"
-            + " pos:4016,150,4016,player:ForgeTestClient,reachable:true}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
-            + " keeping its log line but not its {@code return}, this fails at \"a press from beyond reach held the"
-            + " battery's fire anyway: {...network:true,...holdFire:true...}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
-            + " answering {@code false} unconditionally, this fails at \"the console refused a press from the"
-            + " player standing on it: {...reachable:false}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}"
-            + " removed, this fails at \"a press from the player standing on the console did not hold fire:"
-            + " {...holdFire:false...}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
-            + " removed, this fails at the arrangement wait \"the console never joined a weapon network ... no"
-            + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\"; with {@code TileWeaponConsole#useNetworkData}"
-            + " returning before {@code if (!canInteractWithContainer(player))}, at the far wait \"the console never"
-            + " judged the far press: it never reached the server\" (2026-10-06).")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far press judged", member = "TileWeaponConsole#useNetworkData",
+            at = "if (!canInteractWithContainer(player)) {", replacedBy = "if (player != null) return; if (!canInteractWithContainer(player)) {",
+            fails = "the console never judged the far press: it never reached the server", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far out of reach", member = "TileWeaponConsole#canInteractWithContainer",
+            at = "<= CONTAINER_REACH_SQ;", replacedBy = "<= Double.POSITIVE_INFINITY;",
+            fails = "the console judged a press from", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far changes nothing", member = "TileWeaponConsole#useNetworkData",
+            at = "player == null ? \"nobody\" : player.getName()); return;",
+            replacedBy = "player == null ? \"nobody\" : player.getName());",
+            fails = "a press from beyond reach held the battery's fire anyway", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "near within reach", member = "TileWeaponConsole#canInteractWithContainer",
+            at = "<= CONTAINER_REACH_SQ;", replacedBy = "<= -1.0D;",
+            fails = "the console refused a press from the player standing on it", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "near holds fire", member = "TileWeaponConsole#useNetworkData",
+            at = "setHoldFire(!isHoldFire());", replacedBy = "",
+            fails = "a press from the player standing on the console did not hold fire", on = "2026-10-18")
     @NotYetRed(prose = "NOT YET, with {@code TileWeaponConsole#useNetworkData} at"
             + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
             + " {@code weapon_console_press_judged} wait and the two"
@@ -1358,16 +1351,22 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * player standing on it switches it to illuminating. Both presses are forged by the real client
      * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponClientGroupTest}'s.
      */
-    @LegacyWitness(prose = "(2026-10-06, one inversion per run):"
-            + " {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering"
-            + " true fails \"the sensor judged a press from 24 blocks away as within reach\"; answering false fails"
-            + " \"the sensor refused a press from the player standing on it\";"
-            + " {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
-            + " logging without its {@code return} fails \"a press from beyond reach switched the sensor anyway"
-            + " {...mode:ACTIVE...}\"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}"
-            + " removed fails \"a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}\";"
-            + " the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far"
-            + " wait, \"the sensor never judged the far press: it never reached the server\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far press judged", member = "TileFireControlSensor#useNetworkData",
+            at = "if (!canInteractWithContainer(player)) {", replacedBy = "if (player != null) return; if (!canInteractWithContainer(player)) {",
+            fails = "the sensor never judged the far press: it never reached the server", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far out of reach", member = "TileFireControlSensor#canInteractWithContainer",
+            at = "<= CONTAINER_REACH_SQ;", replacedBy = "<= Double.POSITIVE_INFINITY;",
+            fails = "the sensor judged a press from", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "far changes nothing", member = "TileFireControlSensor#useNetworkData",
+            at = "player == null ? \"nobody\" : player.getName()); return;",
+            replacedBy = "player == null ? \"nobody\" : player.getName());",
+            fails = "a press from beyond reach switched the sensor anyway", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "near within reach", member = "TileFireControlSensor#canInteractWithContainer",
+            at = "<= CONTAINER_REACH_SQ;", replacedBy = "<= -1.0D;",
+            fails = "the sensor refused a press from the player standing on it", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "near switches", member = "TileFireControlSensor#useNetworkData",
+            at = "setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);", replacedBy = "",
+            fails = "a press from the player standing on the sensor did not switch it", on = "2026-10-18")
     @NotYetRed(prose = "NOT YET, with {@code TileFireControlSensor#useNetworkData} at"
             + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
             + " {@code sensor_press_judged} wait and the two"

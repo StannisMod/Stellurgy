@@ -726,7 +726,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "with the client FF branch of {@code EntityRocket#onUpdate} at"
+    @LegacyWitness(prose = "(kept as prose: the replay's locator takes the comment \"… in onUpdate(). A gameplay …\""
+            + " in EntityRocket for the member's declaration) with the client FF branch of {@code EntityRocket#onUpdate} at"
             + " {@code this.setPosition(px, py, pz)} no longer called: \"moved 0/8\", 2026-09-28. And what it does NOT"
             + " catch, measured the same day: a SNAP-ONLY client (no dead reckoning, the raw server position"
             + " each tick) stays green, and stays green with the tracker's {@code updateFrequency} put back to"
@@ -793,9 +794,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     private static final String FLIGHT_CAMERA =
             "dev.stannismod.stellurgy.test.trace.FlightCameraState";
 
-    @LegacyWitness(prose = "with {@code assets/stellurgy/lang/en_US.lang#msg.ff.hud.active} losing its \"FREE \":"
-            + " \"FF HUD must show the active-mode indicator: FLIGHT    Flight Assist: ON …\", 2026-09-28. The"
-            + " await before it is the in-flight link (ENGINES ON), which that inversion leaves green.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "KeyBindings#freeFlightHudLines",
+            at = "lines.add(I18n.format(\"msg.ff.hud.active\", I18n.format(state.flightAssistOn ? \"msg.ff.hud.fa.on\""
+                    + " : \"msg.ff.hud.fa.off\")) + \" \" + I18n.format(\"msg.ff.hud.tier\", state.tier));",
+            replacedBy = "", fails = "FF HUD must show the active-mode indicator", on = "2026-10-18")
     @Test
     public void freeFlightHudInFlightShowsIndicatorAndControlLegend() throws Exception {
         // Riding a FF rocket in flight: the HUD must render the mode indicator,
@@ -903,10 +905,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return bot().reportState().get("screen").getAsString();
     }
 
-    @LegacyWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
-            + " {@code gs.keyBindInventory.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING)} giving"
-            + " the inventory key the PILOTING context instead of NOT_PILOTING: \"pressing the inventory key on foot must open a screen — no"
-            + " `client_gui_opened` opening a screen was recorded within 200 ticks\", 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "KeyBindings#scopeSteeringKeysToCockpit",
+            at = "gs.keyBindInventory.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);",
+            replacedBy = "gs.keyBindInventory.setKeyConflictContext(StellurgyKeyConflictContext.PILOTING);",
+            fails = "pressing the inventory key on foot must open a screen", on = "2026-10-18")
     @Test
     public void inventoryKeyOpensInventoryWhenNotPiloting() throws Exception {
         // On foot (not piloting any Stellurgy craft), pressing the inventory key must
@@ -1044,10 +1046,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "one inversion per verdict in {@code FreeFlightPhysics#rampSetpoint} at"
-            + " {@code double u = sane(spUp)    + input.throttleVertical * SETPOINT_RAMP}, 2026-09-28. CLIMB — a positive vertical input ignored:"
-            + " \"R must climb (y0=151.5999964 y1=151.5999964)\". DESCENT — a negative one ignored: \"F must reduce"
-            + " vertical velocity vs the climb (myUp=1.3499 myDown=1.3999)\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "R climbs", member = "FreeFlightPhysics#rampSetpoint",
+            at = "double u = sane(spUp)    + input.throttleVertical * SETPOINT_RAMP;",
+            replacedBy = "double u = sane(spUp) + Math.min(0f, input.throttleVertical) * SETPOINT_RAMP;",
+            fails = "R must climb", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "F descends", member = "FreeFlightPhysics#rampSetpoint",
+            at = "double u = sane(spUp)    + input.throttleVertical * SETPOINT_RAMP;",
+            replacedBy = "double u = sane(spUp) + Math.max(0f, input.throttleVertical) * SETPOINT_RAMP;",
+            fails = "F must reduce vertical velocity vs the climb", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
             why = "a climb is a value, not an event; no record answers.")
@@ -1091,10 +1097,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     /** The window the cut is judged over, ticks of both clocks from X's arrival; the message says "twelve". */
     private static final int CUT_WINDOW_TICKS = 12;
 
-    @LegacyWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
-            + " the setpoint on a cut:"
-            + " \"when the cut arrived 1.4499, twelve ticks later 2.0498\", 2026-09-28. The precondition at its"
-            + " head is an arrangement and is not witnessed.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "FreeFlightPhysics#rampSetpoint",
+            at = "if (input.cutActive) return new double[] {0, 0, 0};", replacedBy = "",
+            fails = "throttle-cut must stop upward acceleration", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CUT_CLIMB_DOSE_TICKS);",
             why = "twelve ticks of R from its arrival is the dose, and the precondition is what they did — upward"
@@ -1135,9 +1140,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
-            + " the setpoint on a cut:"
-            + " \"cut must brake the climb into a hover (was 1.0999…, now 1.0999…)\", 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "FreeFlightPhysics#rampSetpoint",
+            at = "if (input.cutActive) return new double[] {0, 0, 0};", replacedBy = "",
+            fails = "cut must brake the climb into a hover", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(15);",
             why = "the climb the cut is then asked to brake; the check below says whether it did.")
@@ -1219,14 +1224,15 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return rocketId;
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. STILL LIT — the engines of a"
-            + " Space-started flight cut by {@code tickFreeFlight} twenty ticks in (a flag set beside"
-            + " {@code EntityRocket#useNetworkData} at {@code ffTrace(\"ENGINE_START accepted\"); startFreeFlight()}):"
-            + " \"3 s Space hold must start the engines"
-            + " (isInFlight=true): … isInFlight:false\", with the start link before it green. HUD — the"
-            + " in-flight engine line ({@code KeyBindings#freeFlightHudLines} at"
-            + " {@code I18n.format(\"msg.ff.hud.engines.on\")}) replaced by the ENGINES OFF text: \"HUD must"
-            + " show the engines running: FREE FLIGHT … ENGINES OFF — hold SPACE to start\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "still lit", member = "EntityRocket#useNetworkData",
+            at = "ffTrace(\"ENGINE_START accepted\"); startFreeFlight();",
+            replacedBy = "ffTrace(\"ENGINE_START accepted\"); startFreeFlight(); setInFlight(false);",
+            fails = "3 s Space hold must start the engines (isInFlight=true)", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "HUD", member = "KeyBindings#freeFlightHudLines",
+            at = "lines.add(engineFlashTicks > 0 && engineFlashStarted ? I18n.format(\"msg.ff.engines.started\")"
+                    + " : I18n.format(\"msg.ff.hud.engines.on\"));",
+            replacedBy = "lines.add(I18n.format(\"msg.ff.hud.engines.off\", key(gs.keyBindJump)));",
+            fails = "HUD must show the engines running", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(serverClient(), GameTicks.server(), 40);",
             why = "forty SERVER ticks after the engines lit is the moment the claim is about — the start ritual's"
@@ -1285,13 +1291,18 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. PROGRESS — the progress branch of"
-            + " {@code KeyBindings#freeFlightHudLines} at {@code if (engineStartHoldTicks > 0)} dropped: \"HUD must"
-            + " show engine-start progress while holding - on screen"
-            + " now: … ENGINES OFF\". PRE-LAUNCH HUD BACK — the release branch ({@code KeyBindings#onClientTick} at"
-            + " {@code kbTrace(\"engine-start hold released at \" + pilot.engineStartHoldTicks)}) sending"
-            + " ENGINE_START: \"releasing Space early must put the pre-launch HUD back\". NEVER LIT — the same"
-            + " release start, with {@code EntityRocket#useNetworkData} at {@code ffTrace(\"ENGINE_START accepted\")}"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "progress", member = "KeyBindings#freeFlightHudLines",
+            at = "if (engineStartHoldTicks > 0) {", replacedBy = "if (false) {",
+            fails = "HUD must show engine-start progress while holding", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "pre-launch HUD back", member = "KeyBindings#onClientTick",
+            at = "if (pilot.engineStartHoldTicks > 0) kbTrace(\"engine-start hold released at \" + pilot.engineStartHoldTicks);",
+            replacedBy = "if (pilot.engineStartHoldTicks > 0 && !pilot.engineStartSent) PacketHandler.sendToServer("
+                    + "new PacketEntity(rocket, (byte) EntityRocket.PacketType.ENGINE_START.ordinal()));",
+            fails = "releasing Space early must put the pre-launch HUD back", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: two members broken in one run) NEVER LIT — the"
+            + " release sending ENGINE_START ({@code KeyBindings#onClientTick} at"
+            + " {@code kbTrace(\"engine-start hold released at \" + pilot.engineStartHoldTicks)}), with"
+            + " {@code EntityRocket#useNetworkData} at {@code ffTrace(\"ENGINE_START accepted\")}"
             + " then clearing the client's in-flight"
             + " flag so the HUD stays pre-launch while the server flies: \"early release must cancel the start"
             + " … isInFlight:true\". A start that also reaches the client fails the HUD verdict first; the"
@@ -1358,15 +1369,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. SHUTDOWN — the touchdown in"
-            + " {@code EntityRocket#tickFreeFlight} at {@code this.setInFlight(false); // touchdown = engines off}"
-            + " not writing the in-flight flag false: \"no"
-            + " `rocket_flight_set` carrying e = … and inFlight = false was recorded within 240 ticks\". HUD —"
-            + " the pre-launch engine lines ({@code KeyBindings#freeFlightHudLines} at"
-            + " {@code lines.add(I18n.format(\"msg.ff.engines.stopped\"))} and the {@code msg.ff.hud.engines.off}"
-            + " line after it) not drawn: \"HUD must reflect the"
-            + " shutdown (stopped flash or ENGINES OFF): Free Flight Mode | M Classic mode\". The arming wait at"
-            + " its head is an arrangement link.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "shutdown", member = "EntityRocket#tickFreeFlight",
+            at = "this.setInFlight(false); // touchdown = engines off", replacedBy = "",
+            fails = "descending into the ground must shut THIS rocket's engines off", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "HUD", member = "KeyBindings#freeFlightHudLines",
+            at = "lines.add(I18n.format(\"msg.ff.engines.stopped\")); } else {"
+                    + " lines.add(I18n.format(\"msg.ff.hud.engines.off\", key(gs.keyBindJump))); }",
+            replacedBy = "} else { }",
+            fails = "HUD must reflect the shutdown (stopped flash or ENGINES OFF)", on = "2026-10-18")
     @Test
     public void descendKeyLandsAndShutsEnginesOff() throws Exception {
         // Full cycle through real keys: start via probe (covered above), then
@@ -1439,11 +1449,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     private static final Pattern HUD_VRT =
             Pattern.compile("VRT ([+-][0-9.]+)/([+-][0-9.]+)");
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. PAIR — {@code KeyBindings#freeFlightHudLines}"
-            + " at {@code if (state.flightAssistOn)} drawing the Flight-Assist-off form (actual only) with assist"
-            + " on: \"HUD must render the VRT setpoint/actual pair\". CUT — {@code FreeFlightPhysics#rampSetpoint}"
-            + " at {@code if (input.cutActive)} no longer zeroing the setpoint: \"no"
-            + " `ff_hud` drawing a VRT setpoint of zero was recorded within 200 ticks\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "pair", member = "KeyBindings#freeFlightHudLines",
+            at = "if (state.flightAssistOn) {", replacedBy = "if (false) {",
+            fails = "HUD must render the VRT setpoint/actual pair", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "cut", member = "FreeFlightPhysics#rampSetpoint",
+            at = "if (input.cutActive) return new double[] {0, 0, 0};", replacedBy = "",
+            fails = "the cut must zero the VRT setpoint the pilot's HUD shows", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(windowTicks(5, 5));",
             why = "twenty-five ticks of R from its arrival is the dose, and the assertions are what it did to the"
@@ -1491,12 +1502,16 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         arrange("stellurgytest player dismount");
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. OFF REACHES THE HUD —"
-            + " {@code KeyBindings#freeFlightHudLines} at"
-            + " {@code state.flightAssistOn ? \"msg.ff.hud.fa.on\" : \"msg.ff.hud.fa.off\"} always naming the ON state: \"no `ff_hud` drawing Flight Assist OFF\"."
-            + " OFF IS LABELLED — {@code en_US.lang:743} reading just \"OFF\": \"HUD must label the Newtonian mode"
-            + " when FA is off\". ON REACHES THE HUD — the same line always naming OFF: \"no `ff_hud` drawing"
-            + " Flight Assist ON\". ON DROPS THE LABEL — {@code en_US.lang:742} reading \"ON — Newtonian\": \"HUD"
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "off reaches the HUD", member = "KeyBindings#freeFlightHudLines",
+            at = "state.flightAssistOn ? \"msg.ff.hud.fa.on\" : \"msg.ff.hud.fa.off\"", replacedBy = "\"msg.ff.hud.fa.on\"",
+            fails = "switching Flight Assist off must reach the pilot's HUD", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "on reaches the HUD", member = "KeyBindings#freeFlightHudLines",
+            at = "state.flightAssistOn ? \"msg.ff.hud.fa.on\" : \"msg.ff.hud.fa.off\"", replacedBy = "\"msg.ff.hud.fa.off\"",
+            fails = "switching Flight Assist back on must reach the pilot's HUD", on = "2026-10-18")
+    @LegacyWitness(prose = "(kept as prose: a break in DATA, which neither replay addresses — it resolves Java types"
+            + " only) 2026-09-28. OFF IS LABELLED — {@code assets/stellurgy/lang/en_US.lang#msg.ff.hud.fa.off} reading"
+            + " just \"OFF\": \"HUD must label the Newtonian mode when FA is off\". ON DROPS THE LABEL —"
+            + " {@code assets/stellurgy/lang/en_US.lang#msg.ff.hud.fa.on} reading \"ON — Newtonian\": \"HUD"
             + " must drop the Newtonian label when FA is back on\".")
     @Test
     public void hudShowsNewtonianLabelWhenFlightAssistIsOff() throws Exception {
@@ -1540,11 +1555,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return Math.abs(((a - b + 540) % 360) - 180);
     }
 
-    @LegacyWitness(prose = "with the four camera-pin lines of {@code KeyBindings#onClientTick} at"
-            + " {@code player.rotationYaw       = rocket.rotationYaw} (through {@code prevRotationPitch}) removed: \"camera"
-            + " must never detach from the craft on any rendered frame (worst frame divergence 61.46°)\","
-            + " 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and"
-            + " convergence verdicts after it were outside that rewrite and are not witnessed here.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "KeyBindings#onClientTick",
+            at = "player.rotationYaw       = rocket.rotationYaw; player.prevRotationYaw   = rocket.prevRotationYaw;"
+                    + " player.rotationPitch     = rocket.rotationPitch; player.prevRotationPitch = rocket.prevRotationPitch;",
+            replacedBy = "", fails = "camera must never detach from the craft on any rendered frame", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
             why = "the iterations ARE the manoeuvre — eight swipes, one a tick, each from where the last left the"
@@ -1764,10 +1778,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
      * can never do that (forward.z ≳ cos 85° ≈ 0.09). Also proves the client
      * survives rendering an inverted / looping craft.
      */
-    @LegacyWitness(prose = "with the ±{@code PITCH_MAX} clamp put back into"
-            + " {@code FreeFlightPhysics#integrateBodyRates} at {@code return q.mul(dq).normalized()}, which the client's"
-            + " prediction shares with the server: \"client min forward.z must go negative (was 0.1429)\","
-            + " 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "FreeFlightPhysics#integrateBodyRates",
+            at = "return q.mul(dq).normalized();",
+            replacedBy = "Quat next = q.mul(dq).normalized(); return Math.abs(eulerFromQuat(next)[1]) > PITCH_MAX ? q : next;",
+            fails = "the nose must loop PAST vertical — client min forward.z must go negative", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(30);",
             why = "the climb sets the altitude the loop is flown at.")
@@ -1915,9 +1929,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
      * crashing. Pins the roll channel end-to-end; camera-bank direction/feel is
      * a manual-playtest perception check.
      */
-    @LegacyWitness(prose = "with the roll rate in {@code EntityRocket#tickFreeFlight} at"
-            + " {@code double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE} multiplied by zero: \"commanded roll must integrate server-side (roll0=0.0 roll1=0.0)\","
-            + " 2026-09-28.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "EntityRocket#tickFreeFlight",
+            at = "double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE;",
+            replacedBy = "double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE * 0.0;",
+            fails = "commanded roll must integrate server-side", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
             why = "a roll is a value, not an event; no record answers.")

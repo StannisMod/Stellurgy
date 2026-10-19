@@ -145,7 +145,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
      * Destroying the flight computer throws its pilot out, removes his mount, and leaves a ship that
      * never climbs on the dead computer's last command.
      */
-    @LegacyWitness(prose = "the never-thrusts verdict. The line the wait rewrite touched is the break"
+    @LegacyWitness(prose = "(kept as prose: a double defence, two members broken in one run) the never-thrusts"
+            + " verdict. The line the wait rewrite touched is the break"
             + " probe's own reply, an arrangement check typed as an assertion; the contract after it needs"
             + " BOTH of production's two defences broken"
             + " — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no"

@@ -180,7 +180,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * through {@code PlayerList.transferPlayerToDimension} &rarr; the client's OWN world must be the
      * slot dim and keep rendering.</p>
      */
-    @LegacyWitness(prose = "both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld"
+    @LegacyWitness(prose = "(kept as prose: both breaks need state the members have no place for — when in the hold"
+            + " the transfer lands, how long the body has been in the world; evicting at once reddens the arrival"
+            + " link) both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld"
             + " about a second after the settle's health probe, i.e. inside the hold window: \"a client that"
             + " arrived in a slot dim must STAY there; a dimension change during the hold is it being thrown"
             + " out\". THE END STATE — the space-dim guard ({@code PlanetEventHandler#spaceDimensionGuard} at"
@@ -315,14 +317,15 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * workaround — it is the arrangement a real pilot is in, and the control leg below is what says
      * so.</p>
      */
-    @LegacyWitness(prose = "the CONTROL and the arrival link, 2026-09-28 — the control is the verdict the"
-            + " wait rewrite touched; the contents pins after it are not witnessed and were not touched."
-            + " With {@code SystemBodiesProducer#broadcastTo} at"
-            + " {@code PacketHandler.sendToPlayer(PacketSystemBodiesSync.forDims(one, oneSky), player)} sending"
-            + " every cell's sky to every player — the old"
-            + " {@code sendToAll} — this fails at the control: \"a player who is not in the cell's world must not"
-            + " be sent its sky\". With it sending nothing: \"no `system_bodies_received` naming slot dim 3 was"
-            + " recorded within 400 ticks\".")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the control", member = "SystemBodiesProducer#broadcastTo",
+            at = "if (player == null) { return; }",
+            replacedBy = "if (player == null) { return; } PacketHandler.sendToPlayer(PacketSystemBodiesSync.forDims(byDim,"
+                    + " nebulaeByDim == null ? new LinkedHashMap<Integer, List<RenderNebula>>() : nebulaeByDim), player);"
+                    + " if (Boolean.TRUE) return;",
+            fails = "a player who is not in the cell's world must not be sent its sky", on = "2026-10-18")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the arrival link", member = "SystemBodiesProducer#broadcastTo",
+            at = "PacketHandler.sendToPlayer(PacketSystemBodiesSync.forDims(one, oneSky), player);", replacedBy = "",
+            fails = "no `system_bodies_received` naming slot dim 3", on = "2026-10-18")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
             why = "an absence of feeds over forty ticks of the SERVER's clock, which is the clock the feed is sent"
@@ -513,10 +516,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * load again. {@code vs-assemble} registers a fresh slot on every call, so nothing another scenario
      * here built is in it.</p>
      */
-    @LegacyWitness(prose = "with {@code SpaceSlotPool#unload} at {@code world.saveAllChunks(true, null)} saving nothing"
-            + " before the slot goes: \"the ship must RE-LOAD live after the slot rebind — no `ship_usable`"
-            + " carrying dim = 14 was recorded within 300 ticks\", 2026-09-28. The two verdicts before it are"
-            + " the arrangement's: the ship spawned, and it is in the pool world's registry.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "SpaceSlotPool#unload",
+            at = "world.saveAllChunks(true, null);", replacedBy = "",
+            fails = "the ship must RE-LOAD live after the slot rebind", on = "2026-10-18")
     @Test
     public void vsShipReloadsLiveAfterASlotRebind() throws Exception {
         final int dimLinkBudgetTicks = 200;

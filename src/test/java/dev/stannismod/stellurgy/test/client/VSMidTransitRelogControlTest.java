@@ -79,7 +79,9 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
      * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
     @Pins("SHIPCTL-16")
-    @LegacyWitness(prose = "the regains-control verdict, the one contract verdict the wait rewrite touched"
+    @LegacyWitness(prose = "(kept as prose: the break needs state the member has no place for — the world the craft"
+            + " was first flown in; origin and arrival are both cells) the regains-control verdict, the one contract"
+            + " verdict the wait rewrite touched"
             + " — the others it touched are arrangement reads (the ship's id, the cell entry, the transit"
             + " beginning); the re-seat and placement verdicts are not witnessed. With"
             + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the"
