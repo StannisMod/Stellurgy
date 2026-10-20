@@ -130,7 +130,7 @@ None owned here; NBT/wire are contractual, not config-gated.
 
 ## Test coverage
 
-`RocketFlightModeNbtTest` covers `flightMode` round-trip and back-compat
-(`RocketFlightModeNbtTest.java:30,50,58,72`). FF NBT defaults (missing-key →
+`RocketFlightModeNbtTest` covers `flightMode` defaults and back-compat
+(`RocketFlightModeNbtTest.java:26,36,47,54,61`); the round-trip itself is not asserted. FF NBT defaults (missing-key →
 armed/hover/FA-on) are exercised indirectly by `FreeFlightCycleTest`. No direct
 round-trip test asserts the full `EntityRocket` NBT table → open question.

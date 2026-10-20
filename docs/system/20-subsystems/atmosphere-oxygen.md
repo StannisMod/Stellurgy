@@ -470,7 +470,7 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
   gases is not the same hazard, and good air is no defence.
   `test/unit/AtmospherePredicatesTest#aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt` FOR: INV-ATM-18.
 - **INV-ATM-24 [T][SYS]** A composition survives a save including a substance the three old keys could not
-  name, and a substance this game no longer knows is dropped rather than guessed at.
+  name `[V]` (one key per gas each way, `AirState.java:571-591`), and a substance this game no longer knows is dropped rather than guessed at.
   `test/unit/AtmospherePredicatesTest#aCompositionSurvivesASaveAndAnUnknownGasIsDropped` FOR: INV-ATM-18.
 - **INV-ATM-20 [T][SYS]** Regeneration is respiration run backwards: CO2 becomes oxygen one for one,
   total pressure is unchanged (the solid carbon never held any), and it cannot process CO2 that is

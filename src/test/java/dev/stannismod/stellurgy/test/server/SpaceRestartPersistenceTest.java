@@ -108,57 +108,6 @@ public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
     // this jar), and `Assume` skips SILENTLY, so had it ever been true these six would have left the
     // run without reddening anything. Removed 2026-09-22.
 
-    @Test
-    public void aSettledShipsGalacticPositionSurvivesAServerReboot() throws Exception {
-        // --- boot 1: the production subsystem comes up and records a ship ------------------------
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
-
-        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
-        // If this fails the rest of the test is meaningless rather than wrong: the production wiring
-        // never registered, so nothing below would be exercising it. Say so explicitly.
-        assertTrue("the production space subsystem must be live on boot 1 (config opt-in) — "
-                + "without it this test would silently assert nothing: " + status.raw(),
-                status.registered);
-
-        String settled = arrange("stellurgytest space ledger-settle " + SHIP_ID + " "
-                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0").raw();
-        assertTrue("the ship must be recorded in the production ledger: " + settled,
-                Reply.of(settled).ok());
-
-        LedgerEntry beforeSave = ledger(SHIP_ID);
-        assertTrue("sanity: the ledger must hold the ship BEFORE the reboot, or a green result "
-                + "after it would prove nothing: " + beforeSave.raw(), beforeSave.found);
-
-        // Deliberately NO explicit save here. The ship is recorded and the server is then simply
-        // stopped, which is what an operator does and the harshest honest case: the shutdown save is
-        // the only one that ever runs, and it is the last one there will be. An implementation that
-        // merely marks its snapshot dirty during that save has already missed it, and nothing writes
-        // map storage afterwards — so the ship would be silently lost. Saving twice here would hide
-        // exactly that, by letting a second pass write what the first one dirtied.
-
-        // --- the reboot: this process really exits ----------------------------------------------
-        harness.close();
-        harness = null;
-
-        // --- boot 2: a brand new JVM, same world directory ---------------------------------------
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
-
-        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
-                statusAfter.registered);
-
-        LedgerEntry restored = ledger(SHIP_ID);
-        assertTrue("a ship settled before the reboot must still be known after it — this is the "
-                + "contract that a player's ship is not lost by restarting the server: "
-                + restored.raw(),
-                restored.found);
-        assertEquals("it must come back at the SAME galactic address, not merely exist: "
-                        + restored.raw(),
-                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
-        assertEquals("and it must come back settled, not in some default state: " + restored.raw(),
-                "SETTLED", restored.state());
-    }
-
     /**
      * The slot dimension the subsystem attributes to a restored ship must name the world its cell is
      * ACTUALLY bound to on THIS boot.

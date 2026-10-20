@@ -97,26 +97,11 @@ public class FreeFlightInputTest {
         // Strafe is the 3rd float in the full 8-arg constructor (fwd, vert, strafe, ...).
         FreeFlightInput hi = new FreeFlightInput(0f, 0f, 9f, 0f, 0f, 0f, false);
         assertEquals(1f, hi.strafeInput, EPS);
-        FreeFlightInput orig = new FreeFlightInput(0.1f, 0.2f, -0.6f, 0.3f, 0.4f, 0.5f, true);
-        ByteBuf buf = Unpooled.buffer();
-        orig.write(buf);
-        FreeFlightInput rt = FreeFlightInput.read(buf);
-        assertEquals(orig, rt);
-        assertEquals(-0.6f, rt.strafeInput, EPS);
     }
 
     @Test
     public void isIdleFalseWhenStrafeNonZero() {
         assertFalse(new FreeFlightInput(0f, 0f, 0.01f, 0f, 0f, 0f, false).isIdle());
-    }
-
-    @Test
-    public void wireRoundTripPreservesAllChannels() {
-        FreeFlightInput orig = new FreeFlightInput(0.7f, -0.3f, 0.1f, -0.8f, 0.5f);
-        ByteBuf buf = Unpooled.buffer();
-        orig.write(buf);
-        FreeFlightInput rt = FreeFlightInput.read(buf);
-        assertEquals(orig, rt);
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */

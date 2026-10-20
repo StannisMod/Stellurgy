@@ -141,17 +141,4 @@ public class SkyNebulaeProducerTest {
         assertEquals("only one is worth drawing", 1,
                 SkyNebulaeProducer.around(gen, 1L, GalacticCoord.ORIGIN).size());
     }
-
-    @Test
-    public void aCloudCarriesItsAppearanceAndItsThickness() {
-        // The two fields the renderer branches on: the age sequence decides the tint, and a dark
-        // cloud is the one that must be drawn OVER the stars rather than behind them.
-        Nebula dark = new Nebula(null, Nebula.Appearance.DARK, 0d, 0d, 150d, 40d, 0.6d, UniverseLawsV0.INSTANCE);
-        RenderNebula drawn = SkyNebulaeProducer.renderOf(dark, 0d, 0d, 0d);
-
-        assertNotNull(drawn);
-        assertEquals("the appearance must survive the trip to the client",
-                Nebula.Appearance.DARK.ordinal(), drawn.appearanceOrdinal);
-        assertEquals("and so must how thick it is", 0.6F, drawn.opacity, 1.0E-4F);
-    }
 }

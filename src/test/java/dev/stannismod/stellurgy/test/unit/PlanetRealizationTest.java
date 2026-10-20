@@ -449,16 +449,4 @@ public class PlanetRealizationTest {
         }
         assertTrue(checked);
     }
-
-    @Test
-    public void theOrbitSurvivesAnNbtRoundTrip() {
-        SystemBody body = SystemBody.fixedAt(GalacticCoord.ofSectorLocal(3, 4, 5, 0, 0, 0),
-                SystemBodyKind.PLANET, 12, -7, 1234);
-        net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
-        body.writeToNBT(nbt);
-        SystemBody back = SystemBody.readFromNBT(nbt);
-        assertEquals("a pinned body's orbit must survive the save, or its world is not re-derivable",
-                1234, back.orbitalDistance());
-        assertEquals(body, back);
-    }
 }

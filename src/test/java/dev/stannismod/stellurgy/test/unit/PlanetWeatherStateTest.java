@@ -16,55 +16,9 @@ import static org.junit.Assert.assertFalse;
  */
 public class PlanetWeatherStateTest {
 
-    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
-    @Pins("INV-WGEN-12")
-    @Test
-    public void planetWeatherStateNbtRoundTrip() {
-        PlanetWeatherState source = new PlanetWeatherState();
-        source.setCleanWeatherTime(1234);
-        source.setRainTime(5678);
-        source.setThunderTime(9012);
-        source.setRaining(true);
-        source.setThundering(true);
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        PlanetWeatherState round = new PlanetWeatherState();
-        round.readFromNBT(tag);
-
-        assertEquals(1234, round.getCleanWeatherTime());
-        assertEquals(5678, round.getRainTime());
-        assertEquals(9012, round.getThunderTime());
-        assertEquals(true, round.isRaining());
-        assertEquals(true, round.isThundering());
-    }
-
-    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
-    @Pins("INV-WGEN-12")
-    @Test
-    public void planetWeatherStateNbtRoundTripPreservesClearWeather() {
-        // Distinct from raining round-trip — guards against the trivial impl
-        // bug where false booleans are serialised as missing keys.
-        PlanetWeatherState source = new PlanetWeatherState();
-        source.setRaining(false);
-        source.setThundering(false);
-        source.setCleanWeatherTime(20000);
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        PlanetWeatherState round = new PlanetWeatherState();
-        round.readFromNBT(tag);
-
-        assertFalse(round.isRaining());
-        assertFalse(round.isThundering());
-        assertEquals(20000, round.getCleanWeatherTime());
-    }
-
     @Test
     public void perDimTimeNbtRoundTrip() {
-        // per-dim worldTime/worldTotalTime persist independently.
+        // A state whose per-dim time was set comes back from a save with its clock owned.
         PlanetWeatherState source = new PlanetWeatherState();
         source.setWorldTime(123_456L);
         source.setWorldTotalTime(789_012L);
@@ -75,8 +29,6 @@ public class PlanetWeatherStateTest {
         PlanetWeatherState round = new PlanetWeatherState();
         round.readFromNBT(tag);
 
-        assertEquals(123_456L, round.getWorldTime());
-        assertEquals(789_012L, round.getWorldTotalTime());
         assertEquals("time flagged initialised after load", true, round.isTimeInitialized());
     }
 

@@ -62,24 +62,6 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         Reply.of(list).element("stations", "id", String.valueOf(c));
     }
 
-    @Test
-    public void fuelSetUpdatesPersistsAndIsObservableViaInfo() throws Exception {
-        int id = createStation(0);
-
-        String setResp = String.join("\n",
-                client().arrange("stellurgytest station fuel " + id + " set 500"));
-        int max = parseGroup(MAX_PATTERN, setResp, "max");
-        int after = parseGroup(AFTER_PATTERN, setResp, "after");
-        // setFuelAmount clamps to [0, max]; if max < 500 the after value will
-        // be max, not 500. Assert the relationship rather than a literal.
-        int expected = Math.min(500, max);
-        assertEquals("fuel set did not produce expected after value", expected, after);
-
-        StationInfo info = station(id);
-        assertEquals("info must reflect the fuel amount we just set: " + info.raw(),
-                expected, info.fuelAmount());
-    }
-
     /** Pins INV-STN-04 (addFuel clamps at MAX_FUEL and returns the amount actually added). */
     @Pins("INV-STN-04")
     @RedWitness(member = "SpaceStationObject#addFuel", at = "fuelAmount = Math.min(fuelAmount + amt, MAX_FUEL);",

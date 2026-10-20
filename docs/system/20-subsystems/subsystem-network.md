@@ -108,7 +108,7 @@ does not own persistence: a domain saves its own settings through whatever tile 
 | the solve, through the shield domain | `test/server/Shield{PriorityRedistribution,ZoneThroughput,LimiterBalance,Accumulator,PriorityGroupControl}Test` — the shield tiles implement the primitive's interfaces directly, so this row exercises its own vocabulary rather than a per-domain translation of it |
 | domain isolation, INV-NET-01 | `test/server/VentilationNetworkTest.aShieldCableIsNotADuctAndCarriesNoAir` — a shield cable standing in a duct run carries no air, with the plant scenario beside it as the positive control. |
 | the solve driven deterministically | `/stellurgytest subnet solve <domain> <dim> <ticks>` runs the same tick the event handler calls. Needed because a probe holds the server thread: waiting on wall-clock buys no world ticks, and 300 requested ticks of waiting once produced FOUR solves |
-| reconstruction + settings, across a real restart | `test/server/SubsystemNetworkRestartTest` — two boots on one world: the ventilation graph comes back with the same cables/sources/sinks/members having been saved NOWHERE, while the vent's zone priority and the console's resistance bias come back with the same values because their own tiles persisted them. Both halves in one test, because the split is the design. |
+| reconstruction, across a real restart | `test/server/SubsystemNetworkRestartTest` — two boots on one world: the ventilation graph comes back with the same cables/sources/sinks/members having been saved NOWHERE. The settings half is `[V]` only: the vent's zone priority and the console's resistance bias are persisted by their own tiles (`TileVentilationPort.java:294,301`, `TileEntityShieldConsole.java:448,476-477`). |
 | the domain hooks, through heat | `test/server/HeatLoopTest` — the heat domain is the only user of MECH-NET-08, and its three scenarios are what pins that the per-tick hook runs on the DISCONNECTED path too: a coolant loop has neither source nor sink, so every one of its ticks takes that exit |
 | **not pinned** | more than one source or sink per network; what a node does when its chunk unloads while the rest of the network stays loaded; a node playing two roles at one position — not merely untested but currently broken |
 
@@ -130,8 +130,9 @@ does not own persistence: a domain saves its own settings through whatever tile 
   block has a name (its position). The shield console persists its bias, the vent its zone priority.
   A domain wanting a network-wide setting must give it a block to live in; that is the answer, not a
   workaround.
-  **Pinned** by `SubsystemNetworkRestartTest`, which asserts both halves at once:
-  rebuilt-not-restored for the graph, restored-exactly for the settings.
+  **Pinned** by `SubsystemNetworkRestartTest` for the rebuilt-not-restored graph; the
+  restored-exactly settings are `[V]` (`TileVentilationPort.java:294,301`,
+  `TileEntityShieldConsole.java:448,476-477`).
 
 - **INV-NET-05 [V]** Server only — the writers (`register`, `unregister`, `markDirty`, the tick and
   the unload) are reached through `SubsystemNetworkManager.of(world)`, which REFUSES a null world with

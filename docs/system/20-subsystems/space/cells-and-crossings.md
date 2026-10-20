@@ -27,7 +27,7 @@ than assume the galactic one (`GalacticCoord.java:235-242,299-305,379-390,429-44
 ignore the width, so a key round-trip equals the original (`GalacticCoord.java:268,494-505`) [T]
 `GalacticCoordZoneTest.java:61`. NBT is a `galacticCoord` sub-tag `{sx,sy,sz,lx,ly,lz}` plus `zone`,`cw` only
 when zoned; an *absent* sub-tag reads as `ORIGIN` (`GalacticCoord.java:456-491`) [V][T]
-`GalacticCoordTest.java:205`. Contract: [C15](../../30-contracts/C15-cell-address-and-frame.md) ADDR-19/21/22.
+`GalacticCoordTest.java:201`. Contract: [C15](../../30-contracts/C15-cell-address-and-frame.md) ADDR-19/21/22.
 
 ### MECH-SPC-02 — A position exists only at a tick; distance goes through both frames
 `AbsolutePos` is a sector triple + `long` local, so a sector index near the `long` ceiling stays expressible

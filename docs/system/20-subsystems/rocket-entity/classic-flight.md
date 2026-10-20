@@ -133,7 +133,7 @@ persists `destDimId`, `landingx/y/z`, `stationMapping` (list of `pos` int[3] + `
 - **INV-RKT-04 [T][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
   save with no `flightMode` key loads onto this path `RocketFlightMode.java:20`;
   pinned by `RocketFlightModeNbtTest` (missing-key → DEFAULT)
-  `RocketFlightModeNbtTest.java:30`. Pinned by `RocketFlightModeNbtTest#defaultIsClassicLaunch`, `RocketFlightModeNbtTest#missingNbtKeyReadsDefault`. FOR: save format: flightMode key.
+  `RocketFlightModeNbtTest.java:36`. Pinned by `RocketFlightModeNbtTest#defaultIsClassicLaunch`, `RocketFlightModeNbtTest#missingNbtKeyReadsDefault`. FOR: save format: flightMode key.
 - **INV-RKT-05 [V][BEH]** `toggleRCS` never mutates `RCS_MODE` or launch state — it only
   messages `EntityRocket.java:441`; a deprecation notice cannot abort a launch.
 - **INV-RKT-06 [V][BEH]** `deltaTime`-scaled acceleration assumes `getAcceleration`
@@ -166,6 +166,6 @@ Config: see `C4-config-surface`. Values are `tunable`. Disabling `rocketRequireF
 
 ## Test coverage
 
-- INV-RKT-04 → `RocketFlightModeNbtTest.java:30,50,58`.
+- INV-RKT-04 → `RocketFlightModeNbtTest.java:26,36,54`.
 - Launch-gate behaviour (classic reject of `start-free-flight`) →
   `FreeFlightCycleTest.java:167`.

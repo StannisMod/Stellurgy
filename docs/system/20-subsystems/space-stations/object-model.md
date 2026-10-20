@@ -87,21 +87,21 @@ dropped in 0.1.0 with the warp core; it is neither written nor read.)
   (`getSpaceStationFromBlockCoords`, `:119-138`) are inverse encodings of the same square spiral
   over `2*stationSize` cells; a divergence corrupts every tile→station resolution. FOR: INV-STN-02.
 - **INV-STN-02 [T][BEH]** Distinct stations registered in the same orbit get distinct ids
-  (SpaceStationDepthTest:44-51; SpaceStationDockUndockTest:201-208). Pinned by `SpaceStationDepthTest#multipleStationsCoexistWithDistinctIds`.
+  (SpaceStationDepthTest:51-63). Pinned by `SpaceStationDepthTest#multipleStationsCoexistWithDistinctIds`.
 - **INV-STN-03 [T][BEH]** `useFuel(amt)` consumes nothing and returns 0 when `amt > stock`; a partial
-  drain leaves `stock-amt` and returns `amt` (SpaceStationDepthTest:101-135). Pinned by `SpaceStationDepthTest#fuelUseAllOrNothingWhenInsufficient`, `SpaceStationDepthTest#fuelUseExactAmountDrains`.
+  drain leaves `stock-amt` and returns `amt` (SpaceStationDepthTest:95-131). Pinned by `SpaceStationDepthTest#fuelUseAllOrNothingWhenInsufficient`, `SpaceStationDepthTest#fuelUseExactAmountDrains`.
 - **INV-STN-04 [T][BEH]** `addFuel` clamps at `MAX_FUEL` and returns only the amount actually added
-  (SpaceStationDepthTest:80-97). Pinned by `SpaceStationDepthTest#fuelAddRespectsMaxCapacity`.
+  (SpaceStationDepthTest:70-88). Pinned by `SpaceStationDepthTest#fuelAddRespectsMaxCapacity`.
 - **INV-STN-05 [V][BEH]** A freshly created station holds `fuelAmount = 0` (an unset field,
   `SpaceStationObject.java:48`) and reports the planet it was created to orbit
   (`setOrbitingBody`, `:603`).
-- **INV-STN-06 [T][SYS]** Pads survive a save/reload round-trip with their `occupied`, `name` and
+- **INV-STN-06 [V][SYS]** Pads survive a save/reload round-trip with their `occupied`, `name` and
   `allowAutoLand` fields intact; `autoLand` is read from its own key, not tied to `occupied`
-  (SpaceStationPadPersistenceTest; the `autoLand` read is `SpaceStationObject.java:823`, and an
-  absent key reads as on). Pinned by `SpaceStationPadPersistenceTest#padSetAndPerPadStateSurviveRestart`, `SpaceStationPadPersistenceTest#autoLandFlagWithoutDockSurvivesRestart`. FOR: save format: pads survive reload.
+  (written `SpaceStationObject.java:748-754`, read `:813-823`, and an absent `autoLand` key reads
+  as on). FOR: save format: pads survive reload.
 - **INV-STN-07 [T][BEH]** `getNextLandingPad` only returns pads that are free **and** auto-land-enabled;
   a pad must opt into auto-land before a dock can claim it
-  (SpaceStationDockUndockTest:87-123; StationLandingLocationTest). Pinned by `SpaceStationDockUndockTest#dockRejectsPadWithoutAutoLandOptIn`, `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`.
+  (SpaceStationDockUndockTest:87-133; StationLandingLocationTest). Pinned by `SpaceStationDockUndockTest#dockRejectsPadWithoutAutoLandOptIn`, `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`.
 - **INV-STN-08 [V][BEH]** Rotation and altitude setters are no-ops while `isAnchored`
   (`SpaceStationObject.java:280-288,868-871`).
 - **INV-STN-09 [V]** `nextId` (persisted as `nextInt`) is never consulted for allocation —

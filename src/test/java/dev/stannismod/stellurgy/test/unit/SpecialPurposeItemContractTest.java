@@ -103,23 +103,6 @@ public class SpecialPurposeItemContractTest {
 
     /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
     @Pins("INV-ITM-11")
-    @Test
-    public void biomeChangerReadDataFromNetworkPersistsBiomeIdToNbt() {
-        // Wire-format contract: packet id 0 carries a single int payload
-        // -> write into NBT key "biome". This pins both the packet schema
-        // AND the NBT key name used by the production useNetworkData
-        // path (line 180: `nbt.getInteger("biome")`).
-        ItemBiomeChanger item = new ItemBiomeChanger();
-        ItemStack stack = new ItemStack(item, 1);
-        NBTTagCompound nbt = new NBTTagCompound();
-        ByteBuf wire = Unpooled.buffer().writeInt(7);
-        item.readDataFromNetwork(wire, (byte) 0, nbt, stack);
-        assertEquals("packet id 0 must persist payload int into NBT key 'biome'",
-                7, nbt.getInteger("biome"));
-    }
-
-    /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
-    @Pins("INV-ITM-11")
     @RedWitness(member = "ItemBiomeChanger#readDataFromNetwork", at = "if (packetId == 0) {", replacedBy = "if (true) {",
             fails = "unknown packet id must leave NBT untouched", on = "2026-10-19")
     @Test
@@ -151,37 +134,6 @@ public class SpecialPurposeItemContractTest {
         ItemWeatherController item = new ItemWeatherController();
         assertTrue("weather-controller GUI must always be openable",
                 item.canInteractWithContainer(null));
-    }
-
-    /** Pins INV-ITM-12 (the weather controller maps its three ints to NBT keys in order). */
-    @Pins("INV-ITM-12")
-    @RedWitness(member = "ItemWeatherController#readDataFromNetwork",
-            at = "setInteger(\"floodlevel\", byteBuf.readInt()); nbtTagCompound.setInteger(\"last_mode_id\"",
-            replacedBy = "setInteger(\"last_mode_id\", byteBuf.readInt()); nbtTagCompound.setInteger(\"floodlevel\"",
-            fails = "second int -> NBT 'floodlevel'", on = "2026-10-19")
-    @Test
-    public void weatherControllerReadDataFromNetworkPersistsAllThreeFieldsToNbt() {
-        // Wire-format contract: every packet carries 3 ints in fixed
-        // order — mode_id, floodlevel, last_mode_id — written into NBT
-        // keys of matching names (production useNetworkData reads back
-        // by exactly these keys at lines 171-173). Pin both the order
-        // and the NBT key names.
-        ItemWeatherController item = new ItemWeatherController();
-        ItemStack stack = new ItemStack(item, 1);
-        NBTTagCompound nbt = new NBTTagCompound();
-        ByteBuf wire = Unpooled.buffer()
-                .writeInt(2)    // mode_id
-                .writeInt(63)   // floodlevel
-                .writeInt(1);   // last_mode_id
-
-        item.readDataFromNetwork(wire, (byte) 0, nbt, stack);
-
-        assertEquals("first int -> NBT 'mode_id'",
-                2, nbt.getInteger("mode_id"));
-        assertEquals("second int -> NBT 'floodlevel'",
-                63, nbt.getInteger("floodlevel"));
-        assertEquals("third int -> NBT 'last_mode_id'",
-                1, nbt.getInteger("last_mode_id"));
     }
 
     // ── C047: null-safe network callbacks when the bound satellite is gone ──

@@ -89,7 +89,7 @@ commands need `stellurgy.tests`. Headless CI skips server+client tiers.
   contract violation stays visible. `test/unit/SatelliteRegistryFallbackTest.java` is not one: its two tests
   (`:40`, `:51`) assert the by-design `null` for an unknown type and that `createFromNBT` returns `null`
   instead of NPE-ing (the fix noted in the test's own comment), so they pin the FIXED behaviour.
-  The pattern's surviving instance is `integration/PacketSerializationTest.java:500`.
+  The pattern's surviving instance is `integration/PacketSerializationTest.java:134`.
 - **MECH-TST-08 — positive-control guard.** Known-bug pairs ship a happy-path positive control
   so a registry-wide breakage can't make the bug test pass vacuously. The satellite registry's
   pair has no such control — an unregistered-everything registry would pass both `null` assertions
@@ -166,10 +166,10 @@ nothing about whether it triggers.
 `_documentsKnownBug` / bug-pinning tests (assert *current* behaviour, flip on fix):
 - `unit/SatelliteRegistryFallbackTest.java:40,51` — not a bug-pin: `getNewSatellite` returns
   `null` by design and `createFromNBT` returns `null` rather than NPE-ing.
-- `integration/PacketSerializationTest.java:500` `packetMoveRocketInSpaceDocumentsKnownBugs`
+- `integration/PacketSerializationTest.java:134` `packetMoveRocketInSpaceDocumentsKnownBugs`
   — pins the unregistered `PacketMoveRocketInSpace`: `read()` NPEs on default-ctor instance;
   `hasWorld`/`hasStar` write inverted — of which the test pins the `read()` NPE only
-  (`PacketSerializationTest.java:500-515`).
+  (`PacketSerializationTest.java:134-150`).
 
 `@Ignore`d / superseded:
 - `server/PlanetDimensionLoadTest.java:30` — `@Ignore` (hangs at suite scale,
@@ -198,7 +198,7 @@ nothing about whether it triggers.
   `test/server/MachineRecipeEndToEndKit.java:31-38`.
 - **INV-TST-06 [V]** Known-bug tests pin current behaviour and are written to fail on fix
   (documented flip instruction), keeping the violation visible.
-  `integration/PacketSerializationTest.java:500-515` (the satellite-registry pair does not pin a bug: see MECH-TST-07).
+  `integration/PacketSerializationTest.java:134-150` (the satellite-registry pair does not pin a bug: see MECH-TST-07).
 - **INV-TST-07 [A]** Each `*DisableTest`/`*GateTest` pins that a config flag disables both
   accrual *and* consequence (per §10). Assumed uniform across the ~5 pairs; only sampled
   (`WearAccrualDisableTest`, `WeatherCycleDisableTest`).
@@ -223,7 +223,7 @@ nothing about whether it triggers.
   a red `*DocumentsKnownBug` means someone fixed the bug without flipping the test.
 
 - **Wire bug (confirmed by test)** `PacketMoveRocketInSpace` unregistered + `read()` NPE +
-  inverted `hasWorld`/`hasStar` — the `read()` NPE is pinned by `PacketSerializationTest.java:500`.
+  inverted `hasWorld`/`hasStar` — the `read()` NPE is pinned by `PacketSerializationTest.java:134`.
 - **Coverage gap** `PlanetDimensionLoadTest` `@Ignore`d for suite-scale hang;
   non-Stellurgy dimension isolation has no running gate. `server/PlanetDimensionLoadTest.java:30`.
 - **SatelliteRegistry SSOT/null-contract bug** `getNewSatellite` returns `null` vs javadoc

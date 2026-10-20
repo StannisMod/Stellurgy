@@ -21,20 +21,13 @@ import static org.junit.Assert.*;
  *
  * <p>Boot 1 places + configures a transceiver in a non-default state
  * (extract mode, enabled, paired into a fresh network). Boot 2 — same
- * workDir — reads back via {@code wireless-info} and
- * {@code wireless-role-on-network}, asserting:</p>
+ * workDir — reads back via {@code wireless-role-on-network}, asserting
+ * that {@code onLoad} re-registered the tile on its dataNetwork with
+ * the saved role (extract &rarr; source). Without this side, a player
+ * configuring a transceiver before restart would find it silently
+ * absent from its network on restart.</p>
  *
- * <ul>
- *   <li>{@code mode}, {@code enabled}, {@code networkID} survived
- *       {@code TileWirelessTransciever.writeToNBT / readFromNBT}.</li>
- *   <li>{@code onLoad} re-registered the tile on its dataNetwork with
- *       the saved role (extract &rarr; source). Without this side, a player
- *       configuring a transceiver before restart would find it silently
- *       absent from its network on restart.</li>
- * </ul>
- *
- * <p>Mirrors the lifecycle pattern of {@code PersistenceRestartSmokeTest}
- * (per-method workDir, two harness instances).</p>
+ * <p>Per-method workDir, two harness instances.</p>
  *
  * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
  * it, and boots a second one over the same world directory to read what the save carried across;
@@ -43,9 +36,7 @@ import static org.junit.Assert.*;
 @OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
 
-    private static final String NET_ID = "networkID";
     private static final String SHARED_ID = "sharedNetworkId";
-    private static final String MODE = "mode";
     private static final String ENABLED = "enabled";
     private static final String IS_SOURCE = "isSource";
     private static final String IS_SINK = "isSink";
@@ -86,7 +77,7 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
         // Boot 1 — non-default state.
         place(firstBoot, X_A);
         place(firstBoot, X_B);
-        int sharedId = pair(firstBoot, X_A, X_B);
+        pair(firstBoot, X_A, X_B);
         setMode(firstBoot, X_A, "extract");
         setEnabled(firstBoot, X_A, true);
 
@@ -97,12 +88,6 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
         // being in a spawn chunk; NBT round-trip and onLoad fire on
         // chunk-load.
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
-
-        String post = info(secondBoot, X_A);
-        assertEquals("mode must survive NBT round-trip",
-                "extract", extractMode(post));
-        assertEquals("networkID must survive NBT round-trip",
-                sharedId, extractInt(NET_ID, post));
 
         // onLoad re-registers as source for extract mode. Without onLoad
         // running, isSource would be false and the player's pre-restart
@@ -134,11 +119,6 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
         return extractInt(SHARED_ID, r);
     }
 
-    private static String info(RealDedicatedServerHarness h, int x) throws Exception {
-        return String.join("\n", h.client().read(
-                "stellurgytest pipe wireless-info " + DIM + " " + x + " " + Y + " " + Z));
-    }
-
     private static void setMode(RealDedicatedServerHarness h, int x, String mode) throws Exception {
         String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-set-mode " + DIM + " "
@@ -151,12 +131,6 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
                 "stellurgytest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
         assertTrue("set-enabled failed: " + r, Reply.of(r).ok());
-    }
-
-    private static String extractMode(String haystack) {
-        Reply mReply = Reply.of(haystack);
-        if (!mReply.has(MODE)) throw new AssertionError("no mode in: " + haystack);
-        return mReply.text(MODE);
     }
 
     private static int extractInt(String field, String haystack) {

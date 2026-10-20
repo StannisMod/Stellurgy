@@ -162,8 +162,7 @@ only the sides that changed. Copy-source-into-ship is likewise server-side. [V]
 Read is forgiving: an unreadable `kind` → `PLANET`, an unreadable `detail` → `TELESCOPE`, a missing tag →
 empty crystal, a null entry skipped; entries re-enter through `record`, so duplicate identities in stored
 NBT merge on load. [V] `CrystalEntry.java:33-37,141-188`, `CrystalMemory.java:131-157`,
-`ItemMemoryCrystal.java:29`. [T] round trip of name/kind/detail/tick/coord: `CrystalMemoryTest.java:162`,
-`:181`; **`dim` is not asserted by any round-trip test I found**. The item is stack-size 1
+`ItemMemoryCrystal.java:29`. No test asserts the round trip of name/kind/detail/tick/coord/`dim`. The item is stack-size 1
 (`ItemMemoryCrystal.java:32`). Persisted `observedTick` is a SPACE-clock value (C16); nothing here reconciles
 a rolled-back clock.
 

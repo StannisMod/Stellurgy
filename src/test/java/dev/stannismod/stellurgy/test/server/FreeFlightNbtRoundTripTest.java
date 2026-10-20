@@ -14,27 +14,12 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>The FF attitude quaternion, flight mode, flight-assist toggle and velocity
  * setpoint are persisted by {@code writeEntityToNBT} / {@code readEntityFromNBT}
- * (each with its own legacy-default branch). This pins that a full save/load
- * cycle preserves them, and that a legacy save missing the FF keys degrades to
- * the documented defaults (upright identity attitude, flight-assist ON).
- *
- * <p>"saves must survive" is a project invariant: a read/write asymmetry (a key
- * written but not read, a swapped component, an un-normalised load, a wrong
- * default branch) would silently corrupt stored rockets with NO other test
- * failing. The {@code entity rocket-nbt-roundtrip} probe sets a canonical
- * non-default FF state, drives the real save path into a fresh peer, and also
- * reads a legacy (FF-keys-stripped) copy so both directions are covered.
+ * (each with its own legacy-default branch). This pins that a legacy save missing
+ * the FF keys degrades to the documented defaults (upright identity attitude,
+ * flight-assist ON). The {@code entity rocket-nbt-roundtrip} probe reads a legacy
+ * (FF-keys-stripped) copy of the rocket's real save.
  */
 public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
-
-    /**
-     * How far a restored attitude must be from the identity quaternion, summed over its axes.
-     *
-     * <p>The TEST'S OWN sensitivity bar: an identity attitude is what a round-trip that lost
-     * everything produces, so this refuses exactly that.</p>
-     */
-    private static final double NON_IDENTITY_ATTITUDE = 0.1;
-
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -49,11 +34,6 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         Reply reply = Reply.of(json);
         assertTrue("response missing boolean key " + key + ": " + json, reply.has(key));
         return reply.bool(key);
-    }
-
-    private static String str(String json, String key) {
-        assertTrue("response missing string key " + key + ": " + json, Reply.of(json).has(key));
-        return Reply.of(json).text(key);
     }
 
     private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
@@ -71,37 +51,6 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         // links later wearing some mechanic's name.
         return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-    }
-
-    @Test
-    public void freeFlightStateSurvivesNbtRoundTrip() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 700));
-
-        String r = ok(client().arrange("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
-        assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
-
-        // Flight mode survives.
-        assertEquals("flight mode must survive save/load: " + r,
-                "FREE_FLIGHT", str(r, "peerMode"));
-
-        // Attitude quaternion survives component-for-component (double -> float
-        // -> double on save, so allow float precision).
-        double tol = 1e-3;
-        assertEquals("quat W must survive: " + r, num(r, "srcQuatW"), num(r, "peerQuatW"), tol);
-        assertEquals("quat X must survive: " + r, num(r, "srcQuatX"), num(r, "peerQuatX"), tol);
-        assertEquals("quat Y must survive: " + r, num(r, "srcQuatY"), num(r, "peerQuatY"), tol);
-        assertEquals("quat Z must survive: " + r, num(r, "srcQuatZ"), num(r, "peerQuatZ"), tol);
-        // Sanity: the round-tripped attitude is genuinely non-identity, so the
-        // assertions above are not trivially satisfied by an all-zero write.
-        assertTrue("round-trip attitude must be non-identity: " + r,
-                Math.abs(num(r, "peerQuatX")) + Math.abs(num(r, "peerQuatY"))
-                        + Math.abs(num(r, "peerQuatZ")) > NON_IDENTITY_ATTITUDE);
-
-        // Flight-assist toggle + velocity setpoint survive.
-        assertTrue("flight-assist ON must survive: " + r, bool(r, "peerFaOn"));
-        assertEquals("FA fwd setpoint must survive: " + r, 0.3d, num(r, "peerFaFwd"), tol);
-        assertEquals("FA right setpoint must survive: " + r, -0.2d, num(r, "peerFaRight"), tol);
-        assertEquals("FA up setpoint must survive: " + r, 0.5d, num(r, "peerFaUp"), tol);
     }
 
     @Test

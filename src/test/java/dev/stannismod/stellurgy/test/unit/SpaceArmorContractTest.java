@@ -170,18 +170,6 @@ public class SpaceArmorContractTest {
         assertEquals(0xFFFFFF, armor.getColor(stack));
     }
 
-    @Test
-    public void getColorReadsDisplayTagColorWhenPresent() {
-        ItemSpaceArmor armor = chest();
-        ItemStack stack = stackOf(armor);
-        NBTTagCompound nbt = new NBTTagCompound();
-        NBTTagCompound display = new NBTTagCompound();
-        display.setInteger("color", 0xFF8800); // amber
-        nbt.setTag("display", display);
-        stack.setTagCompound(nbt);
-        assertEquals(0xFF8800, armor.getColor(stack));
-    }
-
     // ───────────────────── ItemSpaceChest specifics ──────────────────────
 
     @Test

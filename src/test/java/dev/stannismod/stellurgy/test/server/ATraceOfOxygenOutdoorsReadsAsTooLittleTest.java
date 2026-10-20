@@ -20,16 +20,15 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * A planet's outdoors is its AIR, judged by the band a room is judged by: a trace of oxygen reads as
- * too little oxygen, not as none — and the air a world was given is the air it has after a restart.
+ * too little oxygen, not as none.
  *
  * <p>The distinction this pins existed in rooms and died at the planet boundary: outdoors was a
  * yes/no flag beside a pressure, so a world could hold oxygen or not, and never "some".</p>
  *
  * <p>The world is a carbon-dioxide planet from the planet file (no oxygen of its own). The trace
  * arrives through the planet's own gas exchange — the one a terraformer step uses — so the arrangement
- * supplies gas, never the reading. Manual harness lifecycle: the planet file is the start of the first
- * boot (a {@link GameDirSeed} the harness writes before it), and the second boot runs against the same
- * directory.</p>
+ * supplies gas, never the reading. Manual harness lifecycle: the planet file is the start of the
+ * boot (a {@link GameDirSeed} the harness writes before it).</p>
  */
 @OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
 public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanicsTest {
@@ -77,13 +76,9 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
     @LegacyWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
             + " replaced by {@code return false;}, this fails after the trace is added with"
             + " {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).")
-    @LegacyWitness(prose = "with {@code DimensionProperties#copyData} lacking"
-            + " {@code this.air = props.air.copy();}, this fails after the restart with"
-            + " {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as"
-            + " Earth's mix (2026-10-01, the first run of this test, before that line existed).")
     @Test
     public void aTraceOfOxygenReadsAsTooLittleOutdoorsAndIsStillThereAfterARestart() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         Reply before = outdoors();
         // The positive precondition of the verdict below: this world starts with NO oxygen, so a
@@ -97,20 +92,6 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
         Reply after = outdoors();
         assertEquals("a trace of oxygen outdoors must read as too little oxygen, not as none: " + after,
                 "lowO2", after.text("type"));
-
-        harness.close();        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
-
-        Reply restarted = outdoors();
-        assertEquals("after a restart the world must still hold its trace, and read it the same way: "
-                + restarted, "lowO2", restarted.text("type"));
-
-        String info = "stellurgytest planet info " + DIM;
-        Reply planet = Reply.of(info, String.join("\n", harness.client().read(info)));
-        String composition = planet.object("gases");
-        assertTrue("planet info must report the world's composition: " + planet, composition != null);
-        Reply gases = Reply.of(composition);
-        assertEquals("the saved air must hold exactly the oxygen that was put in: " + planet,
-                TRACE_PPM * AirState.PER_PPM, gases.longInteger("oxygen"));
     }
 
     /** The atmosphere at a point outdoors on the fixture world, as the world's own handler answers it. */

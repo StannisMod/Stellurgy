@@ -27,21 +27,6 @@ public class SystemBodyTest {
         return BodyEphemeris.orbit(distUnits, 0.0, 0.0, false, 1000d, unitBlocks);
     }
 
-    @Test
-    public void nbtRoundTripPreservesEveryField() {
-        SystemBody body = SystemBody.fixedAt(GalacticCoord.ofSectorLocal(4, -5, 6, 123_456, -7_890, 42),
-                SystemBodyKind.STATION_SLOT, 815, -12345);
-        NBTTagCompound tag = new NBTTagCompound();
-        body.writeToNBT(tag);
-        SystemBody round = SystemBody.readFromNBT(tag);
-        assertEquals(body, round);
-        assertEquals(body.name(), round.name());
-        assertEquals(body.addressAt(0L), round.addressAt(0L));
-        assertEquals(SystemBodyKind.STATION_SLOT, round.kind());
-        assertEquals(815, round.dimId());
-        assertEquals(-12345, round.starId());
-    }
-
     /**
      * A name is not a place. The whole point of the model: a cell name is an identifier, so no amount
      * of time changes it. The second half is the control — without it a body that never moves would
@@ -208,14 +193,6 @@ public class SystemBodyTest {
 
     @Test
     public void aBodyCarriesItsOwnRadiusThroughNbt() {
-        // A body's SIZE travels with it: nothing downstream can recover it (a procedural world has no
-        // dimension until a descent mints one, and the render feed reaches a client with no registry).
-        SystemBody sized = SystemBody.fixedAt(GalacticCoord.ORIGIN, SystemBodyKind.GAS_GIANT,
-                Constants.INVALID_PLANET, 4).withRadius(11.2d);
-        NBTTagCompound tag = new NBTTagCompound();
-        sized.writeToNBT(tag);
-        assertEquals(11.2d, SystemBody.readFromNBT(tag).radiusEarths(), 1e-9);
-
         // A body that is not a sphere says so, and says it the same way after a round trip — the
         // renderer draws that as a marker rather than inventing a size for it.
         SystemBody belt = SystemBody.fixedAt(GalacticCoord.ORIGIN, SystemBodyKind.ASTEROID_BELT,

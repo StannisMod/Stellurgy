@@ -106,9 +106,11 @@ written to disk.
 - **INV-NW-03 [V]** `PacketBackToRocketGui` is the only Stellurgy packet with a real `executeServer`;
   it re-validates via `RocketGuiNavigation`, not trusting client-sent coords blindly.
   `PacketBackToRocketGui.java:58`.
-- **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
-  `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
-  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `integration/PacketSerializationTest#packetSatelliteRoundTrip`, `…#packetConfigSyncRoundTrip`, `…#packetAsteroidInfoRoundTrip`, `…#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
+- **INV-NW-04 [V][SYS]** NBT-envelope packets round-trip byte-for-byte through
+  `writeCompoundTag`/`readCompoundTag`: each writes its compound and reads it back with the
+  matching call at the same point of the stream — `PacketDimInfo.java:52,88`,
+  `PacketSatellite.java:43,49`, `PacketStationUpdate.java:71,112`,
+  `PacketSpaceStationInfo.java:51,81`. FOR: wire format: same build on both sides.
 - **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
   (absent from `Stellurgy.java:334-352`) and never constructed anywhere in `src/main`. A sentinel
   records only that its `read` NPEs (`PacketSerializationTest#packetMoveRocketInSpaceDocumentsKnownBugs`),
@@ -165,13 +167,13 @@ written to disk.
 
 ## Test coverage
 
-- INV-NW-04 → `test/integration/PacketSerializationTest.java:100,169,216,264,335,458`
-- INV-NW-05 → `integration/PacketSerializationTest.java:500` (`packetMoveRocketInSpaceDocumentsKnownBugs`)
+- INV-NW-04 → none (`[V]` above)
+- INV-NW-05 → `integration/PacketSerializationTest.java:134` (`packetMoveRocketInSpaceDocumentsKnownBugs`)
 - INV-NW-07 → none (`[A]` above)
 - INV-NW-11 → `test/client/SatelliteClientGroupTest#aSatelliteTheServerAddsIsInTheClientsCopyOfItsWorld`
 - Empty-buffer safety of `readClient` for Laser/AirParticle/InvalidLocation/Fluid/BiomeID/
   DimInfo/SpaceStationInfo/StationUpdate/Asteroid/ConfigSync/Satellite/SatellitesUpdate/AtmSync/
-  StellarInfo/SyncKnownPlanets → not tested (the delete-flag short-circuit tests exist, `integration/PacketSerializationTest.java:521,539`).
+  StellarInfo/SyncKnownPlanets → not tested (the delete-flag short-circuit tests exist, `integration/PacketSerializationTest.java:155,173`).
 
 ## Open questions
 

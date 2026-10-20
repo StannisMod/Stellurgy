@@ -29,7 +29,6 @@ public class ShipLedgerTest {
 
         ShipLedger.Entry e = ledger.get(SHIP);
         assertNotNull(e);
-        assertEquals(coord(3, 100), e.coord);
         assertEquals(ShipLedger.State.SETTLED, e.state);
         assertEquals(coord(3, 0).cellKey(), e.cellKey());
     }

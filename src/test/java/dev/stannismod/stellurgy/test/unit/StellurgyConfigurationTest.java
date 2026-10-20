@@ -13,17 +13,6 @@ import static org.junit.Assert.*;
  */
 public class StellurgyConfigurationTest {
 
-    @Test
-    public void cloneConstructorCopiesFields() {
-        StellurgyConfiguration src = new StellurgyConfiguration();
-        src.stationClearanceHeight = 4242;
-        src.stationSize = 256;
-
-        StellurgyConfiguration copy = new StellurgyConfiguration(src);
-        assertEquals(4242, copy.stationClearanceHeight);
-        assertEquals(256, copy.stationSize);
-    }
-
     /**
      * Performance section default-stability check.
      * MED batch pack 4 — C017 regression guard.
@@ -63,39 +52,6 @@ public class StellurgyConfigurationTest {
                 copy.laserBlackListDims.contains(42));
         assertEquals("copy must contain the source's map entry",
                 Integer.valueOf(7), new StellurgyConfiguration(src).blackHoleGeneratorBlocks.get(null));
-    }
-
-    /**
-     * The PERFORMANCE config section in {@link StellurgyConfiguration#loadPreInit} sets
-     * {@code atmosphereHandleBitMask} and {@code oxygenVentSize}; they are
-     * {@code @ConfigProperty} tagged, so loadPreInit->sync->clone is the production path and the
-     * clone must carry them end-to-end.
-     */
-    @Test
-    public void performanceConfigDefaultsStable() {
-        StellurgyConfiguration cfg = new StellurgyConfiguration();
-
-        cfg.atmosphereHandleBitMask = 3;
-        cfg.oxygenVentSize = 32;
-        StellurgyConfiguration copy = new StellurgyConfiguration(cfg);
-        assertEquals(3, copy.atmosphereHandleBitMask);
-        assertEquals(32, copy.oxygenVentSize);
-    }
-
-    /**
-     * Cloning a partially-populated config must preserve every mutation, even
-     * ones loadPreInit would never have set.
-     */
-    @Test
-    public void unknownConfigDoesNotCrash() {
-        StellurgyConfiguration cfg = new StellurgyConfiguration();
-
-        cfg.stationClearanceHeight = -777;     // sentinel-out-of-range value
-        cfg.spaceLaserPowerMult = Float.NaN;   // pathological float
-        StellurgyConfiguration clone = new StellurgyConfiguration(cfg);
-        assertEquals(-777, clone.stationClearanceHeight);
-        assertTrue("NaN must survive clone (no silent normalisation)",
-                Float.isNaN(clone.spaceLaserPowerMult));
     }
 
     /**

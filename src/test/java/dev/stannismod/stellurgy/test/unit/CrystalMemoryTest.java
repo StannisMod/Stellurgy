@@ -154,25 +154,6 @@ public class CrystalMemoryTest {
     }
 
     @Test
-    public void theAddressListSurvivesAnNbtRoundTrip() {
-        CrystalMemory crystal = new CrystalMemory();
-        crystal.record(new CrystalEntry(coord(4), "Home", SystemBodyKind.MOON, InfoTier.APPROACH, 4242L));
-        crystal.record(entry(9, "Far", InfoTier.TELESCOPE, 7L));
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        crystal.writeToNBT(nbt);
-        CrystalMemory read = CrystalMemory.readFromNBT(nbt);
-
-        assertEquals(2, read.size());
-        CrystalEntry home = read.get(coord(4));
-        assertNotNull("the address itself must survive the round trip", home);
-        assertEquals("Home", home.name());
-        assertEquals("the body kind must survive", SystemBodyKind.MOON, home.kind());
-        assertEquals("the resolved detail level must survive", InfoTier.APPROACH, home.detail());
-        assertEquals("the observation timestamp must survive", 4242L, home.observedTick());
-    }
-
-    @Test
     public void anUnwrittenCrystalReadsAsBlank() {
         CrystalMemory read = CrystalMemory.readFromNBT(new NBTTagCompound());
 

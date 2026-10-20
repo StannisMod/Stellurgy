@@ -112,12 +112,11 @@ budget cap, MECH-MSN-06) and, for ore missions, `asteroidType` / `asteroidUUID` 
 - **INV-MSN-07 [T][BEH]** Gas completion fills fluid tiles only when `intakePower > 0`.
   `MissionGasCompletionTest.java:105-160`; code `MissionGasCollection.java:44-47`. Pinned by `MissionGasCompletionTest#gasCompletionDoesNotFillFluidWhenIntakePowerZero`, `MissionGasCompletionTest#gasCompletionFillsRocketFluidTilesWithConfiguredFluid`.
 - **INV-MSN-08 [T][BEH]** Completion unlinks all infrastructure from the mission and links it
-  to the respawned rocket. `MissionInfrastructureLifecycleTest.java:139-197`; code
-  `MissionOreMining.java:183-189`, `MissionGasCollection.java:114-120`. Pinned by `MissionInfrastructureLifecycleTest#completionUnlinksInfrastructureFromMission`, `MissionInfrastructureLifecycleTest#completionLinksInfrastructureToRespawnedRocket`, `MissionInfrastructureLifecycleTest#startLinksInfrastructureToMission`.
+  to the respawned rocket. `MissionInfrastructureLifecycleTest.java:113-171`; code
+  `MissionOreMining.java:183-189`, `MissionGasCollection.java:114-120`. Pinned by `MissionInfrastructureLifecycleTest#completionUnlinksInfrastructureFromMission`, `MissionInfrastructureLifecycleTest#completionLinksInfrastructureToRespawnedRocket`.
 - **INV-MSN-09 [V][BEH]** `failureChance` is 0, `canTick` is true, `performAction` false,
   `getInfo` null — the base is a passive countdown with no player interaction.
-  `MissionResourceCollection.java:104-117,94-97`; pinned only as far as
-  `defaultMissionSerialisesToNbtWithoutThrowing` (`MissionResourceCollectionContractTest.java:23-32`).
+  `MissionResourceCollection.java:104-117,94-97`; no test pins it.
 - **INV-MSN-10 [V][SYS]** `duration` is clamped to ≥ 1 tick at construction, so
   `getProgress` never divides by zero for live missions.
   `MissionResourceCollection.java:57-60`. FOR: INV-MSN-04.
@@ -164,8 +163,7 @@ harvests nothing (`MissionOreMining.java:118-120`). The `64000` mB gas base and 
 
 INV-MSN-01/02/03 → none (all `[V]`); INV-MSN-04 → `MissionLifecyclePyramidTest`;
 INV-MSN-05/06 → `MissionOreCompletionTest`; INV-MSN-07 → `MissionGasCompletionTest`;
-INV-MSN-08 → `MissionInfrastructureLifecycleTest`; INV-MSN-09 →
-`MissionResourceCollectionContractTest`.
+INV-MSN-08 → `MissionInfrastructureLifecycleTest`; INV-MSN-09 → none (`[V]`).
 
 ## Open questions
 

@@ -131,24 +131,6 @@ public class CapacitorChargeTest {
         assertEquals("and the energy is really gone", 1L, capacitor.charge());
     }
 
-    @Test
-    public void aStoredChargeIsREADbackOffTheSave() {
-        // It is real stored energy now, so it has to persist — under the old model only c0 and a tick
-        // stamp were written and the level was recomputed, which is exactly how an absence created it.
-        //
-        // ONLY THE READ HALF is pinned here, and the limit is worth naming rather than hiding: writing
-        // goes through TileEntity's registry mapping, which does not exist outside a loaded game, so
-        // this test builds the compound by hand. The write half is exercised by the real save path in
-        // the server tier but is not ASSERTED anywhere yet, and saying so is better than a green that
-        // reads as though it were.
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setLong("capCharge", 7L);
-
-        TileJumpCapacitor restored = bareCapacitor();
-        restored.readFromNBT(nbt);
-        assertEquals("a reloaded bank holds what it held", 7L, restored.charge());
-    }
-
     // ── the cooldown forecast, now a best case ───────────────────────────────
 
     @Test

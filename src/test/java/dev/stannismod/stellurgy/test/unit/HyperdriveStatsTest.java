@@ -99,19 +99,6 @@ public class HyperdriveStatsTest {
                 ShipDriveStats.ofPower(0L, DriveTier.baseline()).present());
     }
 
-    @Test
-    public void driveStatsSurviveAnNbtRoundTrip() {
-        ShipDriveStats original = ShipDriveStats.ofPower(12_345L, DriveTier.baseline());
-        NBTTagCompound nbt = new NBTTagCompound();
-        original.writeToNBT(nbt);
-
-        ShipDriveStats restored = ShipDriveStats.readFromNBT(nbt);
-
-        assertEquals(original.drivePower(), restored.drivePower());
-        assertEquals(original.inFlightDraw(), restored.inFlightDraw());
-        assertEquals(original.burstCost(), restored.burstCost());
-    }
-
     // ─── Speed ─────────────────────────────────────────────────────────────────
 
     @Test

@@ -73,7 +73,7 @@ stands the ship off from where the target was, by the difference between the two
      own writer (`ShipLedgerData.setClock`), **outside** `replaceAll`'s all-or-nothing fleet write, and
      the write-out happens in a `finally` so a fleet step that refuses or fails cannot take the clock
      with it.
-  **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it. Pinned by `AimAndArrivalShareOneClockTest#theClockAdvancesWithoutBeingTold`, `SpaceClockIsTheSubsystemsOwnTest#neitherClockMovesTheOther`, `SpaceClockIsTheSubsystemsOwnTest#theClockComesBackWhereItWasAfterAReboot`. FOR: CLOCK-2.
+  **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it. Pinned by `AimAndArrivalShareOneClockTest#theClockAdvancesWithoutBeingTold`, `SpaceClockIsTheSubsystemsOwnTest#neitherClockMovesTheOther`. FOR: CLOCK-2.
 
 ## Witnesses
 
@@ -85,7 +85,7 @@ stands the ship off from where the target was, by the difference between the two
 | CLOCK-5.1 | `theClockAdvancesWithoutBeingTold` (it moves at all). **The ADVANCE-SITE half is UNWITNESSED**: moving the increment below the null return would go green everywhere, because no server can be booted without the controller. Recovering it needs a SEAM, not a flag — `advanceClock()` and `onServerStarted(live)` both already take the subsystem as a parameter, so a unit test passing `null` would pin the order |
 | CLOCK-5.2 | the RATE leg of `theClockAdvancesWithoutBeingTold` — the two clocks' DELTAS over one window must match (a rate comparison, not a value one, so it does not couple them). **Red at `space=198 world=99`** with a second writer added to the other server-tick handler |
 | CLOCK-5.3 | `neitherClockMovesTheOther` — both directions, each with its own arrangement assertion that the clock it drove really jumped. The class owns its server: one leg hammers the overworld's counter by 20 M ticks, which is exactly the collateral this clause removes from shared servers. **Red at "the overworld jumped 20 000 000 and the space clock moved 20 000 001"** with `spaceClock()` re-pointed at the overworld |
-| CLOCK-5.4 | `theClockComesBackWhereItWasAfterAReboot` — two JVMs over one world directory, through the shipped save/restore hooks and no explicit save (the SHUTDOWN save is the one that has to work). **Red at `set=20000000 restored=0`** against its revert. Plus `ShipLedgerDataTest.theSpaceClockIsStoredWithTheStateItDatesAndSurvivesTheRoundTrip`, `.aSaveWithNoClockInItReadsBackAsTickZero` and `.aRefusedFleetWriteDoesNotRollTheClockBack` at the unit tier |
+| CLOCK-5.4 | no restart witness: the durability half is `[V]` only — staged on save at `SpaceSubsystemEvents.java:164-169`, written and read under `spaceClock` at `ShipLedgerData.java:248,276`, restored on start at `SpaceSubsystem.java:302-303`. The unit tier pins the decisions around it: `ShipLedgerDataTest.aSaveWithNoClockInItReadsBackAsTickZero` and `.aRefusedFleetWriteDoesNotRollTheClockBack` |
 
 ## Scope, stated so it is not over-claimed
 

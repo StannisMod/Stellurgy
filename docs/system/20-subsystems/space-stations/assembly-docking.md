@@ -83,10 +83,11 @@ Config: see `C4-config-surface`.
   carrying its id; the id is unique and appears in the manager list
   (SpaceStationDepthTest; SpaceStationDepthTest:44-58). Pinned by `SpaceStationDepthTest#multipleStationsCoexistWithDistinctIds`.
 - **INV-STN-23 [T][BEH]** A pad added to a station starts `occupied=false` and `allowAutoLand=false`,
-  carries its supplied name, and de-dups on `(x,z)` (SpaceStationDockUndockTest:65-83,167-181). Pinned by `SpaceStationDockUndockTest#addPadGrowsListWithExpectedDefaults`, `SpaceStationDockUndockTest#addPadIsIdempotentForSamePosition`.
+  carries its supplied name `[V]` (`StationLandingLocation.java:7-13`, two unset booleans and the
+  constructor's name; `SpaceStationObject.java:449-452`), and de-dups on `(x,z)` (SpaceStationDockUndockTest:185-196). Pinned by `SpaceStationDockUndockTest#addPadIsIdempotentForSamePosition`.
 - **INV-STN-24 [T][BEH]** Dock claims the pad returned by `getNextLandingPad` and marks it occupied; a
   second dock with no other free auto-land pad fails; undock frees the pad and it can be reclaimed
-  (SpaceStationDockUndockTest:100-149; SpaceStationPadPersistenceTest:180-190). Pinned by `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`, `SpaceStationDockUndockTest#undockReturnsPadToFreePool`.
+  (SpaceStationDockUndockTest:110-159; SpaceStationPadPersistenceTest:116-124). Pinned by `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`, `SpaceStationDockUndockTest#undockReturnsPadToFreePool`.
 - **INV-STN-25 [V][BEH]** Pad ownership is per-station: station A never reports station B's pad —
   each station owns its own `spawnLocations` list (`SpaceStationObject.java:50,68`).
 - **INV-STN-26 [V][BEH]** Assembly refuses unless loader block + station chip present and outputs empty;

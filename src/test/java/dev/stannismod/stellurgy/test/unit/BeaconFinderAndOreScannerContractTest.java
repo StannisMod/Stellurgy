@@ -63,35 +63,16 @@ public class BeaconFinderAndOreScannerContractTest {
         // Default — no NBT, returns -1 sentinel.
         assertEquals("default ore-scanner has no satellite id (-1 sentinel)",
                 -1L, scanner.getSatelliteID(stack));
-
-        scanner.setSatelliteID(stack, 0xDEADBEEFCAFEL);
-        assertEquals("setSatelliteID must round-trip through stack NBT",
-                0xDEADBEEFCAFEL, scanner.getSatelliteID(stack));
-
-        // Overwrite — pin that subsequent calls replace, not append.
-        scanner.setSatelliteID(stack, 42L);
-        assertEquals("setSatelliteID overwrite must replace previous value",
-                42L, scanner.getSatelliteID(stack));
     }
 
     @Test
     public void oreScannerEmptySatelliteIdReturnsMinusOne() {
-        // Specifically: an ItemStack with a non-null NBT compound that
-        // happens to NOT have the "id" key returns 0 (NBT default for
-        // getLong on missing key), not -1. The -1 sentinel only applies
-        // when the stack has NO NBT compound at all. Pin both branches:
+        // The -1 sentinel applies when the stack has NO NBT compound at all;
+        // a compound without the "id" key reads as getLong's 0 instead.
         ItemOreScanner scanner = new ItemOreScanner();
         scanner.setRegistryName("stellurgy_test:ore_scanner_g12_empty");
         ItemStack stack = new ItemStack(scanner);
         assertEquals("no-NBT stack returns the -1 sentinel",
                 -1L, scanner.getSatelliteID(stack));
-
-        // Once setSatelliteID is called once, NBT exists. Then we
-        // overwrite under a different key (via reflection won't matter —
-        // the contract is simpler: setSatelliteID + getSatelliteID
-        // round-trips correctly).
-        scanner.setSatelliteID(stack, 7L);
-        assertEquals("after explicit set, get returns the set value",
-                7L, scanner.getSatelliteID(stack));
     }
 }

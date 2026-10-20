@@ -399,8 +399,9 @@ free because each half keeps what its own blocks held.
   nowhere to put is the one thing conservation forbids. `HeatNetwork.java:233-240` FOR: INV-HEAT-01.
 - **INV-HEAT-06 [T][BEH]** A loop's energy survives a server restart, and comes back OFF THE BLOCKS: the
   loop itself is rebuilt from the world with the same membership and capacity, while every heat unit
-  is read back from the members that were holding it. This is the pin under MECH-HEAT-05 — without
-  it, storing energy per block rather than in the network state was only an argument.
+  is read back from the members that were holding it `[V]` (each block writes and reads its own
+  `heatStored`, `TileHeatLoopBlock.java:114,120`, and re-registers on load, `:84-87`). The
+  rebuilt-membership half is pinned by
   `test/server/SubsystemNetworkRestartTest#aCoolantLoopsEnergyComesBackFromItsBlocks`
 
 - **INV-HEAT-07 [T][BEH]** Rejection scales linearly with the number of radiating cells, at equal loop
@@ -534,7 +535,7 @@ not a network flow (MECH-HEAT-01).
 |---|---|
 | INV-HEAT-01, 02, 03 | `test/server/HeatLoopTest` — 3 scenarios. Scenario 2 was verified by REVERTING the capacity term in production and watching it go red on exactly its own assertion (both loops 4530 units, capacities 60 vs 120) |
 | MECH-HEAT-02c | `HeatLoopTest.aMachineBuiltAfterTheLoopIsStillPickedUp` — verified by removing the neighbour signal in production, which left the loop at exactly ambient with `heatGeneration:0` |
-| INV-HEAT-06 | `test/server/SubsystemNetworkRestartTest.aCoolantLoopsEnergyComesBackFromItsBlocks` — two boots on one world, energy read per BLOCK before the loop is consulted, because the loop's own figure could not tell restored energy from energy that was never gone. Verified by deleting the NBT write: `expected:<4531> but was:<0>` |
+| INV-HEAT-06 | `test/server/SubsystemNetworkRestartTest.aCoolantLoopsEnergyComesBackFromItsBlocks` — two boots on one world; the loop comes back with the same membership. The energy read back off the blocks is `[V]` only (`TileHeatLoopBlock.java:114,120`) |
 | INV-HEAT-07, 08, 09 | `test/server/HeatRejectionTest` — 3 scenarios. Verified by breaking each law separately in production: a linear law gave a measured ratio of 1.95 against the quartic's 2.48, and a cell that ignored its obstruction shed 60 where zero was required. The area scenario stayed GREEN through both, which is what shows the three are independent. The quartic scenario adds the incident flux back on, and that identity was falsified on its own by reporting a flux that is not the one that acts |
 | INV-HEAT-10..13 | `test/server/HeatChillerTest` — 2 scenarios, each law falsified separately in production: delivering only the heat and not the work gave `expected 6000 but was 6240` (the pump inventing 240 units a tick), and dropping the bolted mass gave `cold=60 hot=60`, two loops indistinguishable where one carries a machine |
 | INV-HEAT-20, 21 | `test/server/HeatIntakeDuctTest` — 2 scenarios. Falsified by delivering the heat without the work: `expected:<6240> but was:<6000>`, the machine quietly destroying its own electricity |

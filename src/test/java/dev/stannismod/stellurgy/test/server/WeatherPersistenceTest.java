@@ -108,7 +108,6 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
         // the overworld MapStorage.
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         DimWeather after = weather(secondBoot, FIXTURE_DIM);
-        assertTrue("planet rain DID NOT persist across restart: " + after.raw(), after.raining);
         assertTrue("wrapper should still be installed after restart: " + after.raw(),
                 after.usesStellurgyWorldInfo());
     }

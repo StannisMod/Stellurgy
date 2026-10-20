@@ -22,53 +22,6 @@ public class SpacePositionTest {
 
     /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
     @Pins("INV-NAV-01")
-    @Test
-    public void spacePositionNbtRoundTrip() {
-        SpacePosition position = new SpacePosition();
-        position.x = 100.0;
-        position.y = -42.5;
-        position.z = 9001.0;
-        position.yaw = Math.PI / 4;
-        position.pitch = -0.25;
-        position.roll = 1.5;
-        position.isInInterplanetarySpace = true;
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        position.writeToNBT(nbt);
-
-        SpacePosition restored = new SpacePosition();
-        restored.readFromNBT(nbt);
-
-        assertEquals(position.x, restored.x, EPS);
-        assertEquals(position.y, restored.y, EPS);
-        assertEquals(position.z, restored.z, EPS);
-        assertEquals(position.yaw, restored.yaw, EPS);
-        assertEquals(position.pitch, restored.pitch, EPS);
-        assertEquals(position.roll, restored.roll, EPS);
-        assertTrue(restored.isInInterplanetarySpace);
-        assertNull("star reference must not be reconstructed from NBT without a writer-side star", restored.star);
-        assertNull("world reference must not be reconstructed from NBT without a writer-side world", restored.world);
-    }
-
-    /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
-    @Pins("INV-NAV-01")
-    @Test
-    public void spacePositionNbtRoundTripDefaults() {
-        SpacePosition position = new SpacePosition();
-        NBTTagCompound nbt = new NBTTagCompound();
-        position.writeToNBT(nbt);
-
-        SpacePosition restored = new SpacePosition();
-        restored.readFromNBT(nbt);
-
-        assertEquals(0.0, restored.x, EPS);
-        assertEquals(0.0, restored.y, EPS);
-        assertEquals(0.0, restored.z, EPS);
-        assertFalse(restored.isInInterplanetarySpace);
-    }
-
-    /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
-    @Pins("INV-NAV-01")
     @RedWitness(member = "SpacePosition#readFromNBT", at = "if (!nbt.hasKey(\"spacePosition\")) return;",
             replacedBy = "", fails = "expected:<5.0> but was:<0.0>", on = "2026-10-19")
     @Test

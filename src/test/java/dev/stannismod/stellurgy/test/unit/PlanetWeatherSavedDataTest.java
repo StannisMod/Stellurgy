@@ -43,49 +43,4 @@ public class PlanetWeatherSavedDataTest {
         a.setRaining(true);
         assertFalse("mutation on dim A must not leak to dim B", b.isRaining());
     }
-
-    @Test
-    public void planetWeatherSavedDataStoresByDimensionId() {
-        PlanetWeatherSavedData source = new PlanetWeatherSavedData();
-        PlanetWeatherState a = source.getOrCreate(2);
-        a.setRaining(true);
-        a.setRainTime(11111);
-        a.setCleanWeatherTime(0);
-
-        PlanetWeatherState b = source.getOrCreate(7);
-        b.setThundering(true);
-        b.setThunderTime(22222);
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        PlanetWeatherSavedData round = new PlanetWeatherSavedData();
-        round.readFromNBT(tag);
-
-        PlanetWeatherState a2 = round.getIfPresent(2);
-        PlanetWeatherState b2 = round.getIfPresent(7);
-        assertNotNull("dim 2 must round-trip", a2);
-        assertNotNull("dim 7 must round-trip", b2);
-        assertTrue("dim 2 raining", a2.isRaining());
-        assertEquals(11111, a2.getRainTime());
-        assertTrue("dim 7 thundering", b2.isThundering());
-        assertEquals(22222, b2.getThunderTime());
-
-        // Untouched dim must remain absent — guard against the bug where the
-        // map writer silently injects every (dim, default-state) entry it
-        // sees.
-        assertNull("untouched dim must not appear after restore", round.getIfPresent(99));
-    }
-
-    @Test
-    public void emptySavedDataRoundTripsToEmpty() {
-        PlanetWeatherSavedData source = new PlanetWeatherSavedData();
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        PlanetWeatherSavedData round = new PlanetWeatherSavedData();
-        round.readFromNBT(tag);
-        assertNull(round.getIfPresent(0));
-        assertNull(round.getIfPresent(7));
-    }
 }

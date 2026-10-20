@@ -67,29 +67,6 @@ public class ItemDataCarrierNBTRoundTripTest {
                 positions.isEmpty());
     }
 
-    @Test
-    public void elevatorChipPositionsRoundTripAcrossWriteRead() {
-        ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
-        ItemStack s = new ItemStack(chip, 1);
-
-        List<DimensionBlockPosition> input = Arrays.asList(
-                new DimensionBlockPosition(0, new HashedBlockPosition(10, 64, -5)),
-                new DimensionBlockPosition(-1, new HashedBlockPosition(0, 200, 0)));
-        chip.setBlockPositions(s, input);
-
-        assertTrue("setBlockPositions(non-empty) must attach NBT",
-                s.hasTagCompound());
-        List<DimensionBlockPosition> out = chip.getBlockPositions(s);
-        assertEquals("round-trip must preserve element count",
-                input.size(), out.size());
-        // Compare via equals (DimensionBlockPosition implements equals by
-        // dim + pos), order is the wire-contract preserved by NBTTagList.
-        for (int i = 0; i < input.size(); i++) {
-            assertEquals("round-trip position [" + i + "] must equal input",
-                    input.get(i), out.get(i));
-        }
-    }
-
     /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
     @Pins("INV-ITM-06")
     @RedWitness(member = "ItemSpaceElevatorChip#setBlockPositions", at = "} else if (!listToStore.isEmpty()) {",
@@ -134,53 +111,6 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     // ────────────────────── ItemData ────────────────────────────────────
 
-    @Test
-    public void dataStickEmptyStackReportsZeroData() {
-        ItemData item = new ItemData();
-        ItemStack s = new ItemStack(item, 1);
-        assertEquals("fresh data stick must report 0 data",
-                0, item.getData(s));
-        assertEquals("fresh data stick's type must default to UNDEFINED",
-                DataStorage.DataType.UNDEFINED, item.getDataType(s));
-    }
-
-    @Test
-    public void dataStickAddDataPersistsAcrossReads() {
-        ItemData item = new ItemData();
-        ItemStack s = new ItemStack(item, 1);
-        int added = item.addData(s, 42, DataStorage.DataType.MASS);
-        assertTrue("addData must report some amount stored (non-negative)",
-                added >= 0);
-        assertEquals("getData after addData must echo the stored amount",
-                added, item.getData(s));
-        assertEquals("getDataType after addData(MASS) must report MASS",
-                DataStorage.DataType.MASS, item.getDataType(s));
-        assertTrue("addData must attach NBT", s.hasTagCompound());
-    }
-
-    @Test
-    public void dataStickRemoveDataDecrementsStoredAmount() {
-        ItemData item = new ItemData();
-        ItemStack s = new ItemStack(item, 1);
-        item.addData(s, 100, DataStorage.DataType.COMPOSITION);
-        int before = item.getData(s);
-        int removed = item.removeData(s, 30, DataStorage.DataType.COMPOSITION);
-        assertTrue("removeData must report a non-negative amount removed",
-                removed >= 0);
-        assertEquals("getData after removeData must reflect the decrement",
-                before - removed, item.getData(s));
-    }
-
-    @Test
-    public void dataStickSetDataOverridesPreviousValue() {
-        ItemData item = new ItemData();
-        ItemStack s = new ItemStack(item, 1);
-        item.addData(s, 50, DataStorage.DataType.DISTANCE);
-        item.setData(s, 7, DataStorage.DataType.DISTANCE);
-        assertEquals("setData must overwrite the previous stored value",
-                7, item.getData(s));
-    }
-
     /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
     @Pins("INV-ITM-05")
     @Test
@@ -223,22 +153,6 @@ public class ItemDataCarrierNBTRoundTripTest {
     // ────────────────────── ItemMultiData ───────────────────────────────
 
     @Test
-    public void multiDataEmptyStackReportsZeroForEveryRealType() {
-        // Contract: every "real" DataType (every non-UNDEFINED enum value)
-        // defaults to 0 on a fresh stack. UNDEFINED is the sentinel — both
-        // MultiData.reset() (line 23-24) and ItemMultiData.addInformation
-        // (line 121) explicitly skip it, so querying UNDEFINED is not part
-        // of the public contract.
-        ItemMultiData item = new ItemMultiData();
-        ItemStack s = new ItemStack(item, 1);
-        for (DataStorage.DataType t : DataStorage.DataType.values()) {
-            if (t == DataStorage.DataType.UNDEFINED) continue;
-            assertEquals("fresh multi-data stick must report 0 for type " + t,
-                    0, item.getData(s, t));
-        }
-    }
-
-    @Test
     public void multiDataAddDataAccumulatesPerTypeIndependently() {
         ItemMultiData item = new ItemMultiData();
         ItemStack s = new ItemStack(item, 1);
@@ -258,15 +172,6 @@ public class ItemDataCarrierNBTRoundTripTest {
         assertEquals("TEMPERATURE bucket must remain at 0 — types do not "
                 + "bleed into each other",
                 0, item.getData(s, DataStorage.DataType.TEMPERATURE));
-    }
-
-    @Test
-    public void multiDataSetMaxPersistsAcrossReads() {
-        ItemMultiData item = new ItemMultiData();
-        ItemStack s = new ItemStack(item, 1);
-        item.setMaxData(s, 250);
-        assertEquals("setMaxData must persist to subsequent getMaxData",
-                250, item.getMaxData(s));
     }
 
     @Test

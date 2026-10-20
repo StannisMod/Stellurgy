@@ -177,7 +177,7 @@ one instant whose time term is zero for every period — snapped to a cell centr
 (`SystemContent.java:377`). A parent with no mass has no zone: its moons FALL BACK to the parent's cell and one report says so
 (`SystemContent.java:351-367`). Declared positions are galaxy-local `GalacticAnchor`s resolved **once** to an absolute cell
 (`GalacticAnchor.java:54`, `UniverseRegistry.java:1430` — beyond the guaranteed radius is a loud error, never a clamp). `[V]`
-`[T]` `UniverseRegistryTest.java:138` (a recorded name beats a later derivation).
+`[T]` `UniverseRegistryTest.java:120` (a recorded name beats a later derivation).
 
 ### MECH-UNI-08 — A body is a NAME plus a FRAME plus a LAW
 A `SystemBody` carries an immutable **name** (the sector triple of its cell, at cell centre), a `CellFrame` (its cell's origin as
@@ -190,7 +190,7 @@ AT THE TICK (`CellFrame.java:57, 65`), so a craft beside a moon keeps station. A
 angle, inclination, retrograde, period): `offsetAt` rounds to blocks (`BodyEphemeris.java:129`), so the velocity is the
 analytic derivative (`BodyEphemeris.java:159`), not a difference of two readings. A **pin freezes elements, never positions**.
 A body whose law reaches outside its own cell is refused at construction (`SystemBody.java:154`). An unknown kind reads back
-as an inert `STATION_SLOT` (`SystemBody.java:377`). `[V]` `[T]` `SystemBodyTest.java:233` (an offset outside the cell is
+as an inert `STATION_SLOT` (`SystemBody.java:377`). `[V]` `[T]` `SystemBodyTest.java:210` (an offset outside the cell is
 refused). Frame semantics are C15's (ADDR-6..ADDR-16, zones ADDR-17..ADDR-19).
 
 ### MECH-UNI-09 — The registry resolves a cell: pinned → authored → generator, member → anchor
@@ -209,8 +209,8 @@ plus the POIs of the cells that host bodies (`UniverseRegistry.java:693`), `skyB
 so a station in a void cell survives and interstellar void is empty (`UniverseRegistry.java:757`). `originAt(name, tick)` is
 the frame origin of a cell: its primary's position, else the zone's body displaced by the cell's fixed lattice offset, else
 static (`UniverseRegistry.java:930`). `anchorsInTerritory` (`UniverseRegistry.java:554`) is what one survey look owes its
-direction. `[V]` `[T]` `AuthoredNeighbourhoodTest.java:85, 153`; `UniverseRegistryTest.java:682` (a body cell rides its
-primary, a void cell stands still), `UniverseRegistryTest.java:715, 757`. Clauses: C15 ADDR-3, ADDR-23..ADDR-25.
+direction. `[V]` `[T]` `AuthoredNeighbourhoodTest.java:85, 153`; `UniverseRegistryTest.java:650` (a body cell rides its
+primary, a void cell stands still), `UniverseRegistryTest.java:683, 725`. Clauses: C15 ADDR-3, ADDR-23..ADDR-25.
 
 ### MECH-UNI-10 — A cell name is recorded once, served only while it is true
 `durableName` (`UniverseRegistry.java:822`) is the `CellNames` hook the registry hands `SystemContent`: a body keyed by
@@ -220,8 +220,8 @@ owning star id because **dimension ids are recycled**: a name recorded for anoth
 that has left its system's box (the body would stay listed and be impossible to arrive at). `forgetName` runs from the
 dimension lifecycle (`UniverseRegistry.java:868`, `dimension/DimensionManager.java:586`). Bodies with no dimension (star proxy,
 belts, POIs) are not keyed and keep the derivation, which is time-invariant for them. A config XML reset re-places anchors and
-leaves names alone (`UniverseRegistry.java:1395`). `[V]` `[T]` `UniverseRegistryTest.java:550` (a recycled id does not inherit a name), `UniverseRegistryTest.java:612` (a name
-that left its box is re-derived), `UniverseRegistryTest.java:138`. See C15 ADDR-1/ADDR-2, C29 DIMID-5.
+leaves names alone (`UniverseRegistry.java:1395`). `[V]` `[T]` `UniverseRegistryTest.java:518` (a recycled id does not inherit a name), `UniverseRegistryTest.java:580` (a name
+that left its box is re-derived), `UniverseRegistryTest.java:120`. See C15 ADDR-1/ADDR-2, C29 DIMID-5.
 
 ### MECH-UNI-11 — Pin-on-touch, and the variant that is a body's identity inside a cell
 A **touch** pins the procedural system whose neighbourhood holds the cell (`UniverseRegistry.java:982`): its drawn star
@@ -236,8 +236,8 @@ the parent's orbital distance) and **refuses an ambiguous match** (`UniverseRegi
 variant are the body's derivation key: `derivedProfileOf` (`UniverseRegistry.java:1186-1190`) is the one call a descent
 materializes from, and the generator draws a moon's size under the same key (MECH-UNI-06). `realizeBody` rewrites
 only a PINNED body, is idempotent, and records the dimension's cell name (`UniverseRegistry.java:1056`). `[V]` `[T]`
-`UniverseRegistryTest.java:332` (a pin is a snapshot against a seed change), `TelescopeRegionScanTest.java:571` (a scanned
-system is frozen against a later retune), `TelescopeRegionScanTest.java:624` (a look at nothing freezes nothing),
+`UniverseRegistryTest.java:302` (a pin is a snapshot against a seed change), `TelescopeRegionScanTest.java:552` (a scanned
+system is frozen against a later retune), `TelescopeRegionScanTest.java:605` (a look at nothing freezes nothing),
 `PlanetRealizationTest.java:373` (an unpinned system refuses the rewrite), `PlanetRealizationTest.java:343, 154`.
 
 ### MECH-UNI-12 — A body's physics is derived in a fixed order
@@ -297,7 +297,7 @@ actually differs (`UniverseRegistry.java:1711-1721`). An empty stored laws / der
 adopted. The one door out is `/stellurgy universe upgrade confirm` (pin everything on online players' crystals,
 `adoptSchema` `UniverseRegistry.java:1761`, re-attach the generator, `armUpgrade` `UniverseRegistry.java:1754`;
 `command/sub/universe/UniverseUpgradeCommand.java:76-104`). New versions are written as DECORATORS over the previous one
-(`UniverseSchema.java:37-50`). `[V]` `[T]` `UniverseRegistryTest.java:830, 853, 1031, 917, 1080`;
+(`UniverseSchema.java:37-50`). `[V]` `[T]` `UniverseRegistryTest.java:782, 805, 977, 863, 1026`;
 `ClusteredGalaxyGeneratorTest.java:1084`. (`derivationFingerprintOf` has no test: Open questions.)
 
 ### MECH-UNI-15 — Clusters and nebulae: a cloud is a cluster at another age
@@ -335,7 +335,7 @@ aperture against the brightest star the sky can produce (`StellarMagnitude.java:
 (`RegionScan.java:540`) and refused only when its first shell does not fit. `InfoTier` / `PlanetInfoField` classify graded
 discovery (global fields at `TELESCOPE`, terrain / biomes at `APPROACH`, resources / life at `ORBIT`; a higher tier shows a
 superset: `PlanetInfoField.java:57`). `[V]` `[T]` `TelescopeRegionScanTest.java:304` (refused, not clamped),
-`TelescopeRegionScanTest.java:335` (resumes after unload), `ConeWalkTest.java:158` (an aborted pointing is a shorter cone),
+`ConeWalkTest.java:158` (an aborted pointing is a shorter cone),
 `TelescopeReachTest.java:50` (an over-fine aperture is shortened).
 
 ## State & persistence
@@ -366,15 +366,15 @@ server in one JVM never sees another's model.
 
 - **INV-UNI-01 — at most one REAL body per cell** `[V]` (locked 2026-07-28, [universe-model](../universe-model.md) §4, C15 ADDR-4). Every real body, a moon included, owns its own cell; a zone-qualified key never equals a galactic one, so moons are compared against siblings of their zone only. The generator enforces it by claiming cells (`ClusteredGalaxyGenerator.java:437, 721`); for authored systems it is only AUDITED and reported, never repaired (`SystemContent.java:397-420`). `[V]` `[T]` `SystemRetinueTest.java:155` (procedural; moons skipped there).
 - **INV-UNI-02 — every procedural answer is a pure function of (seed, config, schema).** `[V]` No `Random`, no clock, no registry read inside the generator or `PlanetDerivation`; a body's profile is keyed on its CELL, not its list index, so it survives a pin. `[V]` `PlanetDerivation.java:312-320` `[T]` `ClusteredGalaxyGeneratorTest.java:179, 1084`. **Qualification**: `PlanetTypes.drawTerrain` consults the running modset (`PlanetTypes.java:196`), so the *terrain* leg holds only for a fixed modset (Open questions).
-- **INV-UNI-03 — a name never depends on time; where a body IS does.** `[V]` A cell name is derived at `NAME_TICK = 0`, then recorded; position is a law evaluated at a stated tick, never stored as an absolute. `[V]` `SystemContent.java:97`, `SystemBody.java:268-279` `[T]` `UniverseRegistryTest.java:138`, `SystemContentTest.java:391`. C15 ADDR-1, ADDR-2, ADDR-12.
-- **INV-UNI-04 — a body's name lies inside its system's neighbourhood, and every body attributes back to its anchor.** `[V]` Authored names are clamped into `min(s/2, SEAT_MARGIN) − 2` cells of the anchor (`SystemContent.java:474-478, 495-502`); procedural names into the seat's own lattice cell (`ClusteredGalaxyGenerator.java:1007-1025`); a recorded name outside its box is re-derived. `[V]` `[T]` `ClusteredGalaxyGeneratorTest.java:636`, `UniverseRegistryTest.java:612`.
+- **INV-UNI-03 — a name never depends on time; where a body IS does.** `[V]` A cell name is derived at `NAME_TICK = 0`, then recorded; position is a law evaluated at a stated tick, never stored as an absolute. `[V]` `SystemContent.java:97`, `SystemBody.java:268-279` `[T]` `UniverseRegistryTest.java:120`, `SystemContentTest.java:391`. C15 ADDR-1, ADDR-2, ADDR-12.
+- **INV-UNI-04 — a body's name lies inside its system's neighbourhood, and every body attributes back to its anchor.** `[V]` Authored names are clamped into `min(s/2, SEAT_MARGIN) − 2` cells of the anchor (`SystemContent.java:474-478, 495-502`); procedural names into the seat's own lattice cell (`ClusteredGalaxyGenerator.java:1007-1025`); a recorded name outside its box is re-derived. `[V]` `[T]` `ClusteredGalaxyGeneratorTest.java:636`, `UniverseRegistryTest.java:580`.
 - **INV-UNI-05 — a point is inside at most one galaxy, and a galaxy never leaves its cube.** `[V]` Satellites are ≥ 1 primary diameter out and ≤ 0.3 R across; the seat margin is the whole retinue's reach, not the primary's radius; the drift is clamped. `[V]` `GalaxyField.java:196-214, 662-684` `[T]` `GalaxyFieldTest.java:503, 709`.
 - **INV-UNI-06 — nothing procedural stands inside an authored neighbourhood; a pin clears nothing.** `[V]` One predicate (`UniverseRegistry.java:408`) serves attribution, survey territory and region. `[V]` `[T]` `AuthoredNeighbourhoodTest.java:85, 153`. C15 ADDR-23. (ADDR-25's pinned-box clause is KNOWN OPEN — Open questions.)
 - **INV-UNI-07 — a touched system is frozen, a realized body is never un-realized, realization writes only into a pin.** `[V]` `realizeBody` refuses an unpinned system; a second descent into the same cell reuses the world. `[V]` `UniverseRegistry.java:1056-1064`, `PlanetRealizer.java:98-101` `[T]` `PlanetRealizationTest.java:373, 343`.
-- **INV-UNI-08 — a stamped save is never opened under a different universe.** `[V]` An unknown schema version, a changed `<galaxyGen>` fingerprint (unless armed), an edited released metric, an edited released derivation: each throws `UniverseSchemaMismatchException` and aborts the load. `[V]` `UniverseRegistry.java:1657-1732` `[T]` `UniverseRegistryTest.java:830, 853, 1031, 1080` (the derivation refusal has no test).
-- **INV-UNI-09 — a body cannot be built with an offset outside its own cell.** `[V]` Refused at construction, never clamped. `[V]` `SystemBody.java:154-173` `[T]` `SystemBodyTest.java:233`.
+- **INV-UNI-08 — a stamped save is never opened under a different universe.** `[V]` An unknown schema version, a changed `<galaxyGen>` fingerprint (unless armed), an edited released metric, an edited released derivation: each throws `UniverseSchemaMismatchException` and aborts the load. `[V]` `UniverseRegistry.java:1657-1732` `[T]` `UniverseRegistryTest.java:782, 805, 977, 1026` (the derivation refusal has no test).
+- **INV-UNI-09 — a body cannot be built with an offset outside its own cell.** `[V]` Refused at construction, never clamped. `[V]` `SystemBody.java:154-173` `[T]` `SystemBodyTest.java:210`.
 - **INV-UNI-10 — an unwalkable survey is refused, not clamped; a pointing that merely exceeds the look budget is shortened.** `[V]` `ConeWalk.java:147-166`, `RegionScan.java:109-118, 540-566` `[T]` `TelescopeRegionScanTest.java:304`, `TelescopeReachTest.java:50`.
-- **INV-UNI-11 — an observation freezes only what it reported.** `[V]` A look into the void pins nothing; every characterised system is pinned first so the crystal and the sky cannot disagree. `[V]` `TelescopeScan.java:253` `[T]` `TelescopeRegionScanTest.java:624, 571`.
+- **INV-UNI-11 — an observation freezes only what it reported.** `[V]` A look into the void pins nothing; every characterised system is pinned first so the crystal and the sky cannot disagree. `[V]` `TelescopeScan.java:253` `[T]` `TelescopeRegionScanTest.java:605, 552`.
 - **INV-UNI-12 — the package holds no mutable static state.** `[V]` Every static field is `static final` and either a primitive/`String` constant, an immutable value (`BodyDerivationV0.java:23`, `UniverseLawsV0.java:18`) or a logger; the companion-count distribution is the private enum `CompanionCount` whose weights are final fields, not an array any holder of the reference could rewrite (`ClusteredGalaxyGenerator.java:72-90`; maintainer ruling 2026-10-06, "immutable form"). The only outside dependency is a read of `StellurgyConfiguration.getCurrentConfig()` (`TelescopeScan.java:374-398`, `RegionScan.java:459`). `[V]` by grep of `static` declarations without `final` across `universe/*.java` (zero hits, 2026-10-06).
 - **INV-UNI-13 — diffuse matter is not a body.** `[V]` A nebula has no cell name, is never in `bodiesAt`, and may overlap anything. `[V]` `Nebula.java:24-26`, `UniverseRegistry.java:635-648` (bodies only).
 - **INV-UNI-14** [T][BEH] A companion star is drawn where its body stands: the star carries the angle of the seat its body ends up in, a first cell already taken included (`seatCompanions`, `ClusteredGalaxyGenerator.java:1508-1518`; MECH-UNI-05). Pinned by `ACompanionIsDrawnWhereItsBodyStandsTest#everyCompanionStarCarriesTheAngleItsBodyStandsAt`.
@@ -421,12 +421,12 @@ server in one JVM never sees another's model.
 |---|---|
 | INV-UNI-02, MECH-UNI-01 | `ClusteredGalaxyGeneratorTest.java:179, 316, 1084` (316: region agrees with point query; 1084: golden corpus) |
 | INV-UNI-01 | `SystemRetinueTest.java:155, 180, 232` (180: cramped neighbourhood; 232: a cramped system drops bodies, never moves the ones it keeps) |
-| INV-UNI-03/04, MECH-UNI-10 | `UniverseRegistryTest.java:138, 550, 612, 650`; `SystemContentTest.java:391`; `ClusteredGalaxyGeneratorTest.java:636` |
+| INV-UNI-03/04, MECH-UNI-10 | `UniverseRegistryTest.java:120, 518, 580, 618`; `SystemContentTest.java:391`; `ClusteredGalaxyGeneratorTest.java:636` |
 | INV-UNI-05, MECH-UNI-03 | `GalaxyFieldTest.java:83, 503, 635, 709, 806` (83: home galaxy under every seed; 806: a declared galaxy is seated) |
-| INV-UNI-06, MECH-UNI-09 | `AuthoredNeighbourhoodTest.java:85, 153`; `UniverseRegistryTest.java:277, 682, 715, 757`; `StarClusterTest.java:293` |
-| INV-UNI-07/08, MECH-UNI-11/13/14 | `UniverseRegistryTest.java:332, 830, 853, 917, 1031, 1080`; `PlanetRealizationTest.java:154, 343, 373`; `ProceduralPlanetRealizationTest.java:77, 175` |
-| INV-UNI-09, MECH-UNI-08 | `SystemBodyTest.java:54, 117, 233` |
-| INV-UNI-10/11, MECH-UNI-16 | `TelescopeRegionScanTest.java:304, 335, 571, 624`; `ConeWalkTest.java:85, 158`; `TelescopeReachTest.java:50`; `StellarMagnitudeTest.java:149, 173, 200` |
+| INV-UNI-06, MECH-UNI-09 | `AuthoredNeighbourhoodTest.java:85, 153`; `UniverseRegistryTest.java:247, 650, 683, 725`; `StarClusterTest.java:293` |
+| INV-UNI-07/08, MECH-UNI-11/13/14 | `UniverseRegistryTest.java:302, 782, 805, 863, 977, 1026`; `PlanetRealizationTest.java:154, 343, 373`; `ProceduralPlanetRealizationTest.java:77, 175` |
+| INV-UNI-09, MECH-UNI-08 | `SystemBodyTest.java:39, 102, 210` |
+| INV-UNI-10/11, MECH-UNI-16 | `TelescopeRegionScanTest.java:304, 552, 605`; `ConeWalkTest.java:85, 158`; `TelescopeReachTest.java:50`; `StellarMagnitudeTest.java:149, 173, 200` |
 | MECH-UNI-12 | `PlanetDerivationTest.java:229, 263, 660, 681` |
 | MECH-UNI-15, INV-UNI-17 | `NebulaTest.java:78, 135, 172, 189`; `NebulaReachesPastItsClusterTest` (the field reads a cloud past its cluster ball, point and column) |
 | MECH-UNI-01 (zone seed), MECH-UNI-05/06, INV-UNI-14/15/16 | the clauses name their methods (`TheMoonInTheSkyIsTheMoonLandedOnTest` is integration: sky bulk = realized bulk) |

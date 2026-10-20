@@ -23,15 +23,15 @@ names (`SpaceSubsystem.java:105, 552`; universe MECH-UNI-13) [V][T]. `settle` is
 membership is WRITTEN, and a new way into a cell must end in it. `updatePosition` — which never changes the
 cell — is the flight computer's per-tick self-report and
 is a no-op unless SETTLED (`ShipLedger.java:114-120`; caller `TileAdvancedFlightComputer.java:529-530`) [V][T]
-`ShipLedgerTest.java:54`. No slot dimension is stored anywhere (`ShipLedgerDataTest.java:96`) [T].
+`ShipLedgerTest.java:53`. No slot dimension is stored anywhere (`ShipLedgerDataTest.java:80`) [T].
 `ShipLedgerData` is a `WorldSavedData` named `stellurgy_shipledger` on the overworld map storage; keys
 `ships[{shipId,galacticCoord}]`, `transits[]`, `cellVisits[{cell,visit}]`, `spaceClock`
 (`ShipLedgerData.java:42-46,224-285`) [V]. Only SETTLED ships are in `ships`; a flying one is carried by its
 `TransitRecord`, and `replaceAll` **refuses** (returns the ship ids, touches nothing) a snapshot that would store a
-flying ship nowhere (`ShipLedgerData.java:127-169`) [T] `ShipLedgerDataTest.java:118,150`. Save point: dim-0
+flying ship nowhere (`ShipLedgerData.java:127-169`) [T] `ShipLedgerDataTest.java:102,134`. Save point: dim-0
 `WorldEvent.Save` stages the clock always, the fleet only while the subsystem is up, and writes `saveAllData()` in a
 `finally`; neither step propagates (`SpaceSubsystemEvents.java:131-238`) [V][T]
-`SpaceRestartPersistenceTest.java:275,354`.
+`SpaceRestartPersistenceTest.java:224,303`.
 
 ### MECH-SPC-10 — The space clock is the subsystem's own counter, on both sides
 `ServerState.advanceSpaceClock()` runs **once per server tick**, in `onServerTick` *before* the null-subsystem
@@ -40,7 +40,7 @@ reads, `SpaceEventHandler.java:360-373`). `SpaceSubsystem.spaceClock()` answers 
 and the synced baseline on a client (`SpaceSubsystem.java:804-808`) [V]. It is restored on start *before* the
 `live == null` return, because it dates stamps outside this subsystem (`SpaceSubsystem.java:290-306`), and stored
 monotonically, never rolled back by a refused fleet write (`ShipLedgerData.java:216-219`) [V][T]
-`ShipLedgerDataTest.java:242`, `SpaceClockIsTheSubsystemsOwnTest.java:132,184`. `SpaceClockSync` is a baseline plus
+`ShipLedgerDataTest.java:199`, `SpaceClockIsTheSubsystemsOwnTest.java:110`. `SpaceClockSync` is a baseline plus
 local client ticks, `hasSync()` tells "not told" from tick 0, and a later baseline may move it backwards
 (`SpaceClockSync.java:35-61`) [T] `SpaceClockSyncTest.java:26,68`. The server pushes a baseline at login and every
 200 ticks, each player on his own phase (`SpaceEventHandler.java:243-247,345-373`) [V]. Contract:
@@ -81,7 +81,7 @@ left untouched, `SpaceSubsystem.java:398-426`), settle the pose, and *stay in th
 ### MECH-SPC-16 — A jump survives a restart; boot reconciles what hyperspace kept
 A `TransitRecord` is `{shipId, org, tgt, distance, travelled, arrivalTick, lastTicked, speed, crew[], snapshot?,
 lane?, hyperAnchor?}` — origin name, target name, progress, **never a raw absolute** (`TransitRecord.java:86-122`)
-[V][T] `TransitRecordTest.java:30`. Export does no world work (`ShipTransitManager.java:1109-1119`) [T]
+[V]. Export does no world work (`ShipTransitManager.java:1109-1119`) [T]
 `ShipTransitManagerTest.java:760`; the parked hull's block snapshot is re-cut every 600 ticks while anything flies
 and once at server stop (`ShipTransitManager.java:594-597,1139-1168`; `SpaceSubsystem.java:727-741`) [T]
 `ShipTransitManagerTest.java:734,801`. `importTransit` reclaims the lane first, then resumes as the parked hull if one
@@ -133,7 +133,7 @@ loaded here and he is not on it) (`AboardRecord.java:82-201`) [V]; it runs every
 (`SpaceEventHandler.java:81,262-268,394-398`). The record lives in the player's bindings capability, NBT key
 `stellurgyShipAboard` `{shipId, galacticCoord?, inTransit?, afcDx/Dy/Dz, standing?+standDx/Dy/Dz}`; an absent posture
 reads SEATED, an absent coordinate means "in no cell" (`ShipAboardTag.java:55-61,221-251,265-288,313-331`) [V][T]
-`ShipAboardTagTest.java:74,161,184`; `saysSpaceborne = presence || inTransit` (`ShipAboardTag.java:151-163`).
+`ShipAboardTagTest.java:41,111,131`; `saysSpaceborne = presence || inTransit` (`ShipAboardTag.java:151-163`).
 `onPlayerLoadFromFile` opens the restore when the record says spaceborne or the saved dimension is a subsystem world
 (`SpaceEventHandler.java:148-175`). `LoginRestore.resolve` never returns null or throws: no tag → orphan; ledger
 unknown → `SHIP_UNKNOWN`; `IN_TRANSIT` → hyperspace, **no cell claimed**; `SETTLED` → materialize the **ledger**
@@ -164,12 +164,12 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 - **INV-SPC-03 [V]**  The transit map and the ledger never disagree: in the map ⇔ `IN_TRANSIT`
   (`ShipTransitManagerTest.java:679`). Every put into the map is followed by the ledger's `beginTransit` and every removal by `settle`: `ShipTransitManager.java:535-536,699-705,769-770,1210-1211`.
 - **INV-SPC-05** [V] The ledger holds a coordinate, never a slot dimension; the dimension is derived
-  (`ShipLedger.java:11-16`; `SpaceManager.java:284-290`; `ShipLedgerDataTest.java:96`).
+  (`ShipLedger.java:11-16`; `SpaceManager.java:284-290`; `ShipLedgerDataTest.java:80`).
 - **INV-SPC-07** [V] The space clock advances exactly once per server tick, is monotonic across saves and is not
-  rolled back by a declined fleet write (`SpaceSubsystemEvents.java:76,166-176`; `ShipLedgerDataTest.java:242`).
+  rolled back by a declined fleet write (`SpaceSubsystemEvents.java:76,166-176`; `ShipLedgerDataTest.java:199`).
 - **INV-SPC-08** [V] The fleet write is all-or-nothing and a save-point failure never reaches the server
-  (`ShipLedgerData.java:127-169`; `SpaceSubsystemEvents.java:208-220`; `ShipLedgerDataTest.java:150`;
-  `SpaceRestartPersistenceTest.java:354`).
+  (`ShipLedgerData.java:127-169`; `SpaceSubsystemEvents.java:208-220`; `ShipLedgerDataTest.java:134`;
+  `SpaceRestartPersistenceTest.java:303`).
 - **INV-SPC-09** [V] A transit whose crew is not aboard stays open; it never reports an arrival around a stranded
   player (`ShipTransitManager.java:690-703`; `ShipTransitManagerTest.java:1057`).
 - **INV-SPC-11** [V] A hyperspace lane holds at most one ship: the allocator belongs to the world and a reclaimed
@@ -198,8 +198,8 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 
 ## Test coverage
 
-`INV-SPC-03` ShipTransitManagerTest.java:679 · `-05` ShipLedgerDataTest.java:96 · `-07` ShipLedgerDataTest.java:242,
-SpaceClockIsTheSubsystemsOwnTest.java:132,184 · `-08` ShipLedgerDataTest.java:150, SpaceRestartPersistenceTest.java:275,354 ·
+`INV-SPC-03` ShipTransitManagerTest.java:679 · `-05` ShipLedgerDataTest.java:80 · `-07` ShipLedgerDataTest.java:199,
+SpaceClockIsTheSubsystemsOwnTest.java:110 · `-08` ShipLedgerDataTest.java:134, SpaceRestartPersistenceTest.java:224,303 ·
 `-09` ShipTransitManagerTest.java:1057 · `-11` ShipTransitManagerTest.java:1134 · `-13` LoginRestoreTest.java:270 · `-14`
 HyperspaceSurvivesARestartTest.java:201 · `-18` SpaceSubsystemOwnershipTest.java:58,71,86 · `-12` is `[V]` only.
 
