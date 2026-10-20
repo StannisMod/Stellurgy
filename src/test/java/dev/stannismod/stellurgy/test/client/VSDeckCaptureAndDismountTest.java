@@ -375,23 +375,31 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // built. Its world AABB spans from the deck down to the keel and overlaps the terrain beneath -
         // the exact overlap the playtest fell through - and the deck sits several blocks above the ground,
         // so a fall-through is an unmistakable multi-block drop, not a one-block ambiguity.
+        Events clientEvents = clientEvents();
+        long buildMark = clientEvents.mark();
         double[] ship = buildShip(site);
 
         // The subject is the REAL client player. Drop the bot onto the deck and let its OWN client
         // resolve the landing (this is the thing that breaks; an armour stand read via a server probe
-        // is not). Mirrors the crew test's drop-and-settle.
-        // The landing is a LINK, not a duration: his own client's resolver either takes him onto the
-        // deck or it does not, and 80 ticks was a guess at how long that takes. The mark goes before
-        // the teleport, so nothing can happen between the stimulus and the read.
+        // is not). The landing is a LINK on the EDGE: the drop has to produce a capture of its own.
         //
-        // This used to note that the record was a per-tick COMMIT, so a body the build step had
-        // already left standing on this deck satisfied the await at once — and called that
-        // acceptable. It was not: that is exactly the defect that cost seven scenarios before the
-        // per-tick commit was removed, and this class held two of them. The wait is now on the EDGE, so the teleport has to
-        // produce a capture of its own before it returns. What this scenario's bug looks like is NO
-        // capture on the client at all while the server holds him, and a capture that existed and
-        // was then lost shows up in the release absence over the sink window below.
-        Events clientEvents = clientEvents();
+        // So he must not already be held when it starts, and buildShip's approach teleport puts him
+        // over this deck: a capture opened there can survive the drop below without a release, and
+        // then no edge follows the landing mark (measured 2026-10-19 on a sibling scenario, in-suite).
+        // The arrangement takes him FLY_IN_AWAY_BLOCKS off the hull — past its stay margin, inside
+        // the client's loading distance — and links on his client's own episode being closed, which
+        // holds at once for a body nothing took. What this scenario's bug looks like is NO capture on
+        // the client at all while the server holds him, and a capture that existed and was then lost
+        // shows up in the release absence over the sink window below.
+        long awayMark = clientEvents.mark();
+        arrange("tp @a " + (ship[0] + FLY_IN_AWAY_BLOCKS) + " " + ship[1] + " "
+                + (ship[2] + FLY_IN_AWAY_BLOCKS) + " 0 0");
+        awaitClientPlacedNear(awayMark, ship[0] + FLY_IN_AWAY_BLOCKS, ship[2] + FLY_IN_AWAY_BLOCKS,
+                "the drop below must start from a body this deck is not holding");
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitNotCapturedBy(clientEvents, buildMark,
+                scenarioShipId, "the drop below must start from a body this deck is not holding — a"
+                        + " capture still open from buildShip would leave the landing no edge of its own",
+                DECK_LINK_BUDGET_TICKS));
         long landingMark = clientEvents.mark();
         long serverLandingMark = serverEvents().mark();
         // The SERVER is read below, and it only knows where he is from his client's movement packets:

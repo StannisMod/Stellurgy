@@ -278,6 +278,53 @@ public final class ShipIdentity {
         return true;
     }
 
+    /**
+     * Wait until {@code shipId} does NOT hold the body in {@code log} since {@code mark}: no episode
+     * opened on that craft since the mark, or the last one was ended by a later release or a later
+     * entry onto another hull. The ARRANGEMENT for a scenario whose subject is a fresh capture: it
+     * holds at once for a body nothing took, so it never waits on a release that only a captured body
+     * produces.
+     *
+     * <p>Not {@code !endsCapturedBy}: that predicate's unreadable cases answer "not held" so that a
+     * wait for a capture keeps waiting, and negated they would answer "released" — the premise met by
+     * a record nobody could order. Here an unreadable {@code seq} answers "still held".</p>
+     *
+     * @param mark a mark on {@code log} taken before anything that could have put him on the deck
+     */
+    public static String awaitNotCapturedBy(Events log, long mark, String shipId, String what,
+                                            int tickBudget) throws Exception {
+        assertTrue("this wait cannot mean anything without the scenario's own ship id: " + what,
+                shipId != null);
+        return log.awaitMatching(mark, "deck_entered",
+                seen -> releasedFrom(log, mark, shipId),
+                "no episode on " + shipId + " since the mark, or its last one ended by a LATER release"
+                        + " or a LATER entry onto another hull",
+                what, tickBudget);
+    }
+
+    private static boolean releasedFrom(Events log, long mark, String shipId) throws Exception {
+        java.util.List<String> captures =
+                Events.recordsWhere(log.since(mark, "deck_entered"), "ship", shipId);
+        if (captures.isEmpty()) {
+            return true;
+        }
+        double held = Events.number(captures.get(captures.size() - 1), "seq");
+        if (Double.isNaN(held)) {
+            return false;
+        }
+        for (String release : Events.records(log.since(mark, "deck_released"))) {
+            if (Events.number(release, "seq") > held) {
+                return true;
+            }
+        }
+        for (String entered : Events.records(log.since(mark, "deck_entered"))) {
+            if (!shipId.equals(Reply.of(entered).text("ship")) && Events.number(entered, "seq") > held) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Whether {@code record} comes after the commit at {@code held} — and so ended that episode. An
      *  unreadable {@code seq} counts as ending it: a comparison against NaN is false either way, and
      *  the honest reading of "I cannot order this" is to keep waiting rather than to report held. */
