@@ -76,6 +76,10 @@ coverage (P1) and not mechanically decomposed.
 - **INV-RKT-22 [A][BEH]** `EntityHoverCraft` persists only inventory; a save/reload during
   flight drops its velocity and burn timer to defaults. Inferred from `:438`; not
   test-pinned.
+- **INV-RKT-25 [T][BEH]** A hovercraft takes its climb and descent keys only from its
+  driver: a key packet from any other sender, a player the server shows the craft to
+  included, is refused (`EntityHoverCraft.java:364-375`). Pinned by
+  `RocketPacketSenderClientGroupTest#aHovercraftTakesItsClimbKeyOnlyFromItsDriver`.
 
 ## Failure modes & edge cases
 

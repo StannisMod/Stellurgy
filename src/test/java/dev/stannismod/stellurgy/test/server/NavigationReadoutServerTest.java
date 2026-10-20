@@ -5,6 +5,8 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,8 +39,11 @@ public class NavigationReadoutServerTest extends AbstractSharedServerTest {
      * same {@code Double.toString} the readout uses. The arrangement must hold a body whose mass and
      * gravity differ, or a readout that printed the gravity could not be told from one that printed the
      * mass — the shipped Moon is one (0.0123 Earth masses against a stated 0.166 g).</p>
-     * <p>red-witnessed: with {@code NavBodyView#of} at {@code view.put(PlanetInfoField.MASS, Double.toString(props.getMass()));} writing {@code getGravitationalMultiplier()}, fails: "dim 2's readout must carry its mass under MASS, not its gravity (0.166)" (2026-10-07).</p>
      */
+    @Pins("INV-NVG-11")
+    @RedWitness(member = "NavBodyView#of", at = "view.put(PlanetInfoField.MASS, Double.toString(props.getMass()));",
+            replacedBy = "view.put(PlanetInfoField.MASS, Double.toString(props.getGravitationalMultiplier()));",
+            fails = "dim 2's readout must carry its mass under MASS, not its gravity (0.166)", on = "2026-10-19")
     @Test
     public void theMassLineCarriesTheBodysMassNotItsGravity() throws Exception {
         int described = 0;

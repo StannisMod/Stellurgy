@@ -136,7 +136,7 @@ separation bounded by the system's clear space, never larger than the primary. A
 `fabricate` (`seatCompanions`, `ClusteredGalaxyGenerator.java:1498, 1515-1530`): a companion whose first cell is taken is
 walked round its ring like any body, and the STAR is handed the angle of the seat it ends up in, so every sky, chart and
 selector that draws it at `getBaseTheta()` draws it where its body stands `[T]`
-`ACompanionIsDrawnWhereItsBodyStandsTest.java:69`. An unbound
+(INV-UNI-14). An unbound
 seat holds a **rogue**: a weighted table, mostly a starless `ROGUE_PLANET` system (`PlanetarySystem.java:60`), about one in a
 thousand a whole star thrown out (`GalaxyGenConfig.java:656-660`). A system's primary is `Optional<StellarBody>` — a starless
 system makes the caller decide, instead of receiving a 30 K zero-radius "star" (`PlanetarySystem.java:73`). `[V]` `[T]`
@@ -157,7 +157,7 @@ or 0-5 (giant), biased low (`ClusteredGalaxyGenerator.java:158-160`), orbit 2.5-
 (`ClusteredGalaxyGenerator.java:837-890`). A moon's bulk is derived under the key a descent realizes it with — its OWN cell
 and its variant in that cell (`variantInCell`, the generator-side `UniverseRegistry#variantOf`) — never the parent's cell
 and the moon's number, so the moon the sky shows is the moon landed on (`ClusteredGalaxyGenerator.java:870-877, 893`; a
-rogue's moons `:550-555`) `[T]` `TheMoonInTheSkyIsTheMoonLandedOnTest.java:68`. An inner belt exists only inside a giant's resonance gap; the **outer belt is
+rogue's moons `:550-555`) `[T]` (INV-UNI-15). An inner belt exists only inside a giant's resonance gap; the **outer belt is
 mandatory** at 1.6× the outermost world (`ClusteredGalaxyGenerator.java:611-627`). The same code gives an authored system a
 derived retinue bounded by the pack's `numPlanets` (`ClusteredGalaxyGenerator.java:641`; registry side
 `UniverseRegistry.java:2135`). A rogue system holds the rogue, ≤ 2 moons, no belt, no orbit, no zone
@@ -308,9 +308,9 @@ matter has no cell name and is not a body. A density reading counts **every clou
 the cluster the point is in: clouds are gathered over the super-cells around it widened by the farthest a cloud can reach
 (`cloudsReaching`, `cloudReachSuperCells`), and overlapping clouds add, capped at the scale's 1 (`densityAmong`,
 `NebulaField.java:204-230, 248`; maintainer ruling 2026-10-06: sum capped at 1, not max) `[T]`
-`NebulaReachesPastItsClusterTest.java:49`. `columnDensityBetween` gathers the clouds once for the whole line and integrates
+(INV-UNI-17). `columnDensityBetween` gathers the clouds once for the whole line and integrates
 along it (trapezoid, 1 ly step, ≤ 512 samples: `NebulaField.java:153-199, 36`) `[T]`
-`NebulaReachesPastItsClusterTest.java:75`, and `UniverseRegistry.extinctionBetween`
+(INV-UNI-17), and `UniverseRegistry.extinctionBetween`
 (`UniverseRegistry.java:1318`) converts density-light-years to magnitudes of visual extinction at 0.6 mag per density-ly
 (`Nebula.java:60`) — the unit astronomy states dust in. Its only consumers are the telescope (obscuration, MECH-UNI-16) and the
 sky feed. `[V]` `[T]` `NebulaTest.java:78` (a cloud reaches beyond its cluster), `NebulaTest.java:135, 189` (smooth falloff
@@ -377,11 +377,18 @@ server in one JVM never sees another's model.
 - **INV-UNI-11 — an observation freezes only what it reported.** `[V]` A look into the void pins nothing; every characterised system is pinned first so the crystal and the sky cannot disagree. `[V]` `TelescopeScan.java:253` `[T]` `TelescopeRegionScanTest.java:624, 571`.
 - **INV-UNI-12 — the package holds no mutable static state.** `[V]` Every static field is `static final` and either a primitive/`String` constant, an immutable value (`BodyDerivationV0.java:23`, `UniverseLawsV0.java:18`) or a logger; the companion-count distribution is the private enum `CompanionCount` whose weights are final fields, not an array any holder of the reference could rewrite (`ClusteredGalaxyGenerator.java:72-90`; maintainer ruling 2026-10-06, "immutable form"). The only outside dependency is a read of `StellurgyConfiguration.getCurrentConfig()` (`TelescopeScan.java:374-398`, `RegionScan.java:459`). `[V]` by grep of `static` declarations without `final` across `universe/*.java` (zero hits, 2026-10-06).
 - **INV-UNI-13 — diffuse matter is not a body.** `[V]` A nebula has no cell name, is never in `bodiesAt`, and may overlap anything. `[V]` `Nebula.java:24-26`, `UniverseRegistry.java:635-648` (bodies only).
+- **INV-UNI-14** [T][BEH] A companion star is drawn where its body stands: the star carries the angle of the seat its body ends up in, a first cell already taken included (`seatCompanions`, `ClusteredGalaxyGenerator.java:1508-1518`; MECH-UNI-05). Pinned by `ACompanionIsDrawnWhereItsBodyStandsTest#everyCompanionStarCarriesTheAngleItsBodyStandsAt`.
+- **INV-UNI-15** [T][BEH] The moon the sky shows is the moon landed on: a procedural moon's mass and radius are drawn under the key a descent realizes it with, its own cell and its variant in that cell, so `UniverseRegistry#derivedProfileOf` answers the same bulk (`ClusteredGalaxyGenerator.java:869-870, 886-894`; MECH-UNI-06, MECH-UNI-11). Pinned by `TheMoonInTheSkyIsTheMoonLandedOnTest#aMoonsSizeInTheSkyIsTheSizeOfTheWorldRealizedForIt`.
+- **INV-UNI-16** [T][BEH] Two moons named by the same zone-local cell of two different planets' zones are two worlds: a zoned cell's draw folds its zone into the seed, so a small triple counted in every zone of the galaxy does not hand every such moon one mass and radius (`CellHash.java:53-64`). Pinned by `PlanetDerivationTest#theSameZoneCellOfTwoPlanetsNamesTwoDifferentMoons`.
+- **INV-UNI-17** [T][BEH] A cloud is read wherever it reaches, past its own cluster's ball: a density reading and a sight line's column both gather every cloud that can reach them (`cloudsReaching`, `NebulaField.java:177-183, 204-222`; MECH-UNI-15). Pinned by `NebulaReachesPastItsClusterTest#aPointOutsideTheClusterButInsideItsCloudHasMatter`, `…#aLineThroughACloudOutsideItsClusterCrossesMatter`.
+- **INV-UNI-18** [T][BEH] A galaxy table with no type large enough to hold authored content promises authored content no more reach than its smallest type holds, `(1 − HOME_GALAXY_ORIGIN_FRACTION)` of that type's smallest radius, so an anchor past it is reported to the pack author at load (`GalaxyField.java:713-722`, `UniverseRegistry.java:1438-1445`). Pinned by `AuthoredReachGuaranteeTest#aTableOfDwarfsIsPromisedNoMoreThanItsSmallestDwarfHolds`.
+- **INV-UNI-19** [T][SYS] A survey of a sky whose generator states no star table is ranged against the stock table, and its tuning says so (`reachAssumesStockSky`, `RegionScan.java:484-505, 517-519`); a sky that states its own table is not marked. FOR: MECH-UNI-16, a pointing's reach is derived from the brightest star the sky can produce. Pinned by `ASurveyReachSaysWhoseSkyItWasMeasuredAgainstTest#aSkyWithNoStarTableIsSurveyedAgainstTheStockOneAndSaysSo`.
+- **INV-UNI-20** [T][BEH] A gas giant becomes a place — properties of its own — when a craft is recorded in its zone: every recording of a craft in a cell tells the ledger's observer, which hands the body whose zone the address names to the realizer (`ShipLedger.java:95-97`, `SpaceSubsystem.java:550-557`, `PlanetRealizer.java:205-211`; MECH-UNI-13). Pinned by `ProceduralPlanetRealizationTest#aGasGiantBecomesAPlaceWhenACraftIsRecordedInItsZone`.
 
 ## Failure modes & edge cases
 
 - **A fallback that announces itself**: a moon whose parent has no mass shares its parent's cell and logs once per parent (`SystemContent.java:359-367`); `coordForPlanet` returns EMPTY (and logs once) for a body its system cannot account for, never the anchor (`UniverseRegistry.java:1245-1259`); a recorded name that cannot be served is reported and re-derived (`UniverseRegistry.java:830-846`); no admitting preset → `unclassified`, reported (`PlanetTypes.java:157-168`).
-- **Two fallbacks that now announce themselves**: a galaxy table with nothing large enough to hold authored content draws such a galaxy from the whole table (maintainer ruling 2026-10-06: announced, never refused), logs an ERROR once per generator naming the reach it can still promise, and `guaranteedAuthoredReachLy` shrinks to what the table's smallest type holds instead of vouching for the shipped figure (`GalaxyField.java:700-722`; `ClusteredGalaxyGenerator.java:265-270`) `[T]` `AuthoredReachGuaranteeTest.java:39`; `RegionScan.Tuning.fromConfig` falls back to the stock star table when the generator states none, WARNs once, and the tuning says so (`reachAssumesStockSky`, `RegionScan.java:485-518`) `[T]` `ASurveyReachSaysWhoseSkyItWasMeasuredAgainstTest.java:34`.
+- **Two fallbacks that now announce themselves**: a galaxy table with nothing large enough to hold authored content draws such a galaxy from the whole table (maintainer ruling 2026-10-06: announced, never refused), logs an ERROR once per generator naming the reach it can still promise, and `guaranteedAuthoredReachLy` shrinks to what the table's smallest type holds instead of vouching for the shipped figure (`GalaxyField.java:700-722`; `ClusteredGalaxyGenerator.java:265-270`) `[T]` (INV-UNI-18); `RegionScan.Tuning.fromConfig` falls back to the stock star table when the generator states none, WARNs once, and the tuning says so (`reachAssumesStockSky`, `RegionScan.java:485-518`) `[T]` (INV-UNI-19).
 - **A fallback that does not**: `luminositySuns` reads an unstated temperature as Sol's (`StellarMagnitude.java:92-94`); `drawTerrain` falls back to native generation for a null preset without a report (`PlanetTypes.java:190-192`).
 - **Bounded work, not bounded fiction**: region queries cap at 20 000 systems and LOG the cap (`ClusteredGalaxyGenerator.java:205, 386-390`); retinue ≤ 24, nebula column ≤ 512 samples, ≤ 96 seat retries, ≤ 10⁶ shells (`ConeWalk.java:51`) — all stated as bounds on WORK.
 - **Per-query cost**: `allSystemBodies` runs on every registry query; `ReportOnce` exists because an unguarded report floods the log (28 061 clamp warnings in one playtest: `ReportOnce.java:10-14`).
@@ -421,9 +428,9 @@ server in one JVM never sees another's model.
 | INV-UNI-09, MECH-UNI-08 | `SystemBodyTest.java:54, 117, 233` |
 | INV-UNI-10/11, MECH-UNI-16 | `TelescopeRegionScanTest.java:304, 335, 571, 624`; `ConeWalkTest.java:85, 158`; `TelescopeReachTest.java:50`; `StellarMagnitudeTest.java:149, 173, 200` |
 | MECH-UNI-12 | `PlanetDerivationTest.java:229, 263, 660, 681` |
-| MECH-UNI-15 | `NebulaTest.java:78, 135, 172, 189`; `NebulaReachesPastItsClusterTest.java:49, 75` (the field reads a cloud past its cluster ball, point and column) |
-| MECH-UNI-01 (zone seed), MECH-UNI-05/06 | `PlanetDerivationTest.java:289`; `ACompanionIsDrawnWhereItsBodyStandsTest.java:69`; `TheMoonInTheSkyIsTheMoonLandedOnTest.java:68` (integration: sky bulk = realized bulk) |
-| Failure modes (announced fallbacks) | `AuthoredReachGuaranteeTest.java:39`; `ASurveyReachSaysWhoseSkyItWasMeasuredAgainstTest.java:34` |
+| MECH-UNI-15, INV-UNI-17 | `NebulaTest.java:78, 135, 172, 189`; `NebulaReachesPastItsClusterTest` (the field reads a cloud past its cluster ball, point and column) |
+| MECH-UNI-01 (zone seed), MECH-UNI-05/06, INV-UNI-14/15/16 | the clauses name their methods (`TheMoonInTheSkyIsTheMoonLandedOnTest` is integration: sky bulk = realized bulk) |
+| Failure modes (announced fallbacks), INV-UNI-18/19 | the clauses name their methods |
 | **gaps** | the `universeDerivationFingerprint` refusal (no test names it) |
 
 ## Open questions

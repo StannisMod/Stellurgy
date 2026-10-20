@@ -108,7 +108,7 @@ written to disk.
   `PacketBackToRocketGui.java:58`.
 - **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
   `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
-  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `PacketSerializationTest#packetSatelliteRoundTrip`, `PacketSerializationTest#packetConfigSyncRoundTrip`, `PacketSerializationTest#packetAsteroidInfoRoundTrip`, `PacketSerializationTest#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
+  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `integration/PacketSerializationTest#packetSatelliteRoundTrip`, `…#packetConfigSyncRoundTrip`, `…#packetAsteroidInfoRoundTrip`, `…#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
 - **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
   (absent from `Stellurgy.java:334-352`) and never constructed anywhere in `src/main`. A sentinel
   records only that its `read` NPEs (`PacketSerializationTest#packetMoveRocketInSpaceDocumentsKnownBugs`),

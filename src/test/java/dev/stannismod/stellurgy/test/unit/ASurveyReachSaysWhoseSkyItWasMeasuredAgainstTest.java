@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.unit;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.EmptyGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
@@ -29,8 +31,11 @@ public class ASurveyReachSaysWhoseSkyItWasMeasuredAgainstTest {
      * <p>Fails if {@code RegionScan.Tuning#fromConfig} stops telling its caller that the horizon was
      * derived against a substitute star table (it substituted the stock table silently, so a reach the
      * sky's own stars were never measured against read exactly like one that was).</p>
-     * <p>red-witnessed: with {@code Tuning#fromConfig} at {@code !stated.isPresent(),} made {@code false}, fails: "a sky that states no star table must say its horizon was measured against the stock one" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-19")
+    @RedWitness(member = "Tuning#reachAssumesStockSky", at = "return stockSky;", replacedBy = "return false;",
+            fails = "a sky that states no star table must say its horizon was measured against the stock one",
+            on = "2026-10-19")
     @Test
     public void aSkyWithNoStarTableIsSurveyedAgainstTheStockOneAndSaysSo() {
         StellurgyConfiguration config = new StellurgyConfiguration();

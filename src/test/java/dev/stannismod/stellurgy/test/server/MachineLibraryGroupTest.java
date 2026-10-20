@@ -9,6 +9,8 @@ import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.arrangementFailed;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -153,8 +155,11 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * <p>Contract: fails if {@code TileMultiBlock#destroyBlockAt} stops deciding that a part whose
      * block keeps a tile after unforming keeps THAT tile — the one holding the items and fluid — and
      * gives it up for a fresh, empty one. The hatch is not broken here; only the controller is.</p>
-     * <p>red-witnessed: with {@code TileMultiBlock#destroyBlockAt} at {@code if(!unformed.getBlock().hasTileEntity(unformed))} removed (every pointer invalidated), fails: "after the teardown the item hatch must still hold the 5 minecraft:dirt it held and the fluid hatch its 1000 mB of water — items: ("size":4,"slots":[]), fluid: ("tileClass":"dev.stannismod.stellurgy.li …" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-30")
+    @RedWitness(member = "TileMultiBlock#destroyBlockAt", at = "if(!unformed.getBlock().hasTileEntity(unformed))",
+            replacedBy = "", fails = "after the teardown the item hatch must still hold the 5 minecraft:dirt it held",
+            on = "2026-10-19")
     @Test
     public void tearingDownAMachineLeavesItsHatchesHoldingWhatTheyHeld() throws Exception {
         FixtureSite site = clearedSite(2, 3, "the reactor's volume");
@@ -217,9 +222,13 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * fluid ingredient is drained as what is STILL OWED of it, hatch after hatch, rather than in full
      * from every hatch that holds it. Each hatch here holds exactly one recipe's worth, so the two
      * answers differ by one whole recipe's worth.</p>
-     * <p>red-witnessed (taken while this loop stood in {@code consumeItems}; moved unchanged into
-     * {@code drainFluidIngredients} 2026-10-07): with {@code TileMultiblockMachine#drainFluidIngredients} at {@code FluidStack drainedFluid = fluidInput.drainInternal(stillOwed, true);} draining the whole ingredient from each hatch, its {@code fluidInputCounter[i] <= 0} guard removed, fails: "starting the recipe must draw 10 mB of nitrogen in total from the 2 hatches, which held 10 each — left: ("tileClass":"dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch","hasFluid …" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-32")
+    @RedWitness(member = "TileMultiblockMachine#drainFluidIngredients",
+            at = "if(fluidInputCounter[i] <= 0) continue; FluidStack stillOwed = recipe.getFluidIngredients().get(i).copy();"
+                    + " stillOwed.amount = fluidInputCounter[i];",
+            replacedBy = "FluidStack stillOwed = recipe.getFluidIngredients().get(i).copy();",
+            fails = "starting the recipe must draw 10 mB of nitrogen in total from the 2 hatches", on = "2026-10-19")
     @Test
     public void aRecipeDrawsItsFluidOnceAcrossTwoFluidInputHatches() throws Exception {
         Reply ingredient = fluidRecipeIngredient();
@@ -267,8 +276,12 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * {@code TileMultiblockMachine#consumeItems} stops taking from exactly the slots that check
      * claimed. No shipped recipe repeats an item, so the recipe is handed to the machine by the probe
      * (see the {@code vulpes recipe-claim} verb); what is under test is how the machine matches it.</p>
-     * <p>red-witnessed: with {@code TileMultiblockMachine#claimFrom} at {@code stackInSlot.getCount() - takenFromSlot[i] >= stack.getCount()} without {@code - takenFromSlot[i]}, fails: "one minecraft:stick must not satisfy a recipe that lists it twice" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-31")
+    @RedWitness(member = "TileMultiblockMachine#claimFrom",
+            at = "stackInSlot.getCount() - takenFromSlot[i] >= stack.getCount()",
+            replacedBy = "stackInSlot.getCount() >= stack.getCount()",
+            fails = "one minecraft:stick must not satisfy a recipe that lists it twice", on = "2026-10-19")
     @Test
     public void anIngredientListedTwiceNeedsAndTakesTwoItems() throws Exception {
         FixtureSite site = clearedSite(2, 3, "the reactor's volume");
@@ -306,14 +319,18 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * from the stack of one, the pair from the stack of two — and a first-fit that hands the single
      * stick the stack of two finds no pair left for the second ingredient, so it starts the recipe
      * with two sticks still in the hatch.</p>
-     * <p>red-witnessed: with {@code TilePrecisionLaserEtcher#consumesIngredient} at
-     * {@code return !isLensItem(ingredient);} overridden by the etcher's former {@code consumeItems}
-     * (its own first-fit over {@code getItemInPorts()} skipping {@code isLensItem(stack)}) put back,
-     * fails: "starting the recipe must take all three sticks it claimed — hatch now: (… slot 1 stick
-     * count 1, slot 2 stick count 1)" (2026-10-07). With the same {@code return !isLensItem(ingredient);}
-     * answering true, fails: "the etcher must keep its lens, which the recipe needs present and never
-     * uses up — hatch now: ("size":4,"slots":[])" (2026-10-07).</p>
+     * <p>The sticks verdict is witnessed by letting a slot pay two ingredients: the single stick and the
+     * pair are then both claimed from the stack of two, and the stack of one is left in the hatch.</p>
      */
+    @Pins("INV-LVP-31")
+    @RedWitness(verdict = "starting the recipe must take all three sticks it claimed",
+            member = "TileMultiblockMachine#claimFrom",
+            at = "stackInSlot.getCount() - takenFromSlot[i] >= stack.getCount()",
+            replacedBy = "stackInSlot.getCount() >= stack.getCount()",
+            fails = "starting the recipe must take all three sticks it claimed", on = "2026-10-19")
+    @RedWitness(verdict = "the etcher must keep its lens",
+            member = "TilePrecisionLaserEtcher#consumesIngredient", at = "return !isLensItem(ingredient);",
+            replacedBy = "return true;", fails = "the etcher must keep its lens", on = "2026-10-19")
     @Test
     public void theEtcherTakesWhatItsCheckClaimedAndKeepsItsLens() throws Exception {
         FixtureSite site = clearedSite(1, 3, "the etcher's volume");
@@ -378,8 +395,12 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * The power plugs are swapped for plain Forge input plugs first: the creative plug the fixture
      * places pushes energy into its neighbours every tick, and its neighbour across the border would
      * load that chunk on its own.</p>
-     * <p>red-witnessed: with {@code TileMultiBlock#completeStructure} at {@code if(!world.isBlockLoaded(globalPos, false))} asking {@code world.getChunkFromBlockCoords(globalPos).isLoaded()}, fails: "a controller whose part stands in an unloaded chunk must refuse to form, and asking must not load that chunk — chunk loaded after the attempt: true, attempt" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-33")
+    @RedWitness(member = "TileMultiBlock#completeStructure", at = "if(!world.isBlockLoaded(globalPos, false))",
+            replacedBy = "if(!world.getChunkFromBlockCoords(globalPos).isLoaded())",
+            fails = "a controller whose part stands in an unloaded chunk must refuse to form, and asking must not"
+                    + " load that chunk", on = "2026-10-19")
     @Test
     public void formingAMachineDoesNotLoadThePartsChunkItAsksAbout() throws Exception {
         FixtureSite site = clearedSite(12, 3, "the reactor's volume, which reaches the next chunk south");
@@ -438,8 +459,11 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * are swapped for plain Forge input plugs first: the creative plug the fixture places pushes energy
      * into its neighbours every tick, and its neighbour across the border would load that chunk back
      * and make the area whole again.</p>
-     * <p>red-witnessed: with {@code TilePointer#getFinalPointedTile} at {@code if(world.isBlockLoaded(masterBlockPos, false))} asking {@code world.isAreaLoaded(masterBlockPos, 1)}, fails: "the item hatch, unloading, must tell its controller across the chunk border — no `multiblock_part_lost` carrying x = 4022 and y = 152 and z = 4031 was recorded within 5 ticks. What DID happen since th …" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-34")
+    @RedWitness(member = "TilePointer#getFinalPointedTile", at = "if(world.isBlockLoaded(masterBlockPos, false))",
+            replacedBy = "if(world.isAreaLoaded(masterBlockPos, 1))",
+            fails = "the item hatch, unloading, must tell its controller across the chunk border", on = "2026-10-19")
     @Test
     public void aPartUnloadingAcrossAChunkBorderUncompletesItsController() throws Exception {
         FixtureSite site = clearedSite(12, 3, "the reactor's volume, which reaches the next chunk south");
@@ -480,8 +504,10 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * re-form every {@code TileMultiPowerConsumer#FORMATION_RETRY_PERIOD_TICKS}. The unload is real:
      * the hatch's chunk is saved, dropped and read back, and the hatch un-completes its controller as
      * it unloads. Nobody right-clicks anything afterwards.</p>
-     * <p>red-witnessed: with {@code TileMultiblockMachine#update} at {@code retryFormationIfDue();} removed, fails: "the machine must form again on its own once its part is back — no `multiblock_formation` carrying x = 4022 and y = 152 and z = 4031 and complete = true was recorded within 1010 ticks. What DID happen  …" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-35")
+    @RedWitness(member = "TileMultiblockMachine#update", at = "retryFormationIfDue();", replacedBy = "",
+            fails = "the machine must form again on its own once its part is back", on = "2026-10-19")
     @Test
     public void aRecipeMachineWhosePartCameBackFormsAgainOnItsOwn() throws Exception {
         FixtureSite site = clearedSite(12, 3, "the reactor's volume, which reaches the next chunk south");

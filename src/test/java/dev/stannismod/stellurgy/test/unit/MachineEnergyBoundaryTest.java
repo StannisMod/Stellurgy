@@ -97,8 +97,10 @@ public class MachineEnergyBoundaryTest {
      * <p>Contract: fails if {@code ForgePowerCapability#extractEnergy} stops deciding to refuse a
      * store that declares it cannot be extracted from. The plug's own store is what the machine draws
      * from, so the refusal has to live at the world's edge, not in the store.</p>
-     * <p>red-witnessed: with {@code ForgePowerCapability#extractEnergy} at {@code if(!energy.canExtract())} removed, fails: "nothing may be drained out of an input plug — drained 300, held 1300 before and 1000 after" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-25")
+    @RedWitness(member = "ForgePowerCapability#extractEnergy", at = "if(!energy.canExtract()) return 0;",
+            replacedBy = "", fails = "nothing may be drained out of an input plug", on = "2026-10-19")
     @Test
     public void anInputPlugCannotBeDrainedThroughForgeEnergy() {
         TileForgePowerInput plug = chargedInputPlug();
@@ -121,8 +123,10 @@ public class MachineEnergyBoundaryTest {
      * <p>Contract: fails if {@code ForgePowerCapability#receiveEnergy} stops deciding to refuse a
      * store that declares it cannot receive. A generator fills its output plug through the store
      * itself, so the store cannot refuse and the edge must.</p>
-     * <p>red-witnessed: with {@code ForgePowerCapability#receiveEnergy} at {@code if(!energy.canReceive())} removed, fails: "nothing may be pushed into an output plug — took 300, held 700 before and 1000 after" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-25")
+    @RedWitness(member = "ForgePowerCapability#receiveEnergy", at = "if(!energy.canReceive()) return 0;",
+            replacedBy = "", fails = "nothing may be pushed into an output plug", on = "2026-10-19")
     @Test
     public void anOutputPlugCannotBeFilledThroughForgeEnergy() {
         TileForgePowerOutput plug = new TileForgePowerOutput();
@@ -150,8 +154,10 @@ public class MachineEnergyBoundaryTest {
      * gives nothing to an outside caller, or {@code ForgePowerCapability#extractEnergy} stops refusing
      * it at the edge. The pump stands for every consumer: the decision is the base class's and the
      * pump does not override it.</p>
-     * <p>red-witnessed: with {@code TileEntityRFConsumer#extractEnergy} at {@code if(!canExtract())} removed, fails: "the consumer's own store interface must give nothing to an outside caller — simulated 300, taken 300, left 700 of 1000" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-26")
+    @RedWitness(member = "TileEntityRFConsumer#canExtract", at = "return false;", replacedBy = "return true;",
+            fails = "Forge Energy must drain nothing from a consumer", on = "2026-10-19")
     @Test
     public void aConsumerCannotBeDrainedByAnOutsideCaller() {
         TilePump pump = new TilePump();

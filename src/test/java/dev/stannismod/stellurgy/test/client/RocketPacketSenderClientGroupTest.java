@@ -301,6 +301,7 @@ public class RocketPacketSenderClientGroupTest extends AbstractSharedClientTest 
      * <p>Contract: fails if {@code EntityHoverCraft#useNetworkData} applies {@code TURNUPDATE} from a sender
      * who is not the craft's controlling passenger.</p>
      */
+    @Pins("INV-RKT-25")
     @RedWitness(verdict = "a climb key from a player who is not driving the hovercraft reached it",
             member = "EntityHoverCraft#useNetworkData",
             at = "if (!world.isRemote && (player == null || getControllingPassenger() != player))",

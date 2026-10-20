@@ -302,6 +302,14 @@ blocks each session, so nothing about topology can rot in a save [V].
   neighbour's record.
   `TileEntityFieldGenerator#shouldRepelEntity` [V]
   [T `ShieldMembraneClientGroupTest#aShieldHoldsOutAPlayerWhoCameFromOutsideEvenFromInsideAnother`]
+- **INV-SHD-26** [T][BEH] A force-field packet only a screen sends — a field generator's radius, a shield console's
+  resistance bias, a request to open a console's network map — is taken only from a sender whose open screen shows the
+  block it names and who may still use that block. The position the client names is only compared with the block his
+  screen shows, never looked up in the world, so a packet naming a far position loads no chunk
+  (`PacketSetFieldRadius.java:53-62`, `PacketSetShieldResistanceBias.java:60-68`, `PacketOpenGui.java:59-72`,
+  `ContainerFieldGenerator.java:22-24`, `ContainerShieldConsole.java:22-24`). Pinned by
+  `ClientPacketSenderServerGroupTest#aFieldGeneratorTakesARadiusOnlyFromItsOpenScreen`,
+  `…#aShieldConsoleTakesItsPacketsOnlyFromItsOpenScreen`.
 
 ## Failure modes & edge cases
 

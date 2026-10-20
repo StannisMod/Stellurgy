@@ -306,6 +306,10 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
   would do — yes for a live cell, a free slot or an idle evictable cell — and binds nothing. Pinned by
   `JumpGateTest#aFullDestinationIsAWarningThePilotConfirmsNotARefusal`,
   `SpaceManagerTest#canMaterializeForecastsMaterializeAndBindsNothing`.
+- **INV-HYP-09 [T][BEH]** A hull the far end would not rebuild as one ship is REFUSED before the burst, never
+  warned about: the jump would cut it out of this world and leave loose blocks at the other end, while the refusal
+  costs the pilot nothing (the DRIVE-stage clause on `hullCarryRefusal`, `JumpGate.java:373-382`). Pinned by
+  `JumpGateTest#aHullTheFarEndWouldNotRebuildIsRefusedBeforeTheBurst`.
 
 ## Failure modes & edge cases
 

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.contract.PinMap;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
@@ -287,5 +288,29 @@ public class PinMapTest {
                 "INV-A-41", PinMap.State.BROKEN);
         assertTrue("the refusal must name both classes: " + v.why,
                 v.why.contains("2 compiled test classes"));
+    }
+
+    /**
+     * Two classes share a simple name; a clause that cites it under the directory of one of them is
+     * pinned by that one, and a clause citing it under a directory neither lives in is still refused.
+     */
+    @Test
+    @Pins("INV-TST-09")
+    @RedWitness(member = "PinMap#oneClass", at = "if (qualified.endsWith(suffix)) {", replacedBy = "if (true) {",
+            fails = "INV-A-42 is BROKEN", on = "2026-10-19")
+    public void aSharedSimpleNameCitedUnderOneClasssDirectoryIsThatClass() {
+        Map<String, PinMap.MethodFacts> methods = new HashMap<>();
+        methods.put("pinsIt", method(set("INV-A-42", "INV-A-43"), 1, NO_REGIONS));
+        Map<String, String> docs = new LinkedHashMap<>();
+        docs.put("a.md", "- **INV-A-42** `[T]` (`integration/AlphaTest#pinsIt`).\n"
+                + "- **INV-A-43** `[T]` (`server/AlphaTest#pinsIt`).\n");
+        Map<String, PinMap.Clause> defs = PinMap.parse(docs);
+        Map<String, Integer> ages = new HashMap<>();
+        ages.put("INV-A-42", 0);
+        ages.put("INV-A-43", 0);
+        Map<String, PinMap.Verdict> state = PinMap.classify(defs, corpus(methods, Arrays.asList(
+                PACKAGE + WITNESSED, "dev.stannismod.stellurgy.test.integration." + WITNESSED)), ages);
+        assertState(state, "INV-A-42", PinMap.State.PINNED);
+        assertState(state, "INV-A-43", PinMap.State.BROKEN);
     }
 }

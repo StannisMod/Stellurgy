@@ -359,11 +359,11 @@ public class JumpGateTest {
      *
      * <p>Contract: this fails if {@code JumpGate#clauses} stops refusing, HARD, a ship whose
      * {@code hullCarryRefusal} is not null.</p>
-     *
-     * <p>red-witnessed: with {@code JumpGate#clauses} at {@code return ship.hullCarryRefusal() == null ? null}
-     * made always null, this fails with "a hull that cannot arrive as a ship must not be sent:
-     * Verdict[]" (2026-10-06).</p>
      */
+    @Pins("INV-HYP-09")
+    @RedWitness(member = "JumpGate#clauses", at = "ship.hullCarryRefusal() == null ? null",
+            replacedBy = "true ? null", fails = "a hull that cannot arrive as a ship must not be sent",
+            on = "2026-10-19")
     @Test
     public void aHullTheFarEndWouldNotRebuildIsRefusedBeforeTheBurst() {
         FakeShip ship = new FakeShip();

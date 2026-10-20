@@ -282,8 +282,10 @@ public class PlanetDerivationTest {
      * a zone's centre. A zone's cell WIDTH is not part of a cell's name ({@code GalacticCoord#inZone})
      * and so not part of its draw; the one passed here only has to be positive. The control is the
      * same triple in the same zone, which must draw the same world.</p>
-     * <p>red-witnessed: with {@code CellHash#seedIn} at {@code if (zone == null)} made {@code if (true)}, fails: "the moon at 5_0_0.1_0_0 and the moon at 6_0_0.1_0_0 must not be the same world because their zone-local cells match" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-16")
+    @RedWitness(member = "CellHash#seedIn", at = "if (zone == null)", replacedBy = "if (true)",
+            fails = "must not be the same world because their zone-local cells match", on = "2026-10-19")
     @Test
     public void theSameZoneCellOfTwoPlanetsNamesTwoDifferentMoons() {
         StellarBody s = sol();

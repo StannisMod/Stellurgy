@@ -45,7 +45,7 @@ public final class PinMap {
     /** A constant: a compiled {@link Pattern} is immutable. */
     private static final Pattern TAGS = Pattern.compile("\\[([^\\]\\n]*)\\]");
     /** A constant: a compiled {@link Pattern} is immutable. */
-    private static final Pattern TEST_REF = Pattern.compile("(?:[\\w./]*/)?([A-Z]\\w*Test)(?:#(\\w+))?|…#(\\w+)");
+    private static final Pattern TEST_REF = Pattern.compile("(?:([\\w./]*)/)?([A-Z]\\w*Test)(?:#(\\w+))?|…#(\\w+)");
     /** A constant: a compiled {@link Pattern} is immutable. */
     private static final Pattern UNPINNED = Pattern.compile("UNPINNED:\\s*(.*)", Pattern.DOTALL);
     /** A constant: a compiled {@link Pattern} is immutable. */
@@ -111,7 +111,8 @@ public final class PinMap {
 
     /**
      * The test side. A clause names a test by its SIMPLE name, so the corpus answers which compiled classes
-     * carry that name — more than one is an ambiguity a clause cannot resolve, and is refused, never merged.
+     * carry that name — more than one is an ambiguity, refused and never merged, unless the clause cited the
+     * name under a directory that picks exactly one of them.
      */
     public interface Tests {
         /** The qualified names of every compiled test class with this simple name. */
@@ -121,15 +122,34 @@ public final class PinMap {
         List<MethodFacts> methods(String qualifiedName, String method);
     }
 
-    /** The one class a simple name means, or why it means none or several. */
-    private static String oneClass(Tests tests, String simpleName, String[] out) {
+    /**
+     * The one class a simple name means, or why it means none or several. Where two classes share the
+     * name, the directory the clause cited it under ({@code integration/PacketSerializationTest}) picks
+     * the one whose package ends in that path; a path that picks none or several decides nothing.
+     */
+    private static String oneClass(Tests tests, String simpleName, String path, String[] out) {
         List<String> named = tests.classesNamed(simpleName);
         if (named.isEmpty()) {
             return "names " + simpleName + ", which is no compiled test class";
         }
+        if (named.size() > 1 && path != null) {
+            String suffix = "." + path.replace('/', '.') + "." + simpleName;
+            List<String> under = new ArrayList<>();
+            for (String qualified : named) {
+                if (qualified.endsWith(suffix)) {
+                    under.add(qualified);
+                }
+            }
+            if (under.size() == 1) {
+                out[0] = under.get(0);
+                return null;
+            }
+        }
         if (named.size() > 1) {
-            return "names " + simpleName + ", which is " + named.size() + " compiled test classes " + named
-                    + " -- a clause cannot say which, so neither pins it";
+            return "names " + simpleName + (path == null ? "" : " under " + path + "/") + ", which is "
+                    + named.size() + " compiled test classes " + named
+                    + " -- a clause cannot say which, so neither pins it; cite it by its directory,"
+                    + " as in unit/" + simpleName;
         }
         out[0] = named.get(0);
         return null;
@@ -223,16 +243,19 @@ public final class PinMap {
     }
 
     /** (class, method-or-null) pairs a clause names, a {@code …#m} continuing the class before it. */
+    /** Each test a text names, as {simple name, method or null, the directory it was cited under or null}. */
     static List<String[]> testRefs(String text) {
         List<String[]> out = new ArrayList<>();
         String last = null;
+        String lastPath = null;
         Matcher m = TEST_REF.matcher(text);
         while (m.find()) {
-            if (m.group(1) != null) {
-                last = m.group(1);
-                out.add(new String[]{last, m.group(2)});
-            } else if (m.group(3) != null && last != null) {
-                out.add(new String[]{last, m.group(3)});
+            if (m.group(2) != null) {
+                last = m.group(2);
+                lastPath = m.group(1);
+                out.add(new String[]{last, m.group(3), lastPath});
+            } else if (m.group(4) != null && last != null) {
+                out.add(new String[]{last, m.group(4), lastPath});
             }
         }
         return out;
@@ -320,7 +343,7 @@ public final class PinMap {
         Set<String> named = new TreeSet<>();
         for (String[] ref : refs) {
             String[] qualified = new String[1];
-            String unresolved = oneClass(tests, ref[0], qualified);
+            String unresolved = oneClass(tests, ref[0], ref[2], qualified);
             if (unresolved != null) {
                 return unresolved;
             }
@@ -392,7 +415,7 @@ public final class PinMap {
         }
         for (String[] ref : testRefs(defs.get(other).body)) {
             String[] qualified = new String[1];
-            if (ref[1] == null || oneClass(tests, ref[0], qualified) != null) {
+            if (ref[1] == null || oneClass(tests, ref[0], ref[2], qualified) != null) {
                 continue;
             }
             for (MethodFacts f : tests.methods(qualified[0], ref[1])) {

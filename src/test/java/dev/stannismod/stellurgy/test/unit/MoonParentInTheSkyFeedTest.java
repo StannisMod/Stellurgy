@@ -13,6 +13,8 @@ import dev.stannismod.stellurgy.space.SpaceManager;
 import dev.stannismod.stellurgy.space.SystemBodiesProducer;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.PlanetarySystem;
@@ -64,8 +66,11 @@ public class MoonParentInTheSkyFeedTest {
      * nested in its parent's ({@code CellFrame#within}), so the body at {@code parentIndex} must be the
      * one whose frame the moon's frame is nested in. The sample must hold moons with a zone — the case
      * the defect lived in — or it says nothing about it.</p>
-     * <p>red-witnessed: with {@code SystemBodiesProducer#parentCellKeyOf} at {@code return moonName.zone() != null ? moonName.zone() : moonName.cellKey();} made to answer the moon's own cell, fails: "the moon at -6133342_3859345_-6187298.1_0_0 in system -6133342_3859345_-6187298 was sent with no parent. Actual: -1" (2026-10-07).</p>
      */
+    @Pins("INV-SPC-20")
+    @RedWitness(member = "SystemBodiesProducer#parentCellKeyOf",
+            at = "moonName.zone() != null ? moonName.zone() : moonName.cellKey()",
+            replacedBy = "moonName.cellKey()", fails = "was sent with no parent", on = "2026-10-19")
     @Test
     public void everyMoonInTheFeedPointsAtTheBodyItOrbits() {
         ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new ReportOnce(), GalaxyGenConfig.defaults());

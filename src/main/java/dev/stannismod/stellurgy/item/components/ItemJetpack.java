@@ -31,7 +31,6 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.lwjgl.opengl.GL11;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -332,7 +331,7 @@ public class ItemJetpack extends Item implements IArmorComponent, IJetPack {
             float size = amt / (float) maxAmt;
 
             Minecraft.getMinecraft().renderEngine.bindTexture(background);
-            GL11.glColor3f(1f, 1f, 1f);
+            net.minecraft.client.renderer.GlStateManager.color(1f, 1f, 1f);
             int width = 83;
             int screenX = HudLayout.hydrogenBarX(event.getResolution().getScaledWidth());
             int screenY = HudLayout.hydrogenBarY(event.getResolution().getScaledHeight());

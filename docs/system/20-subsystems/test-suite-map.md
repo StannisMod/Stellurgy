@@ -204,6 +204,13 @@ nothing about whether it triggers.
   (`WearAccrualDisableTest`, `WeatherCycleDisableTest`).
 - **INV-TST-08 [V]** Test dim-ids (9001-9004) and world seed are fixed constants so
   worldgen/round-trip snapshots stay deterministic. `test/StellurgyTestConstants.java:16-22`.
+- **INV-TST-09 [T][SYS]** A clause names a test class by its simple name; where two compiled test
+  classes share that name, the directory the clause cites it under (`integration/X`) picks the one
+  whose package ends in that path, and a citation that picks none or both pins nothing
+  (`test/contract/PinMap.java`, `oneClass`). Pinned by
+  `PinMapTest#aSharedSimpleNameCitedUnderOneClasssDirectoryIsThatClass`. FOR: maintainer ruling
+  2026-10-19, *"второе"* (gloss: of "rename one of the duplicate classes" or "teach PinMap the
+  qualified name", the second).
 
 ## Failure modes & edge cases
 

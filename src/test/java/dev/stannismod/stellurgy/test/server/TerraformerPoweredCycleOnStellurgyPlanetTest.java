@@ -272,6 +272,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * ({@code machine controller-state}) before and after a window of ticks. Silent about the power
      * it pays: the fixture's creative plugs report the same store whatever is drawn.</p>
      */
+    @Pins("INV-MBM-25")
     @RedWitness(member = "TileAtmosphereTerraformer#onRunningPoweredTick",
             at = "&& StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid) {",
             replacedBy = ") { if (!StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid) return;",

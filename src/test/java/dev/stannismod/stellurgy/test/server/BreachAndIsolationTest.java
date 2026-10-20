@@ -52,13 +52,14 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * overworld's outdoors holds no CO2, so leaving and draining agree there; the nitrogen half is the one
      * that tells them apart.</p>
      */
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: \"a breached room is no"
-            + " longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;\". IN NO ZONE —"
-            + " {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the"
-            + " position: \"the position is in no zone any more — that is what the breach did: …"
-            + " \\\"airSource\\\":\\\"zone\\\"\". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air"
-            + " for a zone with no cells: \"but the air must still be reachable from the VENT … \\\"ventHasAir\\\":false\"."
-            + " The premises at its head are arrangements and are not witnessed.")
+    @RedWitness(verdict = "a breached room is no longer a zone", member = "AtmosphereBlob#clearBlob",
+            at = "super.clearBlob();", replacedBy = "",
+            fails = "a breached room is no longer a zone", on = "2026-10-19")
+    @RedWitness(verdict = "the position is in no zone any more", member = "AtmosphereHandler#getAirStateAt",
+            at = "getBlobContaining(new HashedBlockPosition(pos))",
+            replacedBy = "(AtmosphereBlob) blobs.values().stream().filter(b -> b instanceof AtmosphereBlob)"
+                    + ".findFirst().orElse(null)",
+            fails = "the position is in no zone any more", on = "2026-10-19")
     @RedWitness(verdict = "and the outdoors' air must come in", member = "SealedZone#ventBreachedAir",
             at = "long difference = outdoors.partialPressure(gas) - air.partialPressure(gas);",
             replacedBy = "long difference = -air.partialPressure(gas);",

@@ -424,6 +424,54 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   `isOutputOnly`. `TileFluidHatch.java:98-103,135-143`, `TileMultiBlock.java:516-521`.
 - **INV-LVP-24 [V]** Plug capacity is `10^tier × 10000 × energy_multiplier` at construction; a saved `maxEnergy` overrides it on load.
   `TilePlugBase.java:47-49,100-104`.
+- **INV-LVP-25 [T][BEH]** The world moves energy through a power plug only in the plug's direction: through Forge
+  Energy nothing is drained out of an input plug and nothing is pushed into an output plug, while the plug's owner
+  still moves energy through the store the other way (`cap/ForgePowerCapability.java:20-31`; MECH-LVP-09). Pinned by
+  `MachineEnergyBoundaryTest#anInputPlugCannotBeDrainedThroughForgeEnergy`, `…#anOutputPlugCannotBeFilledThroughForgeEnergy`.
+- **INV-LVP-26 [T][BEH]** A single-block consumer takes energy and gives none to an outside caller, through Forge
+  Energy or through its own store interface: it declares it cannot be extracted from, and both the capability and its
+  own `extractEnergy` honour that (`tile/TileEntityRFConsumer.java:26-29, 155-160`). Pinned by
+  `MachineEnergyBoundaryTest#aConsumerCannotBeDrainedByAnOutsideCaller`.
+- **INV-LVP-27 [T][BEH]** Resetting a linker forgets its binding's dimension as well as its position: afterwards it
+  reads as unbound and answers dimension -1 to every reader (`items/ItemLinker.java:165-174`; MECH-LVP-16). Pinned by
+  `LinkerBindingTest#aResetLinkerForgetsTheDimensionOfItsOldBinding`.
+- **INV-LVP-28 [T][BEH]** A machine packet only a screen sends is taken only from a sender who has THAT machine's screen
+  open — his open container is a `ContainerModular` that is the screen of the addressed machine — and only with a value
+  the screen can produce, such as a slider position inside the slider's range; a rocket assembler takes its stored
+  energy and build progress from no client at all (`network/PacketSenderCheck.java:99-102`,
+  `inventory/ContainerModular.java:57-59`; host `TileStationGravityController.java:289-304`,
+  `TileStationAltitudeController.java:265`, `TileStationOrientationController.java:239`,
+  `TileRocketAssemblingMachine.java:1256-1272`, `TileWarpController.java:558-560`; MECH-LVP-12). Pinned by
+  `ClientPacketSenderServerGroupTest#aStationControllerTakesATargetOnlyFromItsOwnOpenScreen`,
+  `…#anAssemblerTakesNoStateFromAClientAndItsButtonsOnlyFromItsScreen`,
+  `…#aWarpMonitorTakesADestinationOnlyFromItsOpenScreen`.
+- **INV-LVP-29 [T][BEH]** A ghost block the projector lays into a cell that held a replaceable block puts that block back
+  when it fades, never air (`tile/TileSchematic.java:55-56`, `items/ItemProjector.java:224-226`; MECH-LVP-16). Pinned by
+  `ClientPacketSenderServerGroupTest#aProjectionPutsBackWhatItStoodInWhenItFades`.
+- **INV-LVP-30 [T][BEH]** Tearing a machine down leaves its hatches holding what they held: a part whose unformed block
+  keeps a tile keeps THAT tile, and only a part whose unformed block has none is invalidated
+  (`tile/multiblock/TileMultiBlock.java:259-267`; MECH-LVP-05). Pinned by
+  `MachineLibraryGroupTest#tearingDownAMachineLeavesItsHatchesHoldingWhatTheyHeld`.
+- **INV-LVP-31 [T][BEH]** One input stack is never promised to two ingredients: an ingredient is paid only from what
+  earlier ingredients left of a slot, so a recipe listing an item twice needs two of it; and starting a recipe takes
+  exactly the slots its check claimed, except an ingredient the machine keeps, which stays in its slot
+  (`tile/multiblock/TileMultiblockMachine.java:297-332,349-378`, host `TilePrecisionLaserEtcher.java:59-60`;
+  MECH-LVP-07). Pinned by `MachineLibraryGroupTest#anIngredientListedTwiceNeedsAndTakesTwoItems`,
+  `…#theEtcherTakesWhatItsCheckClaimedAndKeepsItsLens`.
+- **INV-LVP-32 [T][BEH]** A recipe draws each fluid ingredient once in total, however many fluid input hatches could pay
+  it: each hatch is asked only for what is still owed (`tile/multiblock/TileMultiblockMachine.java:381-401`;
+  MECH-LVP-07). Pinned by `MachineLibraryGroupTest#aRecipeDrawsItsFluidOnceAcrossTwoFluidInputHatches`.
+- **INV-LVP-33 [T][BEH]** A controller whose part stands in a chunk that is not in memory refuses to form, and asking
+  never loads that chunk (`tile/multiblock/TileMultiBlock.java:350`; MECH-LVP-03). Pinned by
+  `MachineLibraryGroupTest#formingAMachineDoesNotLoadThePartsChunkItAsksAbout`.
+- **INV-LVP-34 [T][BEH]** A part whose chunk unloads un-completes its controller even when the controller stands across a
+  chunk border and its own chunk stays loaded: a part reaches its master whenever the master's OWN chunk is loaded
+  (`tile/TilePointer.java:82`, `tile/multiblock/hatch/TileInventoryHatch.java:172-180`; MECH-LVP-05). Pinned by
+  `MachineLibraryGroupTest#aPartUnloadingAcrossAChunkBorderUncompletesItsController`.
+- **INV-LVP-35 [T][BEH]** A recipe machine that is not complete tries to form again on its own every
+  `FORMATION_RETRY_PERIOD_TICKS` of world time, so one whose part's chunk unloaded and came back forms again without a
+  click (`tile/multiblock/TileMultiblockMachine.java:127`, `tile/multiblock/TileMultiPowerConsumer.java:191-197`;
+  MECH-LVP-06). Pinned by `MachineLibraryGroupTest#aRecipeMachineWhosePartCameBackFormsAgainOnItsOwn`.
 
 Assumptions: one of 24 (`[A]` on the tile-id domain above) — within the 10 % bound of the methodology's P3.
 
@@ -475,10 +523,10 @@ The file is libVulpes' own (`<REGISTRY_DOMAIN>.cfg`, not the host's) and is read
 | INV-LVP-18 | `MachineGuiClientGroupTest.java:648,651,653,264,411` (client) |
 | INV-LVP-22 | `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233` (client) |
 | teardown does not throw | `SpaceElevatorUnlinkedDeconstructTest.java:71` (a machine whose master was never linked) |
-| MECH-LVP-03/05/06/07 (formation, teardown, re-form, claims, fluid draw) | `MachineLibraryGroupTest` (server; six scenarios) |
-| INV-LVP-13, MECH-LVP-09 | `MachineEnergyBoundaryTest` (unit) |
-| INV-LVP-05, MECH-LVP-12, MECH-LVP-16 (projector) | `ClientPacketSenderServerGroupTest` (server); `RocketPacketSenderClientGroupTest` (client) |
-| MECH-LVP-16 (linker reset) | `LinkerBindingTest` (unit) |
+| INV-LVP-30 … INV-LVP-35 (formation, teardown, re-form, claims, fluid draw) | `MachineLibraryGroupTest` (server) |
+| INV-LVP-13, INV-LVP-25, INV-LVP-26, MECH-LVP-09 | `MachineEnergyBoundaryTest` (unit) |
+| INV-LVP-05, INV-LVP-28, INV-LVP-29, MECH-LVP-12, MECH-LVP-16 (projector) | `ClientPacketSenderServerGroupTest` (server); `RocketPacketSenderClientGroupTest` (client) |
+| INV-LVP-27, MECH-LVP-16 (linker reset) | `LinkerBindingTest` (unit) |
 
 No test located for: placeholder restoration, `ModuleBase` sync cadence, the material registry, the linker's unbound/other-dimension
 replies, a `PowerMultiplier` ≠ 1 (INV-LVP-14). (Searched `src/test/**` for

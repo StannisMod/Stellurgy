@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.CraftInZone;
@@ -379,6 +380,7 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      * <p>What it does NOT see: the crossings and arrivals that reach {@code ShipLedger#settle}, and the
      * giant's having no Forge world (the registration path decides that, not this one).</p>
      */
+    @Pins("INV-UNI-20")
     @RedWitness(member = "ShipLedger#settle", at = "settleObserver.settled(shipId, coord);", replacedBy = "",
             fails = "a craft recorded in the giant's zone must make the giant a place", on = "2026-10-07")
     @Test

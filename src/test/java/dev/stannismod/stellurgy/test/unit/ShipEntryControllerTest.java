@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -414,8 +416,12 @@ public class ShipEntryControllerTest {
      * aimed into its launch body's OWN named cell, at the point that — read through the frame that
      * cell rides — is where the body stands at that tick, however far the body has carried its cell
      * from the static cube its name occupies.
-     * <p>red-witnessed: with {@code ShipEntryController#aimPoint} at {@code return b.addressAt(tick);} replaced by the static-grid reading of {@code b.absoluteAt(tick)}, fails: "the aim GalacticCoord[sector=(22,0,0), local=(4000000,0,0)] must name the cell of GalacticCoord[sector=(19,0,0), local=(0,0,0)], whose frame is the only one it can be read through" (2026-10-07).</p>
      */
+    @Pins("INV-SPC-19")
+    @RedWitness(member = "ShipEntryController#aimPoint", at = "return b.addressAt(tick);",
+            replacedBy = "AbsolutePos at = b.absoluteAt(tick); return GalacticCoord.ofSectorLocal(at.sectorX(),"
+                    + " at.sectorY(), at.sectorZ(), at.localX(), at.localY(), at.localZ());",
+            fails = "must name the cell of", on = "2026-10-19")
     @Test
     public void anEntryIsAimedIntoTheLaunchBodysOwnCellWhereverItsOrbitHasCarriedIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);

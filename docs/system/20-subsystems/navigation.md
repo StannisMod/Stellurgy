@@ -190,6 +190,9 @@ a rolled-back clock.
 - **INV-NVG-09** `[V]` A ship's navigation computer is found by the console's link to THIS ship's flight
   computer block, and by nothing else. `ShipNavigation.java:194-212`. `[T]` `NavLookupNamesItsOwnShipTest.java:62`.
 - **INV-NVG-10** `[V]` Crystal mutation requests are honoured on the server only. `TileNavigationComputer.java:841-844`.
+- **INV-NVG-11** `[T][BEH]` The readout's MASS line carries the body's mass in Earth masses, never its surface
+  gravity, and a body nobody stated a mass for has no MASS line (`NavBodyView.java:46-51`; MECH-NVG-11). Pinned by
+  `NavigationReadoutServerTest#theMassLineCarriesTheBodysMassNotItsGravity`.
 
 ## Failure modes & edge cases
 
@@ -246,7 +249,5 @@ red-witness notes), `dim` NBT round-trip, `ensureSeeded`, the equal-tick sync ca
 
 ## Open questions
 
-- A `NavBodyView` field named `MASS` is filled from the gravitational multiplier
-  (`NavBodyView.java:46`); whether `PlanetInfoField.MASS` means mass or gravity was not established.
 - Whether `getRegisteredDimensions` (`CrystalSeeding.java:76`) can hold non-planet dimensions that
   `coordForPlanet` would still name was not established.

@@ -79,12 +79,21 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
      * the second craft's unload is recorded, the first index has been handled and anything it queued has
      * been carried out ahead of it.</p>
      *
-     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at {@code if (world == null || world.provider.getDimension() != message.dimensionID)} made {@code if (world == null)}, fails: "an index addressed to another world unloaded a ship of the world the client is in: [(seq 920, ship_unloaded, the first craft, dim 0)] (this world's unload: (seq 923, the second craft))" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at {@code physObjectWorld.queueShipUnload(unloadID);} never reached, the wait on this world's unload fails: "an index addressed to the client's own world must be applied — or nothing below can say the other was refused rather than never handled — no `ship_unloaded` carrying vsShip = … was recorded within 200 ticks" (2026-10-07).</p>
      * <p>Not witnessed: the two waits for the client to LOAD the craft. They are the arrangement — a craft
      * the client never loaded has nothing to unload — and a break of the handler's loading fails them as
      * an arrangement, which is what they are.</p>
      */
+    @Pins("INV-VSK-18")
+    @RedWitness(verdict = "an index addressed to another world unloaded a ship of the world the client is in",
+            member = "ShipIndexDataMessageHandler#onMessage",
+            at = "if (world == null || world.provider.getDimension() != message.dimensionID)",
+            replacedBy = "if (world == null)",
+            fails = "an index addressed to another world unloaded a ship of the world the client is in",
+            on = "2026-10-19")
+    @RedWitness(verdict = "an index addressed to the client's own world must be applied",
+            member = "ShipIndexDataMessageHandler#onMessage", at = "physObjectWorld.queueShipUnload(unloadID);",
+            replacedBy = "", fails = "an index addressed to the client's own world must be applied",
+            on = "2026-10-19")
     @Test
     public void aShipIndexForAnotherWorldLeavesThisWorldsShipsAlone() throws Exception {
         FixtureSite first = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
@@ -131,15 +140,17 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
      * record. What it does not see: a pilot's right-click on the seat, and the server's own choice of
      * which claim to hand out beyond this one case.</p>
      *
-     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
-     * {@code if (holder.isPresent() && !holder.get().getUuid().equals(shipData.getUuid()))} made never
-     * true, this fails at the load verdict: "the client must load the craft built on a claim given back — no
-     * `ship_loaded` carrying vsShip = … was recorded within 200 ticks" (2026-10-07).</p>
-     * <p>red-witnessed: NOT YET for the gate verdict after it, with {@code ShipIndexDataMessageHandler#onMessage}
-     * at {@code worldData.removeShip(holder.get());} — the break above silences the load first, and a
-     * break leaving the craft loaded but the seat unresolved would have to split one position lookup in
-     * two; the gate is the player-visible half, the load the one a break of this handler reaches.</p>
+     * <p>The gate verdict after the load is not witnessed: a break of this handler that drops the old record
+     * silences the load first, and a break leaving the craft loaded but the seat unresolved would have to
+     * split one position lookup in two; the gate is the player-visible half, the load the one a break of
+     * this handler reaches.</p>
      */
+    @Pins("INV-VSK-19")
+    @RedWitness(verdict = "the client must load the craft built on a claim given back",
+            member = "ShipIndexDataMessageHandler#onMessage",
+            at = "if (holder.isPresent() && !holder.get().getUuid().equals(shipData.getUuid()))",
+            replacedBy = "if (false)", fails = "the client must load the craft built on a claim given back",
+            on = "2026-10-19")
     @Test
     public void aShipBuiltOnADestroyedShipsClaimCanBeFlownFromItsSeat() throws Exception {
         FixtureSite first = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);

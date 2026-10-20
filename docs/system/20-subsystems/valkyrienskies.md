@@ -223,8 +223,8 @@ and stores the told velocities where its consumers look [V] `:57-70`. Watchers a
 `VSWorldData` (registry + allocator) is a world capability, written as a CBOR byte array by Jackson over **fields** (getters and setters ignored; `transient` fields
 dropped by Jackson's default `[A]`, so `dead` and the registry back-pointer are not saved) [V] `VS/mod/common/ships/ship_world/VSWorldData.java:7-9`,
 `VS/mod/common/capability/framework/VSDefaultCapability.java:90-101`, `VS/mod/common/util/jackson/VSJacksonUtil.java:60-67`, `ShipData.java:99`. A round trip through
-a Stellurgy slot unload/reload keeps the registry [T] `SpaceSlotVsShipPersistTest.java:65`. A failed read installs an **empty** `VSWorldData` and logs at FATAL; a failed
-write stores an empty array [V] `VSDefaultCapability.java:96-98`, `:108-117`. The block set and force positions are not sent to clients (`@PacketIgnore`) [V] `ShipData.java:51-63`.
+a Stellurgy slot unload/reload keeps the registry [T] `SpaceSlotVsShipPersistTest.java:65`. A record that cannot be read or written stops the load or the
+save instead of standing in an empty one (INV-VSK-16; Failure modes) [V] `VSDefaultCapability.java:90-130`. The block set and force positions are not sent to clients (`@PacketIgnore`) [V] `ShipData.java:51-63`.
 
 ### MECH-VSK-16 — Identity added by Stellurgy
 `ShipData` carries Stellurgy's durable ship id beside the uuid, indexed (hash, nullable) so id→ship is one probe; two ships claiming one id is logged and answers empty [V]
@@ -279,6 +279,22 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
   whichever ship is next handed the claim. `PhysRenderChunk#killRenderChunk`, reached by a ship's unload
   (`PhysObjectRenderManager#killRenderers`) and by a chunk's replacement (`PhysObjectRenderManager#updateChunk`). Pinned by
   `VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw`.
+- **INV-VSK-16 [T][BEH]** A world whose saved ship record cannot be read does not load: the read refuses it rather
+  than install an empty record, which would be a world with no ships and which the next save would write over the
+  record still on disk (`VSDefaultCapability#readNBT`, `#unreadable`, `VSDefaultCapability.java:106-130`). Pinned by
+  `VSWorldDataRecordTest#anUnreadableSavedRecordStopsTheLoadInsteadOfReadingAsNoShips`.
+- **INV-VSK-17 [T][BEH]** A ship that no longer exists gives its shipyard claim back, and the next ship assembled in that
+  world is built in that claim before the strip's cursor advances (`ShipChunkAllocator.java:86-103`,
+  `WorldServerShipManager.java:622-630`; MECH-VSK-03). Pinned by
+  `VSShipAssemblyExtentTest#aCollectedShipsClaimIsTheNextShipsClaim`.
+- **INV-VSK-18 [T][BEH]** A client applies a ship index only to the world it is addressed to: an index addressed to
+  another world leaves the ships of the world he is in loaded, while one addressed to his world is applied
+  (`ShipIndexDataMessageHandler.java:29-35,55-57`). Pinned by
+  `VSShipIndexClientGroupTest#aShipIndexForAnotherWorldLeavesThisWorldsShipsAlone`.
+- **INV-VSK-19 [T][BEH]** When an indexed ship arrives for a claim the client holds under another ship's record, the
+  client unloads and drops that other record, so a ship built on the claim of a destroyed ship is loaded by the client
+  rather than refused for a claim with two holders (`ShipIndexDataMessageHandler.java:38-50`). Pinned by
+  `VSShipIndexClientGroupTest#aShipBuiltOnADestroyedShipsClaimCanBeFlownFromItsSeat`.
 
 ## Failure modes & edge cases
 
@@ -303,12 +319,11 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
   unpinned — a two-thread race).
 - **A ship destroyed this tick leaves the physics snapshot at once**: `WorldServerShipManager#tick` republishes the (`volatile`) snapshot
   right after its destroy loop; a step already in flight still holds the old list (unpinned — thread timing).
-- **The client index handler drops an index addressed to another world**, as the pose handler does (`ShipIndexDataMessageHandler#onMessage`) [T] `VSShipIndexClientGroupTest#aShipIndexForAnotherWorldLeavesThisWorldsShipsAlone`.
+- **The client index handler drops an index addressed to another world**, as the pose handler does (INV-VSK-18).
 - **The client is never told a ship was forgotten** — the index message only adds, loads and unloads. Since claims are handed out
   again, a stale record would leave two client records on one claim, and `QueryableShipData#getShipFromChunk` throws on two, which
   `VSBridge#shipIdManagingBlock` reads as "no ship": every pilot gate on a reused claim would stay shut. The handler therefore lets
-  a record arriving for a claim unload and remove any other record holding it [T] the VS client group
-  (`VSShipFlightTelemetryTest`, `VSCrewCaptureContractTest`), no dedicated method.
+  a record arriving for a claim unload and remove any other record holding it (INV-VSK-19).
 - **Non-vanilla world providers**: a world that never fired `WorldEvent.Load` throws on first manager access (`MixinWorld.java:481-486`); one without the capability throws (`ValkyrienUtils.java:124-133`).
 
 ## Integration seams

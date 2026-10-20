@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -176,10 +177,13 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if {@code VSIntegration#crossShip} stops refusing, before the cut, a hull
      * whose {@code VSBridge#assemblyRefusal} is not null.</p>
      *
-     * <p>red-witnessed: with {@code VSIntegration#crossShip} at {@code if (refusal != null)} made never to
-     * refuse, this fails with "must not cross" on a reply reading {@code "ok":true} — the crossing cut
-     * the hull and reported success over an assembly the substrate then refuses (2026-10-06).</p>
+     * <p>The witness breaks the crossing's question to the substrate, {@code VSBridge#assemblyRefusal}, rather
+     * than {@code VSIntegration#crossShip}'s own refusal: {@code crossShip} is overloaded, and a record naming it
+     * resolves to the first overload, which only delegates.</p>
      */
+    @Pins("INV-VSI-18")
+    @RedWitness(member = "VSBridge#assemblyRefusal", at = "if (refusal == null) {", replacedBy = "if (true) {",
+            fails = "must not cross", on = "2026-10-19")
     @Test
     public void aShipThatGrewPastTheReachIsNotCutByACrossing() throws Exception {
         int dim = emptyWorld();
@@ -223,10 +227,15 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if {@code VSIntegration#crossShip} stops refusing, before the cut, a hull
      * in which it finds no flight computer.</p>
      *
-     * <p>red-witnessed: with {@code VSIntegration#crossShip} at {@code if (refusal != null)} made never to
-     * refuse, this fails with "the crossing must say it was refused, and why" — the hull was cut and
-     * pasted, and the reply carries {@code "refusal":null} (2026-10-06).</p>
+     * <p>The witness takes away the no-computer refusal where the crossing turns it into the refusal it acts on,
+     * {@code VSBridge#describe}: {@code VSIntegration#crossShip} is overloaded, and a record naming it resolves
+     * to the first overload, which only delegates. Broken so, the crossing cuts the hull, the far end builds
+     * nothing ({@code "ok":false}), and the reply carries {@code "refusal":null}, which the refusal verdict's
+     * read of {@code refusal} rejects before its assertion.</p>
      */
+    @Pins("INV-VSI-18")
+    @RedWitness(member = "VSBridge#describe", at = "return \"the hull carries no flight computer\";",
+            replacedBy = "return null;", fails = "did not report `refusal`", on = "2026-10-19")
     @Test
     public void aShipWithItsComputerBrokenIsNotCutByACrossing() throws Exception {
         int dim = emptyWorld();
@@ -265,11 +274,11 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if {@code WorldServerShipManager#forgetShip} stops handing the claim of a
      * collected ship back to {@code ShipChunkAllocator#allocateNextChunkClaim}.</p>
-     *
-     * <p>red-witnessed: with {@code ShipChunkAllocator#releaseChunkClaim} at {@code if (center.x == lastChunkX}
-     * made never to release, this fails with "expected:&lt;51200&gt; but was:&lt;102400&gt;" — the next claim
-     * along the strip (2026-10-07).</p>
      */
+    @Pins("INV-VSK-17")
+    @RedWitness(member = "ShipChunkAllocator#releaseChunkClaim", at = "releasedClaimZ.add(center.z);",
+            replacedBy = "", fails = "the second ship must be built in the claim the collected first ship gave back",
+            on = "2026-10-19")
     @Test
     public void aCollectedShipsClaimIsTheNextShipsClaim() throws Exception {
         int dim = emptyWorld();

@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -82,6 +83,9 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
     /** Pins INV-XML-01 (a malformed planet definition is skipped, not fatal). */
     @Pins("INV-XML-01")
+    @RedWitness(member = "XMLPlanetLoader#readAllPlanets", at = "} catch (RuntimeException e) {",
+            replacedBy = "} catch (IllegalStateException e) {",
+            fails = "before becoming ready", on = "2026-10-19")
     @Test
     public void serverBootsWithMalformedPlanetSkipped() throws Exception {
         // The assertion that matters most is implicit in this line: before the

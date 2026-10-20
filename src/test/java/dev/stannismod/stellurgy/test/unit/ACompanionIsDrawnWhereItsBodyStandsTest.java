@@ -10,6 +10,8 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.PlanetarySystem;
@@ -64,8 +66,11 @@ public class ACompanionIsDrawnWhereItsBodyStandsTest {
      * <p>Fails if {@code ClusteredGalaxyGenerator#seatCompanions} stops handing a companion the angle
      * of the seat its body ends up in (the body was walked round its ring past a taken cell while the
      * star kept the drawn angle, so the star was drawn where its body was not).</p>
-     * <p>red-witnessed: with {@code ClusteredGalaxyGenerator#fabricate} at {@code seatCompanions(seatIn(seed, lattice), lattice, star);} removed, fails: "companion PGS-16293795877.9065387003.-15012441288-C of 16293799595_9065390722_-15012437570 is drawn at one angle and its body stands at another expected:<3.4803475759663702> but was:<1.080384346237717 …" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-14")
+    @RedWitness(member = "ClusteredGalaxyGenerator#seatCompanions",
+            at = "companion.setBaseTheta(seat.law.baseTheta());", replacedBy = "",
+            fails = "is drawn at one angle and its body stands at another", on = "2026-10-19")
     @Test
     public void everyCompanionStarCarriesTheAngleItsBodyStandsAt() {
         ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new ReportOnce(), GalaxyGenConfig.defaults());

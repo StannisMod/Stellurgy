@@ -21,7 +21,6 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.lwjgl.input.Keyboard;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -65,7 +64,7 @@ public class ItemPressureTank extends ItemIngredient implements IArmorComponent 
         }
 
         // ALT block (independent of SHIFT)
-        if (Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU)) {
+        if (GuiScreen.isAltKeyDown()) {
             list.add(TextFormatting.DARK_GRAY + I18n.format("tooltip.stellurgy.pressuretank.alt.1"));
             list.add(TextFormatting.DARK_GRAY + I18n.format("tooltip.stellurgy.pressuretank.alt.2"));
         } else if (I18n.hasKey("tooltip.stellurgy.hold_alt")) {

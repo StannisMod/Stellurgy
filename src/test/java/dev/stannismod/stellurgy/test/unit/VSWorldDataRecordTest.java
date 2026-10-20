@@ -4,6 +4,9 @@ import net.minecraft.nbt.NBTTagByteArray;
 import org.junit.Test;
 import org.valkyrienskies.mod.common.capability.VSWorldDataCapability;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
@@ -20,11 +23,11 @@ public class VSWorldDataRecordTest {
      *
      * <p>Contract: this fails if {@code VSDefaultCapability#readNBT} stops refusing a record it cannot
      * deserialize.</p>
-     *
-     * <p>red-witnessed: with {@code VSDefaultCapability#readNBT} at {@code throw unreadable(ex);} preceded by
-     * the old {@code this.instance = factory.get()} and a return, this fails with "bytes that are not a
-     * ship record must stop the load, not be taken for a world with no ships" (2026-10-07).</p>
      */
+    @Pins("INV-VSK-16")
+    @RedWitness(member = "VSDefaultCapability#readNBT", at = "throw unreadable(ex);",
+            replacedBy = "return this.instance = factory.get();",
+            fails = "bytes that are not a ship record must stop the load", on = "2026-10-19")
     @Test
     public void anUnreadableSavedRecordStopsTheLoadInsteadOfReadingAsNoShips() {
         VSWorldDataCapability written = new VSWorldDataCapability();

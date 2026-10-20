@@ -334,8 +334,11 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      *
      * <p>Contract: fails if {@code TileSchematic#vanish} leaves air where the ghost displaced something,
      * or if {@code ItemProjector#RebuildStructure} stops telling the ghost what it displaced.</p>
-     * <p>red-witnessed: with {@code TileSchematic#vanish} at {@code world.setBlockState(pos, displaced, 3);} setting air, fails: "org.junit.ComparisonFailure: a ghost that faded where snow lay must leave the snow it was laid over expected:<minecraft:[snow_laye]r> but was:<minecraft:[ai]r>" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-29")
+    @RedWitness(member = "TileSchematic#vanish", at = "world.setBlockState(pos, displaced, 3);",
+            replacedBy = "world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);",
+            fails = "a ghost that faded where snow lay must leave the snow it was laid over", on = "2026-10-19")
     @Test
     public void aProjectionPutsBackWhatItStoodInWhenItFades() throws Exception {
         FixtureSite site = clearedSite(0, FURNACE_LAYERS, "the projection is laid into this volume");
@@ -389,11 +392,32 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * <p>What this does not see: the target reaching a station — each controller stands alone, so it
      * keeps the target as its own slider position, which is the value it hands the station when it has
      * one ({@code setProgress}).</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} cut to {@code return sender != null;}, fails: "a slider packet from a sender with no screen open moved a controller's target expected:&lt;{gravity=0, altitude=0, orientation=60}&gt; but was:&lt;{gravity=90, altitude=190, orientation=120}&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code ContainerModular#isScreenOf} at {@code return modularInventory == inventory;} made {@code return true;}, fails: "a slider packet sent through ANOTHER controller's screen moved this one's target expected:&lt;{altitude=0, orientation=60}&gt; but was:&lt;{altitude=190, orientation=120}&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} made {@code return false;}, fails: "a slider packet from a sender with the controller's own screen open must set its target — or the refusals above say nothing about the screen expected:&lt;{gravity=90, altitude=190, orientation=120}&gt; but was:&lt;{gravity=0, altitude=0, orientation=60}&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code TileStationGravityController#refusal} and {@code TileStationAltitudeController#refusal} at {@code return target >= 0 && target <= getTotalProgress(0) ? null} made {@code return true ? null}, and {@code TileStationOrientationController#refusal} at {@code if (targets[axis] < 0 || targets[axis] > getTotalProgress(axis))} made {@code if (false)}, fails: "a target past the end of a controller's slider was taken expected:&lt;{gravity=90, altitude=190, orientation=120}&gt; but was:&lt;{gravity=91, altitude=191, orientation=121}&gt;" (2026-10-07).</p>
+     * <p>The range verdict is witnessed on the gravity controller's check alone: breaking any one of the three
+     * reddens it, since the verdict compares all three targets at once.</p>
      */
+    @Pins("INV-LVP-28")
+    @RedWitness(verdict = "a slider packet from a sender with no screen open moved a controller's target",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return sender != null;",
+            fails = "a slider packet from a sender with no screen open moved a controller's target", on = "2026-10-19")
+    @RedWitness(verdict = "a slider packet sent through ANOTHER controller's screen moved this one's target",
+            member = "ContainerModular#isScreenOf", at = "return modularInventory == inventory;",
+            replacedBy = "return true;",
+            fails = "a slider packet sent through ANOTHER controller's screen moved this one's target",
+            on = "2026-10-19")
+    @RedWitness(verdict = "a slider packet from a sender with the controller's own screen open must set its target",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return false;",
+            fails = "a slider packet from a sender with the controller's own screen open must set its target",
+            on = "2026-10-19")
+    @RedWitness(verdict = "a target past the end of a controller's slider was taken",
+            member = "TileStationGravityController#refusal",
+            at = "return target >= 0 && target <= getTotalProgress(0) ? null", replacedBy = "return true ? null",
+            fails = "a target past the end of a controller's slider was taken", on = "2026-10-19")
     @Test
     public void aStationControllerTakesATargetOnlyFromItsOwnOpenScreen() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the three station controllers stand in this volume");
@@ -520,10 +544,27 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * infrastructure block and a rocket, neither of which stands here, so a taken packet 3 would change
      * nothing this scenario can read; it is refused by the same predicate as packet 2, and nothing here
      * goes red if that predicate is changed for 3 alone.</p>
-     * <p>red-witnessed: with {@code TileRocketAssemblingMachine#acceptsFromClient} at {@code return (id == 0 || id == 1) && PacketSenderCheck.hasScreenOpen(player, this);} made {@code return true;}, fails: "a client's packet set the assembler's stored energy and build progress, which are the server's to send expected:&lt;{pwr=0.0, tik=0.0}&gt; but was:&lt;{pwr=5000.0, tik=7.0}&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} cut to {@code return sender != null;}, fails: "a build press from a sender with no screen open started the assembler building" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} made {@code return false;}, fails: "a build press from a sender with the assembler's screen open must be taken — or the refusal above says nothing about the screen" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-28")
+    @RedWitness(verdict = "a client's packet set the assembler's stored energy and build progress",
+            member = "TileRocketAssemblingMachine#acceptsFromClient",
+            at = "return (id == 0 || id == 1) && PacketSenderCheck.hasScreenOpen(player, this);",
+            replacedBy = "return true;",
+            fails = "a client's packet set the assembler's stored energy and build progress, which are the"
+                    + " server's to send", on = "2026-10-19")
+    @RedWitness(verdict = "a build press from a sender with no screen open started the assembler building",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return sender != null;",
+            fails = "a build press from a sender with no screen open started the assembler building",
+            on = "2026-10-19")
+    @RedWitness(verdict = "a build press from a sender with the assembler's screen open must be taken",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return false;",
+            fails = "a build press from a sender with the assembler's screen open must be taken", on = "2026-10-19")
     @Test
     public void anAssemblerTakesNoStateFromAClientAndItsButtonsOnlyFromItsScreen() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the assembler stands in this volume");
@@ -561,9 +602,21 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      *
      * <p>Contract: fails if {@code TileWarpController#useNetworkData} takes a destination (packet 1) from a
      * sender who has none of its screens open.</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} cut to {@code return sender != null;}, fails: "a destination sent by a player with none of the monitor's screens open was taken expected:&lt;0&gt; but was:&lt;10000&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code PacketSenderCheck#hasScreenOpen} at {@code return sender != null && sender.openContainer instanceof ContainerModular} made {@code return false;}, fails: "a destination sent through the monitor's own selection screen must be taken — or the refusal above says nothing about the screen expected:&lt;10000&gt; but was:&lt;0&gt;" (2026-10-07).</p>
      */
+    @Pins("INV-LVP-28")
+    @RedWitness(verdict = "a destination sent by a player with none of the monitor's screens open was taken",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return sender != null;",
+            fails = "a destination sent by a player with none of the monitor's screens open was taken",
+            on = "2026-10-19")
+    @RedWitness(verdict = "a destination sent through the monitor's own selection screen must be taken",
+            member = "PacketSenderCheck#hasScreenOpen",
+            at = "return sender != null && sender.openContainer instanceof ContainerModular"
+                    + " && ((ContainerModular) sender.openContainer).isScreenOf(machine);",
+            replacedBy = "return false;",
+            fails = "a destination sent through the monitor's own selection screen must be taken", on = "2026-10-19")
     @Test
     public void aWarpMonitorTakesADestinationOnlyFromItsOpenScreen() throws Exception {
         int spaceDim = read("stellurgytest client space-dim").integer("spaceDimId");
@@ -618,9 +671,20 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * <p>Contract: fails if {@code PacketSetFieldRadius.Handler#apply} applies a radius for a sender who
      * does not have that generator's screen open — the radius used to be taken for any loaded generator
      * of the sender's world, from anywhere in it.</p>
-     * <p>red-witnessed: with {@code Handler#apply} (of {@code PacketSetFieldRadius}) at {@code if (generator == null)} preceded by taking the generator from {@code player.world.getTileEntity(message.pos)} when no screen shows one, fails: "a radius sent by a player with no screen open changed the generator expected:&lt;4&gt; but was:&lt;16&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code ContainerFieldGenerator#generatorAt} at {@code return tile != null && tile.getPos().equals(pos) && canInteractWith(player) ? tile : null;} made {@code return null;}, fails: "a radius sent through the generator's own screen must be taken — or the refusal above says nothing about the screen expected:&lt;16&gt; but was:&lt;4&gt;" (2026-10-07).</p>
+     * <p>The handler's {@code apply} is named through its outer class, {@code PacketSetFieldRadius}: every
+     * force-field packet's handler is a nested class called {@code Handler}, so that name alone names no
+     * one file.</p>
      */
+    @Pins("INV-SHD-26")
+    @RedWitness(verdict = "a radius sent by a player with no screen open changed the generator",
+            member = "PacketSetFieldRadius#apply", at = ": null;",
+            replacedBy = ": (TileEntityFieldGenerator) player.world.getTileEntity(message.pos);",
+            fails = "a radius sent by a player with no screen open changed the generator", on = "2026-10-19")
+    @RedWitness(verdict = "a radius sent through the generator's own screen must be taken",
+            member = "ContainerFieldGenerator#generatorAt",
+            at = "return tile != null && tile.getPos().equals(pos) && canInteractWith(player) ? tile : null;",
+            replacedBy = "return null;",
+            fails = "a radius sent through the generator's own screen must be taken", on = "2026-10-19")
     @Test
     public void aFieldGeneratorTakesARadiusOnlyFromItsOpenScreen() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the field generator stands in this volume");
@@ -654,11 +718,29 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      * <p>Contract: fails if {@code PacketSetShieldResistanceBias.Handler#apply} applies a bias for a
      * sender who does not have that console's screen open, or if it or {@code PacketOpenGui.Handler#apply}
      * looks a client's position up in the world — which loads, or generates, the chunk there.</p>
-     * <p>red-witnessed: with {@code Handler#apply} (of {@code PacketSetShieldResistanceBias}) at {@code if (console == null)} preceded by taking the console from {@code player.world.getTileEntity(message.pos)}, where that block is loaded, when no screen shows one, fails: "a bias sent by a player with no screen open changed the console expected:&lt;0.5&gt; but was:&lt;0.0&gt;" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code Handler#apply} (of {@code PacketSetShieldResistanceBias}) at {@code if (console == null)} preceded by a bare {@code player.world.getTileEntity(message.pos);}, fails: "a bias packet naming a far position made the server load the chunk there" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code Handler#apply} (of {@code PacketOpenGui}) at {@code if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP)} preceded by a bare {@code player.world.getTileEntity(message.pos);}, fails: "a request to open a console's map at a far position made the server load the chunk there" (2026-10-07).</p>
-     * <p>red-witnessed: with {@code ContainerShieldConsole#consoleAt} at {@code return tile != null && tile.getPos().equals(pos) && canInteractWith(player) ? tile : null;} made {@code return null;}, fails: "a bias sent through the console's own screen must be taken — or the refusal above says nothing about the screen expected:&lt;0.0&gt; but was:&lt;0.5&gt;" (2026-10-07).</p>
+     * <p>Each handler's {@code apply} is named through its outer packet class: every force-field packet's
+     * handler is a nested class called {@code Handler}, so that name alone names no one file.</p>
      */
+    @Pins("INV-SHD-26")
+    @RedWitness(verdict = "a bias sent by a player with no screen open changed the console",
+            member = "PacketSetShieldResistanceBias#apply", at = ": null;",
+            replacedBy = ": (TileEntityShieldConsole) player.world.getTileEntity(message.pos);",
+            fails = "a bias sent by a player with no screen open changed the console", on = "2026-10-19")
+    @RedWitness(verdict = "a bias packet naming a far position made the server load the chunk there",
+            member = "PacketSetShieldResistanceBias#apply", at = "if (console == null) {",
+            replacedBy = "player.world.getTileEntity(message.pos); if (console == null) {",
+            fails = "a bias packet naming a far position made the server load the chunk there", on = "2026-10-19")
+    @RedWitness(verdict = "a request to open a console's map at a far position made the server load the chunk there",
+            member = "PacketOpenGui#apply", at = "if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP) {",
+            replacedBy = "player.world.getTileEntity(message.pos);"
+                    + " if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP) {",
+            fails = "a request to open a console's map at a far position made the server load the chunk there",
+            on = "2026-10-19")
+    @RedWitness(verdict = "a bias sent through the console's own screen must be taken",
+            member = "ContainerShieldConsole#consoleAt",
+            at = "return tile != null && tile.getPos().equals(pos) && canInteractWith(player) ? tile : null;",
+            replacedBy = "return null;",
+            fails = "a bias sent through the console's own screen must be taken", on = "2026-10-19")
     @Test
     public void aShieldConsoleTakesItsPacketsOnlyFromItsOpenScreen() throws Exception {
         FixtureSite site = clearedSite(0, 1, "the shield console stands in this volume");

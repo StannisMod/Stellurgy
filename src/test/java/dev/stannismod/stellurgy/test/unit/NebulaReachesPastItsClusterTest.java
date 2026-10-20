@@ -7,6 +7,8 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.Galaxy;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
@@ -43,8 +45,13 @@ public class NebulaReachesPastItsClusterTest {
      * point contributes to it (it answered only for the cluster whose ball holds the point's super-cell,
      * so a cloud read as ending at its cluster's edge — where a Gaussian 1.5-3 times wider is still a
      * sixth to two thirds of its peak).</p>
-     * <p>red-witnessed: with {@code NebulaField#densityAtLightYears} at {@code return densityAmong(cloudsReaching(seed, galaxy, supX, supY, supZ, supX, supY, supZ),} reading only the cloud of the point's own cluster ({@code nebulaAt}), and {@code NebulaField#columnDensityBetween} at {@code double density = densityAmong(clouds, ax + dx * t, ay + dy * t, az + dz * t);} sampling through it, fails: "at (-1347.4151752811385, -685.6316157404024, 184.82243554741282) ly in Nebula[DARK r=67ly d=0.8570544725797633 around StarCluster[Molecular Cloud k=1 r=8 super-cells @ -461,-230,62]] the cloud alone h …" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-17")
+    @RedWitness(member = "NebulaField#densityAtLightYears",
+            at = "cloudsReaching(seed, galaxy, supX, supY, supZ, supX, supY, supZ)",
+            replacedBy = "nebulaAt(seed, galaxy, supX, supY, supZ).map(java.util.Collections::singletonList)"
+                    + ".orElse(java.util.Collections.<Nebula>emptyList())",
+            fails = "the cloud alone holds", on = "2026-10-19")
     @Test
     public void aPointOutsideTheClusterButInsideItsCloudHasMatter() {
         ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new ReportOnce(), GalaxyGenConfig.defaults());
@@ -69,8 +76,14 @@ public class NebulaReachesPastItsClusterTest {
      *
      * <p>The line runs one coarse super-cell outward from each probe point; its far end must stand
      * outside every cluster and inside the cloud too, or the line is not used.</p>
-     * <p>red-witnessed: with {@code NebulaField#densityAtLightYears} at {@code return densityAmong(cloudsReaching(seed, galaxy, supX, supY, supZ, supX, supY, supZ),} reading only the cloud of the point's own cluster ({@code nebulaAt}), and {@code NebulaField#columnDensityBetween} at {@code double density = densityAmong(clouds, ax + dx * t, ay + dy * t, az + dz * t);} sampling through it, fails: "the line from (-1347.4151752811385, -685.6316157404024, 184.82243554741282) ly in Nebula[DARK r=67ly d=0.8570544725797633 around StarCluster[Molecular Cloud k=1 r=8 super-cells @ -461,-230,62]] one su …" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-17")
+    @RedWitness(member = "NebulaField#columnDensityBetween",
+            at = "double density = densityAmong(clouds, ax + dx * t, ay + dy * t, az + dz * t);",
+            replacedBy = "double density = nebulaAt(seed, galaxy, Math.floorDiv(laws.cellsAt(ax + dx * t), s),"
+                    + " Math.floorDiv(laws.cellsAt(ay + dy * t), s), Math.floorDiv(laws.cellsAt(az + dz * t), s))"
+                    + ".map(n -> n.densityAt(ax + dx * t, ay + dy * t, az + dz * t)).orElse(0d);",
+            fails = "one super-cell outward runs through a cloud and read a column of", on = "2026-10-19")
     @Test
     public void aLineThroughACloudOutsideItsClusterCrossesMatter() {
         ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new ReportOnce(), GalaxyGenConfig.defaults());

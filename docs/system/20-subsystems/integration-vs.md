@@ -354,6 +354,12 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
   `ClientProxy.java:265`). A null port therefore means "dedicated server" and nothing else.
 - **INV-VSI-17 [V]** Ship-meets-ship holding is a no-op, with no event and no cost beyond one config read,
   while `shipsCollide` is false (`ShipMeetingStop.java:83-87`).
+- **INV-VSI-18 [T][BEH]** A crossing refuses, before it cuts anything, a hull the far end would not rebuild as one ship —
+  one with no flight computer, or one the substrate's own assembly rule refuses (past the detection reach, more blocks
+  than it builds): the source is left whole in its shipyard, nothing is pasted, and the result carries the refusal's
+  reason (`VSIntegration.java:620-640`, `VSBridge.java:87-104,168-179`; MECH-VSI-07). Pinned by
+  `VSShipAssemblyExtentTest#aShipThatGrewPastTheReachIsNotCutByACrossing`,
+  `…#aShipWithItsComputerBrokenIsNotCutByACrossing`.
 
 ## Failure modes & edge cases
 

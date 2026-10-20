@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.item.components.ItemJetpack;
 import dev.stannismod.stellurgy.item.components.ItemPressureTank;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -50,6 +51,9 @@ public class ArmorComponentContractTest {
 
     /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
     @Pins("INV-ITM-09")
+    @RedWitness(member = "ItemJetpack#isAllowedInSlot", at = "slot == EntityEquipmentSlot.CHEST",
+            replacedBy = "slot.getSlotType() == EntityEquipmentSlot.Type.ARMOR",
+            fails = "jetpack slot eligibility for", on = "2026-10-19")
     @Test
     public void jetpackIsAllowedOnlyInChestSlot() {
         ItemJetpack jetpack = new ItemJetpack();
@@ -78,6 +82,8 @@ public class ArmorComponentContractTest {
 
     /** Pins INV-ITM-07 (the pressure tank capacity is base times two to the damage). */
     @Pins("INV-ITM-07")
+    @RedWitness(member = "ItemPressureTank#getCapacity", at = "(int) Math.pow(2, container.getItemDamage())",
+            replacedBy = "(1 + container.getItemDamage())", fails = "tier 2 tank capacity = 4", on = "2026-10-19")
     @Test
     public void pressureTankCapacityScalesAsPowerOfTwoWithItemDamage() {
         // capacity formula: baseCapacity * 2^itemDamage

@@ -133,8 +133,8 @@ cut hands the cell back and re-seats the captured crew (`ShipEntryController.jav
 `ShipEntryControllerTest.java:244`. The entry coordinate is a ring around where the launch body **is** at this tick,
 named in the body's OWN cell — `aimPoint` answers `addressAt(tick)`, the body's named cell at the offset it stands
 at inside that cell's frame, never its absolute position re-read on the static grid, which names a cell no zone
-body stands in once the body has drifted past its static face (`ShipEntryController.java:387-402`) [V][T]
-`ShipEntryControllerTest.java:434` — matched on the launch dimension, radius `max(2·512, 2·shell)`, saturating
+body stands in once the body has drifted past its static face (`ShipEntryController.java:386-402`) [V][T]
+(INV-SPC-19) — matched on the launch dimension, radius `max(2·512, 2·shell)`, saturating
 inside the cell (`ShipEntryController.java:60-70,344-415`; `StandoffRing.java:38-43,90-100`) [V][T]
 `ShipEntryControllerTest.java:172`. On settle the ledger takes the entry coordinate
 (`ShipEntryController.java:290`). After a descent the entry latch holds until the ship has been below the line
@@ -203,6 +203,14 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
 - **INV-SPC-17** [V] "Stored" is derived from region data on disk, never remembered in memory — an in-memory flag is
   empty after a restart and would let eviction delete built-in cells (`SpaceSlotPool.java:341-352`;
   `SpaceManager.java:97-100`).
+- **INV-SPC-19** [T][BEH] An entering ship is aimed into its launch body's OWN named cell, at the point that, read
+  through the frame that cell rides, is where the body stands at that tick, however far its orbit has carried the
+  cell from the static cube its name occupies; the body is the one whose dimension the ship launched from
+  (`ShipEntryController.java:386-402`; MECH-SPC-12). Pinned by
+  `ShipEntryControllerTest#anEntryIsAimedIntoTheLaunchBodysOwnCellWhereverItsOrbitHasCarriedIt`.
+- **INV-SPC-20** [T][BEH] In the sky feed every moon points at the body it orbits: a moon's parent is the body whose
+  cell its ZONE names, never a body sharing the moon's own cell (`SystemBodiesProducer.java:296-324`; MECH-SPC-20).
+  Pinned by `MoonParentInTheSkyFeedTest#everyMoonInTheFeedPointsAtTheBodyItOrbits`.
 
 ## Failure modes & edge cases
 
@@ -218,12 +226,11 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
 
 `INV-SPC-01` GalacticCoordZoneTest.java:140 · `-02` ShipTransitManagerTest.java:275,424 · `-04`
 SpaceManagerTest.java:253,297 · `-06` CellSeamTest.java:97,170 · `-10` ShipTransitManagerTest.java:543 · `-15`
-ShipEntryControllerTest.java:172 · `-16`, `-17` are `[V]` only. The moon→parent link of the sky feed
-(MECH-SPC-20) is pinned by `MoonParentInTheSkyFeedTest.java:69`.
+ShipEntryControllerTest.java:172 · `-16`, `-17` are `[V]` only · `-19`, `-20` name their methods.
 
 ## Open questions
 
 Leads by reading, not reproduced.
 
 3. **`parentIndex` has no reader** outside the packet class (grep of `src`); a moon's parent is the body whose cell its
-   ZONE names (`SystemBodiesProducer.java:302-330`).
+   ZONE names (`SystemBodiesProducer.java:296-324`).

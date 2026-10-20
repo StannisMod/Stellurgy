@@ -12,6 +12,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.TestUniverse;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyProfile;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
@@ -63,8 +65,12 @@ public class TheMoonInTheSkyIsTheMoonLandedOnTest {
      *
      * <p>Compared exactly: the sky's number and the world's are one derivation or they are two. The
      * sample must hold moons named in a zone, the case the two keys differed in.</p>
-     * <p>red-witnessed: with {@code ClusteredGalaxyGenerator#addMoons} at {@code variantInCell(bodies, moonCell), star, true, parentOrbit, reports);} given the parent's cell and variant 1 instead, fails: "the moon at 6385406_1568216_-2549800.-1_0_0 must be as massive on the ground as in the sky expected:<0.00869550573553636> but was:<0.0037079045198368577>" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-15")
+    @RedWitness(member = "ClusteredGalaxyGenerator#addMoons",
+            at = "variantInCell(bodies, moonCell), star, true, parentOrbit, reports);",
+            replacedBy = "variantInCell(bodies, moonCell) + 1, star, true, parentOrbit, reports);",
+            fails = "must be as massive on the ground as in the sky", on = "2026-10-19")
     @Test
     public void aMoonsSizeInTheSkyIsTheSizeOfTheWorldRealizedForIt() {
         TestUniverse universe = new TestUniverse();

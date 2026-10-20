@@ -6,6 +6,8 @@ import java.util.List;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.ReportOnce;
@@ -34,8 +36,10 @@ public class AuthoredReachGuaranteeTest {
      * {@code (1 - fraction) * R}; the promise must fit inside it for the smallest radius the table can
      * draw. The control is the shipped table, which holds a type large enough and is promised more
      * than that dwarf holds — so a promise of nothing at all does not pass.</p>
-     * <p>red-witnessed: with {@code GalaxyField#guaranteedAuthoredReachLy} at {@code if (hostsAuthoredContent())} made {@code if (true)}, fails: "a table of dwarfs is promised 6749.999999999999 ly while its smallest dwarf holds 224.99999999999997 ly" (2026-10-07).</p>
      */
+    @Pins("INV-UNI-18")
+    @RedWitness(member = "GalaxyField#guaranteedAuthoredReachLy", at = "if (hostsAuthoredContent())",
+            replacedBy = "if (true)", fails = "a table of dwarfs is promised", on = "2026-10-19")
     @Test
     public void aTableOfDwarfsIsPromisedNoMoreThanItsSmallestDwarfHolds() {
         List<GalaxyGenConfig.GalaxyType> dwarfs = new ArrayList<>();

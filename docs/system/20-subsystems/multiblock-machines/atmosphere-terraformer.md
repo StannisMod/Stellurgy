@@ -76,11 +76,15 @@ Config: see `C4-config-surface`. Full disable: `enableTerraforming=false` (isRun
   hitting the bound auto-disables the machine. `TileAtmosphereTerraformer.java:499-518`.
 - **INV-MBM-08** [V][BEH] `enableTerraforming=false` forces `currentTime=0` and blocks all accrual —
   the flag gates the consequence, not just the display. `TileAtmosphereTerraformer.java:456-467`.
+- **INV-MBM-25** [T][BEH] With `terraformRequiresFluid` off, a powered terraformer with no gas in its hatches still
+  counts its cycle and never stands out of fluid: the setting skips the gas draw, not the work
+  (`TileAtmosphereTerraformer.java:405-407`; MECH-MBM-10). Pinned by
+  `TerraformerPoweredCycleOnStellurgyPlanetTest#withFluidsNotRequiredAnUnfuelledTerraformerStillRunsItsCycle`.
 
 ## Test coverage
 
 `TerraformerMultiblockTest` (validation, the lone controller's tick, the helper an atmosphere change starts),
-`TerraformerPoweredCycleOnStellurgyPlanetTest` (INV-MBM-06),
+`TerraformerPoweredCycleOnStellurgyPlanetTest` (INV-MBM-06, INV-MBM-25),
 `TerraformerPoweredCycleOnOverworldTest` (allowTerraformNonStellurgy path).
 
 ## Failure modes & edge cases
