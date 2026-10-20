@@ -77,7 +77,9 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
 - **SHIPCTL-8** *(R1)* `[A][BEH]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
   IMMEDIATELY after a successful assembly — no re-seat. "Immediately" runs from the physics object
   going live. Aboard-ness is CREW-C1/C4's; this clause owns delivery. Falsifier: the red repro
-  `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`.
+  `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`
+  (he flies it), and `…#aPilotWhoseRebindIsRefusedAMountIsReboundOnceTheWorldTakesOne` (he stays its pilot
+  when the world refuses his new mount at first; that method does not fly the ship).
 - **SHIPCTL-9** *(R2+R8)* `[A][BEH]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
   one run) An UNASSEMBLED ship does NOT accept pilot input, and the refusal is
   SURFACED **server-side at mount time**: seating on an unassembled craft answers with an action-bar

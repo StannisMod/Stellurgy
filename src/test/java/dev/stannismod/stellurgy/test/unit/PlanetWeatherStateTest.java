@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;

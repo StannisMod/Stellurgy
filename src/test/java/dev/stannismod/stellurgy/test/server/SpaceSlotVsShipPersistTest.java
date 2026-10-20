@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**

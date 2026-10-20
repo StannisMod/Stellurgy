@@ -6,7 +6,6 @@ import dev.stannismod.stellurgy.item.ItemOreScanner;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 

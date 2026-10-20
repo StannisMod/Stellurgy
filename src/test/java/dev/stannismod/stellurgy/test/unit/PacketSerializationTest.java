@@ -1,18 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.network.PacketAtmSync;
-import dev.stannismod.stellurgy.network.PacketOxygenState;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
 import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.*;

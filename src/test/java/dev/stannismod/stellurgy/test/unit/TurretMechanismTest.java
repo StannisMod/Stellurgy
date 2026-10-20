@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.weapon.TurretDriveState;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
 

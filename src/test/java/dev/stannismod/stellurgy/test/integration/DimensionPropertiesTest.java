@@ -11,7 +11,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 
 import static org.junit.Assert.*;
 

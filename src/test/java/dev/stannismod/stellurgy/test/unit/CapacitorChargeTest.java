@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

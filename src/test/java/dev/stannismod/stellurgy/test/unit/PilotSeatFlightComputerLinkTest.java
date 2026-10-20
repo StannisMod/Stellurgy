@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 

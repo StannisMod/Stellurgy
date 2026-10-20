@@ -8,7 +8,6 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationPads;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;

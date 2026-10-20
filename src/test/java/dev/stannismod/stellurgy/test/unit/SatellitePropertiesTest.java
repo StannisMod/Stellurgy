@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
 import static org.junit.Assert.*;

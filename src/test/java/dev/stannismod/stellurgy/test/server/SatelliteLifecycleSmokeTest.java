@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
 
-import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 

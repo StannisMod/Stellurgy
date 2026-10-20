@@ -2,13 +2,9 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.TransitRecord;
-import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
 
 import static org.junit.Assert.*;
 

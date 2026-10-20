@@ -379,7 +379,10 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
 - **INV-LVP-05 [V][T]** Every libVulpes decoder reads bytes only; no C→S packet acts on a block, entity or item its sender could not
   reach in his own world, and a refused or undecodable packet is dropped and logged, never thrown. `network/PacketSenderCheck.java:26-110`,
   `network/PacketMachine.java:83-160`, `network/PacketEntity.java:96-160`; `ClientPacketSenderServerGroupTest`,
-  `RocketPacketSenderClientGroupTest`. Pinned by `ClientPacketSenderServerGroupTest#aMachinePacketFromBeyondReachIsNotApplied`.
+  `RocketPacketSenderClientGroupTest`. Pinned by `ClientPacketSenderServerGroupTest#aMachinePacketFromBeyondReachIsNotApplied`
+  (nothing acts beyond the sender's reach), `…#aRedstoneModeNoButtonProducesIsDroppedNotThrown` and
+  `…#aProjectorTakesOnlyAMachineIdThatExists` (a refused packet is dropped, never thrown). That the drop is
+  logged is `[V]` only (`PacketSenderCheck.java:112-113`).
 - **INV-LVP-06 [V]** A structure is validated in full before the first world mutation of that attempt; the cell list and the port caches
   are cleared before validation, so a failed attempt leaves the machine with no ports. `tile/multiblock/TileMultiBlock.java:317-439`.
 - **INV-LVP-07 [V]** A controller placed alone is not complete; a fixture-built correct structure validates, and replacing any one

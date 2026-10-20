@@ -2,8 +2,6 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderBody;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 import java.util.ArrayList;
