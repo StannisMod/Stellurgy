@@ -544,10 +544,6 @@ replies, a `PowerMultiplier` ≠ 1 (INV-LVP-14). (Searched `src/test/**` for
   "not verifiable from `src/main`"; it is the list index in `PacketHandler.java:56-58`. Its `INV-NW-01` (`:122`) cites
   `BasePacket.idMap`, which is empty (`BasePacket.java:37-42`). Both it (`:27`) and C2 (`C2-network-wire.md:14`) still call the
   transport "foreign"; it is in-repo since 2026-09-29.
-- C2 `CON-C2-05` (`C2-network-wire.md:85`) calls `PacketBackToRocketGui` the sole C→S packet; libVulpes' `PacketMachine`,
-  `PacketEntity`, `PacketItemModifcation` and `PacketChangeKeyState` are also C→S, and since 2026-10-07 they are judged by
-  `PacketSenderCheck` (INV-LVP-05). `PacketBackToRocketGui` is not, and needs not be: it only matches a server-recorded return
-  context.
 - [inventory-containers](./inventory-containers.md) `:30` says the framework is "owned by no subsystem doc yet"; this doc is its owner.
 - [C4](../30-contracts/C4-config-surface.md) has no row for `libvulpes.cfg`.
 

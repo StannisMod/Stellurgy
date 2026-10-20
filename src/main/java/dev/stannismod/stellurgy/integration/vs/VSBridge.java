@@ -55,24 +55,6 @@ final class VSBridge {
                 ValkyrienUtils.class.getName());
     }
 
-    /**
-     * Assemble the connected structure seeded at {@code anchorPos} into a movable
-     * ship. This is the player-less equivalent of VS's
-     * {@code assembleShipAsOrderedByPlayer}: create a ship keyed on the anchor
-     * block, then queue VS to relocate every connected block into it. Called
-     * server-side; the ship does not exist when this returns, but NOT because the
-     * work happens on another thread — it does not. The queue is drained
-     * synchronously on the game thread, in the physics mod's own world tick at
-     * {@code WorldTickEvent} phase END, so the relocation lands on the NEXT tick of
-     * this world and never later: a spawn that is refused there is dropped, not
-     * retried. Anything waiting on the assembly should therefore expect it within a
-     * tick or two, and treat a longer wait as a failure rather than as slowness.
-     *
-     * <p>Scope note: this queues the block relocation only. Making the resulting
-     * ship pilotable (thrust, attitude) is handled by the flight-control layer;
-     * runtime behaviour can only be exercised with VS actually installed, not in a
-     * headless test.</p>
-     */
     /** How a tier-2 craft's blocks are found — one answer, because the refusal question below must ask
      *  exactly what the queued spawn will do. A method, not a field: nothing here is state. */
     private static BlockFinder.BlockFinderType tier2BlockSearch() {
@@ -103,6 +85,24 @@ final class VSBridge {
         throw new IllegalStateException("a spawn refusal the tier-2 search cannot produce: " + refusal);
     }
 
+    /**
+     * Assemble the connected structure seeded at {@code afcPos} into a movable
+     * ship. This is the player-less equivalent of VS's
+     * {@code assembleShipAsOrderedByPlayer}: create a ship keyed on the anchor
+     * block, then queue VS to relocate every connected block into it. Called
+     * server-side; the ship does not exist when this returns, but NOT because the
+     * work happens on another thread — it does not. The queue is drained
+     * synchronously on the game thread, in the physics mod's own world tick at
+     * {@code WorldTickEvent} phase END, so the relocation lands on the NEXT tick of
+     * this world and never later: a spawn that is refused there is dropped, not
+     * retried. Anything waiting on the assembly should therefore expect it within a
+     * tick or two, and treat a longer wait as a failure rather than as slowness.
+     *
+     * <p>Scope note: this queues the block relocation only. Making the resulting
+     * ship pilotable (thrust, attitude) is handled by the flight-control layer;
+     * runtime behaviour can only be exercised with VS actually installed, not in a
+     * headless test.</p>
+     */
     static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
                                   ShipLifecycleEvent.Cause cause,
                                   net.minecraft.world.gen.structure.StructureBoundingBox footprint) {

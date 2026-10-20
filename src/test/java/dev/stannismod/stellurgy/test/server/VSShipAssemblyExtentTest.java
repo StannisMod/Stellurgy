@@ -26,7 +26,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>The subject is {@code WorldServerShipManager#spawnNewShips} and the two decisions inside it: where
  * the found blocks land in the shipyard ({@code shipyardOffset}, with the claim sized by
- * {@code VSChunkClaim#RADIUS}), and whether the structure is refused ({@code spawnRefusal}). Each
+ * {@code VSChunkClaim#RADIUS}), and whether the structure is refused ({@code refusalOf}). Each
  * scenario stands in its own empty space-pool world, because a hull reaching the full detection reach
  * is wider than any plot, and an empty world is where a crossing assembles a ship in play.</p>
  *
@@ -132,12 +132,14 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * A hull continuing past the detection reach is refused as a whole, and stays standing where it
      * was built — it is never cut down to the part the detection could see.
      *
-     * <p>Contract: this fails if {@code WorldServerShipManager#spawnRefusal} stops refusing a structure
+     * <p>Contract: this fails if {@code WorldServerShipManager#refusalOf} stops refusing a structure
      * whose detection reported {@code SpatialDetector#reachExceeded}.</p>
      *
-     * <p>red-witnessed: with {@code WorldServerShipManager#spawnRefusal} at {@code if (detector.reachExceeded)}
-     * made never to refuse, this fails with "must be REFUSED by the substrate" and the outcome is a
-     * {@code ship_spawned} record for the craft (2026-10-06).</p>
+     * <p>red-witnessed on the pre-merge form, when the decision was {@code spawnRefusal} at
+     * {@code if (detector.reachExceeded)}: made never to refuse, this failed with "must be REFUSED by the
+     * substrate" and the outcome was a {@code ship_spawned} record for the craft (2026-10-06). The code
+     * now stands as {@code WorldServerShipManager#refusalOf} at
+     * {@code return detector.reachExceeded ? SpawnRefusal.REACH_EXCEEDED : null;}.</p>
      */
     @Pins("INV-VSK-14")
     @Test
@@ -272,7 +274,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
      * world is built in it — rather than every assembly taking a fresh claim further along a strip that
      * runs past the world's edge after a few hundred.
      *
-     * <p>Contract: this fails if {@code WorldServerShipManager#forgetShip} stops handing the claim of a
+     * <p>Contract: this fails if {@code WorldServerShipManager#removeRecord} stops handing the claim of a
      * collected ship back to {@code ShipChunkAllocator#allocateNextChunkClaim}.</p>
      */
     @Pins("INV-VSK-17")
