@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -29,6 +30,10 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-12 (a single cable carries more than a single emitter can absorb). */
     @Pins("INV-SHD-12")
+    @RedWitness(member = "TileEntityShieldCable#getThroughputPerTick",
+            at = "dev.stannismod.stellurgy.affs.config.ModConfig.cableThroughputPerTick);",
+            replacedBy = "dev.stannismod.stellurgy.affs.config.ModConfig.cableThroughputPerTick / 10);",
+            fails = "a single cable (", on = "2026-10-19")
     @Test
     public void cableCarriesMoreThanASingleEmitterAbsorbs() throws Exception {
         int x = 1070, z = 900;

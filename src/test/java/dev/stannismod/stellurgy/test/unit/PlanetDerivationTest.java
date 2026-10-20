@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
@@ -24,6 +25,16 @@ import static org.junit.Assert.*;
  * after. Every balance constant is exercised as an input and none is asserted as an expected value.</p>
  */
 public class PlanetDerivationTest {
+
+    /**
+     * A body's orbit is measured against the configuration, whose class initializer touches vanilla's
+     * block registry; without the vanilla bootstrap that throws and poisons the class for every later
+     * test in this JVM.
+     */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
 
     private static final long SEED = 0xBEEF1234L;
 
@@ -176,6 +187,9 @@ public class PlanetDerivationTest {
      * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
     @Pins("INV-NAV-11")
+    @RedWitness(member = "PlanetDerivation#rotationalPeriodOf",
+            at = "CellHash.norm(CellHash.ofBody(seed, key, variant, SALT_SPIN))", replacedBy = "0.5d",
+            fails = "two worlds of equal gravity must be able to have different days", on = "2026-10-19")
     @Test
     public void aDayIsDrawnAndIsNotAFunctionOfGravity() {
         GalacticCoord anchor = cell(600, 0, 0);
@@ -241,22 +255,9 @@ public class PlanetDerivationTest {
     }
 
     @Test
-    public void aBodysWorldIsKeyedOnItsCellNotOnItsPositionInTheList() {
-        // The property that makes a profile survive a pin: a body keeps its world when the system's body
-        // COUNT changes under it, because the draw is keyed on the durable cell name and not on an index.
-        StellarBody s = sol();
-        GalacticCoord anchor = cell(4, 0, 0);
-        GalacticCoord body = cell(9, 1, 2);
-        BodyProfile inFive = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
-        BodyProfile inTwelve = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
-        assertEquals(inFive.typeName(), inTwelve.typeName());
-        assertEquals(inFive.massEarths(), inTwelve.massEarths(), 0d);
-    }
-
-    @Test
     public void aMoonIsNotACopyOfThePlanetWhoseCellItShares() {
-        // A moon lives in its parent's cell by construction, so without the variant it would draw the
-        // parent's exact physics — the same mass, the same air, the same world twice.
+        // A moon of a parent with no zone is named by its parent's own cell, so without the variant it
+        // would draw the parent's exact physics — the same mass, the same air, the same world twice.
         StellarBody s = sol();
         GalacticCoord anchor = cell(0, 0, 0);
         GalacticCoord shared = cell(5, 0, 0);
@@ -267,6 +268,39 @@ public class PlanetDerivationTest {
                         && planet.radiusEarths() == moon.radiusEarths());
         assertEquals(SystemBodyKind.MOON, moon.kind());
         assertTrue("a moon is never a giant", moon.radiusEarths() < GIANT_RADIUS_EARTHS);
+    }
+
+    /**
+     * Two moons named by the same zone-local cell of two DIFFERENT planets' zones are two worlds.
+     *
+     * <p>Fails if {@code CellHash#ofBody} stops folding a zoned cell's zone into the draw: a zoned
+     * triple is counted in its parent's lattice, so the same small triple names a cell in every zone of
+     * the galaxy, and hashing the triple alone handed every moon at zone cell {@code (1,0,0)} the same
+     * mass and radius wherever its planet was.</p>
+     *
+     * <p>The zones are those of two neighbouring planet cells and the triple is the first cell out from
+     * a zone's centre. A zone's cell WIDTH is not part of a cell's name ({@code GalacticCoord#inZone})
+     * and so not part of its draw; the one passed here only has to be positive. The control is the
+     * same triple in the same zone, which must draw the same world.</p>
+     */
+    @Pins("INV-UNI-16")
+    @RedWitness(member = "CellHash#seedIn", at = "if (zone == null)", replacedBy = "if (true)",
+            fails = "must not be the same world because their zone-local cells match", on = "2026-10-19")
+    @Test
+    public void theSameZoneCellOfTwoPlanetsNamesTwoDifferentMoons() {
+        StellarBody s = sol();
+        GalacticCoord anchor = cell(0, 0, 0);
+        long anyWidth = 1L;
+        GalacticCoord inA = GalacticCoord.inZone(cell(5, 0, 0).cellKey(), anyWidth, 1L, 0L, 0L, 0L, 0L, 0L);
+        GalacticCoord alsoInA = GalacticCoord.inZone(cell(5, 0, 0).cellKey(), anyWidth, 1L, 0L, 0L, 0L, 0L, 0L);
+        GalacticCoord inB = GalacticCoord.inZone(cell(6, 0, 0).cellKey(), anyWidth, 1L, 0L, 0L, 0L, 0L, 0L);
+        BodyProfile a = PlanetDerivation.derive(SEED, anchor, inA, 0, s, true, 100, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        BodyProfile again = PlanetDerivation.derive(SEED, anchor, alsoInA, 0, s, true, 100, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        BodyProfile b = PlanetDerivation.derive(SEED, anchor, inB, 0, s, true, 100, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        assertEquals("one cell of one zone must draw one world", a.radiusEarths(), again.radiusEarths(), 0d);
+        assertFalse("the moon at " + inA.cellKey() + " and the moon at " + inB.cellKey()
+                        + " must not be the same world because their zone-local cells match",
+                a.massEarths() == b.massEarths() && a.radiusEarths() == b.radiusEarths());
     }
 
     @Test

@@ -76,11 +76,19 @@ capability; the chunks by vanilla [V] `VS/mod/common/ships/ShipData.java:35-82`,
 exists only while a ship is loaded; destroying a record never needs one (MECH-VSK-07).
 
 ### MECH-VSK-03 — The shipyard and the claim
-Ship N's claim is centred at chunk `(CHUNK_X_START, 3200·N)` — one fixed strip in +Z; the cursor only ever
-advances and is saved [V] `VS/mod/common/ships/chunk_claims/ShipChunkAllocator.java:47-50`, `:84-86`. A claim
-is exactly 15×15 chunks (radius 7), written as a literal in three places [V]
-`VS/mod/common/ships/ship_world/WorldServerShipManager.java:210`, `VS/mod/common/ships/chunk_claims/VSChunkClaim.java:67`,
-`VS/mod/common/ships/chunk_claims/ClaimedChunkCacheController.java:46`. "Is this chunk shipyard" is a
+Ship N's claim is centred at chunk `(CHUNK_X_START, 3200·N)` — one fixed strip in +Z. A claim given back by a
+ship that no longer exists (`WorldServerShipManager#removeRecord`, the one place every removal of a ship record
+goes through — it also announces the lifecycle event — and `refuseSpawn` for a spawn that never held anything)
+is handed out again, lowest first, before the cursor
+advances; the cursor and the given-back set are both saved with the world (`ShipChunkAllocator#releasedClaimZ`,
+`#allocateNextChunkClaim`, `#releaseChunkClaim`). A spawn unloads any chunk still loaded where it injects its
+own, so nothing of the previous holder survives in a reused claim (`WorldServerShipManager#injectChunkIntoWorldServer`).
+[T] `VSShipAssemblyExtentTest#aCollectedShipsClaimIsTheNextShipsClaim`. A claim
+is 17×17 chunks: `VSChunkClaim.RADIUS` is DERIVED from the detection reach (`SpatialDetector.MAX_REACH` = 128
+blocks along X/Z from the anchor, which lands on the centre chunk's first block, so radius 8), and the three
+places that ask read that one constant [V] `VS/mod/common/ships/chunk_claims/VSChunkClaim.java:32`, `:75`,
+`VS/mod/common/ships/ship_world/WorldServerShipManager.java:205`, `VS/mod/common/ships/chunk_claims/ClaimedChunkCacheController.java:45`,
+`VS/mod/common/ships/block_relocation/SpatialDetector.java:29`. "Is this chunk shipyard" is a
 **half-plane** (`x ≥ CHUNK_X_START − 1599 ∧ z ≥ −1599`), not the claimed strip [V] `ShipChunkAllocator.java:58-60`.
 Three vanilla seams honour that predicate: the world border lets every shipyard position through, terrain
 population is cancelled there, and a player teleport into it is redirected to the ship's world position or cancelled [V]
@@ -92,10 +100,17 @@ population is cancelled there, and a player teleport into it is redirected to th
 `queueShipSpawn(record, pos, finder)` only queues [V] `WorldServerShipManager.java:536-539`. The queue is drained by
 `spawnNewShips()` inside the manager tick, on the game thread [V] `WorldServerShipManager.java:167`, `WorldServerShipManager.java:182-377`.
 For each entry: drop this uuid's own blockless remnant, throw if a *loaded* holder of the uuid remains
-[V] `WorldServerShipManager.java:187-190`; flood-fill from the infuser, refused when over `maxDetectedShipSize` or touching bedrock,
-reported only to stderr [V] `WorldServerShipManager.java:191-208`, `VS/mod/common/ships/block_relocation/ShipSpawnDetector.java:52-53`;
-give the record a 15×15 claim [V] `WorldServerShipManager.java:209-219`; copy each block and tile entity into fresh `Chunk` objects at
-`src + (claimCentre − infuser)`, carrying its damage record and updating mass/inertia [V] `WorldServerShipManager.java:233-302`; sweep
+[V] `WorldServerShipManager.java:187-190`; flood-fill from the infuser, bounded by the queued spawn's FOOTPRINT box (a block outside it is not part of the craft:
+it neither joins the result, counts toward the size cap, nor counts as the structure continuing), which stops at `MAX_REACH` and
+flags a structure that continues past it rather than truncating it [V] `SpatialDetector.java:45-60`, `:207-215`; refuse when over
+`maxDetectedShipSize` (`TOO_LARGE`), touching bedrock (`BEDROCK`), or past the reach (`REACH_EXCEEDED`) — one decision,
+`WorldServerShipManager#refusalOf`, which `#refusalFor(pos, finderType, footprint)` asks ahead of the queue on the world as it
+stands; a refused queued spawn is logged with its reason by `refuseSpawn`, gives its claim back and leaves every block
+standing [V] `WorldServerShipManager.java:326-333`, `:549`, `:870-909`;
+give the record its claim [V] `WorldServerShipManager.java:204-210`; copy each block and tile entity into fresh `Chunk` objects at
+`src + offset`, where the offset puts the infuser on the claim centre in X/Z and on y = 128 unless the hull would leave 0..255 there,
+in which case it is moved the least that keeps the hull inside — and the start pose maps the infuser to wherever that put it
+[V] `WorldServerShipManager.java:216-222`, `:431-450`; carrying its damage record and updating mass/inertia [V] `WorldServerShipManager.java:233-302`; sweep
 the damage records of the holes between blocks, within a margin of 8 blocks around the found blocks [V] `WorldServerShipManager.java:42`,
 `WorldServerShipManager.java:308-314`; delete the sources and relight [V] `WorldServerShipManager.java:319-360`; inject the new chunks
 straight into the chunk provider's map [V] `WorldServerShipManager.java:361-369`, `WorldServerShipManager.java:416-422`; **only then**
@@ -118,12 +133,12 @@ The managers are created on `WorldEvent.Load` through a mixin-added field on `Wo
 A ship with no physics object is queued for an **immediate** load if a player is within `loadDistance`, else for a
 **background** load within `loadBackgroundDistance` (or always when `permanentlyLoaded`); a loaded ship is queued to unload
 beyond `unloadDistance` [V] `VS/mod/common/ships/ship_world/WorldShipLoadingController.java:36-56`. Immediate load builds the
-`PhysicsObject`, whose constructor synchronously loads all 225 claim chunks on the game thread [V]
+`PhysicsObject`, whose constructor synchronously loads all 289 claim chunks (17×17) on the game thread [V]
 `WorldServerShipManager.java:450`, `ClaimedChunkCacheController.java:96-129`. Background load only asks the chunk provider for the
 claim's chunks, and a chunk-provider mixin keeps them out of the drop set [V] `WorldServerShipManager.java:485-493`, `VS/mixin/world/gen/MixinChunkProviderServer.java:27-32`.
 A request already satisfied — load of a loaded ship, unload of an unloaded one — is a no-op on the server [V] `WorldServerShipManager.java:440-443`,
 `WorldServerShipManager.java:472-474`, `WorldServerShipManager.java:504-506`,
-[T] `src/test/java/dev/stannismod/stellurgy/test/server/SpaceSlotVsShipPersistTest.java:113`; on the client it logs an error and continues [V] `WorldClientShipManager.java:59-62`, `WorldClientShipManager.java:85-88`.
+[T] `src/test/java/dev/stannismod/stellurgy/test/server/SpaceSlotVsShipPersistTest.java:84`; on the client it logs an error and continues [V] `WorldClientShipManager.java:59-62`, `WorldClientShipManager.java:85-88`.
 The distances are config (`tunable`); their defaults are ordered watch < load < unwatch < unload [V] `VS/mod/common/config/VSConfig.java:154-174`.
 
 ### MECH-VSK-07 — Disposal: dead means discard, empty means collect
@@ -208,8 +223,8 @@ and stores the told velocities where its consumers look [V] `:57-70`. Watchers a
 `VSWorldData` (registry + allocator) is a world capability, written as a CBOR byte array by Jackson over **fields** (getters and setters ignored; `transient` fields
 dropped by Jackson's default `[A]`, so `dead` and the registry back-pointer are not saved) [V] `VS/mod/common/ships/ship_world/VSWorldData.java:7-9`,
 `VS/mod/common/capability/framework/VSDefaultCapability.java:90-101`, `VS/mod/common/util/jackson/VSJacksonUtil.java:60-67`, `ShipData.java:99`. A round trip through
-a Stellurgy slot unload/reload keeps the registry [T] `SpaceSlotVsShipPersistTest.java:65`. A failed read installs an **empty** `VSWorldData` and logs at FATAL; a failed
-write stores an empty array [V] `VSDefaultCapability.java:96-98`, `:108-117`. The block set and force positions are not sent to clients (`@PacketIgnore`) [V] `ShipData.java:51-63`.
+a Stellurgy slot unload/reload keeps the registry [V] (the capability is written and read whole, `VSDefaultCapability.java:90-130`; no test asserts it). A record that cannot be read or written stops the load or the
+save instead of standing in an empty one (INV-VSK-16; Failure modes) [V] `VSDefaultCapability.java:90-130`. The block set and force positions are not sent to clients (`@PacketIgnore`) [V] `ShipData.java:51-63`.
 
 ### MECH-VSK-16 — Identity added by Stellurgy
 `ShipData` carries Stellurgy's durable ship id beside the uuid, indexed (hash, nullable) so id→ship is one probe; two ships claiming one id is logged and answers empty [V]
@@ -244,8 +259,13 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **INV-VSK-06** [V] A dead ship's blocks are never copied back; they are deleted with its chunks (`PhysicsObject.java:280-315`).
 - **INV-VSK-07** [V] Shipyard addresses are subspace; no world position inside `x ≥ (CHUNK_X_START−1599)·16, z ≥ −25 584` is a real-world position the
   substrate will leave alone (`ShipChunkAllocator.java:58-60`). Stellurgy's cell geometry is built around this (its javadoc `:26-46`).
-- **INV-VSK-08** [V] A claim is 15×15 chunks everywhere it is asked (`WorldServerShipManager.java:210`, `VSChunkClaim.java:67`, `ClaimedChunkCacheController.java:46`);
-  changing one literal alone desynchronises assembly, containment and the cache.
+- **INV-VSK-08** [V] A claim is the same size everywhere it is asked, and it holds everything a detection can find: one constant,
+  `VSChunkClaim.RADIUS`, derived from `SpatialDetector.MAX_REACH` (`VSChunkClaim.java:32`, `:75`, `WorldServerShipManager.java:205`,
+  `ClaimedChunkCacheController.java:45`). [T] `src/test/java/dev/stannismod/stellurgy/test/server/VSShipAssemblyExtentTest.java`
+  (`aHullReachingTheFullDetectionReachKeepsEveryBlock`).
+- **INV-VSK-14** [V] An assembly either copies every block it found or refuses and moves none: a hull past the reach is refused
+  whole, and a hull taller than the default placement allows is placed lower in the shipyard rather than off its top
+  (`WorldServerShipManager.java:199-203`, `:431-450`). [T] `VSShipAssemblyExtentTest` (the other two scenarios).
 - **INV-VSK-09** [V] Vacuum does not damp: air drag retention is exactly 1.0 at zero atmospheric density (`PhysicsCalculations.java:299-301`).
 - **INV-VSK-10** [V] A ship's Y never leaves the world's altitude band, which can only be widened (`ShipAltitudeBand.java:31-45`, `PhysicsCalculations.java:370-371`).
 - **INV-VSK-11** [V] A body is carried only by a hull it is within 1 block of and that has not just been teleported
@@ -253,24 +273,57 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **INV-VSK-12** [V] Block damage records travel with their blocks through assembly and copy-back (`WorldServerShipManager.java:272`, `:308-314`; `MoveBlocks.java:54`).
 - **INV-VSK-13 [V]**  A VS ship is present and the registry answers on a loaded server (`src/test/java/dev/stannismod/stellurgy/test/server/VsVendorSmokeTest.java:42`) and
   a commanded ship translates under the physics loop (`src/test/java/dev/stannismod/stellurgy/test/server/VSShipMotionServerTest.java:94`).
+- **INV-VSK-15 [T][BEH]** A ship the client unloads leaves none of its tiles among those the client draws. A ship's render
+  chunks put its tiles into the world renderer's global tile set, and that set draws a tile wherever the ship managing its
+  POSITION stands (`MixinTileEntityRendererDispatcher#preRender`), so a tile left there after its ship is gone is drawn inside
+  whichever ship is next handed the claim. `PhysRenderChunk#killRenderChunk`, reached by a ship's unload
+  (`PhysObjectRenderManager#killRenderers`) and by a chunk's replacement (`PhysObjectRenderManager#updateChunk`). Pinned by
+  `VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw`.
+- **INV-VSK-16 [T][BEH]** A world whose saved ship record cannot be read does not load: the read refuses it rather
+  than install an empty record, which would be a world with no ships and which the next save would write over the
+  record still on disk (`VSDefaultCapability#readNBT`, `#unreadable`, `VSDefaultCapability.java:106-130`). Pinned by
+  `VSWorldDataRecordTest#anUnreadableSavedRecordStopsTheLoadInsteadOfReadingAsNoShips`.
+- **INV-VSK-17 [T][BEH]** A ship that no longer exists gives its shipyard claim back, and the next ship assembled in that
+  world is built in that claim before the strip's cursor advances (`ShipChunkAllocator.java:86-103`,
+  `WorldServerShipManager.java:622-630`; MECH-VSK-03). Pinned by
+  `VSShipAssemblyExtentTest#aCollectedShipsClaimIsTheNextShipsClaim`.
+- **INV-VSK-18 [T][BEH]** A client applies a ship index only to the world it is addressed to: an index addressed to
+  another world leaves the ships of the world he is in loaded, while one addressed to his world is applied
+  (`ShipIndexDataMessageHandler.java:29-35,55-57`). Pinned by
+  `VSShipIndexClientGroupTest#aShipIndexForAnotherWorldLeavesThisWorldsShipsAlone`.
+- **INV-VSK-19 [T][BEH]** When an indexed ship arrives for a claim the client holds under another ship's record, the
+  client unloads and drops that other record, so a ship built on the claim of a destroyed ship is loaded by the client
+  rather than refused for a claim with two holders (`ShipIndexDataMessageHandler.java:38-50`). Pinned by
+  `VSShipIndexClientGroupTest#aShipBuiltOnADestroyedShipsClaimCanBeFlownFromItsSeat`.
 
 ## Failure modes & edge cases
 
-- **Refused assembly is silent to the caller.** Too big, or bedrock reached: `System.err` only, the entry is skipped, and the claim allocated at
-  `createNewShip` stays spent [V] `WorldServerShipManager.java:195-207`, `ShipChunkAllocator.java:84-86`.
-- **No extent check against the claim `[A]`.** The flood reaches ±128 blocks of the infuser (`SpatialDetector.java:39-40`), the paste maps the infuser to the claim centre, and only
-  chunks inside the 15×15 claim are injected (`WorldServerShipManager.java:362-369`) — yet the sources of every found block are deleted (`:319-340`). A structure longer than the claim
-  would lose the blocks that fall outside it. Not executed.
-- **Claims are never released.** The allocator has no free path, so a world's lifetime ship count is bounded: ship N sits at block Z ≈ 51 200·N, and
-  vanilla's light code stops treating Z ≥ 30 000 000 as valid (ship ≈ 586 on) [V] `ShipChunkAllocator.java:84-86`, [V] `build/rfg/minecraft-src/java/net/minecraft/world/World.java:261`.
-- **Save read failure empties the registry** while the shipyard chunks stay (`VSDefaultCapability.java:108-117`).
-- **Immediate load stalls the game thread** for 225 chunk loads (`ClaimedChunkCacheController.java:104`).
+- **Refused assembly is silent to the caller.** Too big, bedrock reached or past the reach: logged with its reason, the entry is skipped, and
+  the claim allocated at `createNewShip` stays spent; the caller that queued it has already been handed the uuid
+  [V] `WorldServerShipManager.java:199-203`, `:416-420`, `ShipChunkAllocator.java:84-86`.
+- **The ground an assembly is cut from is never relit** — the relight loop computes its chunk from the stale paste position
+  [V] `WorldServerShipManager.java`, the "Then relight the original chunks" block of `spawnNewShips`.
+- **The number of ships ALIVE in one world at once is bounded**: ship N sits at block Z ≈ 51 200·N, and vanilla's
+  light code stops treating Z ≥ 30 000 000 as valid, so a world holding ~586 ships at once runs past it
+  [V] `build/rfg/minecraft-src/java/net/minecraft/world/World.java:261`. Claims are given back (MECH-VSK-03), so
+  it is the count alive at once that is bounded, not a world's lifetime count of assemblies.
+- **An unreadable saved ship record stops the world from loading**, and a record that cannot be serialized
+  stops the save, leaving the file on disk as the last save that succeeded (`VSDefaultCapability#readNBT`,
+  `#writeNBT`, `#unreadable`): neither installs or writes an EMPTY record, which the next save would make
+  permanent. [T] `test/unit/VSWorldDataRecordTest` (the read half; a serializer that fails cannot
+  be arranged without a stand-in, so the write half is unpinned).
+- **Immediate load stalls the game thread** for 289 chunk loads (`ClaimedChunkCacheController.java:104`).
 - **Cross-thread reads are unsynchronised beyond the pose.** The physics thread iterates `activeForcePositions` while the game thread edits it (the source says so,
-  `PhysicsCalculations.java:191-193`), and the pose watchdog reads each ship's `watchingPlayers` list while the manager tick clears and refills it
-  (`EventsCommon.java:206`, `WorldShipLoadingController.java:70-71`); the pose send wraps its body in a catch that prints (`EventsCommon.java:225-227`).
-- **A ship destroyed this tick may still be in the physics thread's snapshot** until the tick's end publishes a new one (`WorldServerShipManager.java:108`, `:179`) while its chunk storage has
-  been nulled (`ClaimedChunkCacheController.java:142-144`); per-ship exceptions in the step are caught (`VSWorldPhysicsLoop.java:177-179`) `[A]` that this window is reachable.
-- **The client index handler ignores the packet's dimension**, unlike the pose handler (`VS/mod/common/network/ShipIndexDataMessageHandler.java:22-36` vs `ShipTransformUpdateMessageHandler.java:36`); the dimension is set on send (`WorldShipLoadingController.java:135`).
+  `PhysicsCalculations.java:191-193`). The pose watchdog no longer reads the live `watchingPlayers` list: it iterates an immutable
+  copy the game thread publishes after each refill, destroy and unload (`PhysicsObject#getPublishedWatchingPlayers`;
+  unpinned — a two-thread race).
+- **A ship destroyed this tick leaves the physics snapshot at once**: `WorldServerShipManager#tick` republishes the (`volatile`) snapshot
+  right after its destroy loop; a step already in flight still holds the old list (unpinned — thread timing).
+- **The client index handler drops an index addressed to another world**, as the pose handler does (INV-VSK-18).
+- **The client is never told a ship was forgotten** — the index message only adds, loads and unloads. Since claims are handed out
+  again, a stale record would leave two client records on one claim, and `QueryableShipData#getShipFromChunk` throws on two, which
+  `VSBridge#shipIdManagingBlock` reads as "no ship": every pilot gate on a reused claim would stay shut. The handler therefore lets
+  a record arriving for a claim unload and remove any other record holding it (INV-VSK-19).
 - **Non-vanilla world providers**: a world that never fired `WorldEvent.Load` throws on first manager access (`MixinWorld.java:481-486`); one without the capability throws (`ValkyrienUtils.java:124-133`).
 
 ## Integration seams
@@ -280,8 +333,8 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **VS → Stellurgy (calls this tree makes into Stellurgy code).** Regenerate the list with
   `grep -rn "dev.stannismod.stellurgy" valkyrienskies/` — it is the hosting (`Stellurgy.instance.valkyrienSkies`), `WorldRuntime` parts (altitude band, pose clock, client
   render state), `DamageState` (carry, MECH-VSK-04/12), and `AtmosphereDensity`/`FreeFlightPhysics` (drag, MECH-VSK-09). Each new such call is a coupling this doc and C11 should name.
-- **Mixins (our own, against vanilla).** `mixins.valkyrienskies.json` — see `mixins-asm-coremod` and C6. No production mixin targets this
-  tree: it is edited in place.
+- **Mixins (our own, against vanilla).** `mixins.valkyrienskies.json` — see `mixins-asm-coremod` and C6. No production mixin targets
+  this tree: it is edited in place, and VS's own `loadAndUnloadShips` already treats a ship that is already loaded as a satisfied request.
 - **Forge bus.** `EventsCommon` subscribes at HIGHEST priority to world load/unload/tick, entity join, player tick/login, block, explosion and interact events (`EventsCommon.java:78-352`).
 - **Wire.** Channels in MECH-VSK-01; the manager sends `ShipIndexDataMessage` (load/unload/index) and `ShipTransformUpdateMessage` (poses) — contract C2.
 
@@ -296,20 +349,19 @@ Tunable; values are not pinned here.
 | anchor | test |
 |---|---|
 | MECH-VSK-01 | `test/unit/VendoredAssetDomainTest.java:87` |
-| MECH-VSK-06 | `test/server/SpaceSlotVsShipPersistTest.java:113` |
+| MECH-VSK-06 | `test/server/SpaceSlotVsShipPersistTest.java:84` |
 | MECH-VSK-07 | `test/server/VSCrossingLeavesNoShipBehindTest.java:78` |
 | MECH-VSK-12 | `test/server/ShipDamageSurvivesRelocationTest.java:93` |
 | MECH-VSK-13 | `test/unit/StandingOnAHullCountsAsBeingAtItTest.java:47` |
-| MECH-VSK-15 | `test/server/SpaceSlotVsShipPersistTest.java:65` |
+| MECH-VSK-15 | none (`[V]` only) |
 | INV-VSK-13 | `test/server/VsVendorSmokeTest.java:42`, `test/server/VSShipMotionServerTest.java:94` |
+| INV-VSK-15 | `test/client/VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw` |
 
-(All under `src/test/java/dev/stannismod/stellurgy/`.) **No test found** for: the pose-send watchdog, the claim allocator, a failed capability read, the client index handler, the deconstruct states, or the
-terrain collider — a grep of `src/test` and `testframework` for `poseSendIsOverdue`, `allocateNextChunkClaim`, `VSDefaultCapability`, `ShipIndexDataMessage`, `DeconstructState`,
-`WorldPhysicsCollider` returns no file (2026-10-06). A test-only mixin records each spawn's flood result, which is the only non-stderr trace of a refused assembly
-(`src/test/java/dev/stannismod/stellurgy/test/mixin/MixinWorldServerShipManagerDiag.java:97`); it asserts nothing.
+(All under `src/test/java/dev/stannismod/stellurgy/`.) **No test found** for: the pose-send watchdog, the deconstruct states, or the
+terrain collider — a grep of `src/test` and `testframework` for `poseSendIsOverdue`, `DeconstructState`,
+`WorldPhysicsCollider` returns no file (2026-10-06). A test-only mixin records each refused spawn with VS's own reason
+(`src/test/java/dev/stannismod/stellurgy/test/mixin/MixinWorldServerShipManagerDiag.java:78`, `ship_spawn_refused`); it asserts nothing.
 
 ## Open questions
 
-- Does Forge write a world capability for every dimension, or only dimensions with their own `WorldInfo`? `[A]` — `SpaceSlotVsShipPersistTest.java:65` shows a slot world round-trips, nothing more.
-- `StellurgyMixinPlugin` still says two mixins "MUST be skipped when that mod is absent" and so describes VS as optional (`src/main/java/dev/stannismod/stellurgy/mixin/StellurgyMixinPlugin.java:63-75`); VS is mandatory.
-- `ShipChunkAllocator`'s javadoc says the cursor "only increases the xPos" (`ShipChunkAllocator.java:80-83`); the code advances Z (`ShipChunkAllocator.java:84-86`).
+- Does Forge write a world capability for every dimension, or only dimensions with their own `WorldInfo`? `[A]` — nothing in the test corpus asserts even that a slot world round-trips.

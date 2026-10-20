@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -85,6 +86,10 @@ public class ShieldConditionTest {
      * Pins INV-SHD-22 (a standing emitter still projects something and a mended one its whole field).
      */
     @Pins("INV-SHD-22")
+    @RedWitness(member = "ShieldCondition#shrinkRadius",
+            at = "return Math.max(minRadius, Math.min(declaredRadius, shrunk));",
+            replacedBy = "return Math.min(declaredRadius, shrunk);",
+            fails = "an emitter that is still standing must still project a field, however small", on = "2026-10-19")
     @Test
     public void aStandingEmitterAlwaysProjectsSomething() {
         for (int declared = 1; declared <= 16; declared++) {

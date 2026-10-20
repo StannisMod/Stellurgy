@@ -1258,9 +1258,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      */
     /**
      * A machine packet's address is the CLIENT's to write, so a press can name a weapon console its
-     * sender is nowhere near. The server answers it by the console's own usability rule — the same
-     * world, within a chest's reach — and a press from beyond it changes nothing; the same press from
-     * beside the console still holds the battery's fire.
+     * sender is nowhere near. The server judges it by a chest's reach before any machine sees it
+     * ({@code PacketSenderCheck#withinContainerReach}, read through {@code container_reach_judged}), and
+     * a press from beyond it changes nothing; the same press from beside the console is let through
+     * and holds the battery's fire.
      *
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
@@ -1268,30 +1269,26 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      */
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
-            + " answering {@code true} unconditionally (the shape it shipped with), this fails at \"the console"
-            + " judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,"
-            + " pos:4016,150,4016,player:ForgeTestClient,reachable:true}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
-            + " keeping its log line but not its {@code return}, this fails at \"a press from beyond reach held the"
-            + " battery's fire anyway: {...network:true,...holdFire:true...}\" (2026-10-06).")
-    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
-            + " answering {@code false} unconditionally, this fails at \"the console refused a press from the"
-            + " player standing on it: {...reachable:false}\" (2026-10-06).")
+    @LegacyWitness(prose = "with {@code PacketSenderCheck#withinContainerReach} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code true}, this fails at \"the server judged a press from 24 blocks away as within"
+            + " reach: {...container_reach_judged,...reachable:true}\" (2026-10-07).")
+    @LegacyWitness(prose = "with {@code PacketMachine#executeServer} at {@code \"the sender is not within reach"
+            + " of it (he is at \"} keeping its log line but not its {@code return}, this fails at \"a press from"
+            + " beyond reach held the battery's fire anyway: {...holdFire:true...}\" (2026-10-07).")
+    @LegacyWitness(prose = "with {@code PacketSenderCheck#withinContainerReach} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code false}, this fails at \"the server refused a press from the player standing on the"
+            + " console: {...reachable:false}\" (2026-10-07).")
     @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}"
             + " removed, this fails at \"a press from the player standing on the console did not hold fire:"
             + " {...holdFire:false...}\" (2026-10-06).")
     @LegacyWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
             + " removed, this fails at the arrangement wait \"the console never joined a weapon network ... no"
-            + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\"; with {@code TileWeaponConsole#useNetworkData}"
-            + " returning before {@code if (!canInteractWithContainer(player))}, at the far wait \"the console never"
-            + " judged the far press: it never reached the server\" (2026-10-06).")
-    @NotYetRed(prose = "NOT YET, with {@code TileWeaponConsole#useNetworkData} at"
-            + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
-            + " {@code weapon_console_press_judged} wait and the two"
-            + " {@code awaitClientPlacedNear} waits, for the reasons given on"
-            + " {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing the near press"
-            + " silences the far one first, and the placement waits link on vanilla's teleport.")
+            + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\" (2026-10-06).")
+    @NotYetRed(prose = "NOT YET, with {@code PacketSenderCheck#withinContainerReach} at"
+            + " {@code <= CONTAINER_REACH_SQ} the seam both press waits link on, for the NEAR"
+            + " {@code container_reach_judged} wait and the two {@code awaitClientPlacedNear} waits, for the"
+            + " reasons given on {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing"
+            + " the near press silences the far one first, and the placement waits link on vanilla's teleport.")
     @Test
     public void aWeaponConsolePressFromBeyondReachChangesNothing() throws Exception {
         int dim = plot().dim;
@@ -1327,10 +1324,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         scenario().asserting("a press from beyond reach is judged out of reach and changes nothing");
         long farPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
-        String farJudged = events.awaitRecordWithFields(farPress, "weapon_console_press_judged",
-                "the console never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String farJudged = events.awaitRecordWithFields(farPress, "container_reach_judged",
+                "the server never judged the far press's reach: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
-        assertEquals("the console judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
+        assertEquals("the server judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
                 + farJudged, "false", Events.text(farJudged, "reachable"));
         Reply afterFar = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         scenario().requireArranged("the console lost its network during the far press: " + afterFar,
@@ -1347,10 +1344,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
                 + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
         long nearPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
-        String nearJudged = events.awaitRecordWithFields(nearPress, "weapon_console_press_judged",
-                "the console never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String nearJudged = events.awaitRecordWithFields(nearPress, "container_reach_judged",
+                "the server never judged the near press's reach: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
-        assertEquals("the console refused a press from the player standing on it: " + nearJudged,
+        assertEquals("the server refused a press from the player standing on the console: " + nearJudged,
                 "true", Events.text(nearJudged, "reachable"));
         Reply afterNear = Reply.of(read("stellurgytest weaponconsole read " + console).raw()).requireOk("read the console");
         assertTrue("a press from the player standing on the console did not hold fire: " + afterNear,
@@ -1358,24 +1355,27 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
     }
 
     /**
-     * The fire-control sensor answers a press the way the weapon console does: by vanilla's usability
-     * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
-     * player standing on it switches it to illuminating. Both presses are forged by the real client
+     * The fire-control sensor's presses are judged as the weapon console's are: by a chest's reach,
+     * before the sensor sees them ({@code container_reach_judged}), so a press from beyond it leaves its
+     * mode alone, and the same press from the player standing on it is let through and switches it to
+     * illuminating. Both presses are forged by the real client
      * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerTest}'s.
      */
-    @LegacyWitness(prose = "(2026-10-06, one inversion per run):"
-            + " {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering"
-            + " true fails \"the sensor judged a press from 24 blocks away as within reach\"; answering false fails"
-            + " \"the sensor refused a press from the player standing on it\";"
-            + " {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
-            + " logging without its {@code return} fails \"a press from beyond reach switched the sensor anyway"
-            + " {...mode:ACTIVE...}\"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}"
-            + " removed fails \"a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}\";"
-            + " the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far"
-            + " wait, \"the sensor never judged the far press: it never reached the server\".")
-    @NotYetRed(prose = "NOT YET, with {@code TileFireControlSensor#useNetworkData} at"
-            + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
-            + " {@code sensor_press_judged} wait and the two"
+    @LegacyWitness(prose = "(2026-10-06): {@code TileFireControlSensor#useNetworkData} at"
+            + " {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}"
+            + " removed fails \"a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}\".")
+    @LegacyWitness(prose = "with {@code PacketSenderCheck#withinContainerReach} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code true}, this fails at \"the server judged a press from 24 blocks away as within"
+            + " reach: {...container_reach_judged,...reachable:true}\" (2026-10-07).")
+    @LegacyWitness(prose = "with {@code PacketMachine#executeServer} at {@code \"the sender is not within reach"
+            + " of it (he is at \"} logging without its {@code return}, this fails at \"a press from beyond reach"
+            + " switched the sensor anyway: {...mode:ACTIVE...}\" (2026-10-07).")
+    @LegacyWitness(prose = "with {@code PacketSenderCheck#withinContainerReach} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code false}, this fails at \"the server refused a press from the player standing on the"
+            + " sensor: {...reachable:false}\" (2026-10-07).")
+    @NotYetRed(prose = "NOT YET, with {@code PacketSenderCheck#withinContainerReach} at"
+            + " {@code <= CONTAINER_REACH_SQ} the seam both press waits link on, for the NEAR"
+            + " {@code container_reach_judged} wait and the two"
             + " {@code awaitClientPlacedNear} waits. Any production break that silences the near press silences"
             + " the far one first (one path, one seam), so it reds the far wait instead; the only break that"
             + " reaches the near wait alone is one conditional on distance — the reach decision itself, which the"
@@ -1410,10 +1410,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
         scenario().asserting("a press from beyond reach is judged out of reach and leaves the mode alone");
         long farPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
-        String farJudged = events.awaitRecordWithFields(farPress, "sensor_press_judged",
-                "the sensor never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String farJudged = events.awaitRecordWithFields(farPress, "container_reach_judged",
+                "the server never judged the far press's reach: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
-        assertEquals("the sensor judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
+        assertEquals("the server judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
                 + farJudged, "false", Events.text(farJudged, "reachable"));
         Reply afterFar = Reply.of(read("stellurgytest sensor read " + sensor).raw()).requireOk("read the sensor");
         assertEquals("a press from beyond reach switched the sensor anyway: " + afterFar,
@@ -1428,10 +1428,10 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
                 + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
         long nearPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
-        String nearJudged = events.awaitRecordWithFields(nearPress, "sensor_press_judged",
-                "the sensor never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String nearJudged = events.awaitRecordWithFields(nearPress, "container_reach_judged",
+                "the server never judged the near press's reach: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
-        assertEquals("the sensor refused a press from the player standing on it: " + nearJudged,
+        assertEquals("the server refused a press from the player standing on the sensor: " + nearJudged,
                 "true", Events.text(nearJudged, "reachable"));
         Reply afterNear = Reply.of(read("stellurgytest sensor read " + sensor).raw()).requireOk("read the sensor");
         assertEquals("a press from the player standing on the sensor did not switch it: " + afterNear,

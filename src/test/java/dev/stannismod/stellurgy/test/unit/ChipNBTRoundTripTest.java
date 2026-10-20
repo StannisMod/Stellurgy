@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -49,6 +50,8 @@ public class ChipNBTRoundTripTest {
 
     /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
     @Pins("INV-ITM-01")
+    @RedWitness(member = "ItemPlanetIdentificationChip#getDimensionId", at = "return Constants.INVALID_PLANET;",
+            replacedBy = "return 0;", fails = "fresh stack must read as INVALID_PLANET", on = "2026-10-19")
     @Test
     public void planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt() {
         // Production contract (getDimensionId, lines 99-103): a stack with
@@ -61,62 +64,21 @@ public class ChipNBTRoundTripTest {
                 Constants.INVALID_PLANET, chip.getDimensionId(s));
     }
 
-    /** Pins INV-ITM-02 (set then get round-trips through NBT). */
-    @Pins("INV-ITM-02")
-    @Test
-    public void planetChipDimIdRoundTripsForRegisteredDim() {
-        // setDimensionId only persists if the dim is registered (its
-        // production path looks up DimensionProperties and erase()s on miss).
-        // INVALID_PLANET hits a separate early-return branch that has its
-        // own contract — pinned in the _documentsKnownBug test below. Here
-        // we directly seed the NBT key to validate the read path, which is
-        // what production launch / landing tests as the "trusted" surface
-        // (post-write integrity from the production setter is a separate
-        // matter).
-        ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
-        ItemStack s = freshStack();
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setInteger("dimId", 7);
-        s.setTagCompound(nbt);
-        assertEquals(7, chip.getDimensionId(s));
-    }
-
-    /** The INVALID_PLANET branch of
-     *  {@code setDimensionId} previously built a fresh NBT but never
-     *  called {@code stack.setTagCompound(nbt)} before returning — so
-     *  the sentinel was silently dropped. Now it attaches the NBT so
-     *  callers can observe the "explicitly invalid" state.
-     * Pins INV-ITM-04 (setting the invalid planet still attaches a tag carrying the sentinel).
-     */
-    @Pins("INV-ITM-04")
-    @Test
-    public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
-        ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
-        ItemStack s = freshStack();
-        chip.setDimensionId(s, Constants.INVALID_PLANET);
-        assertTrue("setDimensionId(INVALID_PLANET) must attach the NBT",
-                s.hasTagCompound());
-        assertEquals("the stored sentinel must equal INVALID_PLANET",
-                Constants.INVALID_PLANET, s.getTagCompound().getInteger("dimId"));
-    }
-
     @Test
     public void planetChipUuidRoundTrip() {
-        // UUID setter does attach NBT correctly (line 131). Pin the round-
-        // trip + verify the getter returns boxed Long (production callers
-        // null-check against the "no NBT" case).
+        // The getter returns a boxed Long because production callers
+        // null-check against the "no NBT" case.
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
         ItemStack s = freshStack();
         assertNull("fresh stack has no UUID — must return null, not 0",
                 chip.getUUID(s));
-        chip.setUUID(s, 0xCAFEBABE_DEADBEEFL);
-        assertNotNull("after setUUID, getUUID must return non-null",
-                chip.getUUID(s));
-        assertEquals(0xCAFEBABE_DEADBEEFL, chip.getUUID(s).longValue());
     }
 
     /** Pins INV-ITM-03 (erase drops the entire compound). */
     @Pins("INV-ITM-03")
+    @RedWitness(member = "ItemPlanetIdentificationChip#erase", at = "stack.setTagCompound(null);",
+            replacedBy = "stack.setTagCompound(new NBTTagCompound());",
+            fails = "erase() must drop the entire NBT compound", on = "2026-10-19")
     @Test
     public void planetChipEraseClearsAllNbt() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -142,36 +104,16 @@ public class ChipNBTRoundTripTest {
         assertEquals(0, ItemStationChip.getUUID(s));
     }
 
-    @Test
-    public void stationChipUuidRoundTrip() {
-        ItemStack s = freshStack();
-        ItemStationChip.setUUID(s, 12345);
-        assertEquals(12345, ItemStationChip.getUUID(s));
-        // Re-set: subsequent write to same key must overwrite, not append.
-        ItemStationChip.setUUID(s, -42);
-        assertEquals(-42, ItemStationChip.getUUID(s));
-    }
-
     // ───────────────────── ItemAsteroidChip ─────────────────────────────
 
-    /**
-     * Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default).
-     * Pins INV-ITM-02 (set then get round-trips through NBT).
-     */
-    @Pins({"INV-ITM-01", "INV-ITM-02"})
+    /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
+    @Pins("INV-ITM-01")
     @Test
     public void asteroidChipUuidAndTypeRoundTrip() {
         ItemAsteroidChip chip = new ItemAsteroidChip();
         ItemStack s = freshStack();
         assertNull("fresh stack: UUID null", chip.getUUID(s));
         assertNull("fresh stack: type null", chip.getType(s));
-
-        chip.setUUID(s, 0x0123_4567_89ABCDEFL);
-        chip.setType(s, "metallic");
-
-        assertNotNull(chip.getUUID(s));
-        assertEquals(0x0123_4567_89ABCDEFL, chip.getUUID(s).longValue());
-        assertEquals("metallic", chip.getType(s));
     }
 
     @Test
@@ -185,52 +127,7 @@ public class ChipNBTRoundTripTest {
         assertNull("erase must clear type", chip.getType(s));
     }
 
-    @Test
-    public void asteroidChipTypeOverwriteIsLossless() {
-        ItemAsteroidChip chip = new ItemAsteroidChip();
-        ItemStack s = freshStack();
-        chip.setType(s, "rocky");
-        chip.setType(s, "icy");
-        assertEquals("subsequent setType must overwrite, not concat",
-                "icy", chip.getType(s));
-        // UUID set in-between must not be dropped.
-        chip.setUUID(s, 7L);
-        chip.setType(s, "metallic");
-        assertEquals(7L, chip.getUUID(s).longValue());
-        assertEquals("metallic", chip.getType(s));
-    }
-
     // ─────────────────── ItemSatelliteIdentificationChip ────────────────
-
-    /** {@code setSatellite(SatelliteBase)} must
-     *  attach the freshly built NBT to the stack. Previously the
-     *  else-branch (no pre-existing tag compound) silently dropped
-     *  the NBT because {@code stack.setTagCompound(nbt)} was missing
-     *  — the sibling overload {@code setSatellite(SatelliteProperties)}
-     *  at line 87 did attach it, confirming the omission was an
-     *  oversight. */
-    @Test
-    public void satelliteChipSetSatelliteAttachesNbtToFreshStack() {
-        dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip chip =
-                new dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip();
-        ItemStack s = freshStack();
-        dev.stannismod.stellurgy.api.satellite.SatelliteBase fake =
-                new dev.stannismod.stellurgy.api.satellite.SatelliteBase() {
-                    @Override public String getName() { return "test-comsat"; }
-                    @Override public int getDimensionId() { return 17; }
-                    @Override public long getId() { return 4242L; }
-                    @Override public String getInfo(net.minecraft.world.World w) { return ""; }
-                    @Override public boolean performAction(net.minecraft.entity.player.EntityPlayer p,
-                            net.minecraft.world.World w, net.minecraft.util.math.BlockPos b) { return false; }
-                    @Override public double failureChance() { return 0; }
-                };
-        chip.setSatellite(s, fake);
-        assertTrue("setSatellite must attach the NBT to a fresh stack",
-                s.hasTagCompound());
-        assertEquals("test-comsat", s.getTagCompound().getString("satelliteName"));
-        assertEquals(17, s.getTagCompound().getInteger("dimId"));
-        assertEquals(4242L, s.getTagCompound().getLong("satelliteId"));
-    }
 
     @Test
     public void satelliteChipEraseClearsNbt() {

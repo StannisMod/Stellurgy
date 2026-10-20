@@ -48,8 +48,10 @@ that is not already an `ItemSpaceArmor`, generates a recipe that consumes the ar
 `blockPipeSealer` + titanium-aluminide sheet (+ a pressure tank for chestplates) and outputs the
 same armour enchanted with `enchantmentSpaceProtection`. `reloadRecipesSpecial` re-derives that
 special set idempotently after a recipe reload, dropping any removed by other mods. Ingredient
-consumption is custom (`consumeItemsSpecial`) so the enchant is applied to the actual input stack.
-[V] `TileChemicalReactor.java:49-204`.
+consumption is custom (`consumeItemsSpecial`) so the enchant is applied to the actual input stack;
+it takes exactly the slots the recipe check claimed (`takeClaimedItems`) and drains
+the fluids. [V] `TileChemicalReactor.java:49-204`. The precision laser etcher starts
+through the base claim and keeps its lens by `consumesIngredient` (libvulpes MECH-LVP-07).
 
 ### MECH-MBM-17 — Crystallizer gravity gate
 `isGravityWithinBounds()` returns true unless `crystalliserMaximumGravity != 0` **and** the local

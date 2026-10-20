@@ -40,9 +40,35 @@ public final class CellHash {
         return h;
     }
 
+    /**
+     * Folds a cell's ZONE into the seed — {@code seed} itself for a galactic cell.
+     *
+     * <p>A zoned cell's sector triple is counted in its parent's zone lattice, so the same small triple
+     * names a cell in every zone of the galaxy. Hashing the triple alone gave every moon at zone cell
+     * {@code (1,0,0)} the same draw, wherever its planet was. Galactic cells are untouched, so no
+     * planet's draw moves.</p>
+     *
+     * @throws IllegalArgumentException when the zone is not a readable cell key
+     */
+    private static long seedIn(long seed, GalacticCoord cell) {
+        String zone = cell.zone();
+        if (zone == null) {
+            return seed;
+        }
+        GalacticCoord parent = GalacticCoord.fromCellKey(zone);
+        if (parent == null) {
+            throw new IllegalArgumentException("cell " + cell.cellKey() + " names a zone '" + zone
+                    + "' that is not a cell key, so no draw can be told apart from another zone's");
+        }
+        return of(seedIn(seed, parent), parent.sectorX(), parent.sectorY(), parent.sectorZ(), SALT_ZONE);
+    }
+
+    /** The salt of {@link #seedIn}; disjoint from every field salt, which all sit below {@code 0x1000}. */
+    private static final long SALT_ZONE = 0x5A0E_0001L;
+
     /** Mix a cell's own field draw. */
     public static long ofCell(long seed, GalacticCoord cell, long salt) {
-        return of(seed, cell.sectorX(), cell.sectorY(), cell.sectorZ(), salt);
+        return of(seedIn(seed, cell), cell.sectorX(), cell.sectorY(), cell.sectorZ(), salt);
     }
 
     /**
@@ -53,8 +79,8 @@ public final class CellHash {
      * draws — which would make body {@code i}'s radius a near-copy of body {@code i+1}'s.</p>
      */
     public static long ofBody(long seed, GalacticCoord cell, int index, long salt) {
-        return of(seed ^ (index * 0xD1B54A32D192ED03L), cell.sectorX(), cell.sectorY(), cell.sectorZ(),
-                salt);
+        return of(seedIn(seed, cell) ^ (index * 0xD1B54A32D192ED03L), cell.sectorX(), cell.sectorY(),
+                cell.sectorZ(), salt);
     }
 
     /** Map a 64-bit hash to a double in {@code [0, 1)}. */

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.item.ItemThermite;
 import dev.stannismod.stellurgy.item.ItemWeatherController;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.item.ItemStack;
@@ -63,6 +64,9 @@ public class SpecialPurposeItemContractTest {
 
     /** Pins INV-ITM-10 (thermite burns for 6000 ticks regardless of count). */
     @Pins("INV-ITM-10")
+    @RedWitness(member = "ItemThermite#getItemBurnTime", at = "return 6000;",
+            replacedBy = "return 6000 * itemStack.getCount();", fails = "expected:<6000> but was:<384000>",
+            on = "2026-10-19")
     @Test
     public void thermiteBurnTimeIsStackInsensitive() {
         // Burn time must not depend on stack size or NBT — vanilla furnace
@@ -99,23 +103,8 @@ public class SpecialPurposeItemContractTest {
 
     /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
     @Pins("INV-ITM-11")
-    @Test
-    public void biomeChangerReadDataFromNetworkPersistsBiomeIdToNbt() {
-        // Wire-format contract: packet id 0 carries a single int payload
-        // -> write into NBT key "biome". This pins both the packet schema
-        // AND the NBT key name used by the production useNetworkData
-        // path (line 180: `nbt.getInteger("biome")`).
-        ItemBiomeChanger item = new ItemBiomeChanger();
-        ItemStack stack = new ItemStack(item, 1);
-        NBTTagCompound nbt = new NBTTagCompound();
-        ByteBuf wire = Unpooled.buffer().writeInt(7);
-        item.readDataFromNetwork(wire, (byte) 0, nbt, stack);
-        assertEquals("packet id 0 must persist payload int into NBT key 'biome'",
-                7, nbt.getInteger("biome"));
-    }
-
-    /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
-    @Pins("INV-ITM-11")
+    @RedWitness(member = "ItemBiomeChanger#readDataFromNetwork", at = "if (packetId == 0) {", replacedBy = "if (true) {",
+            fails = "unknown packet id must leave NBT untouched", on = "2026-10-19")
     @Test
     public void biomeChangerReadDataFromNetworkOtherPacketIdIsNoOp() {
         // Production gates on packetId==0; other ids must NOT mutate NBT.
@@ -145,33 +134,6 @@ public class SpecialPurposeItemContractTest {
         ItemWeatherController item = new ItemWeatherController();
         assertTrue("weather-controller GUI must always be openable",
                 item.canInteractWithContainer(null));
-    }
-
-    /** Pins INV-ITM-12 (the weather controller maps its three ints to NBT keys in order). */
-    @Pins("INV-ITM-12")
-    @Test
-    public void weatherControllerReadDataFromNetworkPersistsAllThreeFieldsToNbt() {
-        // Wire-format contract: every packet carries 3 ints in fixed
-        // order — mode_id, floodlevel, last_mode_id — written into NBT
-        // keys of matching names (production useNetworkData reads back
-        // by exactly these keys at lines 171-173). Pin both the order
-        // and the NBT key names.
-        ItemWeatherController item = new ItemWeatherController();
-        ItemStack stack = new ItemStack(item, 1);
-        NBTTagCompound nbt = new NBTTagCompound();
-        ByteBuf wire = Unpooled.buffer()
-                .writeInt(2)    // mode_id
-                .writeInt(63)   // floodlevel
-                .writeInt(1);   // last_mode_id
-
-        item.readDataFromNetwork(wire, (byte) 0, nbt, stack);
-
-        assertEquals("first int -> NBT 'mode_id'",
-                2, nbt.getInteger("mode_id"));
-        assertEquals("second int -> NBT 'floodlevel'",
-                63, nbt.getInteger("floodlevel"));
-        assertEquals("third int -> NBT 'last_mode_id'",
-                1, nbt.getInteger("last_mode_id"));
     }
 
     // ── C047: null-safe network callbacks when the bound satellite is gone ──

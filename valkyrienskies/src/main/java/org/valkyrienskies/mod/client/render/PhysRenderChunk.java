@@ -91,7 +91,14 @@ public class PhysRenderChunk {
         }
     }
 
+    /**
+     * Tear this chunk's renderer down — its GL buffers AND the tiles it put into the world renderer's
+     * global tile set. A tile left in that set is drawn wherever the ship that manages its position now
+     * stands, so a claim handed to another ship would draw the old ship's tiles inside the new one.
+     */
     void killRenderChunk() {
+        Minecraft.getMinecraft().renderGlobal.updateTileEntities(tileEntitiesToRender, new ArrayList<>());
+        tileEntitiesToRender = new ArrayList<>();
         for (int i = 0; i < 16; i++) {
             IVSRenderChunk renderChunk = renderChunks[i];
             if (renderChunk != null) {

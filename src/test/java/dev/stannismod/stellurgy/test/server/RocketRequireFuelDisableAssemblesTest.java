@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.ShipBirth;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -142,6 +143,9 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
 
     /** Pins INV-RASM-06 (with rocketRequireFuel off a valid structure still assembles). */
     @Pins("INV-RASM-06")
+    @RedWitness(member = "TileRocketAssemblingMachine#hasEnoughFuel", at = "if (!StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) {",
+            replacedBy = "if (false) {",
+            fails = "with rocketRequireFuel=false a valid rocket must still assemble", on = "2026-10-19")
     @Test
     public void validRocketAssemblesWhenFuelNotRequired() throws Exception {
         try (ConfigFlag restored = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {

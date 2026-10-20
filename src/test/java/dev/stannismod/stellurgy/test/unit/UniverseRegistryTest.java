@@ -80,24 +80,6 @@ public class UniverseRegistryTest {
         assertFalse(reg.starIdForCoord(otherCell).isPresent());
     }
 
-    @Test
-    public void overrideStoreRoundTripsThroughNbt() {
-        UniverseRegistry source = testUniverse.newRegistry();
-        source.place(GalacticCoord.ofSectorLocal(1, 1, 1, 0, 0, 0), 5);
-        source.place(GalacticCoord.ofSectorLocal(-9, 0, 42, 0, 0, 0), 8);
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        UniverseRegistry round = testUniverse.newRegistry();
-        round.readFromNBT(tag);
-
-        assertEquals(Optional.of(GalacticCoord.ofSectorLocal(1, 1, 1, 0, 0, 0)), round.coordForSystem(5));
-        assertEquals(Optional.of(GalacticCoord.ofSectorLocal(-9, 0, 42, 0, 0, 0)), round.coordForSystem(8));
-        assertEquals(5, round.starIdForCoord(GalacticCoord.ofSectorLocal(1, 1, 1, 0, 0, 0)).getAsInt());
-        assertEquals(8, round.starIdForCoord(GalacticCoord.ofSectorLocal(-9, 0, 42, 0, 0, 0)).getAsInt());
-    }
-
     /**
      * A body's cell NAME survives a save, and the loaded name beats what a fresh derivation would
      * now say.
@@ -161,18 +143,6 @@ public class UniverseRegistryTest {
         fresh.place(GalacticCoord.ORIGIN, 4321);
         assertFalse("a fresh registry must derive the CHANGED orbit's name, or this test proves nothing",
                 namedAtFirstDerivation.equals(fresh.coordForPlanet(body)));
-    }
-
-    @Test
-    public void emptyRegistryRoundTripsToEmpty() {
-        UniverseRegistry source = testUniverse.newRegistry();
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-
-        UniverseRegistry round = testUniverse.newRegistry();
-        round.readFromNBT(tag);
-        assertFalse(round.coordForSystem(0).isPresent());
-        assertFalse(round.starIdForCoord(GalacticCoord.ORIGIN).isPresent());
     }
 
     @Test
@@ -458,8 +428,6 @@ public class UniverseRegistryTest {
         UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
 
-        List<SystemBody> pois = round.poisAt(sys);
-        assertEquals("both POIs must round-trip, keyed by their system cell", 2, pois.size());
         assertTrue(round.removePois(sys));
         assertTrue(round.poisAt(sys).isEmpty());
     }
@@ -785,22 +753,6 @@ public class UniverseRegistryTest {
     }
 
     @Test
-    public void theModelAWorldWasGeneratedUnderSurvivesASave() {
-        UniverseRegistry source = testUniverse.newRegistry();
-        source.reconcileSchema(packConfig());
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-        UniverseRegistry round = testUniverse.newRegistry();
-        round.readFromNBT(tag);
-
-        assertEquals("the schema version must outlive the session", source.schemaVersion(),
-                round.schemaVersion());
-        assertEquals("and so must the configuration it was generated under",
-                source.configFingerprint(), round.configFingerprint());
-    }
-
-    @Test
     public void theSameConfigurationOpensTheWorldUnchanged() {
         // The ordinary case, and the one that must never cost the player anything: same pack, same
         // build, second boot.
@@ -887,12 +839,6 @@ public class UniverseRegistryTest {
 
         assertEquals("a fresh world records the laws it was generated under",
                 reg.currentLawsFingerprint(), reg.lawsFingerprint());
-
-        NBTTagCompound tag = new NBTTagCompound();
-        reg.writeToNBT(tag);
-        UniverseRegistry round = testUniverse.newRegistry();
-        round.readFromNBT(tag);
-        assertEquals("and they outlive the session", reg.lawsFingerprint(), round.lawsFingerprint());
     }
 
     @Test

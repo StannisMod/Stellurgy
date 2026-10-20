@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.StationPads;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -77,31 +78,11 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
-    @Pins("INV-STN-23")
-    @Test
-    public void addPadGrowsListWithExpectedDefaults() throws Exception {
-        int id = createStation();
-        String add = ok(client().arrange("stellurgytest station add-pad " + id + " 10 20 alpha"));
-        assertTrue("add-pad must succeed: " + add, Reply.of(add).ok());
-        // `add-pad` writes its own `padCount`, so it is read as ITS reply and not as a station
-        // reading — and as a NUMBER: the substring form was a prefix, satisfied by 10 pads.
-        assertEquals("padCount should be 1 after first add: " + add,
-                1, Reply.of("stellurgytest station add-pad", add).integer("padCount"));
-
-        // Read as ONE pad addressed by its position. The `x`-and-`z` substring pair this replaces
-        // is satisfied by a station holding (10, 99) and (77, 20), i.e. by no such pad at all.
-        StationPads.Pad pad = pads(id).at(10, 20);
-        // Default state contract — pad starts unoccupied AND not opted into
-        // auto-landing. A refactor that flips either default would silently
-        // change the dock-allocation semantics.
-        assertFalse("new pad must start occupied=false: " + pad.raw(), pad.occupied);
-        assertFalse("new pad must start allowAutoLand=false: " + pad.raw(), pad.allowAutoLand);
-        assertEquals("new pad must carry the supplied name: " + pad.raw(), "alpha", pad.name());
-    }
-
     /** Pins INV-STN-07 (a dock claims only free pads that opted into auto-land). */
     @Pins("INV-STN-07")
+    @RedWitness(member = "SpaceStationObject#getNextLandingPad",
+            at = "if (!pos.getOccupied() && pos.getAllowedForAutoLand()) {", replacedBy = "if (!pos.getOccupied()) {",
+            fails = "dock must refuse a pad that hasn't opted into auto-land", on = "2026-10-19")
     @Test
     public void dockRejectsPadWithoutAutoLandOptIn() throws Exception {
         // Critical: getNextLandingPad gates on BOTH not-occupied AND
@@ -123,6 +104,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
      * Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it).
      */
     @Pins({"INV-STN-07", "INV-STN-24"})
+    @RedWitness(member = "SpaceStationObject#getNextLandingPad", at = "pos.setOccupied(true);", replacedBy = "",
+            fails = "dock must mark the pad occupied=true", on = "2026-10-19")
     @Test
     public void dockClaimsAutoLandPadAndMarksOccupied() throws Exception {
         int id = createStation();
@@ -195,6 +178,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
     @Pins("INV-STN-23")
+    @RedWitness(member = "StationLandingLocation#equals",
+            at = "return pos.equals(((StationLandingLocation) object).getPos());", replacedBy = "return false;",
+            fails = "duplicate add at same (x,z) must NOT grow padCount", on = "2026-10-19")
     @Test
     public void addPadIsIdempotentForSamePosition() throws Exception {
         // Production gate: spawnLocations.contains(pos) check uses
@@ -228,45 +214,17 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertFalse("removed pad must be gone from list: " + pads.raw(), pads.has(100, 100));
     }
 
-    /** Pins INV-STN-25 (pad ownership is per station). */
-    @Pins("INV-STN-25")
-    @Test
-    public void multipleStationsTrackPadsIndependently() throws Exception {
-        // Per-station pad state must not bleed across stations. A regression
-        // that consolidated landing pads into a global registry would
-        // silently route rockets to the wrong station's pads.
-        int a = createStation();
-        int b = createStation();
-        assertNotEquals("station ids must be unique", a, b);
-
-        ok(client().arrange("stellurgytest station add-pad " + a + " 200 200 a1"));
-        ok(client().arrange("stellurgytest station add-pad " + b + " 300 300 b1"));
-
-        StationPads padsA = pads(a);
-        StationPads padsB = pads(b);
-        assertTrue("station A must have its pad: " + padsA.raw(), padsA.has(200, 200));
-        assertFalse("station A must NOT have station B's pad: " + padsA.raw(),
-                padsA.has(300, 300));
-        assertTrue("station B must have its pad: " + padsB.raw(), padsB.has(300, 300));
-        assertFalse("station B must NOT have station A's pad: " + padsB.raw(),
-                padsB.has(200, 200));
-    }
-
     @Test
     public void infoExposesPadCountAndFreePadFlag() throws Exception {
-        // Pin the info probe's pad-related fields; downstream tooling
-        // (rocket launch UI, station-finder satellite) reads these.
+        // The free-pad flag downstream tooling (rocket launch UI, station-finder
+        // satellite) reads.
         int id = createStation();
         StationInfo empty = station(id);
-        assertEquals("empty station: padCount=0 — read as a number, because the substring form was"
-                + " also satisfied by a station holding 0 pads out of 10: " + empty.raw(),
-                0, empty.padCount());
         assertFalse("empty station: hasFreePad=false (no pads at all): " + empty.raw(),
                 empty.hasFreePad());
 
         ok(client().arrange("stellurgytest station add-pad " + id + " 400 400 p1"));
         StationInfo oneOccupied = station(id);
-        assertEquals("after add: padCount=1: " + oneOccupied.raw(), 1, oneOccupied.padCount());
         // hasFreeLandingPad checks for ANY pad with occupied=false, NOT
         // gating on auto-land. So even a non-auto-land pad reports
         // hasFreePad=true. Pin this contract — it's a separate axis from

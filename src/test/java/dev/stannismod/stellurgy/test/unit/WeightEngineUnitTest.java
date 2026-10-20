@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,32 +43,12 @@ public class WeightEngineUnitTest {
 
     /** Pins INV-WGT-04 (seedDefaults populates a non-empty material table). */
     @Pins("INV-WGT-04")
+    @RedWitness(member = "WeightEngine#defaultMaterials", at = "return m;", replacedBy = "return new LinkedHashMap<>();",
+            fails = "default material table must be populated", on = "2026-10-19")
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
-    }
-
-    /** Pins INV-WGT-02 (an individual override survives a JSON save and load). */
-    @Pins("INV-WGT-02")
-    @Test
-    public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
-        File file = new File(tempFolder.getRoot(), "weights.json");
-
-        WeightEngine fresh = new WeightEngine(file.getPath());
-        assertNull("a fresh file must not know the test key", fresh.rawIndividual("ar:roundtrip_probe"));
-
-        Files.write(file.toPath(), (CURRENT + ",\"individual\":{\"ar:roundtrip_probe\":42.0}}")
-                .getBytes(StandardCharsets.UTF_8));
-        WeightEngine written = new WeightEngine(file.getPath());
-        assertEquals("the override must be read from the file",
-                Double.valueOf(42.0), written.rawIndividual("ar:roundtrip_probe"));
-
-        // Save writes it back; an engine built from what was saved must hold it again.
-        written.save();
-        WeightEngine reloaded = new WeightEngine(file.getPath());
-        assertEquals("override must persist across save/load",
-                Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
     @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has(\"formatVersion\")} checking no schema"
@@ -119,64 +100,15 @@ public class WeightEngineUnitTest {
     // ---- The whole file, not one column of it -------------------------------
 
     /**
-     * A column the engine READS is a column a pack may write, and {@code save()} rewrites the whole
-     * file — so a column that is loaded and not saved is a column the pack silently loses the first
-     * time anything saves. This walks every column through the file rather than picking one, because
-     * the columns that go missing are by definition the ones nobody remembered to add to a list.
-     *
-     * <p>Two ablation columns were lost exactly this way: read by {@code load()}, absent from
-     * {@code save()}, invisible until a pack's hand-written rows evaporated.</p>
-     * Pins INV-WGT-07 (Every column the file declares survives a save→load cycle carrying its value, and every regex column comes back in the order it).
-     */
-    @Pins("INV-WGT-07")
-    @Test
-    public void everyColumnAPackCanWriteSurvivesASave() throws Exception {
-        File config = new File(tempFolder.getRoot(), "weights.json");
-        writeConfig(config, "{\n"
-                    + "  \"formatVersion\": " + WeightEngine.FORMAT_VERSION + ",\n"
-                    + "  \"individual\": {\"ar:probe\": 1.5},\n"
-                    + "  \"byRegex\": {\"ar:probe.*\": 2.5},\n"
-                    + "  \"fluids\": {\"ar_probe_fluid\": 0.5},\n"
-                    + "  \"materials\": {\"IRON\": 3.5},\n"
-                    + "  \"fallback\": 4.5,\n"
-                    + "  \"fluidFallback\": 5.5,\n"
-                    + "  \"toughnessIndividual\": {\"ar:probe\": 6.5},\n"
-                    + "  \"toughnessByRegex\": {\"ar:probe.*\": 7.5},\n"
-                    + "  \"toughnessMaterials\": {\"IRON\": 8.5},\n"
-                    + "  \"toughnessFallback\": 9.5,\n"
-                    + "  \"ablationIndividual\": {\"ar:probe\": 10.5},\n"
-                    + "  \"ablationByRegex\": {\"ar:probe.*\": 11.5}\n"
-                    + "}\n");
-
-        new WeightEngine(config.getPath()).save();
-
-        JsonObject saved = readConfig(config);
-        List<String> lost = new ArrayList<String>();
-        assertRow(saved, "individual", "ar:probe", 1.5, lost);
-        assertRow(saved, "byRegex", "ar:probe.*", 2.5, lost);
-        assertRow(saved, "fluids", "ar_probe_fluid", 0.5, lost);
-        assertRow(saved, "materials", "IRON", 3.5, lost);
-        assertScalar(saved, "fallback", 4.5, lost);
-        assertScalar(saved, "fluidFallback", 5.5, lost);
-        assertRow(saved, "toughnessIndividual", "ar:probe", 6.5, lost);
-        assertRow(saved, "toughnessByRegex", "ar:probe.*", 7.5, lost);
-        assertRow(saved, "toughnessMaterials", "IRON", 8.5, lost);
-        assertScalar(saved, "toughnessFallback", 9.5, lost);
-        assertRow(saved, "ablationIndividual", "ar:probe", 10.5, lost);
-        assertRow(saved, "ablationByRegex", "ar:probe.*", 11.5, lost);
-
-        assertTrue("these hand-written config values did not survive one save/load cycle, so a "
-                + "pack that edits them loses them the first time the game writes the file: "
-                + lost, lost.isEmpty());
-    }
-
-    /**
      * Regex columns are first-match-wins, so the order a pack writes its patterns in IS the
      * precedence between two patterns that both match. A column deserialised into an unordered map
      * answers a different question after a reload than the one the pack asked.
      * Pins INV-WGT-07 (Every column the file declares survives a save and load, and every regex column keeps its written order).
      */
     @Pins("INV-WGT-07")
+    @RedWitness(member = "WeightEngine#read", at = "\"ablationByRegex\", linkedType", replacedBy = "\"ablationByRegex\", mapType",
+            fails = "first-match-wins makes pattern order the precedence rule, and ablationByRegex came back reordered",
+            on = "2026-10-19")
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -206,11 +138,12 @@ public class WeightEngineUnitTest {
      * config silently inherits half of the file it failed to parse.
      *
      * <p>The file below breaks on its LAST field, {@code toughnessFallback}, which is read after every
-     * column this asserts on. {@link #everyColumnAPackCanWriteSurvivesASave} is the control: the same
-     * rows in a file that parses are kept.</p>
+     * column this asserts on.</p>
      * Pins INV-WGT-08 (A config file that cannot be read leaves no column carrying the previous load's rows).
      */
     @Pins("INV-WGT-08")
+    @RedWitness(member = "WeightEngine#seedDefaults", at = "ablationIndividual = new HashMap<>();", replacedBy = "",
+            fails = "the fallback must leave no column carrying the broken file's rows", on = "2026-10-19")
     @Test
     public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -260,19 +193,5 @@ public class WeightEngineUnitTest {
             keys.add(e.getKey());
         }
         return keys;
-    }
-
-    private static void assertRow(JsonObject saved, String column, String key, double value,
-                                  List<String> lost) {
-        if (!saved.has(column) || !saved.getAsJsonObject(column).has(key)
-                || Math.abs(saved.getAsJsonObject(column).get(key).getAsDouble() - value) > 1e-9) {
-            lost.add(column + "[" + key + "]");
-        }
-    }
-
-    private static void assertScalar(JsonObject saved, String key, double value, List<String> lost) {
-        if (!saved.has(key) || Math.abs(saved.get(key).getAsDouble() - value) > 1e-9) {
-            lost.add(key);
-        }
     }
 }

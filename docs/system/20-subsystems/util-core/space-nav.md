@@ -116,11 +116,12 @@ keys). `GravityHandler` keeps an INSTANCE `WeakHashMap<Entity,Double>` of custom
 
 ## Invariants
 
-- **INV-NAV-01 [T][SYS]** SpacePosition survives NBT round-trip (populated and default); a read
-  with no `spacePosition` tag leaves the object unchanged. `test/unit/SpacePositionTest.java:25,53,68`. Pinned by `SpacePositionTest#spacePositionNbtRoundTrip`, `SpacePositionTest#spacePositionNbtRoundTripDefaults`, `SpacePositionTest#readFromNbtWithoutSpacePositionTagIsNoOp`. FOR: save format: SpacePosition.
+- **INV-NAV-01 [T][SYS]** SpacePosition survives NBT round-trip (populated and default) `[V]`
+  (`SpacePosition.java:25-55`, one key per field each way); a read
+  with no `spacePosition` tag leaves the object unchanged. `test/unit/SpacePositionTest.java:28`. Pinned by `SpacePositionTest#readFromNbtWithoutSpacePositionTagIsNoOp`. FOR: save format: SpacePosition.
 - **INV-NAV-02 [T][SYS]** `distanceToSpacePosition2` equals the Euclidean definition and is
   symmetric; `getNormalVectorTo` is unit-length and points at the target; `getFromSpherical`
-  lands at the requested radius/axis and carries context. `test/unit/SpacePositionTest.java:78,91,101,115,131,144,153`. Pinned by `SpacePositionTest#distanceSquaredMatchesEuclideanDefinition`, `SpacePositionTest#distanceSquaredIsSymmetric`, `SpacePositionTest#normalVectorHasUnitLength`, `SpacePositionTest#normalVectorPointsTowardsTarget`, `SpacePositionTest#getFromSphericalReturnsPointAtRequestedRadius`, `SpacePositionTest#getFromSphericalCarriesContextFields`. FOR: INV-NAV-05.
+  lands at the requested radius/axis and carries context. `test/unit/SpacePositionTest.java:42,57,69,85,103,116,127`. Pinned by `SpacePositionTest#distanceSquaredMatchesEuclideanDefinition`, `SpacePositionTest#distanceSquaredIsSymmetric`, `SpacePositionTest#normalVectorHasUnitLength`, `SpacePositionTest#normalVectorPointsTowardsTarget`, `SpacePositionTest#getFromSphericalReturnsPointAtRequestedRadius`, `SpacePositionTest#getFromSphericalCarriesContextFields`. FOR: INV-NAV-05.
 - **INV-NAV-03 [T][BEH]** Orbital period grows with distance and matches the baseline at Earth
   distance; brightness is monotone in distance, equals 1 at Earth baseline, and is reduced
   for black holes. `test/unit/AstronomicalBodyHelperTest.java:41,47,63,74,81`; orbital

@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -144,6 +145,9 @@ public class FreeFlightPhysicsTest {
 
     /** Pins INV-RKT-12 (with thrust not permitted the craft is a Newtonian brick that only falls). */
     @Pins("INV-RKT-12")
+    @RedWitness(member = "FreeFlightPhysics#step(double,double,double,float,float,float,FreeFlightInput,double,double,boolean)",
+            at = "boolean thrustApplied = canThrust && wantsThrust;", replacedBy = "boolean thrustApplied = wantsThrust;",
+            fails = "no fuel: no thrust", on = "2026-10-20")
     @Test
     public void cannotThrustDisablesThrustButStillRotatesAndApplyGravity() {
         Step s = FreeFlightPhysics.step(0, 0, 0, 0f, 0f,
@@ -176,6 +180,11 @@ public class FreeFlightPhysicsTest {
      * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
     @Pins("INV-RKT-23")
+    @RedWitness(verdict = "burning buys every bit of the speed it paid for",
+            member = "FreeFlightPhysics#step(double,double,double,float,float,float,FreeFlightInput,double,double,boolean)",
+            at = "return new Step(newMx, newMy, newMz,",
+            replacedBy = "return new Step(Math.min(newMx, 50.0), Math.min(newMy, 50.0), Math.min(newMz, 50.0),",
+            fails = "burning for 1000 ticks must buy every bit of the speed it paid for", on = "2026-10-20")
     @Test
     public void newtonianFlightBoundsAccelerationAndNotSpeed() {
         int burnTicks = 1000;
@@ -483,6 +492,8 @@ public class FreeFlightPhysicsTest {
      * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
     @Pins("INV-RKT-24")
+    @RedWitness(member = "FreeFlightPhysics#ambientDragFactor", at = "(density > 1.0 ? 1.0 : density)",
+            replacedBy = "density", fails = "a density above one atmosphere saturates there", on = "2026-10-19")
     @Test
     public void anAbsurdDensityIsClampedNotObeyed() {
         assertEquals("negative density is vacuum",

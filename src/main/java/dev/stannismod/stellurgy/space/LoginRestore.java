@@ -129,8 +129,16 @@ public final class LoginRestore {
         /** Why this placement was chosen. */
         public final Reason reason;
 
+        /**
+         * The cell this decision took an occupant claim on through {@link Ops#materialize}, or
+         * {@code null} when it took none. The claim is on THIS coordinate's cell, and it is the one
+         * that must be handed back: the ship the player belongs to can leave that cell while he is
+         * online, so asking the ledger at release time names wherever the ship is by then.
+         */
+        public final GalacticCoord claimedCell;
+
         private Placement(int dimension, double x, double y, double z, boolean aboard, UUID shipId,
-                          Reason reason) {
+                          Reason reason, GalacticCoord claimedCell) {
             this.dimension = dimension;
             this.x = x;
             this.y = y;
@@ -138,6 +146,7 @@ public final class LoginRestore {
             this.aboard = aboard;
             this.shipId = shipId;
             this.reason = reason;
+            this.claimedCell = claimedCell;
         }
 
         @Override
@@ -179,7 +188,8 @@ public final class LoginRestore {
             }
             // Hyperspace is a plain parking world, NOT a coordinate-mapped cell — the ship sits
             // wherever the transit parked it, so the cell pose mapping does not apply here.
-            return aboard(transitDim, tag.shipId, Reason.ABOARD_IN_TRANSIT, ops, UNRESOLVED_SHIP_POS);
+            return aboard(transitDim, tag.shipId, Reason.ABOARD_IN_TRANSIT, ops, UNRESOLVED_SHIP_POS,
+                    null);
         }
 
         // 4. Settled: make its cell live and put him in the bound slot world. The LEDGER's
@@ -192,7 +202,7 @@ public final class LoginRestore {
             // A settled cell maps its coordinates into a high world band, so the cell's own pose is
             // the only honest "somewhere near the ship" guess while the ship is still assembling.
             return aboard(slotDim, tag.shipId, Reason.ABOARD_SETTLED, ops,
-                    CellWorldMapper.poseWorldOf(entry.coord));
+                    CellWorldMapper.poseWorldOf(entry.coord), entry.coord);
         }
 
         // A ledger state this version does not know how to restore into. Keeps the decision total
@@ -212,25 +222,25 @@ public final class LoginRestore {
      * fallback that belongs to its branch.</p>
      */
     private static Placement aboard(int dimension, UUID shipId, Reason reason, Ops ops,
-                                    double[] provisional) {
+                                    double[] provisional, GalacticCoord claimedCell) {
         double[] pos = shipWorldPos(ops, dimension, shipId);
         if (pos == null || pos.length < 3) {
             pos = provisional == null || provisional.length < 3 ? UNRESOLVED_SHIP_POS : provisional;
         }
-        return new Placement(dimension, pos[0], pos[1], pos[2], true, shipId, reason);
+        return new Placement(dimension, pos[0], pos[1], pos[2], true, shipId, reason, claimedCell);
     }
 
     /** Not-aboard placement: his own bed if he has a usable one, else the overworld spawn. */
     private static Placement orphan(Reason reason, Ops ops, UUID playerId) {
         double[] bed = personalSpawn(ops, playerId);
         if (bed != null && bed.length >= 4) {
-            return new Placement((int) bed[0], bed[1], bed[2], bed[3], false, null, reason);
+            return new Placement((int) bed[0], bed[1], bed[2], bed[3], false, null, reason, null);
         }
         double[] spawn = overworldSpawn(ops);
         if (spawn == null || spawn.length < 3) {
             spawn = LAST_DITCH_SPAWN;
         }
-        return new Placement(OVERWORLD_DIM, spawn[0], spawn[1], spawn[2], false, null, reason);
+        return new Placement(OVERWORLD_DIM, spawn[0], spawn[1], spawn[2], false, null, reason, null);
     }
 
     // --- Ops accessors -------------------------------------------------------------------------

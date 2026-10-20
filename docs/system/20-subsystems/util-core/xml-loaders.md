@@ -79,8 +79,10 @@ world NBT themselves. `OreGenProperties` keeps a process-wide static
   `XMLOreLoader.java:303-307`. FOR: public API: planetDefs.xml schema read by pack authors.
 - **INV-XML-04 [V][SYS]** Ore heights are clamped into legal world range at parse time, so no
   out-of-range `OreEntry` reaches world-gen. `XMLOreLoader.java:73,89,105,121`. FOR: public API: planetDefs.xml schema read by pack authors.
-- **INV-XML-05 [T][BEH]** Asteroid dimensions actually contain asteroids after config load
-  (end-to-end). `test/server/AsteroidDimensionContainsAsteroidsTest.java`. Pinned by `AsteroidDimensionContainsAsteroidsTest#asteroidDimGeneratesFillBlocks`.
+- **INV-XML-05 [T][BEH]** An asteroid dimension's chunk generator lays its fill block, so the
+  dimension actually contains asteroids (`ChunkProviderAsteroids.java:136`;
+  `test/server/AsteroidDimensionContainsAsteroidsTest.java`, which creates the dimension through a
+  probe — the XML load path is not exercised). Pinned by `AsteroidDimensionContainsAsteroidsTest#asteroidDimGeneratesFillBlocks`.
 - **INV-XML-06 [V][SYS]** `XMLAsteroidLoader.getStack` accepts both `;`-delimited (new) and
   space-delimited (legacy) `name;meta` forms. `XMLAsteroidLoader.java:31-56`. FOR: public API: asteroid definition forms read by pack authors.
 - **INV-XML-07 [A][BEH]** `Asteroid.getHarvest` output is deterministic for a fixed seed

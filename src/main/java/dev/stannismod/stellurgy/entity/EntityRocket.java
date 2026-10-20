@@ -87,6 +87,7 @@ import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -111,6 +112,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
     private static final int BUTTON_ID_OFFSET = 25;
     private static final int STATION_LOC_OFFSET = 50;
+    /** How far from the rocket a player may stand and still use its screen. */
+    private static final double CONTAINER_RANGE = 64;
     private static final int ENGINE_IGNITION_CNT = 100;
     private static final DataParameter<Integer> fuelLevelMonopropellant = EntityDataManager.createKey(EntityRocket.class, DataSerializers.VARINT);
     private static final DataParameter<Integer> fuelLevelBipropellant = EntityDataManager.createKey(EntityRocket.class, DataSerializers.VARINT);
@@ -3245,12 +3248,13 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public void readDataFromNetwork(ByteBuf in, byte packetId,
                                     NBTTagCompound nbt) {
-        //System.out.println("rocket read from network");
-        if(packetId==(byte)9987){ // update tileentities
+        // The rocket's blocks and their tiles come from the server; a client's copy of them is never
+        // read into the server's rocket.
+        if(packetId==(byte)9987 && world.isRemote){ // update tileentities
             if (storage != null)
                 storage.readtiles(in);
         }
-        if (packetId == PacketType.RECIEVENBT.ordinal()) {
+        if (packetId == PacketType.RECIEVENBT.ordinal() && world.isRemote) {
             storage = new StorageChunk(); //this re-loading makes the rocket not render for a tick or two when launching
             storage.setEntity(this);
             storage.readFromNetwork(in);
@@ -3357,9 +3361,20 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id,
-                               NBTTagCompound nbt) {
+    public final void useNetworkData(EntityPlayer player, Side side, byte id,
+                                     NBTTagCompound nbt) {
 
+        if (!world.isRemote && !acceptsFromClient(player, id)) {
+            PacketSenderCheck.refuse(player, "rocket packet " + id + " for rocket " + getEntityId(),
+                    "the rocket does not take that packet from this player");
+            return;
+        }
+        useAcceptedNetworkData(player, side, id, nbt);
+    }
+
+    /** What packet {@code id} does, once the server has decided to take it (or a client receives it). */
+    protected void useAcceptedNetworkData(EntityPlayer player, Side side, byte id,
+                                          NBTTagCompound nbt) {
         if(id==(byte)9987){
             // F*ck you little bug
         }
@@ -3507,7 +3522,13 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             if (!world.isRemote)
                 PacketHandler.sendToPlayersTrackingEntity(new PacketEntity(this, id), this);
         } else if (id > BUTTON_ID_OFFSET) {
-            TileEntity tile = storage.getGUITiles().get(id - BUTTON_ID_OFFSET - tilebuttonOffset);
+            int tileIndex = id - BUTTON_ID_OFFSET - tilebuttonOffset;
+            if (storage == null || tileIndex < 0 || tileIndex >= storage.getGUITiles().size()) {
+                PacketSenderCheck.refuse(player, "rocket packet " + id + " for rocket " + getEntityId(),
+                        "the rocket has no screen at index " + tileIndex);
+                return;
+            }
+            TileEntity tile = storage.getGUITiles().get(tileIndex);
 
             if (!world.isRemote)
                 Stellurgy.serverState().rocketGuiReturns.rememberIfRocketGuiReturnTile(player, this, tile);
@@ -3519,7 +3540,71 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         }
     }
 
+    /**
+     * Whether the server takes packet {@code id} from {@code player}'s client. The channel has already
+     * established that this rocket is in his world and that the server is showing it to him; this is
+     * what the rocket itself requires on top, per id.
+     *
+     * <ul>
+     *   <li>Asking for the rocket's data: anyone who sees it — every client asks as the rocket spawns
+     *       for it.</li>
+     *   <li>Its position in space: anyone who sees it — every client that has the rocket reports it
+     *       every second of its space flight, a passenger or not.</li>
+     *   <li>A right-click on the rocket: within the player's reach of its hull, with the tolerance the
+     *       server gives any click ({@link PacketSenderCheck#withinItemUseReach}). Vanilla's own check
+     *       measures to the entity's position, which a large rocket's hull lies far from.</li>
+     *   <li>What its screen sends — dismantle, the destination, a module's screen, a landing pad, the
+     *       gas a station-deployed rocket harvests: a passenger, or a player within the range the screen
+     *       stays open at.</li>
+     *   <li>Flying it — launch, abort, turning, RCS, flight mode and input, flight
+     *       assist, engine start, its own screen by key: a passenger only.</li>
+     *   <li>Everything else — its NBT and blocks, mounting, the world switch, infrastructure, landing,
+     *       dismounting — is the server's to send, and never taken from a client.</li>
+     * </ul>
+     */
+    private boolean acceptsFromClient(EntityPlayer player, byte id) {
+        if (player == null) {
+            return false;
+        }
+        PacketType[] types = PacketType.values();
+        if (id >= 0 && id < types.length) {
+            switch (types[id]) {
+                case REQUESTNBT:
+                case SENDSPACEPOS:
+                    return true;
+                case SENDINTERACT:
+                    return PacketSenderCheck.withinItemUseReach(player, getEntityBoundingBox());
+                case DECONSTRUCT:
+                case OPENPLANETSELECTION:
+                case SENDPLANETDATA:
+                case MENU_CHANGE:
+                    return isPassenger(player) || withinContainerRange(player);
+                case LAUNCH:
+                case ABORTLAUNCH:
+                case OPENGUI:
+                case TOGGLE_RCS:
+                case TURNUPDATE:
+                case SET_FLIGHT_MODE:
+                case FREE_FLIGHT_INPUT:
+                case SET_FLIGHT_ASSIST:
+                case ENGINE_START:
+                    return isPassenger(player);
+                default:
+                    return false;
+            }
+        }
+        return id > BUTTON_ID_OFFSET && (isPassenger(player) || withinContainerRange(player));
+    }
+
+    /** Whether {@code player} is near enough to this rocket, which is still there, to use its screen. */
+    private boolean withinContainerRange(EntityPlayer player) {
+        return !this.isDead && this.getDistance(player) < CONTAINER_RANGE;
+    }
+
     private void setDestLandingPad(int padIndex) {
+        if (storage == null || storage.getGuidanceComputer() == null) {
+            return;
+        }
         ItemStack slot0 = storage.getGuidanceComputer().getStackInSlot(0);
         int uuid;
         //Station location select
@@ -3530,7 +3615,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 if (padIndex == -1) {
                     storage.getGuidanceComputer().setLandingLocation(uuid, null);
-                } else {
+                } else if (padIndex >= 0 && padIndex < ((SpaceStationObject) spaceObject).getLandingPads().size()) {
 
                     StationLandingLocation location = ((SpaceStationObject) spaceObject).getLandingPads().get(padIndex);
                     if (location != null && !location.getOccupied())
@@ -3880,7 +3965,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        boolean ret = !this.isDead && this.getDistance(entity) < 64;
+        boolean ret = withinContainerRange(entity);
         if (!ret && entity instanceof EntityPlayerMP)
             Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass((EntityPlayerMP) entity);
 

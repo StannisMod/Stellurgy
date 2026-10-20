@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
 import org.junit.Test;
 
@@ -50,6 +51,8 @@ public class SleepWakeTimeTest {
 
     /** Pins INV-WGEN-11 (computeSleepWakeTime always lands on a dawn and moves strictly forward). */
     @Pins("INV-WGEN-11")
+    @RedWitness(member = "StellurgyDimensionWorldInfo#computeSleepWakeTime", at = "long next = current + rotationalPeriod;",
+            replacedBy = "long next = current;", fails = "expected:<41664> but was:<27776>", on = "2026-10-19")
     @Test
     public void alreadyAtDawnSkipsToNextDay() {
         // current exactly on a dawn boundary -> advance a full day, not stay put.

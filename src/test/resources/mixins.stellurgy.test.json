@@ -9,6 +9,7 @@
     "defaultRequire": 1
   },
   "mixins": [
+    "MixinTileMultiBlockFormationEvents",
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",
     "MixinWorldFlightComputerTickCensus",
@@ -65,8 +66,6 @@
     "MixinTileNavigationComputerEvents",
     "MixinTileTurretEvents",
     "MixinBeamReplicationEvents",
-    "MixinTileWeaponConsolePressEvents",
-    "MixinTileFireControlSensorPressEvents",
     "MixinWeaponOrdersSeedEvents",
     "MixinLinkerDesignationEvents",
     "MixinServerPlayerPoseEvents",
@@ -111,7 +110,11 @@
     "MixinMinecraftServerSideTrace",
     "MixinMinecraftServerShipLoadHold",
     "MixinShipLoadingHold",
-    "MixinEntityTraceMemory"
+    "MixinEntityTraceMemory",
+    "MixinArrivalSpawnMountRefusal",
+    "MixinEntityRocketClientGateEvents",
+    "MixinPacketSenderReachEvents",
+    "MixinTileOxygenVentScrubEvents"
   ],
   "client": [
     "MixinClientCursorActs",
@@ -153,6 +156,7 @@
     "MixinTestClientMuteEvents",
     "MixinMinecraftSideTrace",
     "MixinWorldClientShipManagerPickable",
-    "MixinNetHandlerChunkDataPickable"
+    "MixinNetHandlerChunkDataPickable",
+    "MixinPacketSatelliteEvents"
   ]
 }

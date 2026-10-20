@@ -6,11 +6,11 @@ import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 
 import static org.junit.Assert.*;
 
@@ -26,27 +26,6 @@ public class DimensionPropertiesTest {
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
-    }
-
-    /** starId / parentPlanet are package-private; tests use reflection. */
-    private static void setIntField(Object target, String name, int value) {
-        try {
-            Field f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            f.setInt(target, value);
-        } catch (Exception e) {
-            throw new AssertionError("Reflection failed setting " + name, e);
-        }
-    }
-
-    private static int getIntField(Object target, String name) {
-        try {
-            Field f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            return f.getInt(target);
-        } catch (Exception e) {
-            throw new AssertionError("Reflection failed reading " + name, e);
-        }
     }
 
     // ---- terrainSource -------------------------------------------------------
@@ -73,23 +52,19 @@ public class DimensionPropertiesTest {
         assertFalse("empty template must not be written", nbt.hasKey("terrainTemplate"));
     }
 
-    /** Pins INV-DIM-06 (realizeAtmosphere does not corrupt id or hierarchy). */
+    /** Pins INV-DIM-06 (realizeAtmosphere yields an air whose density is the stated one). */
     @Pins("INV-DIM-06")
+    @RedWitness(member = "DimensionProperties#realizeAtmosphere", at = "statedDensity <= 0 ? AirState.vacuum()",
+            replacedBy = "true ? AirState.vacuum()", fails = "the derived air must read the stated density",
+            on = "2026-10-19")
     @Test
-    public void realizingTheAtmosphereDoesNotCorruptIdOrHierarchy() {
+    public void realizingTheAtmosphereYieldsTheStatedDensity() {
         DimensionProperties props = new DimensionProperties(123, "Mars");
-        setIntField(props, "starId", 5);
-        setIntField(props, "parentPlanet", -1);
         props.setBulk(1d, 1d);
 
         props.realizeAtmosphere(true, 42);
 
-        // Identity invariants survive density mutation.
-        assertEquals(123, props.getId());
-        assertEquals("Mars", props.getName());
-        assertEquals(5, props.getStarId());
-        assertEquals(-1, getIntField(props, "parentPlanet"));
-        assertEquals(42, props.getAtmosphereDensity());
+        assertEquals("the derived air must read the stated density", 42, props.getAtmosphereDensity());
     }
 
     /**

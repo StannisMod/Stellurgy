@@ -5,6 +5,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -58,6 +59,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk).
      */
     @Pins("INV-RASM-02")
+    @RedWitness(member = "StorageChunk#copyWorldBB", at = "x <= bb.maxX",
+            replacedBy = "x < bb.maxX",
+            fails = "storage chunk must enclose the placed components (sx>=3)", on = "2026-10-19")
     @Test
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 540, 500), "simple");
@@ -160,6 +164,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * Pins INV-RASM-03 (assembleRocket proceeds only when the scan status is SUCCESS).
      */
     @Pins("INV-RASM-03")
+    @RedWitness(member = "TileRocketAssemblingMachine#scanRocket", at = "status = ErrorCodes.NOENGINES;",
+            replacedBy = "status = ErrorCodes.SUCCESS;",
+            fails = "assemble of engineless rocket must fail", on = "2026-10-19")
     @Test
     public void invalidRocketMissingEngineFailsAssemblyWithReason() throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, 780, 500);

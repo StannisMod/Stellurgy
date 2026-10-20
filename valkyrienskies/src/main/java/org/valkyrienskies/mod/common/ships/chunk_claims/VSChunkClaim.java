@@ -23,6 +23,15 @@ import java.util.stream.Stream;
  */
 @Immutable
 public final class VSChunkClaim implements Iterable<ChunkPos> {
+    /**
+     * How many chunks a claim extends from its center chunk along X and Z. A ship's anchor lands on
+     * the first block of the center chunk ({@link #getRegionCenter}) and its blocks reach up to
+     * {@link org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector#MAX_REACH} from the
+     * anchor, so this many chunks hold every block a detection can find, on both sides.
+     */
+    public static final int RADIUS =
+            (org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector.MAX_REACH + 15) / 16;
+
     private final ChunkPos centerPos;
     private final Set<Long> claimedChunks;
 
@@ -63,8 +72,7 @@ public final class VSChunkClaim implements Iterable<ChunkPos> {
     public boolean containsChunk(int chunkX, int chunkZ) {
         // long chunkLong = getChunkPos(chunkX, chunkZ);
         // return claimedChunks.contains(chunkLong);
-        // Bad :(
-        final int radius = 7;
+        final int radius = RADIUS;
         final int relativeChunkX = chunkX - centerPos.x + radius;
         final int relativeChunkZ = chunkZ - centerPos.z + radius;
         if (relativeChunkX < 0 || relativeChunkX >= radius * 2 + 1 || relativeChunkZ < 0 || relativeChunkZ >= radius * 2 + 1) {

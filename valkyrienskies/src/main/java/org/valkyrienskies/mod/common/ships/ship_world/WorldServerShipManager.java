@@ -17,6 +17,7 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.ChunkProviderServer;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
+import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
 import org.valkyrienskies.mod.common.ships.QueryableShipData;
@@ -24,8 +25,12 @@ import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.block_relocation.BlockFinder;
 import org.valkyrienskies.mod.common.ships.block_relocation.IRelocationAwareTile;
 import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
+import org.valkyrienskies.mod.common.ships.chunk_claims.VSChunkClaim;
+import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 import org.valkyrienskies.mod.common.ships.physics_data.BasicCenterOfMassProvider;
 import org.valkyrienskies.mod.common.ships.physics_data.IPhysicsObjectCenterOfMassProvider;
+import org.valkyrienskies.mod.common.util.VSMath;
+import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import org.valkyrienskies.mod.common.util.multithreaded.CalledFromWrongThreadException;
 import org.valkyrienskies.mod.common.util.multithreaded.VSWorldPhysicsLoop;
 import net.minecraftforge.common.MinecraftForge;
@@ -54,7 +59,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     private final LinkedHashSet<UUID> unloadQueue;
     private final LinkedHashSet<UUID> backgroundLoadQueue;
     private final Set<UUID> loadingInBackground;
-    private ImmutableList<PhysicsObject> threadSafeLoadedShips;
+    private volatile ImmutableList<PhysicsObject> threadSafeLoadedShips;
     /**
      * Lifecycle transitions that happened this tick and have not been announced yet.
      *
@@ -185,6 +190,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     public void tick() {
         // First destroy any ships that want to be destroyed (copy blocks from ship to world, and then unload)
         Iterator<Map.Entry<UUID, PhysicsObject>> iterator = loadedShips.entrySet().iterator();
+        boolean destroyedAny = false;
         while (iterator.hasNext()) {
             PhysicsObject physicsObject = iterator.next().getValue();
             if (physicsObject.shouldShipBeDestroyed()) {
@@ -194,7 +200,14 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 // Then remove the ship from the world, and the ship map.
                 removeRecord(physicsObject.getShipData());
                 iterator.remove();
+                destroyedAny = true;
             }
+        }
+        if (destroyedAny) {
+            // The physics thread takes this list at the start of every step. Left to the end of the
+            // tick, every step that starts in between still simulates a ship whose storage
+            // destroyShip has just released.
+            this.threadSafeLoadedShips = ImmutableList.copyOf(loadedShips.values());
         }
         // ...and the ships nothing has loaded. The sweep above walks `loadedShips`, so a craft that
         // was emptied or declared finished while unloaded was never asked the question and stayed in
@@ -316,15 +329,12 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             }
             final SpawnRefusal refusal = refusalOf(detector);
             if (refusal != null) {
-                // A caller that cares asks refusalFor BEFORE queueing; this line is for one that did not.
-                System.err.println("Ship spawn refused (" + refusal + ") at " + physicsInfuserPos);
+                // A caller that cares asks refusalFor BEFORE queueing; this is for one that did not.
+                refuseSpawn(toSpawn, physicsInfuserPos, refusal);
                 continue; // Skip ship construction
             }
-            // Fill the chunk claims
-            int radius = 7;
-            // TEMP CODE
-            // Eventually want to create mechanisms that control how many chunks are allocated to a ship
-            // But for now, lets just give them a bunch of chunks.
+            // Fill the chunk claims: as far as a detection can reach, so no found block falls outside.
+            int radius = VSChunkClaim.RADIUS;
             ChunkPos centerPos = toSpawn.getChunkClaim().getCenterPos();
             for (int chunkX = -radius; chunkX <= radius; chunkX++) {
                 for (int chunkZ = -radius; chunkZ <= radius; chunkZ++) {
@@ -335,7 +345,13 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             IPhysicsObjectCenterOfMassProvider centerOfMassProvider = new BasicCenterOfMassProvider();
             // Then create the ship chunks
             MutableBlockPos srcLocationPos = new MutableBlockPos();
-            BlockPos centerDifference = toSpawn.getChunkClaim().getRegionCenter().subtract(physicsInfuserPos);
+            BlockPos centerDifference = shipyardOffset(toSpawn.getChunkClaim(), physicsInfuserPos, detector);
+            // The ship starts where its anchor stood, and the anchor's shipyard image is wherever the
+            // offset put it - which is the region center only when the hull fits around that.
+            Vector3dc anchorInYard = VSMath.toVector3d(physicsInfuserPos.add(centerDifference));
+            ShipTransform startPose = new ShipTransform(VSMath.toVector3d(physicsInfuserPos), anchorInYard);
+            toSpawn.setShipTransform(startPose);
+            toSpawn.setPrevTickShipTransform(startPose);
             MutableBlockPos pasteLocationPos = new MutableBlockPos();
             Map<Long, Chunk> copiedChunksMap = new HashMap<>();
             // Bounds of the region being taken out of the world, tracked so that the damage records
@@ -459,8 +475,8 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 while (blocksIterator.hasNext()) {
                     int hashedPos = blocksIterator.next();
                     SpatialDetector.setPosWithRespectTo(hashedPos, detector.firstBlock, srcLocationPos);
-                    int changedChunkX = pasteLocationPos.getX() >> 4;
-                    int changedChunkZ = pasteLocationPos.getZ() >> 4;
+                    int changedChunkX = srcLocationPos.getX() >> 4;
+                    int changedChunkZ = srcLocationPos.getZ() >> 4;
                     long changedChunkPos = ChunkPos.asLong(changedChunkX, changedChunkZ);
                     if (chunksRelit.contains(changedChunkPos)) {
                         continue;
@@ -512,6 +528,59 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * than at the queue because only here is the answer authoritative: a spawn is queued a tick or
      * more earlier, when the remnant may not exist yet.</p>
      */
+    /**
+     * The record of a ship queued to spawn under {@code uuid} and not built yet, or {@code null}. A
+     * caller that queued a ship can name it before it is registered — to park it, for one — and a
+     * change made to this record is the one the spawn registers.
+     */
+    public ShipData queuedSpawn(UUID uuid) {
+        for (QueuedSpawn queued : spawnQueue) {
+            if (queued.toSpawn.getUuid().equals(uuid)) {
+                return queued.toSpawn;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A queued ship that will not be built: nothing is copied, its blocks stay where they stand, and
+     * the claim it was given is handed back — it never held anything.
+     */
+    private void refuseSpawn(ShipData toSpawn, BlockPos anchor, SpawnRefusal reason) {
+        ValkyrienUtils.getShipChunkAllocator(world).releaseChunkClaim(toSpawn.getChunkClaim());
+        org.apache.logging.log4j.LogManager.getLogger(WorldServerShipManager.class).warn("Refusing to spawn ship {} anchored at {} in dim {}: {}. Its blocks"
+                        + " are left in the world.", toSpawn.getUuid(), anchor, world.provider.getDimension(),
+                reason);
+    }
+
+    /**
+     * How far each found block moves when it is copied into the shipyard.
+     *
+     * <p>Along X and Z the anchor goes to the claim's region center, and the claim reaches as far as
+     * the detection could ({@link VSChunkClaim#RADIUS}). Along Y the anchor goes to the region
+     * center's height when the whole hull fits around it; a hull reaching further above or below its
+     * anchor than that allows is moved just enough to stay inside the world's 0..255, which a hull
+     * found in a world always can, since it was found inside them.</p>
+     */
+    private static BlockPos shipyardOffset(VSChunkClaim claim, BlockPos anchor, SpatialDetector detector) {
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        MutableBlockPos pos = new MutableBlockPos();
+        TIntIterator blocks = detector.foundSet.iterator();
+        while (blocks.hasNext()) {
+            SpatialDetector.setPosWithRespectTo(blocks.next(), detector.firstBlock, pos);
+            minY = Math.min(minY, pos.getY());
+            maxY = Math.max(maxY, pos.getY());
+        }
+        BlockPos center = claim.getRegionCenter();
+        int dy = center.getY() - anchor.getY();
+        if (minY <= maxY) {
+            dy = Math.max(dy, -minY);
+            dy = Math.min(dy, 255 - maxY);
+        }
+        return new BlockPos(center.getX() - anchor.getX(), dy, center.getZ() - anchor.getZ());
+    }
+
     private void dropOwnBlocklessRemnant(@Nonnull UUID uuid) {
         final PhysicsObject loaded = loadedShips.get(uuid);
         if (loaded != null && loaded.getShipData().getBlockPositions() != null
@@ -546,6 +615,9 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * crossing, a {@code DEPARTED} immediately followed, in the same tick, by a {@code DESTROYED} for
      * the same vessel, because the first consumed the declared departure. So the entry's removal is
      * the one announcement, and a half whose entry is already gone announces nothing.</p>
+     *
+     * <p>Every path that ends a ship's record goes through here, so this is also where its chunk claim
+     * is given back: a claim left held by a record nobody has is shipyard space no later ship can use.</p>
      */
     private void removeRecord(@Nonnull ShipData ship) {
         Optional<ShipData> registered = QueryableShipData.get(world).getShip(ship.getUuid());
@@ -554,6 +626,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         }
         noteRemoved(ship);
         QueryableShipData.get(world).removeShip(ship);
+        ValkyrienUtils.getShipChunkAllocator(world).releaseChunkClaim(ship.getChunkClaim());
     }
 
     /**
@@ -666,6 +739,12 @@ public class WorldServerShipManager implements IPhysObjectWorld {
 
     private void injectChunkIntoWorldServer(@Nonnull Chunk chunk, int x, int z) {
         ChunkProviderServer provider = world.getChunkProvider();
+        // A claim can be handed out again after its ship is gone, and that ship's chunks may still be
+        // loaded: unload the one being replaced, or its tile entities and entities stay in the world.
+        Chunk replaced = provider.id2ChunkMap.get(ChunkPos.asLong(x, z));
+        if (replaced != null && replaced != chunk) {
+            replaced.onUnload();
+        }
         provider.id2ChunkMap.put(ChunkPos.asLong(x, z), chunk);
         chunk.onLoad();
         chunk.checkLight();
@@ -792,7 +871,10 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         /** The search found more blocks than {@code VSConfig.maxDetectedShipSize}. */
         TOO_LARGE,
         /** The search touched bedrock, which no ship may take out of a world. */
-        BEDROCK
+        BEDROCK,
+        /** The structure continues past {@link SpatialDetector#MAX_REACH} from its anchor, so the search
+         *  found only part of it; built, the ship would leave the rest standing in the world. */
+        REACH_EXCEEDED
     }
 
     /** The drain's detector parameters, in ONE place, because {@link #refusalFor} must ask the same question. */
@@ -808,7 +890,10 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         if (detector.cleanHouse) {
             return SpawnRefusal.BEDROCK;
         }
-        return detector.foundSet.size() > VSConfig.maxDetectedShipSize ? SpawnRefusal.TOO_LARGE : null;
+        if (detector.foundSet.size() > VSConfig.maxDetectedShipSize) {
+            return SpawnRefusal.TOO_LARGE;
+        }
+        return detector.reachExceeded ? SpawnRefusal.REACH_EXCEEDED : null;
     }
 
     /**

@@ -34,9 +34,9 @@ changes. Each server tick it walks the satellite ids from `ItemSatelliteIdentifi
 its input hatches, and for each `IUniversalEnergyTransmitter` satellite in the same planetary
 system (`PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem`) adds `transmitEnergy(UP,false)`,
 scaled by `2 × insolation`. Every 100 ticks while producing it also **destroys** the first solid
-block above each panel column and sets nearby entities on fire (`powerMadeLastTick/10`). Hatch
-contents are snapshotted/restored across (de)construction (MECH-MBM-02). [V]
-`TileMicrowaveReciever.java:200-324,245-270`.
+block above each panel column and sets nearby entities on fire (`powerMadeLastTick/10`). Its hatches
+keep their contents across (de)construction by libVulpes' own rule; its former snapshot/restore is gone
+(MECH-MBM-02). [V] `TileMicrowaveReciever.java:157-290,202-226`.
 
 ### MECH-MBM-14 — Black-hole generator
 Fires only when `enabled` **and** the tile orbits a star whose `getStarData().isBlackHole()`.
@@ -48,8 +48,8 @@ produces `500 × blackHolePowerMultiplier` RF/t. [V] `TileBlackHoleGenerator.jav
 ## State & persistence
 
 These producers persist almost nothing bespoke — power is recomputed each tick. The description-packet / update-tag keys (client
-render only: `amtPwr`, `canRender`, `numPanels`, and the alternative `powerMadeLastTick` key on the `SolarArray` tag path) and the
-`MicrowaveReciever` persisted hatch snapshot (MECH-MBM-02) are listed in `C1-nbt-persistence`.
+render only: `amtPwr`, `canRender`, `numPanels`, and the alternative `powerMadeLastTick` key on the `SolarArray` tag path) are listed
+in `C1-nbt-persistence`. The microwave receiver persists no hatch snapshot (MECH-MBM-02).
 
 ## Integration seams
 

@@ -39,11 +39,14 @@ public final class NebulaField {
     /** The metric this field measures with — its schema's, not a global one. */
     private final IUniverseLaws laws;
     private final ClusterField clusters;
+    /** How far a density reading searches for clouds: {@link #cloudReachSuperCells}. */
+    private final long cloudReachSuperCells;
 
     public NebulaField(GalaxyGenConfig config, ClusterField clusters, IUniverseLaws laws) {
         this.laws = (laws == null) ? UniverseLawsV0.INSTANCE : laws;
         this.config = (config == null) ? GalaxyGenConfig.defaults() : config;
         this.clusters = clusters;
+        this.cloudReachSuperCells = cloudReachSuperCells(this.config, this.laws);
     }
 
     /**
@@ -169,10 +172,19 @@ public final class NebulaField {
         int samples = (int) Math.max(2L, Math.min(MAX_COLUMN_SAMPLES,
                 Math.round(lengthLy / COLUMN_SAMPLE_STEP_LY) + 1L));
         double step = lengthLy / (samples - 1);
+        // Every cloud that can reach any point of the line, gathered once for the whole walk.
+        long s = config.minSpacing;
+        List<Nebula> clouds = cloudsReaching(seed, galaxy,
+                Math.min(Math.floorDiv(a.sectorX(), s), Math.floorDiv(b.sectorX(), s)),
+                Math.min(Math.floorDiv(a.sectorY(), s), Math.floorDiv(b.sectorY(), s)),
+                Math.min(Math.floorDiv(a.sectorZ(), s), Math.floorDiv(b.sectorZ(), s)),
+                Math.max(Math.floorDiv(a.sectorX(), s), Math.floorDiv(b.sectorX(), s)),
+                Math.max(Math.floorDiv(a.sectorY(), s), Math.floorDiv(b.sectorY(), s)),
+                Math.max(Math.floorDiv(a.sectorZ(), s), Math.floorDiv(b.sectorZ(), s)));
         double sum = 0d;
         for (int i = 0; i < samples; i++) {
             double t = i / (double) (samples - 1);
-            double density = densityAtLightYears(seed, galaxy, ax + dx * t, ay + dy * t, az + dz * t);
+            double density = densityAmong(clouds, ax + dx * t, ay + dy * t, az + dz * t);
             // Trapezoid: the endpoints are half-weighted, so the answer does not depend on which
             // end the walk started from.
             sum += (i == 0 || i == samples - 1) ? density * 0.5d : density;
@@ -180,25 +192,66 @@ public final class NebulaField {
         return sum * step;
     }
 
-    /** The density at a point stated in light years — what the line integral samples. */
+    /**
+     * The density at a point stated in light years — what the line integral samples.
+     *
+     * <p><b>Every cloud that REACHES the point counts, not the cluster the point is in.</b> A cloud is
+     * {@link Nebula#spreadFor 1.5-3 times} wider than its cluster and Gaussian, so at the cluster's own
+     * edge it is still a sixth to two thirds of its peak. Asking only the cluster that contains the
+     * point read every cloud as ending at its cluster's ball, while the sky drew the whole of it.
+     * Overlapping clouds add, capped at the scale's {@code 1}.</p>
+     */
     public double densityAtLightYears(long seed, Galaxy galaxy, double xLy, double yLy, double zLy) {
+        if (galaxy == null) {
+            return 0d;
+        }
         long s = config.minSpacing;
-        long sectorX = laws.cellsAt(xLy);
-        long sectorY = laws.cellsAt(yLy);
-        long sectorZ = laws.cellsAt(zLy);
-        Optional<Nebula> nebula = nebulaAt(seed, galaxy, Math.floorDiv(sectorX, s),
-                Math.floorDiv(sectorY, s), Math.floorDiv(sectorZ, s));
-        return nebula.isPresent() ? nebula.get().densityAt(xLy, yLy, zLy) : 0d;
+        long supX = Math.floorDiv(laws.cellsAt(xLy), s);
+        long supY = Math.floorDiv(laws.cellsAt(yLy), s);
+        long supZ = Math.floorDiv(laws.cellsAt(zLy), s);
+        return densityAmong(cloudsReaching(seed, galaxy, supX, supY, supZ, supX, supY, supZ),
+                xLy, yLy, zLy);
+    }
+
+    /** Every cloud that can reach some point of the coarse super-cell box {@code [min, max]}. */
+    private List<Nebula> cloudsReaching(long seed, Galaxy galaxy, long minX, long minY, long minZ,
+                                        long maxX, long maxY, long maxZ) {
+        return nebulaeInRegion(seed, galaxy, minX - cloudReachSuperCells, minY - cloudReachSuperCells,
+                minZ - cloudReachSuperCells, maxX + cloudReachSuperCells, maxY + cloudReachSuperCells,
+                maxZ + cloudReachSuperCells);
+    }
+
+    /** The summed density of {@code clouds} at a point, capped at the scale's {@code 1}. */
+    private static double densityAmong(List<Nebula> clouds, double xLy, double yLy, double zLy) {
+        double total = 0d;
+        for (Nebula nebula : clouds) {
+            total += nebula.densityAt(xLy, yLy, zLy);
+        }
+        return Math.min(1d, total);
     }
 
     /**
      * How much diffuse matter lies at this cell, {@code 0}..{@code 1} — the one query a consequence
-     * would be written against, whatever the consequence turns out to be.
+     * would be written against, whatever the consequence turns out to be. The same reading as
+     * {@link #densityAtLightYears} at the cell's own point.
      */
     public double densityAtSector(long seed, Galaxy galaxy, long sectorX, long sectorY, long sectorZ) {
-        long s = config.minSpacing;
-        Optional<Nebula> nebula = nebulaAt(seed, galaxy, Math.floorDiv(sectorX, s),
-                Math.floorDiv(sectorY, s), Math.floorDiv(sectorZ, s));
-        return nebula.isPresent() ? nebula.get().densityAtSector(sectorX, sectorY, sectorZ) : 0d;
+        return densityAtLightYears(seed, galaxy, laws.lightYearsForCells(sectorX),
+                laws.lightYearsForCells(sectorY), laws.lightYearsForCells(sectorZ));
+    }
+
+    /**
+     * How far, in coarse super-cells, the widest cloud this table can seat reaches from its centre —
+     * the widest cluster type (the nucleus included) at the widest spread, plus one cell for where in
+     * its super-cell a centre or a point sits.
+     */
+    private static long cloudReachSuperCells(GalaxyGenConfig config, IUniverseLaws laws) {
+        double widestClusterLy = GalaxyGenConfig.NUCLEUS.maxRadiusLy;
+        for (GalaxyGenConfig.ClusterType type : config.clusterTypes) {
+            widestClusterLy = Math.max(widestClusterLy, type.maxRadiusLy);
+        }
+        long s = Math.max(1L, config.minSpacing);
+        long clusterSuperCells = Math.max(1L, laws.cellsForLightYears(widestClusterLy) / s);
+        return (long) Math.ceil(clusterSuperCells * Nebula.spreadFor(1d)) + 1L;
     }
 }

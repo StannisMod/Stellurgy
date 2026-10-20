@@ -76,7 +76,10 @@ public class TilePointer extends TileEntity implements IMultiblock, ILinkableTil
 		TileEntity pointedTile;
 
 		try  {
-			if(world.isAreaLoaded(masterBlockPos, 1))
+			// The master's own chunk, never an area around it: a master standing on a chunk border
+			// would otherwise be unreachable whenever the neighbour chunk is gone - which is exactly
+			// when a part in that chunk, unloading, has to tell it so.
+			if(world.isBlockLoaded(masterBlockPos, false))
 				pointedTile = this.world.getTileEntity(masterBlockPos);
 			else
 				pointedTile = null;

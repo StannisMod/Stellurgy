@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -34,6 +35,8 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
 
     /** Pins INV-XML-05 (asteroid dimensions contain asteroids after config load). */
     @Pins("INV-XML-05")
+    @RedWitness(member = "ChunkProviderAsteroids#prepareHeights", at = "iblockstate = this.fillblock;", replacedBy = "",
+            fails = "asteroid dimension must generate > 0 fill (stone) blocks", on = "2026-10-19")
     @Test
     public void asteroidDimGeneratesFillBlocks() throws Exception {
         // Find a registered non-overworld Stellurgy planet to clone as a template.

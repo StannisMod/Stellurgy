@@ -106,7 +106,13 @@ implementations (→ satellite); space-station objects (→ space-stations); the
   `addToAtmosphere(portion)` adds real gas (the terraformer's step-up), and
   `setAtmosphereDensity(int)` rescales the whole mix proportionally — REFUSING
   (`IllegalStateException`) to thicken an empty mix, since scaling cannot create a gas. Both end in
-  `atmosphereChanged()`: temperature recompute, `load_terraforming_helper(true)`, `PacketDimInfo`.
+  `atmosphereChanged()`: temperature recompute, `climateChanges++` (NBT `climateChanges`), then
+  `load_terraforming_helper(true)` only for a body WITH a surface whose world is LOADED — one without a
+  surface never has a world — then `PacketDimInfo`. The world's `TerraformingRecord`
+  stores the count its progress was made under (NBT `climate`); `load_terraforming_helper` retires that
+  progress whenever the counts disagree, so an air change made while nobody is on the planet retires it
+  on the next load instead of throwing [T]
+  `TerraformerPoweredCycleOnStellurgyPlanetTest#airChangedWhileThePlanetIsUnloadedRetiresItsTerraformingOnTheNextLoad`.
   `setAtmosphereDensityDirect` is GONE. An AUTHORED body enters by the second door,
   `authorAtmosphere(stated)` — the planet file's `<atmosphere>` gases, or a `copyOf` resolved by the
   loader's second pass (`XMLPlanetLoader#resolveAtmosphereCopies`) — which consults nothing about the
@@ -290,7 +296,8 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   geode (not volcano) field is `[V]` — `DimensionProperties.java:2781-2783`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-05 [V][SYS]** Ring angle/color and sky/fog/sunrise colors survive the round-trip
   (`DimensionProperties.java:1891-1916,2111` read, `:2275-2298` write). FOR: save format: a dimension survives a world reload.
-- **INV-DIM-06 [T][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-06 [T][SYS]** `realizeAtmosphere(oxygenated, d)` derives an air whose density reads `d`
+  (`DimensionProperties.java:1139-1143`). `DimensionPropertiesTest#realizingTheAtmosphereYieldsTheStatedDensity`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-07 [V][BEH]** Parent↔child links are bidirectional (`DimensionProperties.java:1313-1320`,
   `addChildPlanet` sets both ends); a moon inherits its parent's solar distance (`:1034-1040`).
 - **INV-DIM-08 [V][SYS]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state):

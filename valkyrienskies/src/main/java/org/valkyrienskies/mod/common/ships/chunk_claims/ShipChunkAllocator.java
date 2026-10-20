@@ -48,6 +48,12 @@ public class ShipChunkAllocator {
     public static final int CHUNK_Z_START = 0;
     private int lastChunkX = CHUNK_X_START;
     private int lastChunkZ = CHUNK_Z_START;
+    /**
+     * Centre-chunk Z of every claim a ship that no longer exists gave back. Handed out again, lowest
+     * first, before the cursor advances: without it the cursor is the only source, and a world that
+     * assembles a ship per crossing walks its claims past the world's edge.
+     */
+    private final java.util.TreeSet<Integer> releasedClaimZ = new java.util.TreeSet<>();
 
     /**
      * Determines whether or not a chunk is in the shipyard
@@ -77,12 +83,24 @@ public class ShipChunkAllocator {
         return isChunkInShipyard(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
-    /**
-     * This finds the next empty chunkSet for use, currently only increases the xPos to get new
-     * positions
-     */
+    /** A claim nobody holds: one given back, if any, otherwise the next one along the strip. */
     public VSChunkClaim allocateNextChunkClaim() {
-        return new VSChunkClaim(new ChunkPos(lastChunkX, lastChunkZ += MAX_CHUNK_LENGTH));
+        Integer reused = releasedClaimZ.pollFirst();
+        return new VSChunkClaim(new ChunkPos(lastChunkX,
+                reused != null ? reused : (lastChunkZ += MAX_CHUNK_LENGTH)));
+    }
+
+    /**
+     * Give back the claim of a ship that no longer exists, so it can be handed out again. The new
+     * ship's spawn injects fresh chunks over every chunk of the claim, so nothing of the old ship is
+     * carried into it. A claim this allocator never handed out is ignored.
+     */
+    public void releaseChunkClaim(VSChunkClaim claim) {
+        ChunkPos center = claim.getCenterPos();
+        if (center.x == lastChunkX && center.z > CHUNK_Z_START && center.z <= lastChunkZ
+                && (center.z - CHUNK_Z_START) % MAX_CHUNK_LENGTH == 0) {
+            releasedClaimZ.add(center.z);
+        }
     }
 
     @java.lang.SuppressWarnings("all")

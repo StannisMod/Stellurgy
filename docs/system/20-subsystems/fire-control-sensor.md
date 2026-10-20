@@ -126,11 +126,11 @@ or the lock moving by more than a twentieth. `TileFireControlSensor.java:159-180
 **MECH-FCS-14 — The mode button is a PACKET, because the button runs where the sweep does not.** A
 GUI button fires on the client (`ModuleButton.actionPerform` is client-only), and the mode it flips
 is read by the sweep on the server; so the press travels as a `PacketMachine` and the server flips
-its OWN mode in `useNetworkData`, answering to the GUI's `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
+its OWN mode in `useNetworkData`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
 on a dedicated server. `TileFireControlSensor#onInventoryButtonPressed`,
 `#useNetworkData` [V] [T `WeaponGuiButtonsReachTheServerTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
-`canInteractWithContainer` is vanilla's usability rule (same world, not invalid,
-distanceSq ≤ 64.0) and the server branch refuses a press that fails it — weapons MECH-GUN-44 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
+Who may press is judged centrally by `PacketMachine` (same world, distanceSq ≤ 64 to the block) before
+the sensor sees the packet; the sensor has no check of its own — weapons MECH-GUN-44 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
 
 ## Invariants
 

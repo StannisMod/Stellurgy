@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -52,6 +53,9 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
 
     /** Pins INV-NET-02 (a store registers as both source and sink). */
     @Pins("INV-NET-02")
+    @RedWitness(member = "WorldState#rebuild", at = "if (node instanceof ISubsystemSink) {",
+            replacedBy = "else if (node instanceof ISubsystemSink) {",
+            fails = "emitter behind an accumulator (G-A-E, no cable) never powered", on = "2026-10-19")
     @Test
     public void accumulatorBridgesGeneratorToEmitter() throws Exception {
         // Line: generator - accumulator - emitter, each adjacent along +X. The generator is NOT
@@ -95,6 +99,9 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-04 (energy is conserved across the solve). */
     @Pins("INV-SHD-04")
+    @RedWitness(member = "TileEntityShieldAccumulator#extract", at = "int extracted = storage.extractEnergy(amount, false);",
+            replacedBy = "int extracted = storage.extractEnergy(amount * 10, false);",
+            fails = "accumulator reserve haemorrhaged", on = "2026-10-19")
     @Test
     public void accumulatorReserveIsConservedNotBled() throws Exception {
         // Charge an accumulator to a large reserve from a generator, then let it be the SOLE source of

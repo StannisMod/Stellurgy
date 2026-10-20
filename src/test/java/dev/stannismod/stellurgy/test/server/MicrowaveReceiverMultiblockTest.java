@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -51,6 +52,9 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
 
     /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
     @Pins("INV-MBM-11")
+    @RedWitness(member = "TileMultiBlock#completeStructure(IBlockState)", at = "&& !getAllowableBlocks(structure[y][z][x]).contains(new BlockMeta(block,meta))",
+            replacedBy = "&& false",
+            fails = "structure validated despite missing corner panel", on = "2026-10-19")
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenCornerPanelRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;

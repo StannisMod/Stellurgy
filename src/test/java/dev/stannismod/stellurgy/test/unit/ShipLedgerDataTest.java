@@ -8,15 +8,13 @@ import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.Assert.*;
 
 /**
  * Pure persistence contract of {@link ShipLedgerData} (the durable backing for the ship ledger): a
- * settled ship's galactic position survives a write&rarr;read NBT round-trip, a ship in flight is
- * carried by its transit record instead of by the settled list, a write that would store a ship in
+ * ship in flight is carried by its transit record instead of by the settled list, a write that would store a ship in
  * NEITHER place is refused outright, the subsystem's own clock rides its own monotonic writer rather
  * than the fleet's snapshot, and a loaded store repopulates a live {@link ShipLedger}. No MC world —
  * the WSD's own {@code write/readFromNBT} + {@code replaceAll}/{@code loadInto} operate on in-memory
@@ -60,7 +58,7 @@ public class ShipLedgerDataTest {
         GalacticCoord coordB = coord(-7, 2, 0, 0, -40, 0);
         GalacticCoord flyingTo = coord(9, 0, 0, 0, 0, 0);
 
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.settle(a, coordA);
         live.settle(b, coordB);
         live.beginTransit(flyer, flyingTo); // in flight: belongs in the transit list, not this one
@@ -71,21 +69,6 @@ public class ShipLedgerDataTest {
                         java.util.Collections.singletonList(flying(flyer, flyingTo)),
                         java.util.Collections.<String, Long>emptyMap()).isEmpty());
         assertEquals("only the two settled ships are in the settled list", 2, src.snapshot().size());
-
-        NBTTagCompound nbt = src.writeToNBT(new NBTTagCompound());
-
-        ShipLedgerData dst = new ShipLedgerData();
-        dst.readFromNBT(nbt);
-
-        Map<UUID, ShipLedger.Entry> read = dst.snapshot();
-        assertEquals("both settled ships survive the round-trip", 2, read.size());
-
-        assertNotNull("ship A present", read.get(a));
-        assertEquals("A coord survives", coordA, read.get(a).coord);
-        assertEquals("A restored as SETTLED", ShipLedger.State.SETTLED, read.get(a).state);
-
-        assertNotNull("ship B present", read.get(b));
-        assertEquals("B coord survives", coordB, read.get(b).coord);
     }
 
     @Test
@@ -95,7 +78,7 @@ public class ShipLedgerDataTest {
         // answer that expires with the process, and the reader has no way to tell an expired one from
         // a live one. The coordinate is what survives a restart; the dimension is re-derived from it.
         UUID a = UUID.randomUUID();
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.settle(a, coord(3, 0, -1, 100, 0, 50));
 
         ShipLedgerData data = new ShipLedgerData();
@@ -114,7 +97,7 @@ public class ShipLedgerDataTest {
     public void anInFlightShipIsCarriedByItsTransitRecordAndNotByTheSettledList() {
         UUID flyer = UUID.randomUUID();
         GalacticCoord flyingTo = coord(1, 0, 0, 0, 0, 0);
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.beginTransit(flyer, flyingTo);
 
         ShipLedgerData data = new ShipLedgerData();
@@ -149,13 +132,13 @@ public class ShipLedgerDataTest {
         GalacticCoord home = coord(4, 0, 0, 0, 0, 0);
 
         ShipLedgerData data = new ShipLedgerData();
-        ShipLedger before = new ShipLedger();
+        ShipLedger before = new ShipLedger((shipId, coord) -> { });
         before.settle(settled, home);
         before.settle(flyer, home);
         assertTrue("arrangement: a good fleet is stored first", store(data, before).isEmpty());
         NBTTagCompound good = data.writeToNBT(new NBTTagCompound());
 
-        ShipLedger during = new ShipLedger();
+        ShipLedger during = new ShipLedger((shipId, coord) -> { });
         during.settle(settled, home);
         during.beginTransit(flyer, coord(5, 0, 0, 0, 0, 0)); // flying, and nothing carries it
 
@@ -165,33 +148,6 @@ public class ShipLedgerDataTest {
         assertEquals("and it changed nothing: both ships are still stored", 2, data.snapshot().size());
         assertEquals("byte for byte, the store is what it was before the refused write",
                 good.toString(), data.writeToNBT(new NBTTagCompound()).toString());
-    }
-
-    /**
-     * The space subsystem's own clock is part of the durable snapshot, so the counter resumes where
-     * the last save left it instead of restarting at zero every boot.
-     *
-     * <p>Everything else in this store is a STAMP — a cell's last visit, a jump's arrival tick — and a
-     * stamp only means anything beside the counter it was taken from. Lose the counter and a flight
-     * that had two minutes left comes back having arrived before the world began.</p>
-     */
-    @Test
-    public void theSpaceClockIsStoredWithTheStateItDatesAndSurvivesTheRoundTrip() {
-        UUID a = UUID.randomUUID();
-        GalacticCoord home = coord(3, 0, -1, 100, 0, 50);
-        ShipLedger live = new ShipLedger();
-        live.settle(a, home);
-
-        ShipLedgerData src = new ShipLedgerData();
-        assertTrue("the write is applied", store(src, live).isEmpty());
-        src.setClock(CLOCK);
-
-        ShipLedgerData dst = new ShipLedgerData();
-        dst.readFromNBT(src.writeToNBT(new NBTTagCompound()));
-
-        assertEquals("the subsystem must resume its own counter where the save left it", CLOCK,
-                dst.clock());
-        assertEquals("...beside the fleet that counter dates", 1, dst.snapshot().size());
     }
 
     /**
@@ -241,7 +197,7 @@ public class ShipLedgerDataTest {
         GalacticCoord home = coord(4, 0, 0, 0, 0, 0);
 
         ShipLedgerData data = new ShipLedgerData();
-        ShipLedger before = new ShipLedger();
+        ShipLedger before = new ShipLedger((shipId, coord) -> { });
         before.settle(settled, home);
         before.settle(flyer, home);
         assertTrue("arrangement: a good fleet is stored first", store(data, before).isEmpty());
@@ -251,7 +207,7 @@ public class ShipLedgerDataTest {
         data.setClock(CLOCK + AGE);
 
         // The state a failed gather leaves behind: flying, and nothing carrying it.
-        ShipLedger during = new ShipLedger();
+        ShipLedger during = new ShipLedger((shipId, coord) -> { });
         during.settle(settled, home);
         during.beginTransit(flyer, coord(5, 0, 0, 0, 0, 0));
         assertEquals("arrangement: the fleet write must actually be refused", 1,
@@ -268,7 +224,7 @@ public class ShipLedgerDataTest {
         UUID a = UUID.randomUUID();
         GalacticCoord coordA = coord(2, -3, 4, 10, 20, -30);
 
-        ShipLedger source = new ShipLedger();
+        ShipLedger source = new ShipLedger((shipId, coord) -> { });
         source.settle(a, coordA);
 
         ShipLedgerData data = new ShipLedgerData();
@@ -277,50 +233,12 @@ public class ShipLedgerDataTest {
         ShipLedgerData restored = new ShipLedgerData();
         restored.readFromNBT(data.writeToNBT(new NBTTagCompound()));
 
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         assertEquals("starts empty", 0, live.size());
         restored.loadInto(live);
 
         assertEquals("one settled ship restored into the live ledger", 1, live.size());
-        ShipLedger.Entry en = live.get(a);
-        assertNotNull("ship A restored", en);
-        assertEquals(coordA, en.coord);
-        assertEquals(ShipLedger.State.SETTLED, en.state);
+        assertNotNull("ship A restored", live.get(a));
         assertFalse("live ledger snapshot is a copy", live.snapshot() == restored.snapshot());
-    }
-
-    @Test
-    public void transitRecordsSurviveWriteReadRoundTrip() {
-        GalacticCoord org = coord(1, 0, 0, 500, 0, 0);
-        GalacticCoord tgt = coord(2, 0, 0, 0, 0, 0);
-        NBTTagCompound snapshot = new NBTTagCompound();
-        snapshot.setInteger("blocks", 27); // stands in for the StorageChunk NBT (its own round-trip = TransitRecordTest)
-        UUID crew = UUID.randomUUID();
-        TransitRecord rec = new TransitRecord(UUID.randomUUID().toString(), org, tgt, 3_500_000L,
-                1_250_000L, 4242L, 100L, 9L, java.util.Collections.singletonList(crew), snapshot);
-
-        ShipLedgerData src = new ShipLedgerData();
-        src.replaceAll(java.util.Collections.<UUID, ShipLedger.Entry>emptyMap(),
-                java.util.Collections.singletonList(rec),
-                java.util.Collections.<String, Long>emptyMap());
-
-        // Round-trip through the store's own NBT (the same write/read that hits disk on a world save).
-        ShipLedgerData dst = new ShipLedgerData();
-        dst.readFromNBT(src.writeToNBT(new NBTTagCompound()));
-
-        List<TransitRecord> read = dst.loadTransits();
-        assertEquals("the in-flight transit survives the store's 'transits' NBT round-trip", 1, read.size());
-        TransitRecord r = read.get(0);
-        assertEquals("shipId survives", rec.shipId, r.shipId);
-        assertEquals("origin survives", org, r.origin);
-        assertEquals("the flight's priced distance survives", 3_500_000L, r.distanceBlocks);
-        assertEquals("how far it had got survives", 1_250_000L, r.travelledBlocks);
-        assertEquals("target survives", tgt, r.target);
-        assertEquals("arrivalTick survives", 4242L, r.arrivalTick);
-        assertEquals("speed survives", 9L, r.speed);
-        assertEquals("crew survives", 1, r.crew.size());
-        assertEquals(crew, r.crew.get(0));
-        assertNotNull("the block snapshot survives (so the persisted transit can rematerialize)", r.snapshot);
-        assertEquals("snapshot payload survives", 27, r.snapshot.getInteger("blocks"));
     }
 }

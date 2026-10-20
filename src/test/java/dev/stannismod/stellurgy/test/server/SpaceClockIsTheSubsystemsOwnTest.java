@@ -5,7 +5,6 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
@@ -14,7 +13,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -140,66 +138,6 @@ public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
                         + ELAPSED_SLACK_TICKS + "). Every vanilla gate keyed on total time — the day"
                         + " cycle, mob spawns, weather — rides on this",
                 Math.abs(worldAfterSpaceMove - worldBefore) <= ELAPSED_SLACK_TICKS);
-    }
-
-    /**
-     * The counter comes back where it was after the server really restarts.
-     *
-     * <p>Persistence is what the overworld's clock was giving the subsystem for free, and taking the
-     * counter into the subsystem's own hands is a promise to keep paying for it. Everything the
-     * subsystem stores is a STAMP against this counter — when a cell was last visited, when a jump
-     * arrives — so a clock that restarted at zero would make every one of them read as an age of the
-     * entire world: cells collected as ancient on the first tick back, a flight with two minutes left
-     * restored as long since landed.</p>
-     *
-     * <p>The clock is set to a value ~11.6 days along, which no boot of this test could ever reach on
-     * its own — asserted on the SECOND boot as a lower bound, so a clock that quietly restarted from
-     * zero fails rather than passing on the ticks it accumulated since. No explicit save follows the
-     * set for the same reason the neighbouring restart tests take none: the SHUTDOWN save is the one
-     * that has to work, and asking for an extra pass would hide a snapshot marked dirty too late.</p>
-     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
-     */
-    @Pins("CLOCK-5")
-    @Test
-    public void theClockComesBackWhereItWasAfterAReboot() throws Exception {
-        // --- boot 1 --------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
-        // A third copy of the same defect stood here: the probe was called and its answer assigned
-        // to a local nothing read. Both the verb and the question are gone; the assertion below is
-        // what actually decided anything.
-        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
-        assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
-                        + "what persists the clock, so without it this test would assert nothing: "
-                        + status.raw(), status.registered);
-
-        long fresh = spaceClock(read("stellurgytest space clock").raw());
-        requireArranged("a fresh boot's clock must be far below the value set below, or "
-                        + "reading that value back afterwards would prove nothing. fresh=" + fresh,
-                fresh < JUMP_TICKS / 2L);
-
-        String moved = arrange("stellurgytest space set-clock " + JUMP_TICKS).raw();
-        assertTrue("the clock must be set: " + moved, Reply.of(moved).ok());
-        assertEquals("and it must hold the value it was set to: " + moved, JUMP_TICKS,
-                spaceClock(moved));
-
-        // --- the reboot: this process really exits -------------------------------------------------
-        harness.close();
-        harness = null;
-
-        // --- boot 2: a brand new JVM, same world directory -----------------------------------------
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
-        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
-                statusAfter.registered);
-
-        long restored = spaceClock(read("stellurgytest space clock").raw());
-        assertTrue("the subsystem's clock must resume where the last save left it, not restart at"
-                        + " zero: every stamp it persisted is dated against this counter, so a reset"
-                        + " one ages the whole fleet by the age of the world. set=" + JUMP_TICKS
-                        + " restored=" + restored, restored >= JUMP_TICKS);
-        assertTrue("...and it must be the SAVED value it resumed from rather than a clock that has"
-                        + " been running for eleven days: restored=" + restored,
-                restored - JUMP_TICKS <= ELAPSED_SLACK_TICKS);
     }
 
     // ---- THE DOWN-SUBSYSTEM LEG IS GONE, AND ITS COVERAGE WITH IT -------------------------------

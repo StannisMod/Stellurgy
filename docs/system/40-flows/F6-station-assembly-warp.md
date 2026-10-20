@@ -26,7 +26,7 @@ tier-1 station object that exists today.
 3. **Emit item + chip stamped with the id.** The assembler writes the id onto both the packed
    `itemSpaceStation` and a fresh `itemSpaceStationChip` (slot 3), then `setStructure` stores the cut
    `StorageChunk` (MECH-STN-16). *Seam:* the station id is the sole link between the in-memory
-   `SpaceObjectManager` entry and the item the player carries away. INV-STN-05 pins the fresh station to
+   `SpaceObjectManager` entry and the item the player carries away. INV-STN-05 states the fresh station holds
    `orbitingPlanetId = INVALID_PLANET`, `fuel = 0`.
 4. **Deploy / unpack into the space world.** When the packed item is used, `onModuleUnpack(chunk)`
    pastes the structure into the space dimension. The first unpack (`!created`) centres it on the

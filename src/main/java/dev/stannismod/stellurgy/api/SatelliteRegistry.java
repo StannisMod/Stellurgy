@@ -96,7 +96,7 @@ public class SatelliteRegistry {
             // with dataType="poo" (getKey fallback), permanently destroying the
             // original type so it could never be restored even with the mod back.
             // Callers must null-guard (DimensionProperties.readFromNBT,
-            // PacketSatellite.readClient, PacketSatellitesUpdate.readClient). See C002/C155.
+            // PacketSatellite.executeClient, PacketSatellitesUpdate.executeClient). See C002/C155.
             Logger.getLogger(Constants.modId).warning(
                     "Dropping satellite with unknown dataType '" + nbt.getString("dataType") + "'");
             return null;

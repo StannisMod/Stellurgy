@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -55,6 +56,9 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
     /** Pins INV-RASM-07 (Wear accrual is single-gated by partsWearSystem). */
     @Pins("INV-RASM-07")
+    @RedWitness(member = "StorageChunk#damageParts", at = "if (!StellurgyConfiguration.getCurrentConfig().partsWearSystem) {",
+            replacedBy = "if (false) {",
+            fails = "with the wear system OFF, damageParts must not advance any wear", on = "2026-10-19")
     @Test
     public void wearAccruesOnlyWhenSystemEnabled() throws Exception {
         try {

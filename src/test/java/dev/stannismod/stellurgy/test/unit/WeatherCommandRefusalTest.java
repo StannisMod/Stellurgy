@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.command.sub.redirect.WeatherCommand;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -33,6 +34,9 @@ public class WeatherCommandRefusalTest {
 
     /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
     @Pins("INV-CMD-03")
+    @RedWitness(member = "WeatherCommand#weatherRefusalKey",
+            at = "if (rainMarker == -1) return \"commands.weather.cannot_rain\";", replacedBy = "",
+            fails = "expected:<commands.weather.cannot_rain> but was:<null>", on = "2026-10-19")
     @Test
     public void rainRefusedByNeverMarker() {
         assertEquals("commands.weather.cannot_rain",
@@ -89,6 +93,8 @@ public class WeatherCommandRefusalTest {
 
     /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
     @Pins("INV-CMD-03")
+    @RedWitness(member = "WeatherCommand#weatherRefusalKey", at = "rainMarker == 1 ||", replacedBy = "",
+            fails = "expected:<commands.weather.always_not_clear> but was:<null>", on = "2026-10-19")
     @Test
     public void clearRefusedByAlwaysRainMarker() {
         assertEquals("commands.weather.always_not_clear",

@@ -36,7 +36,8 @@ per-dim weather/time (`world/weather/*`, `dimension/`), FF camera
 
 > **No production mixin targets code this mod COMPILES.** The vendored engine and our own tiles are edited in place:
 > `TileAdvancedFlightComputer` itself `implements IPhysicsBlockController` (its `onPhysicsTick` is the force controller), and
-> `mixins.stellurgy.json` lists mixins over vanilla and Forge only.
+> `mixins.stellurgy.json` lists mixins over vanilla and Forge only. `StellurgyMixinPlugin` does not probe the classpath for VS
+> (it is compiled in).
 >
 > **The flight recorder and the spawn diagnostics are test-side.** Production carries the control law and nothing that records; the
 > per-physics-step sample is taken by the TEST mixin `MixinPhysicsCalculationsMotionSample` around the physics loop's own call into

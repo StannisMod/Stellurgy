@@ -89,7 +89,7 @@ commands need `stellurgy.tests`. Headless CI skips server+client tiers.
   contract violation stays visible. `test/unit/SatelliteRegistryFallbackTest.java` is not one: its two tests
   (`:40`, `:51`) assert the by-design `null` for an unknown type and that `createFromNBT` returns `null`
   instead of NPE-ing (the fix noted in the test's own comment), so they pin the FIXED behaviour.
-  The pattern's surviving instance is `integration/PacketSerializationTest.java:500`.
+  The pattern's surviving instance is `integration/PacketSerializationTest.java:134`.
 - **MECH-TST-08 — positive-control guard.** Known-bug pairs ship a happy-path positive control
   so a registry-wide breakage can't make the bug test pass vacuously. The satellite registry's
   pair has no such control — an unregistered-everything registry would pass both `null` assertions
@@ -141,8 +141,7 @@ tier-2 oracles are C8-C22 and `stellurgytest-probe-catalog`.
 Tests independently exercise the same seams the contract docs own:
 - **C1 NBT round-trip**: every `*NbtRoundTrip`/`*NBTRoundTrip`/`*Persistence`/`*Restart`
   test writes→reads→asserts equality (e.g. `unit/RocketFlightModeNbtTest`,
-  `unit/ChipNBTRoundTripTest`, `server/FluidTankNBTRoundTripsAcrossRestartTest`,
-  `server/MissionPersistenceRestartTest`). Restart tests use per-method
+  `unit/ChipNBTRoundTripTest`). Restart tests use per-method
   `AbstractHeadlessServerTest` to force a real save/load cycle across two boots.
 - **C2 packets**: `integration/PacketSerializationTest` + `unit/PacketSerializationTest`
   round-trip all wire packets and pin negative-input safety.
@@ -167,10 +166,10 @@ nothing about whether it triggers.
 `_documentsKnownBug` / bug-pinning tests (assert *current* behaviour, flip on fix):
 - `unit/SatelliteRegistryFallbackTest.java:40,51` — not a bug-pin: `getNewSatellite` returns
   `null` by design and `createFromNBT` returns `null` rather than NPE-ing.
-- `integration/PacketSerializationTest.java:500` `packetMoveRocketInSpaceDocumentsKnownBugs`
+- `integration/PacketSerializationTest.java:134` `packetMoveRocketInSpaceDocumentsKnownBugs`
   — pins the unregistered `PacketMoveRocketInSpace`: `read()` NPEs on default-ctor instance;
   `hasWorld`/`hasStar` write inverted — of which the test pins the `read()` NPE only
-  (`PacketSerializationTest.java:500-515`).
+  (`PacketSerializationTest.java:134-150`).
 
 `@Ignore`d / superseded:
 - `server/PlanetDimensionLoadTest.java:30` — `@Ignore` (hangs at suite scale,
@@ -199,12 +198,47 @@ nothing about whether it triggers.
   `test/server/MachineRecipeEndToEndKit.java:31-38`.
 - **INV-TST-06 [V]** Known-bug tests pin current behaviour and are written to fail on fix
   (documented flip instruction), keeping the violation visible.
-  `integration/PacketSerializationTest.java:500-515` (the satellite-registry pair does not pin a bug: see MECH-TST-07).
+  `integration/PacketSerializationTest.java:134-150` (the satellite-registry pair does not pin a bug: see MECH-TST-07).
 - **INV-TST-07 [A]** Each `*DisableTest`/`*GateTest` pins that a config flag disables both
   accrual *and* consequence (per §10). Assumed uniform across the ~5 pairs; only sampled
   (`WearAccrualDisableTest`, `WeatherCycleDisableTest`).
 - **INV-TST-08 [V]** Test dim-ids (9001-9004) and world seed are fixed constants so
   worldgen/round-trip snapshots stay deterministic. `test/StellurgyTestConstants.java:16-22`.
+- **INV-TST-09 [T][SYS]** A clause names a test class by its simple name; where two compiled test
+  classes share that name, the directory the clause cites it under (`integration/X`) picks the one
+  whose package ends in that path, and a citation that picks none or both pins nothing
+  (`test/contract/PinMap.java`, `oneClass`). Pinned by
+  `PinMapTest#aSharedSimpleNameCitedUnderOneClasssDirectoryIsThatClass`. FOR: maintainer ruling
+  2026-10-19, *"второе"* (gloss: of "rename one of the duplicate classes" or "teach PinMap the
+  qualified name", the second).
+- **INV-TST-11 [T][SYS]** A red-witness record whose `member` is an overloaded method name with no
+  parameter list names no member: the build refuses it, and the refusal lists every overload's
+  parameter types. The judge never picks one (`test/contract/MemberAddress.java`, `resolve`). Pinned by
+  `WitnessReplayTest#anOverloadedNameWithoutParametersIsRefusedNamingEachOverload`. FOR: maintainer ruling
+  2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the replayer resolved an
+  overloaded name to its first declaration without saying so, could not address a nested type's member and
+  could not replay a field).
+- **INV-TST-12 [T][SYS]** A parameter list in a record's `member` (`Type#m(double,boolean)` — simple
+  type names, no generic arguments, `T...` as `T[]`) names exactly the overload whose declared
+  parameters it matches, and the record's fragment is looked for in that overload alone
+  (`test/contract/MemberAddress.java`, `resolve`). Pinned by `WitnessReplayTest#aParameterListNamesThatOverloadAlone`.
+  FOR: maintainer ruling 2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the
+  replayer resolved an overloaded name to its first declaration without saying so).
+- **INV-TST-13 [T][SYS]** A record's member belongs to the innermost named type around its
+  declaration: a nested type's method is that type's and never its outer type's, a nested type is named by
+  its own name or by an `Outer.Inner` chain, an enum constant's body through its constant
+  (`Enum.CONSTANT#m`), and a nested type name declared in more than one file is refused, naming the files
+  (`test/contract/MemberAddress.java`, `memberLevelOf`; `test/contract/WitnessReplay.java`, `typeFile`).
+  Pinned by `WitnessReplayTest#aMemberBelongsToTheInnermostNamedTypeAroundIt` and
+  `WitnessReplayTest#aNestedTypeNameDeclaredInTwoFilesIsRefusedNamingThem`. FOR: maintainer ruling
+  2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the replayer took the first
+  same-named member anywhere in a file, so a nested type's member could not be addressed).
+- **INV-TST-14 [T][SYS]** A record naming a FIELD (`Type#FIELD`) addresses the field's declaration from
+  its name through the `;` that ends it, and only a field of the class body: a method's local variable
+  of that name is not a member (`test/contract/MemberAddress.java`, `resolve`). Pinned by
+  `WitnessReplayTest#aFieldIsItsDeclarationThroughItsSemicolon`. FOR: maintainer ruling 2026-09-30, *"Да,
+  добавь форму для полей в правило и резолвер"* (gloss: "Yes, add the form for fields to the rule and to
+  the resolver").
 
 ## Failure modes & edge cases
 
@@ -217,7 +251,7 @@ nothing about whether it triggers.
   a red `*DocumentsKnownBug` means someone fixed the bug without flipping the test.
 
 - **Wire bug (confirmed by test)** `PacketMoveRocketInSpace` unregistered + `read()` NPE +
-  inverted `hasWorld`/`hasStar` — the `read()` NPE is pinned by `PacketSerializationTest.java:500`.
+  inverted `hasWorld`/`hasStar` — the `read()` NPE is pinned by `PacketSerializationTest.java:134`.
 - **Coverage gap** `PlanetDimensionLoadTest` `@Ignore`d for suite-scale hang;
   non-Stellurgy dimension isolation has no running gate. `server/PlanetDimensionLoadTest.java:30`.
 - **SatelliteRegistry SSOT/null-contract bug** `getNewSatellite` returns `null` vs javadoc

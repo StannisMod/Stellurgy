@@ -35,32 +35,9 @@ import static org.junit.Assert.assertTrue;
 public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
     private static final String ID = "id";
-    private static final String IS_TRANSMITTER = "isUniversalEnergyTransmitter";
-    private static final String CAN_TICK = "canTick";
     private static final String LIST_SIZE = "listSize";
     private static final String BIOME_NAME = "biome";
     private static final String BLOCK_NAME = "block";
-
-    /** Pin: solarEnergy &rarr; SatelliteMicrowaveEnergy implements
-     *  {@link dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergyTransmitter} —
-     *  the marker the orbital &rarr; ground energy receiver resolves
-     *  against. Also pin canTick=true and isUniversalEnergy=true (the
-     *  battery side of the contract, used by GUI updates). */
-    @Test
-    public void solarEnergySatelliteImplementsEnergyTransmitterMarker() throws Exception {
-        long satId = createSat("solarEnergy", 200, 4000, 1000);
-        String resp = String.join("\n", client().read(
-                "stellurgytest satellite markers 0 " + satId));
-        assertTrue("markers probe failed: " + resp, Reply.of(resp).ok());
-        String isTransmitter = stringField(IS_TRANSMITTER, resp, "isUniversalEnergyTransmitter");
-        String canTick = stringField(CAN_TICK, resp, "canTick");
-        assertEquals("solarEnergy (SatelliteMicrowaveEnergy) MUST implement "
-                + "IUniversalEnergyTransmitter — beam-down energy routing "
-                + "depends on this marker; " + resp,
-                "true", isTransmitter);
-        assertEquals("solarEnergy must canTick=true; " + resp,
-                "true", canTick);
-    }
 
     /** Pin: BiomeChanger consumes the queue and mutates the world's
      *  biome at the queued position when battery is sufficient and

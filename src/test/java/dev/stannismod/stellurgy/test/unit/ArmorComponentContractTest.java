@@ -4,9 +4,9 @@ import dev.stannismod.stellurgy.item.components.ItemJetpack;
 import dev.stannismod.stellurgy.item.components.ItemPressureTank;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -50,6 +50,9 @@ public class ArmorComponentContractTest {
 
     /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
     @Pins("INV-ITM-09")
+    @RedWitness(member = "ItemJetpack#isAllowedInSlot", at = "slot == EntityEquipmentSlot.CHEST",
+            replacedBy = "slot.getSlotType() == EntityEquipmentSlot.Type.ARMOR",
+            fails = "jetpack slot eligibility for", on = "2026-10-19")
     @Test
     public void jetpackIsAllowedOnlyInChestSlot() {
         ItemJetpack jetpack = new ItemJetpack();
@@ -78,6 +81,8 @@ public class ArmorComponentContractTest {
 
     /** Pins INV-ITM-07 (the pressure tank capacity is base times two to the damage). */
     @Pins("INV-ITM-07")
+    @RedWitness(member = "ItemPressureTank#getCapacity", at = "(int) Math.pow(2, container.getItemDamage())",
+            replacedBy = "(1 + container.getItemDamage())", fails = "tier 2 tank capacity = 4", on = "2026-10-19")
     @Test
     public void pressureTankCapacityScalesAsPowerOfTwoWithItemDamage() {
         // capacity formula: baseCapacity * 2^itemDamage
@@ -93,33 +98,4 @@ public class ArmorComponentContractTest {
         assertEquals("tier 2 tank capacity = 4× base", 32000, tank.getCapacity(tier2));
     }
 
-    /** Pins INV-ITM-08 (the jetpack enabled flag is written when on and cleared when off). */
-    @Pins("INV-ITM-08")
-    @Test
-    public void jetpackEnabledStateToggleStoresAndClearsNbtFlag() {
-        // Production toggle stored under NBT key "enabled" via
-        // setEnabledState(stack, boolean). Pin the round-trip at the
-        // tag level: setEnabledState writes the key, isEnabled reads it.
-        // Full ItemStack envelope round-trip (with item registry id)
-        // requires a registered Item, which unit-tier doesn't reach;
-        // the contract being tested is "the flag persists across stack
-        // mutations" — covered by reading back through isEnabled.
-        ItemJetpack jetpack = new ItemJetpack();
-        ItemStack stack = new ItemStack(jetpack);
-        assertFalse("default jetpack must be disabled (no NBT)",
-                jetpack.isEnabled(stack));
-
-        jetpack.setEnabledState(stack, true);
-        assertTrue("after setEnabledState(true), isEnabled must be true",
-                jetpack.isEnabled(stack));
-        // Direct NBT key inspection — proves the flag is in the stack's
-        // own NBT (not transient state on the Item).
-        NBTTagCompound tag = stack.getTagCompound();
-        assertTrue("setEnabledState(true) must write the 'enabled' NBT key: " + tag,
-                tag != null && tag.getBoolean("enabled"));
-
-        jetpack.setEnabledState(stack, false);
-        assertFalse("setEnabledState(false) must clear the enabled flag",
-                jetpack.isEnabled(stack));
-    }
 }

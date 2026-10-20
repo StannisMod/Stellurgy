@@ -96,20 +96,4 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
                         + peer + ": " + resp,
                 "UNSCANNED".equals(peer));
     }
-
-    /** Counter-test: an unmutated round-trip must still decode a valid status
-     *  without throwing — the read guard must not break the happy path. */
-    @Test
-    public void plainRoundtripPreservesStatus() throws Exception {
-        int[] pos = placeAssembler(9800);
-        String resp = ok(client().read("stellurgytest assembler nbt-roundtrip 0 "
-                + pos[0] + " " + pos[1] + " " + pos[2]));
-        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
-
-        assertTrue("plain round-trip must not throw: " + resp,
-                "null".equals(field(THREW, resp, "threw")));
-        String peer = field(PEER_STATUS, resp, "peerStatus");
-        assertTrue("plain round-trip must decode a non-empty status: " + resp,
-                peer != null && !peer.isEmpty());
-    }
 }

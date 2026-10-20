@@ -21,8 +21,7 @@ import static org.junit.Assert.assertFalse;
  * <p>This pins the corrected contract: invoking {@code performAction} on an
  * ore-mapping satellite returns {@code false} and does not open the dead GUI — with
  * a {@code null} player, the former body would have NPE'd on {@code player.openGui}.
- * Same {@code performAction(null, null, null)}-returns-false shape used by
- * {@code MissionResourceCollectionContractTest}. Pure unit tier: the no-arg ctor
+ * Pure unit tier: the no-arg ctor
  * only runs {@code SatelliteBase()} (no {@code Biome.getBiome} like the biome/weather
  * satellites), so it needs no Minecraft Bootstrap.</p>
  */

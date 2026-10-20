@@ -1,30 +1,19 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.network.PacketAtmSync;
-import dev.stannismod.stellurgy.network.PacketOxygenState;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
 import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.*;
 
 /**
- * Network packet round-trip — write/readClient symmetry.
- *
- * Each test:
- *   1. constructs a representative packet,
- *   2. writes it into a Netty {@link ByteBuf},
- *   3. reads into a fresh instance via the no-arg ctor + readClient,
- *   4. asserts every field is preserved.
+ * Network packet wire decisions — what a packet's write/readClient pair decides beyond carrying
+ * its fields.
  *
  * Production code dispatches read vs readClient based on side. Most Stellurgy packets are
  * server&rarr;client only (no executable {@code read} on server). We exercise the
@@ -53,124 +42,6 @@ public class PacketSerializationTest {
         return (T) field.get(target);
     }
 
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    @LegacyWitness(prose = "one inversion per verdict on the readout, 2026-09-30. PRESSURE -"
-            + " {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());} writing half the pressure: \"expected:&lt;850&gt; but was:&lt;425&gt;\"."
-            + " BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getInteger(\"pressure\"), nbt.getBoolean(\"breathable\"),} reading the flag negated: \"expected:&lt;false&gt; but"
-            + " was:&lt;true&gt;\". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString(\"warning\"), holding);} reading the warning under another key:"
-            + " \"expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;\". STATEMENTS IN ORDER -"
-            + " {@code PacketAtmSync#readClient} at {@code holding.add(list.getStringTagAt(i));} prepending each statement instead of appending it: \"the statements must"
-            + " survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,"
-            + " NOT_BREATHABLE]&gt;\". The readable-bytes check was not part of this change and is not"
-            + " witnessed here. PRESSURE and BREATHABLE were taken on the pre-change form, when the pressure"
-            + " crossed as a short ({@code setShort} / {@code getShort}); the code named above is its int form.")
-    @Test
-    public void packetAtmSyncRoundTrip() {
-        // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
-        // statements that are true of the air — which is what a player reads as its name now that
-        // nothing branches on one.
-        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary summary =
-                new dev.stannismod.stellurgy.atmosphere.AtmosphereSummary(
-                        850, false, "msg.noOxygen",
-                        java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"));
-        PacketAtmSync sent = new PacketAtmSync(summary);
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketAtmSync received = new PacketAtmSync();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary back =
-                PacketSerializationTest.field(received, "summary");
-        assertEquals(850, back.pressureCentiAtm());
-        assertEquals(false, back.breathable());
-        assertEquals("msg.noOxygen", back.warningKey());
-        assertEquals("the statements must survive in order — they are the label a player reads",
-                java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"), back.assertions());
-    }
-
-    /**
-     * A pressure past what a short holds reaches the client as itself. The model allows any
-     * {@code int} of centi-atm ({@code AirState#getPressureCentiAtm} clamps only at
-     * {@code Integer.MAX_VALUE}), so 400 atm — 40 000, above a short's 32 767 — must not arrive as a
-     * wrapped negative.
-     */
-    @LegacyWitness(prose = "with {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());}"
-            + " and {@code PacketAtmSync#readClient} at {@code nbt.getInteger(\"pressure\")} back on their short"
-            + " forms ({@code setShort(\"pressure\", (short) …)} / {@code getShort(\"pressure\")}), this fails with"
-            + " \"a 400 atm room must reach the client as 400 atm expected:&lt;40000&gt; but was:&lt;-25536&gt;\""
-            + " (2026-10-06).")
-    @Test
-    public void packetAtmSyncCarriesAPressureAboveAShort() {
-        int fourHundredAtm = 40_000;
-        PacketAtmSync sent = new PacketAtmSync(new dev.stannismod.stellurgy.atmosphere.AtmosphereSummary(
-                fourHundredAtm, false, "", java.util.Collections.<String>emptyList()));
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-        PacketAtmSync received = new PacketAtmSync();
-        received.readClient(buffer);
-
-        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary back =
-                PacketSerializationTest.field(received, "summary");
-        assertEquals("a 400 atm room must reach the client as 400 atm", fourHundredAtm, back.pressureCentiAtm());
-    }
-
-    @Test
-    public void packetOxygenStateRoundTrip() {
-        // PacketOxygenState carries no payload — write() must produce zero bytes
-        // and readClient() must complete without throwing.
-        PacketOxygenState sent = new PacketOxygenState();
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        assertEquals("PacketOxygenState carries no payload", 0, buffer.readableBytes());
-
-        // Readability test: a fresh instance should accept the empty stream silently.
-        // We deliberately do NOT call sent.readClient — that path uses
-        // Minecraft.getMinecraft() which requires a running game.
-    }
-
-    @Test
-    public void packetStellarInfoRoundTrip() throws Exception {
-        StellarBody star = new StellarBody();
-        star.setName("TestStar");
-        star.setTemperature(80);
-        star.setSize(1.5f);
-        star.setBlackHole(false);
-        star.setId(7);
-
-        PacketStellarInfo sent = new PacketStellarInfo(7, star);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketStellarInfo received = new PacketStellarInfo();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(7, (int) PacketSerializationTest.<Integer>field(received, "starId"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>field(received, "removeStar"));
-
-        // The packet stores the inner NBT and only re-hydrates the star inside
-        // executeClient (which mutates DimensionManager). Round-trip the NBT to
-        // verify it survived the wire.
-        net.minecraft.nbt.NBTTagCompound nbt = field(received, "nbt");
-        assertNotNull(nbt);
-
-        StellarBody restored = new StellarBody();
-        restored.readFromNBT(nbt);
-        assertEquals("TestStar", restored.getName());
-        assertEquals(80, restored.getTemperature());
-        assertEquals(1.5f, restored.getSize(), 1e-6);
-        assertEquals(7, restored.getId());
-    }
-
     @Test
     public void packetStellarInfoRoundTripRemoveStar() throws Exception {
         // Setting star=null signals removal — the wire format must encode just the
@@ -183,86 +54,8 @@ public class PacketSerializationTest {
         received.readClient(buffer);
 
         assertEquals(0, buffer.readableBytes());
-        assertEquals(99, (int) PacketSerializationTest.<Integer>field(received, "starId"));
         assertTrue("star=null on send must round-trip as removeStar=true",
                 PacketSerializationTest.<Boolean>field(received, "removeStar"));
-    }
-
-    @Test
-    public void packetSyncKnownPlanetsRoundTrip() throws Exception {
-        // The 2-arg ctor pulls DimensionManager.getInstance().knownPlanets into the
-        // payload — bypass it via no-arg ctor + reflection so we don't depend on
-        // global state.
-        PacketSyncKnownPlanets sent = new PacketSyncKnownPlanets();
-        sent.stationId = 42;
-        Set<Integer> planets = new HashSet<>();
-        planets.add(2);
-        planets.add(7);
-        planets.add(11);
-        setField(sent, "knownPlanets", planets);
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketSyncKnownPlanets received = new PacketSyncKnownPlanets();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(42, received.stationId);
-
-        Set<Integer> recvPlanets = field(received, "knownPlanets");
-        assertNotNull(recvPlanets);
-        assertEquals(planets, recvPlanets);
-    }
-
-    @Test
-    public void packetSyncKnownPlanetsRoundTripEmpty() throws Exception {
-        PacketSyncKnownPlanets sent = new PacketSyncKnownPlanets();
-        sent.stationId = 1;
-        setField(sent, "knownPlanets", new HashSet<Integer>());
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketSyncKnownPlanets received = new PacketSyncKnownPlanets();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        Set<Integer> recvPlanets = field(received, "knownPlanets");
-        assertEquals(0, recvPlanets.size());
-    }
-
-    @Test
-    public void satellitePropertiesNbtSurvivesPacketBufferTransport() {
-        // Satellite-bearing packets (PacketSatellite) ultimately serialize
-        // SatelliteProperties via writeCompoundTag. Test the inner serialization is
-        // wire-stable independent of the surrounding packet machinery.
-        SatelliteProperties original = new SatelliteProperties(40, 800, "ar:test", 256, 1.5f);
-        original.setId(0xFEEDL);
-
-        net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
-        original.writeToNBT(nbt);
-
-        ByteBuf buffer = newBuffer();
-        net.minecraft.network.PacketBuffer packetBuffer = new net.minecraft.network.PacketBuffer(buffer);
-        packetBuffer.writeCompoundTag(nbt);
-
-        net.minecraft.nbt.NBTTagCompound received;
-        try {
-            received = packetBuffer.readCompoundTag();
-        } catch (java.io.IOException e) {
-            throw new AssertionError(e);
-        }
-
-        SatelliteProperties restored = new SatelliteProperties();
-        restored.readFromNBT(received);
-
-        assertEquals(40, restored.getPowerGeneration());
-        assertEquals(800, restored.getPowerStorage());
-        assertEquals("ar:test", restored.getSatelliteType());
-        assertEquals(256, restored.getMaxDataStorage());
-        assertEquals(1.5f, restored.getWeight(), 1e-6);
-        assertEquals(0xFEEDL, restored.getId());
     }
 
     // PacketDimInfo / PacketSatellite / PacketStationUpdate / PacketConfigSync

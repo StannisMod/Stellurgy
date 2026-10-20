@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,6 +13,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.*;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * terraformer powered cycle on a Stellurgy-native planet.
@@ -125,6 +127,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
      */
     @Pins("INV-MBM-06")
+    @RedWitness(member = "TileAtmosphereTerraformer#processComplete", at = "properties.addToAtmosphere(new AirState(STEP_PER_GAS, STEP_PER_GAS, 0L));",
+            replacedBy = "",
+            fails = "powered + fueled terraformer did not move density", on = "2026-10-19")
     @Test
     public void nativePlanetTerraformerWithFuelAndPowerStepsDensity() throws Exception {
         assertDimIsNativeStellurgyPlanet();
@@ -249,6 +254,68 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
                 densityBefore, densityAfter);
     }
 
+    /**
+     * How long the window is that the cycle is watched over, in machine ticks. Any positive count
+     * would do — the claim is that the cycle moves at all — and this one is short of the cycle's own
+     * {@code completionTime} (18000 at the shipped {@code terraformSpeed}), so no step completes
+     * and resets the count inside it.
+     */
+    private static final int FLUIDLESS_WINDOW_TICKS = 100;
+
+    /**
+     * With {@code terraformRequiresFluid} off, a powered terraformer with no gas in its hatches still
+     * runs its cycle: the setting skips the gas requirement, not the work.
+     *
+     * <p>Contract: fails if {@code TileAtmosphereTerraformer#onRunningPoweredTick} stops deciding
+     * that a terraformer not required to draw gas goes on counting its cycle, and returns before the
+     * count instead. Read off the controller's own {@code currentTime} and {@code outOfFluid}
+     * ({@code machine controller-state}) before and after a window of ticks. Silent about the power
+     * it pays: the fixture's creative plugs report the same store whatever is drawn.</p>
+     */
+    @Pins("INV-MBM-25")
+    @RedWitness(member = "TileAtmosphereTerraformer#onRunningPoweredTick",
+            at = "&& StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid) {",
+            replacedBy = ") { if (!StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid) return;",
+            fails = "with fluids not required a powered terraformer with empty hatches must still count its cycle",
+            on = "2026-10-07")
+    @Test
+    public void withFluidsNotRequiredAnUnfuelledTerraformerStillRunsItsCycle() throws Exception {
+        FixtureSite site = plot().inDimension(newDim).site();
+        site.requireClear(c -> arrange(c).raw(), 8, 12, "the terraformer's volume");
+        int cx = site.x + 2;
+        int cy = site.y + 5;
+        int cz = site.z + 2;
+        String controller = newDim + " " + cx + " " + cy + " " + cz;
+        Reply fixture = arrange("stellurgytest fixture multiblock terraformer " + controller);
+        requireArranged("the terraformer fixture must build whole: " + fixture,
+                fixture.ok() && fixture.integer("unresolved") == 0);
+        Reply formed = act("stellurgytest machine try-complete " + controller);
+        requireArranged("the terraformer must form: " + formed, formed.bool("isComplete"));
+
+        String found = read("stellurgytest config get terraformRequiresFluid").text("value");
+        try {
+            Reply off = arrange("stellurgytest config set terraformRequiresFluid false");
+            requireArranged("the setting must go off: " + off, off.ok());
+            Reply enabled = arrange("stellurgytest machine set-enabled " + controller + " true");
+            requireArranged("the terraformer must switch on: " + enabled, enabled.bool("enabled"));
+
+            Reply before = read("stellurgytest machine controller-state " + controller);
+            Reply tick = act("stellurgytest tile force-tick " + controller + " " + FLUIDLESS_WINDOW_TICKS);
+            requireArranged("the window must run: " + tick, tick.ok());
+            Reply after = read("stellurgytest machine controller-state " + controller);
+
+            int countedBefore = before.integer("currentTime");
+            int countedAfter = after.integer("currentTime");
+            assertTrue("with fluids not required a powered terraformer with empty hatches must still"
+                            + " count its cycle and not stand out of fluid — currentTime " + countedBefore
+                            + " -> " + countedAfter + " over " + FLUIDLESS_WINDOW_TICKS + " ticks, after: "
+                            + after,
+                    countedAfter > countedBefore && !after.bool("outOfFluid"));
+        } finally {
+            arrange("stellurgytest config set terraformRequiresFluid " + found).requireOk();
+        }
+    }
+
     // ─── helpers ───────────────────────────────────────────────────────
 
     private String buildAndCompleteFixture(int cx) throws Exception {
@@ -343,6 +410,78 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * {@code ar planet list}. Nothing here claims anything about that command's output; both read
      * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
      */
+    /**
+     * A planet's air may change while nobody is on it, and the terraforming its world had done under
+     * the old climate is retired when the world is next worked — the same as when the air changes with
+     * the world loaded. The change itself is taken and reported as taken.
+     *
+     * <p>The decision is {@code DimensionProperties#load_terraforming_helper} comparing the climate count
+     * its world's record was made under with the planet's own, which {@code atmosphereChanged} advances.
+     * Arranged: this class's freshly generated planet, one chunk recorded as terraformed
+     * ({@code terraforming mark}), the world saved and unloaded ({@code space unload}). The helper is
+     * loaded the way a terraforming terminal or drill loads it ({@code terraforming load-helper}). First a
+     * reload with the air untouched — the progress must stand, or "retired" below proves nothing — then
+     * the air changed while unloaded, and a reload.</p>
+     *
+     * <p>What it does not see: the terminal and drill that load the helper in play, and a terraforming
+     * cycle run afterwards.</p>
+     */
+    @RedWitness(verdict = "the terraforming done under the old air must be retired on the next load",
+            member = "DimensionProperties#load_terraforming_helper",
+            at = "if (reset || record.climate() != climateChanges)", replacedBy = "if (reset)",
+            fails = "the terraforming done under the old air must be retired on the next load", on = "2026-10-07")
+    @RedWitness(verdict = "a reload with the air untouched must keep the terraforming done",
+            member = "DimensionProperties#load_terraforming_helper",
+            at = "if (reset || record.climate() != climateChanges)",
+            replacedBy = "if (reset || record.climate() != climateChanges + 1)",
+            fails = "a reload with the air untouched must keep the terraforming done", on = "2026-10-07")
+    @RedWitness(verdict = "a change to the air of a planet nobody is on must be taken",
+            member = "DimensionProperties#atmosphereChanged",
+            at = "if (hasSurface() && net.minecraftforge.common.DimensionManager.getWorld(getId()) != null)",
+            replacedBy = "if (hasSurface())",
+            fails = "a change to the air of a planet nobody is on must be taken", on = "2026-10-07")
+    @Pins("MECH-DIM-10")
+    @Test
+    public void airChangedWhileThePlanetIsUnloadedRetiresItsTerraformingOnTheNextLoad() throws Exception {
+        int dim = newDim;
+        Reply marked = arrange("stellurgytest terraforming mark " + dim + " 0 0");
+        requireArranged("one chunk must stand terraformed: " + marked,
+                marked.integer("chunksFullyTerraformed") == 1);
+
+        reload(dim);
+        assertEquals("a reload with the air untouched must keep the terraforming done",
+                1, terraformedChunks(dim));
+
+        arrange("stellurgytest space unload " + dim);
+        Reply unloaded = read("stellurgytest terraforming info " + dim);
+        requireArranged("the planet's world must be unloaded before its air changes: " + unloaded,
+                !unloaded.bool("worldLoaded"));
+        Reply changed = arrange("stellurgytest planet add-gas " + dim + " oxygen 1000000000");
+        assertTrue("a change to the air of a planet nobody is on must be taken: " + changed, changed.ok());
+
+        reload(dim);
+        assertEquals("the terraforming done under the old air must be retired on the next load",
+                0, terraformedChunks(dim));
+    }
+
+    /** Save and unload {@code dim}'s world, load it again, and load its terraforming helper. */
+    private void reload(int dim) throws Exception {
+        arrange("stellurgytest space unload " + dim);
+        Reply loaded = arrange("stellurgytest dim load " + dim);
+        requireArranged("the planet's world must load again: " + loaded, loaded.bool("loaded"));
+        act("stellurgytest terraforming load-helper " + dim).requireOk();
+    }
+
+    private int terraformedChunks(int dim) throws Exception {
+        Reply info = read("stellurgytest terraforming info " + dim);
+        requireArranged("the planet's world must be loaded to read its record: " + info, info.bool("worldLoaded"));
+        return info.integer("chunksFullyTerraformed");
+    }
+
+    private static void requireArranged(String message, boolean holds) {
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(message, holds);
+    }
+
     private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
         for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw()).intArray("stellurgyDimensions")) {

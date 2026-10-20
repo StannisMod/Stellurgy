@@ -43,7 +43,12 @@ public final class NavBodyView {
             view.put(PlanetInfoField.ATMOSPHERE_PRESENCE,
                     Boolean.toString(props.getAtmosphereDensity() > 0));
             view.put(PlanetInfoField.TEMPERATURE, Integer.toString(props.getAverageTemp()));
-            view.put(PlanetInfoField.MASS, Float.toString(props.getGravitationalMultiplier()));
+            // MASS is the body's mass in Earth masses. A body nobody stated one for has no MASS line:
+            // its surface gravity is a different quantity, and printing it here would label one as
+            // the other.
+            if (props.getMass() > DimensionProperties.BULK_UNSET) {
+                view.put(PlanetInfoField.MASS, Double.toString(props.getMass()));
+            }
             view.put(PlanetInfoField.BIOMES, Integer.toString(props.getBiomes().size()));
         }
         return view;

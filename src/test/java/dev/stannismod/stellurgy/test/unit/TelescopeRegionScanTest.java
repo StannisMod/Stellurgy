@@ -314,25 +314,6 @@ public class TelescopeRegionScanTest {
     }
 
     @Test
-    public void aSweepResumesWhereItStoodAfterTheChunkComesBack() {
-        // A survey is a deadline plus a cursor, not a counter: it is saved mid-sweep, reloaded, and
-        // continues — which is what lets an observatory be unloaded without owing a tick replay.
-        RegionScan started = RegionScan.directed(HOME, 1, 0, -1, 6, 5_000L, tuning());
-        RegionScan halfway = started.advanced(started.stepDeadline(), started.cellsPerStep());
-        NBTTagCompound nbt = new NBTTagCompound();
-        halfway.writeToNBT(nbt);
-
-        RegionScan reloaded = RegionScan.readFromNBT(nbt);
-        assertNotNull("a saved survey must come back", reloaded);
-        assertEquals("it must come back looking at the same region",
-                halfway.min().cellKey(), reloaded.min().cellKey());
-        assertEquals(halfway.max().cellKey(), reloaded.max().cellKey());
-        assertEquals("and must not have forgotten what it already surveyed",
-                halfway.cellsDone(), reloaded.cellsDone());
-        assertEquals("nor when its next step lands", halfway.stepDeadline(), reloaded.stepDeadline());
-    }
-
-    @Test
     public void nothingIsStoredForAnObservatoryThatIsNotLooking() {
         assertNull("an absent survey must read back as absent, not as a survey at tick zero",
                 RegionScan.readFromNBT(new NBTTagCompound()));

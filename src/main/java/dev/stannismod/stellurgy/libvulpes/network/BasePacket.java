@@ -14,6 +14,24 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+/**
+ * A packet of the libVulpes channel: decoded on the network thread, executed on the game thread.
+ *
+ * <p><b>The no-argument constructor, {@link #readClient} and {@link #read} run on the NETTY thread.</b>
+ * The channel's codec builds the packet from its discriminator and fills it there, while the game
+ * thread is ticking the world, rendering, or still finishing a login. So they only turn bytes into
+ * this packet's own fields. They never read or change the state of the game or of this mod: no world,
+ * entity, tile, player, client or server instance, no {@code DimensionManager} / {@code ServerView} /
+ * {@code SpaceObjectManager} or any other manager, no configuration currently in force. That state
+ * belongs to the game thread, and on a client it may not exist yet: packets can arrive before the
+ * connection's galaxy has been made, and an exception thrown while decoding is fatal to the
+ * connection.</p>
+ *
+ * <p><b>{@link #executeClient} and {@link #executeServer} run on the GAME thread</b>, queued by the two
+ * handlers below in arrival order, and are where everything the packet DOES belongs — every lookup
+ * and every write. A decoder that needs a world to make sense of its bytes stores the raw values
+ * (an id, a position, the tag) and resolves them in its executor.</p>
+ */
 public abstract class BasePacket implements IMessage {
 	/** Effectively final, process lifetime: built once at class initialisation. */
 	private static final BiMap<Integer,Class<? extends BasePacket>> idMap;

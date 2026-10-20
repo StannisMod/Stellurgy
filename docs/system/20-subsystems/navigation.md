@@ -52,19 +52,19 @@ and shares nothing with this package.
 An entry's identity is `dim:<dimId>` when it carries a dimension, else `cell:<cellKey>` for a hand-noted
 bare coordinate. The coordinate it carries is the observation, never the identity; so one planet seen at
 two orbital positions is one entry, and a body and a bare point at the same coordinate are two. [V]
-`CrystalEntry.java:89-94`, `CrystalMemory.java:48-52`. [T] `CrystalMemoryTest.java:48`, `:68`.
+`CrystalEntry.java:89-94`, `CrystalMemory.java:48-52`. [T] `CrystalMemoryTest.java:35`, `:55`.
 
 ### MECH-NVG-02 — Merge by freshness
 Same identity: the larger `observedTick` wins outright; on equal ticks the entry whose detail tier is
 `atLeast` the other's wins (the incoming one on an exact tier tie). Merging different identities throws.
 `record` returns whether the crystal changed. [V] `CrystalEntry.java:124-139`, `CrystalMemory.java:48-64`.
-[T] `CrystalMemoryTest.java:91`, `:103`.
+[T] `CrystalMemoryTest.java:78`, `:90`.
 
 ### MECH-NVG-03 — Copy is add-only; sync is the symmetric union
 `copyFrom` records every source entry into the target (never removes, never mutates the source); `sync`
 copies B into A, then a snapshot of A's pre-merge state into B, so both end as the union with the
 fresher record of each shared body. Returns the number of entries changed (0 = already in step). [V]
-`CrystalMemory.java:71-82`, `CrystalSync.java:23-33`. [T] `CrystalMemoryTest.java:114`, `:132`;
+`CrystalMemory.java:71-82`, `CrystalSync.java:23-33`. [T] `CrystalMemoryTest.java:101`, `:119`;
 `NavRedactionAndSyncTest.java:136`, `:151`, `:165`. Exception to "already in step": see Failure modes.
 
 ### MECH-NVG-04 — Unlimited capacity, wholesale blanking only
@@ -129,8 +129,9 @@ row `PacketNavBodyInfo`), so the channel has no visible effect yet. [V]
 `NavBodyView.of` always carries COORDINATE (the body's durable name cell key, never an offset), NAME
 (crystal's name, else the dimension's, else the kind) and TOPOLOGY (kind). For a body with a dimension
 (not stars/belts/slots; landability irrelevant) it adds atmosphere density and presence, average
-temperature, a gravity figure under `MASS`, and biome count. A field nobody can supply is absent, not
-blank. [V] `NavBodyView.java:26-71`.
+temperature, the body's mass in Earth masses under `MASS` — absent when nobody stated one, never its surface gravity
+under that label — and biome count. A field nobody can supply is absent, not blank. [V][T]
+`NavBodyView.java:26-54`; `NavigationReadoutServerTest.java:42`.
 
 ### MECH-NVG-12 — A ship answers the gate from its own console and ledger
 `ShipNavigation` is a thin per-call view: the nav computer is the loaded `TileNavigationComputer` whose own
@@ -161,8 +162,7 @@ only the sides that changed. Copy-source-into-ship is likewise server-side. [V]
 Read is forgiving: an unreadable `kind` → `PLANET`, an unreadable `detail` → `TELESCOPE`, a missing tag →
 empty crystal, a null entry skipped; entries re-enter through `record`, so duplicate identities in stored
 NBT merge on load. [V] `CrystalEntry.java:33-37,141-188`, `CrystalMemory.java:131-157`,
-`ItemMemoryCrystal.java:29`. [T] round trip of name/kind/detail/tick/coord: `CrystalMemoryTest.java:162`,
-`:181`; **`dim` is not asserted by any round-trip test I found**. The item is stack-size 1
+`ItemMemoryCrystal.java:29`. No test asserts the round trip of name/kind/detail/tick/coord/`dim`. The item is stack-size 1
 (`ItemMemoryCrystal.java:32`). Persisted `observedTick` is a SPACE-clock value (C16); nothing here reconciles
 a rolled-back clock.
 
@@ -170,10 +170,10 @@ a rolled-back clock.
 
 - **INV-NVG-01** `[V]` A `CrystalMemory` holds at most one entry per identity key; the key is the body's
   `dimId` when it has one, else the coordinate's cell. `CrystalMemory.java:48-64`; `CrystalEntry.java:89`.
-  `[T]` `CrystalMemoryTest.java:48`, `:81`.
+  `[T]` `CrystalMemoryTest.java:35`, `:68`.
 - **INV-NVG-02** `[V]` `record`/`copyFrom`/`sync` never remove an address and never replace a record with
   an older observation. `CrystalMemory.java:71-82`, `CrystalEntry.java:132-137`. `[T]`
-  `CrystalMemoryTest.java:103`, `:114`.
+  `CrystalMemoryTest.java:90`, `:101`.
 - **INV-NVG-03** `[V]` Merging two different identities throws; callers must key first. `CrystalEntry.java:128-131`.
 - **INV-NVG-04** `[V]` A `CrystalEntry` always has a coordinate; null `name`/`kind`/`detail` are normalised
   (`""`, `PLANET`, `TELESCOPE`). `CrystalEntry.java:54-60`.
@@ -189,6 +189,9 @@ a rolled-back clock.
 - **INV-NVG-09** `[V]` A ship's navigation computer is found by the console's link to THIS ship's flight
   computer block, and by nothing else. `ShipNavigation.java:194-212`. `[T]` `NavLookupNamesItsOwnShipTest.java:62`.
 - **INV-NVG-10** `[V]` Crystal mutation requests are honoured on the server only. `TileNavigationComputer.java:841-844`.
+- **INV-NVG-11** `[T][BEH]` The readout's MASS line carries the body's mass in Earth masses, never its surface
+  gravity, and a body nobody stated a mass for has no MASS line (`NavBodyView.java:46-51`; MECH-NVG-11). Pinned by
+  `NavigationReadoutServerTest#theMassLineCarriesTheBodysMassNotItsGravity`.
 
 ## Failure modes & edge cases
 
@@ -245,7 +248,5 @@ red-witness notes), `dim` NBT round-trip, `ensureSeeded`, the equal-tick sync ca
 
 ## Open questions
 
-- A `NavBodyView` field named `MASS` is filled from the gravitational multiplier
-  (`NavBodyView.java:46`); whether `PlanetInfoField.MASS` means mass or gravity was not established.
 - Whether `getRegisteredDimensions` (`CrystalSeeding.java:76`) can hold non-planet dimensions that
   `coordForPlanet` would still name was not established.

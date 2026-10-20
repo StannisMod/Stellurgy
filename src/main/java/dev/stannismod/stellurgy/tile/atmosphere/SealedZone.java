@@ -4,12 +4,15 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * The zone one block holds: whether its room is closed, whether its hull has opened since, and what
@@ -38,8 +41,9 @@ final class SealedZone {
 
     private boolean sealed;
     /**
-     * This zone has held a seal at least once since it loaded. It is what tells "the room opened"
-     * apart from "the room is not built yet": both look like no seal, no zone, air in hand.
+     * This zone has held a seal since it loaded or was last dropped. It is what tells "the room opened"
+     * apart from "the room is not built yet" and from "the owner let it go": all three look like no
+     * seal, no zone, air in hand.
      */
     private boolean everSealed;
     /**
@@ -167,18 +171,29 @@ final class SealedZone {
         return ok;
     }
 
-    /** The owner cannot hold the zone (switched off, browning out): the room stops being one. */
+    /**
+     * The owner cannot hold the zone (switched off, browning out): the room stops being one. That is not
+     * a hole in the hull, so the zone this empties must not read as a seal that found its zone gone; the
+     * air waits for the next seal check, which the owner runs once it can hold the zone again and which
+     * answers for a hull that opened meanwhile.
+     */
     void drop(@Nonnull AtmosphereHandler handler) {
         handler.clearBlob(owner);
         sealed = false;
+        everSealed = false;
         awaitingFill = false;
     }
 
     /**
-     * A breached zone loses its air to space instead of losing it to bookkeeping. Clearing the zone
-     * empties its cells and keeps its gases, so the air outlives the room exactly as long as it takes
-     * to escape. A hole needs no electricity, so this runs whatever the owner's power. All gases go
-     * together: vacuum does not sort them.
+     * A breached zone exchanges its air with the outdoors instead of losing it to bookkeeping. Clearing
+     * the zone empties its cells and keeps its gases, so the air outlives the room exactly as long as
+     * it takes to become the outdoors'. A hole needs no electricity, so this runs whatever the owner's
+     * power.
+     *
+     * <p>Each gas moves toward the outdoors' partial pressure of it, by at most the breach rate a
+     * second, in whichever direction it differs: in space every gas leaves until the room is vacuum, on a
+     * breathable world the room's air becomes that world's air — a room patched after a breach holds
+     * what is outside, not nothing. What comes in arrives at the outdoors' temperature.</p>
      */
     private void ventBreachedAir(AtmosphereHandler handler) {
         if (!breached || sealed) {
@@ -190,13 +205,26 @@ final class SealedZone {
         }
         ticksSinceVenting = 0;
         AirState air = handler.getAirState(owner);
-        if (air == null || air.getTotalPressure() <= 0L) {
+        if (air == null) {
             return;
         }
-        air.drawNitrogen(ratePerSecond);
-        air.drawOxygen(ratePerSecond);
-        air.drawCarbonDioxide(ratePerSecond);
-        changed.run();
+        AirState outdoors = handler.getOutdoorAir();
+        Set<Gas> gases = new HashSet<>(air.composition().keySet());
+        gases.addAll(outdoors.composition().keySet());
+        boolean moved = false;
+        for (Gas gas : gases) {
+            long difference = outdoors.partialPressure(gas) - air.partialPressure(gas);
+            if (difference > 0L) {
+                air.add(gas, Math.min(ratePerSecond, difference), outdoors.getTemperatureKelvin());
+                moved = true;
+            } else if (difference < 0L) {
+                air.draw(gas, Math.min(ratePerSecond, -difference));
+                moved = true;
+            }
+        }
+        if (moved) {
+            changed.run();
+        }
     }
 
     /** The zone's gases: the live ones once registered, otherwise what waits to be restored. */

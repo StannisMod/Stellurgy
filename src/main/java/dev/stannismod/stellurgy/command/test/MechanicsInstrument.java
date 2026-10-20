@@ -23,7 +23,11 @@ enum MechanicsInstrument {
     SEAT_DELIVERY_WINDOW_CLOSE("dev.stannismod.stellurgy.test.trace.SeatDeliveryWindow", "close", Kind.RECORDER),
     PHYSICS_STEP_WINDOW_OPEN("dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", "open", Kind.RECORDER),
     PHYSICS_STEP_WINDOW_CLOSE("dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", "close", Kind.RECORDER),
-    SIDE_TRACE_DISCARD_WINDOWS("dev.stannismod.stellurgy.test.trace.SideTrace", "discardServerWindows", Kind.RECORDER);
+    SIDE_TRACE_DISCARD_WINDOWS("dev.stannismod.stellurgy.test.trace.SideTrace", "discardServerWindows", Kind.RECORDER),
+    // A window the behaviour mixin MixinArrivalSpawnMountRefusal reads to refuse that many seat mounts; open and
+    // close write only the window's own count.
+    MOUNT_REFUSAL_ARMING_OPEN("dev.stannismod.stellurgy.test.trace.MountRefusalArming", "open", Kind.RECORDER),
+    MOUNT_REFUSAL_ARMING_CLOSE("dev.stannismod.stellurgy.test.trace.MountRefusalArming", "close", Kind.RECORDER);
 
     /** What an instrument does; the kind is the claim a reviewer checks against the body. */
     enum Kind {

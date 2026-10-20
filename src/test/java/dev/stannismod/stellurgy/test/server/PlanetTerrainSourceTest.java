@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -136,6 +137,9 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
      * Pins INV-WGEN-22 (A planet's published world type is its own, never the save's).
      */
     @Pins("INV-WGEN-22")
+    @RedWitness(member = "StellurgyPlanetWorldInfo#getTerrainType", at = "return resolved.worldType;",
+            replacedBy = "return delegate.getTerrainType();",
+            fails = "a NATIVE planet generates with Stellurgy's own world type and must say so", on = "2026-10-19")
     @Test
     public void planetPublishesItsOwnWorldTypeThroughWorldInfo() throws Exception {
         int planet = firstTemplateStellurgyDimOrSkip();

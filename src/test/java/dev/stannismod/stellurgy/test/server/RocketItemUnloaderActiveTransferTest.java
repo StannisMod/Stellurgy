@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -53,6 +54,9 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      * Pins INV-INFRA-14 (the item unloader pulls items out of a rocket).
      */
     @Pins("INV-INFRA-14")
+    @RedWitness(member = "TileRocketUnloader#update", at = "ItemHandlerHelper.insertItem(ownHandler, actuallyExtracted, false)",
+            replacedBy = "actuallyExtracted",
+            fails = "the unloader's own inventory must hold what it drained", on = "2026-10-19")
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {
         // THE PAIR MOVES TOGETHER: the unloader sat one block above the rocket's base, a RELATIVE

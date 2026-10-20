@@ -124,7 +124,12 @@ stopped" must be re-said every tick (`VSBridge.java:575-583`, `:1105-1123`). `[V
 **MECH-VSI-07 — The crossing recipe: cut a ship out of one world, paste and re-assemble it in another.**
 `crossShip(src…, srcShipUuid, dst…)` (`VSIntegration.java:479-639`) in order: resolve the shipyard box
 (by id when given, else nearest — `:486-487`) → scan the Y band of real blocks, force-loading the claim
-(`:500`, `:967-991`) → read the source's durable name and **declare the departure** to the announcer
+(`:500`, `:967-991`) → **ask the substrate, before anything is cut, whether it will rebuild this hull**: find
+the flight computer the far end will anchor on (the first in the box, in the order the far end scans it) and
+run the spawn's own detection and rule from it, with the SOURCE's own shipyard box as the footprint
+(`VSBridge#assemblyRefusal` → `WorldServerShipManager#refusalFor`: `TOO_LARGE`, `BEDROCK` or `REACH_EXCEEDED`);
+no computer, or a refusal, returns a `CrossResult` carrying `refusal` with the source untouched (`VSIntegration.java:628-630`,
+the block after the band scan) → read the source's durable name and **declare the departure** to the announcer
 BEFORE cutting (`VSIntegration.java:538-555`) → cut a tight box (`:558-560`; `abandonDeparture` if nothing was cut, `:561-566`)
 → mark the source FINISHED so the engine collects it on its next tick, loaded or not (`:571`,
 `VSBridge.java:854-864`; the source is deliberately not deregistered by hand first — `VSIntegration.java:509-537`)
@@ -132,9 +137,12 @@ BEFORE cutting (`VSIntegration.java:538-555`) → cut a tight box (`:558-560`; `
 paste in clear sky, anchor on the first non-air block, and `assembleTier2Ship` the pasted snapshot (`:592-625`).
 `snapshotShipOf`/`snapshotShipAt` re-cut a parked ship non-destructively for the transit persistence
 (`:648-685`); `pasteAndAssemble` is the paste tail for a restored transit and now returns the ship under
-its own name (`:699-744`). If the anchor scan of the pasted box finds only air, the source is already cut and
-the ship exists as loose blocks registered nowhere: a `CrossResult` with a null anchor and an ERROR log, the
-one destructive failure (`:626-637`). `[T]` a crossing leaves no ship behind:
+its own name (`:699-744`). If the anchor scan of the pasted box finds only air, or the assembly takes nothing,
+the source is already cut and the ship exists as loose blocks registered nowhere: a `CrossResult` that is not
+`ok()` — `ok()` is a pasted anchor AND a queued identity — and an ERROR log, the destructive failure the pre-cut
+check exists to make unreachable. `[T]` a hull past the reach and a hull with its computer broken are refused
+before the cut: `test/server/VSShipAssemblyExtentTest.java` (`aShipThatGrewPastTheReachIsNotCutByACrossing`,
+`aShipWithItsComputerBrokenIsNotCutByACrossing`). `[T]` a crossing leaves no ship behind:
 `test/server/VSCrossingLeavesNoShipBehindTest.java:78`, `:90`, `:141`. The dummy rule is `[T]`
 `test/unit/CutLeavesNothingBoundTest.java:38` (and `:52`, `:75` — the match is on the SEAT, not where the
 dummy rides).
@@ -346,6 +354,12 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
   `ClientProxy.java:265`). A null port therefore means "dedicated server" and nothing else.
 - **INV-VSI-17 [V]** Ship-meets-ship holding is a no-op, with no event and no cost beyond one config read,
   while `shipsCollide` is false (`ShipMeetingStop.java:83-87`).
+- **INV-VSI-18 [T][BEH]** A crossing refuses, before it cuts anything, a hull the far end would not rebuild as one ship —
+  one with no flight computer, or one the substrate's own assembly rule refuses (past the detection reach, more blocks
+  than it builds): the source is left whole in its shipyard, nothing is pasted, and the result carries the refusal's
+  reason (`VSIntegration.java:620-640`, `VSBridge.java:87-104,168-179`; MECH-VSI-07). Pinned by
+  `VSShipAssemblyExtentTest#aShipThatGrewPastTheReachIsNotCutByACrossing`,
+  `…#aShipWithItsComputerBrokenIsNotCutByACrossing`.
 
 ## Failure modes & edge cases
 
@@ -356,16 +370,21 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
   `crossShip` overload all go through `nearestQueryableShip` (`VSBridge.java:902`), which compares a
   WORLD-frame pose to whatever position it is handed. The facade's own comment says "the nearest-ship
   lookups are gone" (`VSIntegration.java:1291-1302`), but production still calls `flightComputerAt`
-  (`VSShipCrosser.java:240`), `parkShipAt` (`:317`), `snapshotShipAt` (`:527`) and `unparkShipAt`
-  (`VSShipCrossingOps.java:409`). Each has an id-keyed twin; the callers listed are not on it.
-- **A crossing whose re-assembly is refused reports success.** `CrossResult.ok()` is `anchor != null`
-  (`VSIntegration.java:433-435`), but `assembleTier2Ship` returns null on a footprint with no flight computer
-  (`:155-163`) while the anchor was found by the air-scan (`:603-625`); the source is already cut. `Crossed`
-  is then built with a null `shipUuid` (`VSShipCrosser.java:459`, `:563`, `VSShipCrossingOps.java:144`).
-- **A spawn the engine refuses leaves no trace on this side.** The drain skips a ship that is too big or
-  attached to bedrock with one `System.err` line and clears the queue
-  (`WorldServerShipManager.java:195-207`, `:376`), while `assembleTier2Ship` has already returned the uuid
-  (`VSBridge.java:112-115`), so the caller holds the id of a ship that was never spawned.
+  (`VSShipCrosser.java:240`) and `unparkShipAt` (`VSShipCrossingOps.java:409`). Each has an id-keyed twin;
+  the callers listed are not on it. The departure's `parkShipAt` and the re-cut's `snapshotShipAt` fallbacks are
+  gone: a re-cut that finds no ship of its name takes NO snapshot and the jump keeps the
+  one it has (`VSShipCrosser#snapshotOfNamedShip`), and the departure parks by name, finding a ship still queued
+  to spawn (`VSBridge#parkShip` → `WorldServerShipManager#queuedSpawn`).
+- **A crossing's re-assembly can still be refused after the cut.** The hull is checked against the spawn's own
+  rule before the cut and `CrossResult.ok()` needs a queued identity; but the check and the spawn run on
+  different ticks, so a world that changes between them (a block added to the pasted hull) can still be refused
+  after the cut — logged by the substrate with its reason.
+- **A spawn the engine refuses reaches this side only as a log line.** The drain refuses a ship that
+  is too big, attached to bedrock or past the detection reach, logging the reason and giving the shipyard claim
+  back (`WorldServerShipManager#refuseSpawn`), while `assembleTier2Ship` has already returned the uuid, so a
+  caller that did not ask first holds the id of a ship that was never spawned. The crossing, the jump gate
+  (with the ship's chunk claim, full column, as the footprint) and the rocket assembler ask first
+  (`VSBridge#assemblyRefusal`).
 - **Known-red deck scenarios (ignored with the maintainer's reason in the annotation):** hull-stand→aboard
   is still a per-tick geometric predicate with no edge (`ShipFrameTravel.java:283-287`;
   `VSCrewCaptureContractTest.java:1636`); a relogged player on an inverted deck is released
@@ -425,13 +444,13 @@ Server e2e: `VSCrossingLeavesNoShipBehindTest`, `VSShipTransitPersistTest` (rest
   mixin moves behind the port (C11 PORT-11)?
 - `ShipMeetingStop` has no pinning test; a mechanic with a config flag and an event should owe one.
 **Bug leads (by reading)**
-- The positional nearest-ship lookups still run in production: `VSShipCrosser.java:240,317,527` and
-  `VSShipCrossingOps.java:409` go through `VSBridge.nearestQueryableShip` (`VSBridge.java:902`). A second
-  ship or a blockless remnant nearer the probe point is parked, snapshotted or searched instead.
-- A crossing whose paste re-assembles no ship reports `ok()`, verified.
-- The engine refuses an over-size or bedrock-attached spawn with one `System.err` line while
-  `assembleTier2Ship` has already returned the uuid (`VSBridge.java:112-115`; engine side in
-  [valkyrienskies](./valkyrienskies.md)).
+- Two positional nearest-ship lookups still run in production: `VSShipCrosser.java:243` (`flightComputerAt`)
+  and `VSShipCrossingOps.java:408` (`unparkShipAt`) go through `VSBridge.nearestQueryableShip`
+  (`VSBridge.java:993`). A second ship or a blockless remnant nearer the probe point is searched or unparked
+  instead. The departure parks by name, and a re-cut that finds no ship of its name takes no snapshot.
+- The rocket assembler asks `VSIntegration#builtTier2ShipRefusal` before it hands the craft over
+  (`TileRocketAssemblingMachine.java:860`), so an over-size or past-reach build is refused with the "ship too
+  large" status for both `TOO_LARGE` and `REACH_EXCEEDED` (engine side in [valkyrienskies](./valkyrienskies.md)).
 
 **Doc drift found while mapping** (code first, doc second)
 - C11 PORT-3 counts `VSIntegration` at 966 lines (now 1636); PORT-4 and the javadocs at `VSBridge.java:39`,

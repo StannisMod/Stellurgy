@@ -221,6 +221,11 @@ enum ProbeVerbKind {
             case "block biome-at":
             case "chunk list":
             case "chunk loaded":
+            case "client entity-state":
+            case "client machine-state":
+            case "client slider":
+            case "client space-dim":
+            case "client tile-byte":
             case "clock":
             case "commands list":
             case "config get":
@@ -271,6 +276,7 @@ enum ProbeVerbKind {
             case "machine recipe-info-block":
             case "machine recipes-summary":
             case "machine tick-until":
+            case "mission asteroid-types":
             case "mission infra-state":
             case "mission rocket-cargo":
             case "mission state":
@@ -278,6 +284,10 @@ enum ProbeVerbKind {
             case "oredict empty":
             case "oredict get":
             case "oxygen player":
+            case "packet ghosts":
+            case "packet held":
+            case "packet sees":
+            case "packet sender":
             case "pipe wireless-info":
             case "pipe wireless-role-on-network":
             case "planet authored":
@@ -371,10 +381,13 @@ enum ProbeVerbKind {
             case "space ledger-get":
             case "space loose-body-count":
             case "space loose-body-find":
+            case "space nav-body-view":
             case "space nebula-find":
             case "space nebulae":
             case "space subsystem-status":
             case "space transit-export":
+            case "space yard-afc":
+            case "space yard-blocks":
             case "space zone-membership":
             case "space zone-planets":
             case "space zone-sphere":
@@ -466,6 +479,10 @@ enum ProbeVerbKind {
             case "chunk release":
             case "chunk release-all":
             case "chunk warmup":
+            // A container the sender never opened, and a ship-index packet addressed where the test chooses.
+            case "client close-screen":
+            case "client screen":
+            case "client vs-index":
             case "config set":
             case "damage clear-impacts":
             case "damage guard":
@@ -524,6 +541,7 @@ enum ProbeVerbKind {
             case "nav link":
             case "nav target":
             case "nav target-body":
+            case "packet hold":
             case "pipe wireless-pair":
             case "pipe wireless-set-enabled":
             case "pipe wireless-set-mode":
@@ -591,6 +609,7 @@ enum ProbeVerbKind {
             case "shield rotate-code":
             case "shot clear":
             case "space add-poi":
+            case "space assemble-box":
             case "space auto-takeoff":
             case "space enter":
             case "space entry-clear":
@@ -673,6 +692,10 @@ enum ProbeVerbKind {
             case "vs strand-blockless-record":
             case "vs teleport-ship-by-id":
             case "vs unpark-by-id":
+            case "vulpes chunk-drop":
+            // A recipe built by the probe and registered nowhere: no player can reach its ingredients.
+            case "vulpes recipe-claim":
+            case "vulpes recipe-take":
             case "weaponconsole allegiance":
             case "weaponconsole cleartarget":
             case "weaponconsole code":
@@ -692,6 +715,10 @@ enum ProbeVerbKind {
             case "worldgen create-terrain-dim":
                 return ARRANGE;
             case "block activate":
+            // A client packet decoded by its own class and handed to its server handler for the sender.
+            case "client affs":
+            case "client entity":
+            case "client machine":
             case "damage impact":
             case "damage weld":
             case "drive arm":
@@ -714,6 +741,9 @@ enum ProbeVerbKind {
             case "nav modules":
             case "nav refresh":
             case "nav sync":
+            case "packet entity":
+            case "packet item":
+            case "packet machine":
             case "player advancement-trigger-direct":
             case "player drive-ridden-entity":
             case "player ensure-fake":
@@ -776,6 +806,7 @@ enum ProbeVerbKind {
             case "telescope passive":
             case "telescope scan":
             case "telescope whole-system":
+            case "terraforming load-helper":
             case "tile force-tick":
             case "tile force-tick-clock":
             case "tile init-modules":
@@ -798,6 +829,7 @@ enum ProbeVerbKind {
             case "space ledger-settle":
             case "space ledger-transit":
             case "station undock":
+            case "terraforming mark":
             case "turret drive":
             case "vent reseal":
             case "wear set":

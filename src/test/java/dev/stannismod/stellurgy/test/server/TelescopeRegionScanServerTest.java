@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.Nebula;
@@ -809,7 +810,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * comparing the threshold against the extinction in magnitudes.</p>
      *
      * <p>The cloud is a real one of the shipped procedural sky ({@code space nebula-find}), the
-     * system is seated on the far side of it along the instrument's own aim, and the dust on that
+     * system is seated a quarter of the way into it along the instrument's own aim, and the dust on that
      * sight line is MEASURED ({@code space extinction}); the two thresholds straddle that one reading,
      * so the only thing that differs between the two looks is which side of the threshold the same
      * dust falls. The thin one sits midway between the dust in magnitudes and the same dust as a
@@ -829,7 +830,14 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
             + " \"behind dust thicker than the threshold the system must still be written down - its address"
             + " alone, never nothing\" (it was named); with {@code TelescopeScan#characterise} at"
             + " {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was"
-            + " written) — one inversion per run, 2026-10-02.")
+            + " written) — one inversion per run, 2026-10-02. Taken with the system seated past the cloud's far"
+            + " edge; it was moved a quarter into the cloud on 2026-10-07, where the {@code return false;} one"
+            + " was re-taken (below).")
+    @RedWitness(verdict = "behind dust thicker than the threshold the system must still be written down",
+            member = "TelescopeScan#isObscuredAt",
+            at = "return threshold > 0d && extinctionMagnitudes >= threshold;", replacedBy = "return false;",
+            fails = "behind dust thicker than the threshold the system must still be written down",
+            on = "2026-10-07")
     @Test
     public void thickDustLeavesASystemItsAddressAndThinDustHidesNothing() throws Exception {
         FixtureSite site = site();
@@ -857,9 +865,13 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                 requireArranged("the aim at the cloud must fit the instrument's integer aim: " + cloud,
                         Math.abs(component) <= Integer.MAX_VALUE);
             }
-            // The first whole territory past the cloud's far edge, along the aim: the look of that
-            // shell lands on the axis, `k` strides out.
-            int k = (int) Math.ceil((cloudCells + cloud.number("radiusCells")) / stride) + 1;
+            // The first whole territory a quarter of the cloud deep from its near edge, along the aim:
+            // the look of that shell lands on the axis, `k` strides out. Not past its far edge: a whole
+            // cloud read end to end is more dust than any aperture a player can configure sees a star
+            // through (measured 2026-10-07 on the shipped sky: 36.7 magnitudes across this cloud, a star
+            // of m=44 behind it; past its centre, 24.5 magnitudes and an aperture of 39.4 against the
+            // ceiling of 40), and a quarter of it is still dust on the line.
+            int k = (int) Math.ceil((cloudCells - cloud.number("radiusCells") / 2d) / stride) + 1;
             long[] aim = {(long) toCloud[0], (long) toCloud[1], (long) toCloud[2]};
             long[] seat = {home[0] + Math.round(toCloud[0] / cloudCells * k * stride),
                     home[1] + Math.round(toCloud[1] / cloudCells * k * stride),

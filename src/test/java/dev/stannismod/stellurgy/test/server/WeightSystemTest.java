@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -108,6 +109,9 @@ public class WeightSystemTest extends AbstractSharedServerTest {
 
     /** Pins INV-WGT-03 (fluid weight is positive and scales with fuelMassScale). */
     @Pins("INV-WGT-03")
+    @RedWitness(member = "WeightEngine#getWeight(Fluid,float)",
+            at = "* StellurgyConfiguration.getCurrentConfig().fuelMassScale", replacedBy = "",
+            fails = "fluid weight must scale by fuelMassScale", on = "2026-10-20")
     @Test
     public void fluidWeightUsesFallbackAndFuelScale() throws Exception {
         reset();

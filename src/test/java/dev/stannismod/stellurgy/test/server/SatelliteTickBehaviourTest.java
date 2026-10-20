@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -90,6 +91,9 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      * Pins INV-SAT-01 (Base battery never exceeds powerStorage).
      */
     @Pins("INV-SAT-01")
+    @RedWitness(member = "UniversalBattery#acceptEnergy", at = "if(maxReceive > maxEnergy - energy) {",
+            replacedBy = "if(false) {",
+            fails = "battery must cap at powerStorage=500", on = "2026-10-19")
     @Test
     public void baseSatelliteBatteryCapsAtPowerStorage() throws Exception {
         long satId = createSat("oreScanner", 1000, 500, 1000);
@@ -143,6 +147,9 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      * Pins INV-SAT-02 (DataStorage.addData is capped at maxData).
      */
     @Pins("INV-SAT-02")
+    @RedWitness(member = "DataStorage#addData", at = "int amountToAdd = Math.min(data, this.maxData - this.data);",
+            replacedBy = "int amountToAdd = data;",
+            fails = "data must NOT exceed maxData cap even with many ticks", on = "2026-10-19")
     @Test
     public void dataSatelliteRespectsMaxDataCap() throws Exception {
         // maxData=2, powerGen=1000 -> collectionTime=20; 500 ticks would

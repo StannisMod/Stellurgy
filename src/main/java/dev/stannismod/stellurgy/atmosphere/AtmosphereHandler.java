@@ -398,6 +398,15 @@ public class AtmosphereHandler {
         return outside == null ? null : outside.getAir();
     }
 
+    /**
+     * The outdoors of this world: the air a room open to it exchanges with. A handler exists only for a
+     * world whose properties have a surface ({@link #registerWorld}), so there is always one to ask.
+     */
+    @Nonnull
+    public AirState getOutdoorAir() {
+        return DimensionManager.getInstance().getDimensionProperties(dimId).getAir();
+    }
+
     /** The same, at an entity: the zone it stands in, by the zone lookup the effects use. */
     @Nullable
     private AirState getAirAround(@Nonnull Entity entity) {

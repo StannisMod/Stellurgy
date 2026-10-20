@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -62,6 +63,9 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
      * Pins INV-INFRA-01 (a freshly placed unlinked monitor reports an unpowered state and comparator zero).
      */
     @Pins("INV-INFRA-01")
+    @RedWitness(member = "TileRocketMonitoringStation#getComparatorOverride", at = "return 0;",
+            replacedBy = "return 15;",
+            fails = "unlinked monitor's getComparatorOverride must return 0", on = "2026-10-19")
     @Test
     public void unlinkedMonitorReportsZeroComparatorOverride() throws Exception {
         int mx = CX_NO_ROCKET, my = CY + 2, mz = CZ;

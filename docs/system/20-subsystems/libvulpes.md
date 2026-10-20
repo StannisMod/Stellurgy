@@ -92,11 +92,13 @@ power out (Forge output plug) [V] `LibVulpes.java:385-424`; a second `addMapping
 ### MECH-LVP-03 — formation: validate everything, then mutate
 
 `attemptCompleteStructure(state)` sets `completeStructure` and `canRender` to the result of `completeStructure(state)`
-[V] `TileMultiBlock.java:274-278`. That method (a) **clears the port and battery caches first** [V] `:317`; (b) walks every non-null cell
-and returns `false` on the first of: a chunk reporting not-loaded, a `blockPhantom` cell, or a block not in the cell's allowed list
-(the failing cell raises the client-side `errorBox` particle) [V] `:329-393`; (c) only then mutates, in this order: structure blocks are
-hidden or marked formed, **foreign blocks are replaced by placeholders**, every tile gathered during the scan is `integrateTile`d, and
-replaceable `AIR` cells are cleared [V] `:396-439`. A `TilePointer` already mastered by this controller is trusted without checking its
+[V] `TileMultiBlock.java:279-283`. That method (a) **clears the port and battery caches first** [V] `:322`; (b) walks every non-null cell
+and returns `false` on the first of: a cell whose chunk is not in memory — asked with `isBlockLoaded(pos, false)`, which never loads
+or generates the chunk it asks about [V][T] `:350`, `MachineLibraryGroupTest` (forming does not load the part's chunk) —,
+a `blockPhantom` cell, or a block not in the cell's allowed list (the failing cell raises the `errorBox` particle, on the client's own
+walk only) [V] `:334-405`; (c) only then mutates, in this order: structure blocks are hidden or marked formed, **foreign
+blocks are replaced by placeholders**, every tile gathered during the scan is `integrateTile`d, and replaceable `AIR` cells are cleared
+[V] `:406-457`. A `TilePointer` already mastered by this controller is trusted without checking its
 block (`continue`), and a pointer mastered by a *different* controller is re-checked as an ordinary block and, on success,
 **re-pointed at this controller** by `integrateTile` — a hatch belongs to the last controller that formed around it, and the previous
 one is never told [V] `:357-372,508-510`. Formation can run **on the client too**: a right-click on a controller whose server state is
@@ -121,26 +123,36 @@ formation is picked up [V] `TileMultiBlock.java:77-97`.
 `deconstructMultiBlock(world, destroyedPos, blockBroken, state)` clears `completeStructure`/`canRender`, turns the controller's `STATE`
 property off (unless the controller itself is the block being broken), then walks the same cells (with the **destroyed controller's current facing**) and calls `destroyBlockAt` on each: a
 structure block has its formed bit cleared; a placeholder is marked incomplete, replaced by its stored state, and its stored tile is
-rebuilt by a **NBT write/read round trip** onto the new tile; any other pointer is marked incomplete **and `invalidate()`d**
-[V] `TileMultiBlock.java:178-264`. `TileMultiPowerConsumer` additionally zeroes progress, disables the machine and resets the speed
+rebuilt by a **NBT write/read round trip** onto the new tile; any other pointer is marked incomplete and, **only when its unformed
+block carries no tile** (a visible component), `invalidate()`d — a hatch or a plug keeps a tile in both states, and that tile is what
+holds the items, fluid and energy put into it, so it stays the one the next lookup finds (the microwave receiver keeps no snapshot/restore of its own around
+teardown and formation: restoring a snapshot by merge would double a hatch's stacks) [V][T] `TileMultiBlock.java:178-269`, `MachineLibraryGroupTest` (a teardown leaves the
+hatches holding what they held). `TileMultiPowerConsumer` additionally zeroes progress, disables the machine and resets the speed
 multiplier; `TileMultiblockMachine` first nulls its pending outputs [V] `tile/multiblock/TileMultiPowerConsumer.java:256-265`,
 `tile/multiblock/TileMultiblockMachine.java:170-175`. Triggers: breaking the controller (`BlockMultiblockMachine.breakBlock`, only if
 complete), breaking any structure block or hatch (`BlockMultiblockStructure.breakBlock`), breaking a placeholder
 [V] `block/multiblock/BlockMultiblockMachine.java:37-48`, `block/multiblock/BlockMultiblockStructure.java:83-96`,
 `block/multiblock/BlockMultiblockPlaceHolder.java:121-130`. A chunk unload of a hatch **un-completes its master without
-deconstructing** (flag only) [V] `tile/multiblock/hatch/TileInventoryHatch.java:173-181`, `TileMultiBlock.java:163-165`.
+deconstructing** (flag only), on the world tick after the unload (`World#updateEntities` runs the tiles' `onChunkUnload`) [V][T]
+`tile/multiblock/hatch/TileInventoryHatch.java:173-181`, `TileMultiBlock.java:163-165`, `MachineLibraryGroupTest` (a part unloading
+across a chunk border un-completes its controller). The hatch finds its master through `TilePointer#getFinalPointedTile`, which asks
+whether the master's OWN chunk is loaded; it asked whether a one-block area around the master was, which for a controller on a chunk
+border is false exactly when the hatch's chunk has gone, so the master was never told [V] `tile/TilePointer.java:75-90`.
 
 ### MECH-LVP-06 — the machine tick and the power gate
 
 Both consumer bases run one deferred re-validation on the first server tick **only if the tile loaded as complete**
 [V] `TileMultiPowerConsumer.java:141-157`, `TileMultiblockMachine.java:105-123`. A machine `isRunning` when `completionTime > 0` and
-the structure is complete [V] `TileMultiPowerConsumer.java:279-281`. The two bases then **differ**:
-`TileMultiPowerConsumer.update` retries a failed formation every 1000 ticks and gates the tick on `requiredPowerPerTick()`
-(`powerPerTick × PowerMultiplier`, floor 1) [V] `:159-166,194-196`; `TileMultiblockMachine.update` (which does not call `super`) has no
-retry, only a 1000-tick `onInventoryUpdated` poke for a jammed machine, and gates on the raw `powerPerTick`
-[V] `TileMultiblockMachine.java:105-151`. Both then call the shared `onRunningPoweredTick`, which on the server **spends the raw
-`powerPerTick`**, advances `currentTime` on both sides, and calls `processComplete` at `currentTime == completionTime`
-[V] `TileMultiPowerConsumer.java:205-221`. Power state is synced by `hadPowerLastTick`: the server flips it and sends a `POWERERROR`
+the structure is complete [V] `TileMultiPowerConsumer.java:291-293`. Both bases **retry a structure that is not complete on their
+own**, every `FORMATION_RETRY_PERIOD_TICKS` (1000) of world time, through the one `retryFormationIfDue` — `TileMultiblockMachine.update`
+(which does not call `super`) and `TileAstrobodyDataProcessor` call it too, so a recipe machine whose part's chunk unloaded and came
+back, and a valid structure that never formed, forms again without a click (maintainer ruling 2026-10-07: a
+never-formed valid structure included) [V][T] `TileMultiPowerConsumer.java:159,186-201`, `TileMultiblockMachine.java:128`,
+`MachineLibraryGroupTest` (a recipe machine whose part came back forms again on its own). Both gate the tick on
+`requiredPowerPerTick()` (`powerPerTick × PowerMultiplier`, floor 1) [V] `TileMultiPowerConsumer.java:162,206-207`,
+`TileMultiblockMachine.java:135`, and the shared `onRunningPoweredTick` **spends `usedPowerPerTick()`, which is that same figure**,
+advances `currentTime` on both sides, and calls `processComplete` at `currentTime == completionTime`
+[V] `TileMultiPowerConsumer.java:213-232`. `TileMultiblockMachine` keeps a 1000-tick `onInventoryUpdated` poke for a jammed machine. Power state is synced by `hadPowerLastTick`: the server flips it and sends a `POWERERROR`
 `PacketMachine` to everything within 256 blocks; the client keeps ticking progress only while the last-known flag is true
 [V] `TileMultiPowerConsumer.java:165-188`, `TileMultiblockMachine.java:129-150`.
 
@@ -150,12 +162,19 @@ retry, only a 1000-tick `onInventoryUpdated` poke for a jammed machine, and gate
 pending it picks the **first recipe in the tile class's list that `canProcessRecipe`** (list order is priority), **consumes the
 ingredients immediately**, fixes `powerPerTick` and `completionTime` (time = recipe time × structure multiplier, min 1), stores the
 recipe's outputs, and turns the controller block's `STATE` on; otherwise it turns `STATE` off
-[V] `TileMultiblockMachine.java:223-232,494-528`. At `processComplete` the stored outputs are written to the output hatches (item
+[V] `TileMultiblockMachine.java:548-590`. At `processComplete` the stored outputs are written to the output hatches (item
 slots from the **end** of each hatch, merging equal stacks) and the fluid outputs `fillInternal`ed into the out-ports, then
-`onInventoryUpdated` runs again [V] `:177-219`. `canProcessRecipe` re-entrancy is blocked by a flag; an ingredient is satisfied when
-**any** input slot holds a matching stack of at least the needed count (ore-dict wildcard damage allowed) — the check does not track
-slots already claimed by an earlier ingredient — and fluids are summed across all `L` hatches by a simulated drain
-[V] `:301-473`. Chance recipes (`maxoutputsize`) draw their outputs with a `System.currentTimeMillis`-seeded `Random` and need that
+`onInventoryUpdated` runs again [V] `:182-224`. `canProcessRecipe` re-entrancy is blocked by a flag. Item ingredients are matched to
+input slots by ONE claim (`claimIngredientSlots` / `claimFrom`): each ingredient takes a slot holding a matching stack of at least the
+needed count **minus what earlier ingredients already claimed from it** (ore-dict wildcard damage allowed), backtracking when a first
+fit would starve a later ingredient; the start check and `consumeItems` use the same claims, so one stack is never promised to two
+ingredients and starting consumes exactly the claimed slots [V][T] `:280-360,398`, `MachineLibraryGroupTest` (an
+ingredient listed twice needs and takes two). Fluids are summed across all `L` hatches by a simulated drain; at the start each fluid
+ingredient is drained as what is STILL OWED of it, hatch after hatch, never in full from every hatch [V][T] `:366-380`,
+`MachineLibraryGroupTest` (a recipe draws its fluid once across two hatches). Starting is `consumeItems` = `takeClaimedItems` +
+`drainFluidIngredients`, both protected; a machine keeps an ingredient (a tool) by answering `consumesIngredient` false — the
+precision laser etcher keeps its lens that way, and the chemical reactor's sealing recipe takes exactly the claimed slots
+ [V][T] `MachineLibraryGroupTest#theEtcherTakesWhatItsCheckClaimedAndKeepsItsLens`. Chance recipes (`maxoutputsize`) draw their outputs with a `System.currentTimeMillis`-seeded `Random` and need that
 many *empty* output slots [V] `recipe/RecipesMachine.java:144-195`, `TileMultiblockMachine.java:307-310,419-430`.
 
 ### MECH-LVP-08 — speed multipliers from the structure
@@ -170,8 +189,10 @@ placeholder**: a block implementing `ITimeModifier` (the four motors: ×1, ×1/1
 ### MECH-LVP-09 — energy: batteries, aggregation, adapters
 
 `UniversalBattery` clamps both ways and persists `energy`/`maxEnergy` [V] `util/UniversalBattery.java:19-81`. `MultiBattery` is a
-list of `IUniversalEnergy`: `acceptEnergy` fills sequentially with the remainder; `getUniversalEnergyStored` sums; **`extractEnergy`
-asks every battery for the full amount and sums the answers** [V] `util/MultiBattery.java:26-33,63-68`. A consumer fills its
+list of `IUniversalEnergy`: `acceptEnergy` fills sequentially with the remainder; `getUniversalEnergyStored` sums; `extractEnergy`
+takes sequentially too, asking each battery only for what is still owed and stopping when it is paid, so a machine with several
+power plugs pays its request once in total; an empty aggregate takes a maximum without dividing by zero
+[V][T] `util/MultiBattery.java:26-37,57-65`, `MachineEnergyBoundaryTest` (two plugs pay once; the empty-aggregate guard is `[V]` only). A consumer fills its
 `batteries` at integrate time with every tile whose block is in the `P` mapping, a producer with the `p` mapping
 [V] `TileMultiPowerConsumer.java:291-299`, `TileMultiPowerProducer.java:115-127`. `TilePlugBase` (the plug tiles) holds a battery of
 `10^tier × 10000 × energy_multiplier` (tier fixed to 1 by the plug block), exposes **Forge Energy always and Tesla when present** by
@@ -179,9 +200,23 @@ wrapping itself in a fresh `ForgePowerCapability` per call, and keeps the **save
 [V] `tile/energy/TilePlugBase.java:26-72,87-104`, `block/multiblock/BlockMultiMachineBattery.java:44-53`. The output plug pushes its
 whole store into every adjacent energy-capable tile each tick; the creative input plug (`CreativeBattery`: always `Integer.MAX>>4`,
 extraction never depletes) does the same [V] `tile/energy/TileForgePowerOutput.java:49-59`, `util/CreativeBattery.java:3-17`,
-`tile/energy/TileCreativePowerInput.java:91-103`. `ForgePowerCapability` forwards straight to `acceptEnergy`/`extractEnergy` and does
-**not** consult `canReceive`/`canExtract` [V] `cap/ForgePowerCapability.java:14-42`. `libvulpes.cfg` `EUPowerMultiplier` (default 4)
-converts IC2/GT EU to FE; `PowerMultiplier` is read by the two gates above (MECH-LVP-06, `tile/TileEntityRFConsumer.java:115-121`).
+`tile/energy/TileCreativePowerInput.java:91-103`. **The world reaches a store only in the directions it declares**: `ForgePowerCapability`
+refuses a receive the store says it cannot take and an extract it says it cannot give, while the store's own methods stay unguarded
+because its owner moves energy through them the other way — a machine draws from its input plugs, a generator fills its output plugs
+ [V][T] `cap/ForgePowerCapability.java:14-31`, `MachineEnergyBoundaryTest` (an input plug cannot be drained, an output plug
+cannot be filled, through Forge Energy). The Forge plugs no longer implement `IEnergyStorage` themselves — that face's `extractEnergy`
+is the very method the machine draws through, so it could not refuse an outside caller — and are reached only through the capability
+(maintainer ruling 2026-10-07; a mod that cast the tile loses that path) [V] `tile/energy/TileForgePowerInput.java:5-10`,
+`tile/energy/TileForgePowerOutput.java:13-18`. A consumer's own `extractEnergy` refuses an outside caller while `canExtract()` says no and
+honours `simulate` [V][T] `tile/TileEntityRFConsumer.java:150-160`, `MachineEnergyBoundaryTest` (a consumer cannot be
+drained by an outside caller). The Tesla capability asks `canExtract`/`canReceive` too (unpinned: Tesla is on no
+runtime classpath); the GregTech one wraps only the GT plug's battery, which extracts by design, so it needs no guard.
+Its `acceptEnergyFromNetwork` answers GT in AMPERES — whole packets within the room and the plug's declared input
+amperage per tick, each stored as EU × `EUPowerMultiplier` (unpinned: GT is compileOnly). There is no voltage
+on this side (ruling 2026-10-08): a packet of any voltage is taken, the declared 32 V / 1 A is information for GT and
+the amperage the one real cap. Its stored/capacity readouts still speak FE. `libvulpes.cfg` `EUPowerMultiplier` (default 4)
+converts IC2/GT EU to FE; `PowerMultiplier` scales what the multiblock bases both gate on and spend (MECH-LVP-06) and is read by the
+single-block consumer's gate (`tile/TileEntityRFConsumer.java:115-121`).
 
 ### MECH-LVP-10 — hatches and embedded inventories
 
@@ -205,19 +240,30 @@ ids 0-2 and `PacketItemModifcation` at 6 [V] `network/PacketHandler.java:42-66`,
 throws `IllegalStateException` [V] `PacketHandler.java:99-105`; the `sendTo*` family selects reach through FML outbound attributes
 [V] `:107-148`. The codec decodes on the netty thread — client side through `readClient`, server side through `read` — and **nothing
 else**; per-class handlers then queue `executeClient`/`executeServer` on that side's game thread, resolving the **player when it runs**
-(a respawn queued ahead replaces him) [V] `:150-178`, `network/BasePacket.java:106-120`. `BasePacket.idMap` is an empty map that nothing
-fills, so `getPacketId` always throws — the wire id never comes from it [V] `network/BasePacket.java:19-24,57-62`.
+(a respawn queued ahead replaces him) [V] `:150-178`, `network/BasePacket.java:124-138`. `BasePacket.idMap` is an empty map that nothing
+fills, so `getPacketId` always throws — the wire id never comes from it [V] `network/BasePacket.java:37-42,75-80`.
 
 ### MECH-LVP-12 — the four libVulpes packets
 
-**`PacketMachine`** addresses an `INetworkMachine` tile by `(dimension, x, y, z, byte id)` plus a payload that machine itself writes;
-decoding copies the bytes and touches no world; the game thread then looks up the world and tile, drops the packet silently when the
-world, the block or an `INetworkMachine` is missing, and calls `readDataFromNetwork` then `useNetworkData` [V]
-`network/PacketMachine.java:65-135`. **`PacketEntity`** does the same for `INetworkEntity` by dimension + entity id, but resolves the
-world and entity **inside the decoder** [V] `network/PacketEntity.java:64-98`. **`PacketItemModifcation`** targets the sender's
-**main-hand** item if it is an `INetworkItem` (dimension and entity id are sent but the executor ignores them) [V]
-`network/PacketItemModifcation.java:114-125`. **`PacketChangeKeyState`** (C→S) relays `(int key, boolean)` to `InputSyncHandler`
-[V] `network/PacketChangeKeyState.java:44-46`: key 0 toggles the chest jetpack (or every jetpack inside a modular chestplate), key 1
+**Every decoder reads bytes only and touches no world**; everything a packet does happens on the game thread, and a C→S packet is first
+judged by ONE sender check, `PacketSenderCheck`: the address must be in the **sender's own world** (a client-sent
+dimension that is not his is refused, never looked up), a machine within **container reach** of him (distance² ≤ 64 to the block centre;
+VS-aware, because the physics mod overrides `getDistanceSq` for a player aboard a ship), an item action within his **click reach** of what
+it touches, an entity one the server's tracker is **showing** him. A refusal is dropped and logged once per packet, never thrown
+[V][T] `network/PacketSenderCheck.java:26-110`, `ClientPacketSenderServerGroupTest` (beyond reach, another world, an undecodable payload,
+a packet naming no world). **`PacketMachine`** addresses an `INetworkMachine` tile by `(dimension, x, y, z, byte id)` plus a payload that
+machine itself writes; the server half refuses a header short of `HEADER_BYTES`, another world and an address beyond reach, drops a
+missing block or tile, and treats anything the machine's own reader throws on the client's bytes as a refusal
+[V] `network/PacketMachine.java:83-160`. **`PacketEntity`** does the same for `INetworkEntity` by dimension + entity id, resolving the
+entity in the sender's world only after the world check, and refusing an entity the server is not showing him [V]
+`network/PacketEntity.java:96-160`; each entity adds its own per-id rule — the rocket's is `EntityRocket#acceptsFromClient` (rocket-entity
+doc), the hovercraft takes steering only from its controlling passenger. A machine packet only a SCREEN sends
+also needs that machine's screen open — `PacketSenderCheck#hasScreenOpen`, i.e. the sender's open container is a
+`ContainerModular` whose `isScreenOf(machine)` holds — and a value that screen can produce (each machine's slider range, a
+real redstone mode, a real tab); the rocket assembler never takes energy, progress or its rocket link from a client [V][T] `ClientPacketSenderServerGroupTest`. **`PacketItemModifcation`** targets the sender's **main-hand** item if it is an `INetworkItem`, and refuses a packet naming another
+entity than the sender or another world [V] `network/PacketItemModifcation.java:98-160`. **`PacketChangeKeyState`** (C→S) speaks only for
+the sender, so the one check is that its body decodes (a short one is refused), then relays `(int key, boolean)` to `InputSyncHandler`
+[V] `network/PacketChangeKeyState.java:36-70`: key 0 toggles the chest jetpack (or every jetpack inside a modular chestplate), key 1
 changes the mode of jetpacks inside a modular chestplate (and toggles a bare jetpack exactly as key 0 does), key 57 sets the player's SPACE flag (stored by a mixin on `EntityPlayer`, cleared on dimension
 change) [V] `util/InputSyncHandler.java:18-80`, `MixinEntityPlayerJetpackKeys.java:14`.
 
@@ -272,14 +318,21 @@ members at the moment of the call**, and a recipe equal to an existing one (same
 
 ### MECH-LVP-16 — linker and projector
 
-`ItemLinker` stores a binding in item NBT: `MasterPos{MasterX,MasterY,MasterZ}` plus a top-level `dimId`; **"unset" is `MasterY == 0`**
-[V] `items/ItemLinker.java:62-63,137-152,92-114`. A use on an `ILinkableTile` calls `onLinkStart` when unset, else `onLinkComplete`;
+`ItemLinker` stores a binding in item NBT: `MasterPos{MasterX,MasterY,MasterZ}` plus a top-level `dimId`; **"unset" is `MasterY == 0`**,
+and a reset clears the top-level `dimId` the readers read (it wrote a `dimId` inside `MasterPos` nobody reads, so a reset linker kept
+its old binding's dimension) [V][T] `items/ItemLinker.java:92-114,169-177`, `LinkerBindingTest`. A use on an `ILinkableTile` calls `onLinkStart` when unset, else `onLinkComplete`;
 a use on a tile-less block while sneaking clears the binding [V] `:181-208`. A right-click that is not a link use, with the linker bound
 (here, or with `dimId -1`) to an `ILinkAimedTile`, traces the player's line of sight (blocks and entities, out to the server's view
 distance) and hands the first hit to `onLinkAimed`; an unloaded or other-dimension binding answers with a chat line instead
 [V] `:210-288`. `ItemProjector` keeps an in-process list of registered machine prototypes (indexed by `machineId`, kept in the item's
 NBT) and, on a server-side request, writes `blockPhantom` ghost blocks (a self-deleting `TileSchematic`, 6000 ticks) over air or
-replaceable cells at the position the client sent [V] `items/ItemProjector.java:58-59,80,172-226`, `tile/TileSchematic.java:17`.
+replaceable cells at the position the client sent. What the client sends is judged first: a machine id only when a machine has it
+(an id outside the list was written onto the item and crashed every client that later drew its tooltip), a layer only when the
+machine has it, a projection only when its footprint is within the holder's click reach and wholly loaded
+[V][T] `items/ItemProjector.java:731-830`, `ClientPacketSenderServerGroupTest` (a projector takes only a machine id that exists; projects
+only where its holder could have pointed). A ghost remembers the block it was placed over (`displaced`) and puts it back when it fades
+or the projector points elsewhere, instead of leaving air [V][T] `tile/TileSchematic.java:27-56`,
+`ClientPacketSenderServerGroupTest` (a projection puts back what it stood in).
 
 ## State & persistence
 
@@ -294,7 +347,7 @@ applies (no migration); cross-reference [C1](../30-contracts/C1-nbt-persistence.
 | `TileMultiPowerProducer` | `enabled` | `TileMultiPowerProducer.java:129-139` |
 | `TilePointer` (every hatch/plug/placeholder) | `masterX/Y/Z` (absent = none) | `TilePointer.java:138-169` |
 | `TilePlaceholder` | `ID` (**numeric** block id), `damage`, `tile` (replaced tile compound) | `TilePlaceholder.java:68-96` |
-| `TileSchematic` | `timeAlive`, `blockIds`, `blockMetas` (**numeric** ids) | `tile/TileSchematic.java:60-80` |
+| `TileSchematic` | `timeAlive`, `blockIds`, `blockMetas` (**numeric** ids), `displaced` (the block state the ghost stands in, written by `NBTUtil`) | `tile/TileSchematic.java:95-125` |
 | `EmbeddedInventory` | `size`, `outputItems` (`Slot`+stack), `slotInsert`, `slotExtract` (byte arrays) | `util/EmbeddedInventory.java:38-100` |
 | `UniversalBattery` / `TilePlugBase` | `energy`, `maxEnergy` / `teir` | `util/UniversalBattery.java:73-81`, `TilePlugBase.java:87-104` |
 | `TileFluidHatch` | `outputOnly`, `capacity` + `FluidTank` keys | `TileFluidHatch.java:225-244` |
@@ -322,9 +375,14 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   second), and every sender is loud before it opens. `network/PacketHandler.java:51-66,99-105`. Reordering renumbers the tail
   ([C2](../30-contracts/C2-network-wire.md) `CON-C2-03`).
 - **INV-LVP-04 [V]** Every packet of the channel executes on the receiving side's game thread, and the player is read when it executes.
-  `network/BasePacket.java:106-120`.
-- **INV-LVP-05 [V]** `PacketMachine` decoding reads bytes only; an addressee that cannot be resolved on the game thread is dropped.
-  `network/PacketMachine.java:88-100,106-116`.
+  `network/BasePacket.java:124-138`.
+- **INV-LVP-05 [V][T]** Every libVulpes decoder reads bytes only; no C→S packet acts on a block, entity or item its sender could not
+  reach in his own world, and a refused or undecodable packet is dropped and logged, never thrown. `network/PacketSenderCheck.java:26-110`,
+  `network/PacketMachine.java:83-160`, `network/PacketEntity.java:96-160`; `ClientPacketSenderServerGroupTest`,
+  `RocketPacketSenderClientGroupTest`. Pinned by `ClientPacketSenderServerGroupTest#aMachinePacketFromBeyondReachIsNotApplied`
+  (nothing acts beyond the sender's reach), `…#aRedstoneModeNoButtonProducesIsDroppedNotThrown` and
+  `…#aProjectorTakesOnlyAMachineIdThatExists` (a refused packet is dropped, never thrown). That the drop is
+  logged is `[V]` only (`PacketSenderCheck.java:112-113`).
 - **INV-LVP-06 [V]** A structure is validated in full before the first world mutation of that attempt; the cell list and the port caches
   are cleared before validation, so a failed attempt leaves the machine with no ports. `tile/multiblock/TileMultiBlock.java:317-439`.
 - **INV-LVP-07 [V]** A controller placed alone is not complete; a fixture-built correct structure validates, and replacing any one
@@ -341,11 +399,14 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   cargo transits between linked railguns through the hatches, `MachineGuiClientGroupTest.java:551,553`.
 - **INV-LVP-12 [V]** Machine speed is the product of the multipliers of the cells replaced at formation, reset to 1 on deconstruction;
   recipe time never drops below one tick. `TileMultiPowerConsumer.java:109-138,261-262`, `TileMultiblockMachine.java:503`.
-- **INV-LVP-13 [V]** `acceptEnergy` conserves (remainder passed on); `extractEnergy` on a `MultiBattery` does not (each battery is asked for
-  the full request). `util/MultiBattery.java:26-33,63-68`.
-- **INV-LVP-14 [V]** A `PowerMultiplier` ≠ 1 changes what a consumer must **hold** to run, not what it **spends**; recipe machines
-  (`TileMultiblockMachine`) ignore it altogether. `TileMultiPowerConsumer.java:194-196,208`, `TileMultiblockMachine.java:130`,
-  `tile/TileEntityRFConsumer.java:119-120`.
+- **INV-LVP-13 [V][T]** `MultiBattery` conserves both ways: `acceptEnergy` passes the remainder on, `extractEnergy` asks each battery only
+  for what is still owed. `util/MultiBattery.java:26-37,68-80`; `MachineEnergyBoundaryTest`. Pinned by
+  `MachineEnergyBoundaryTest#aMachineWithTwoPowerPlugsPaysItsRequestOnceInTotal`.
+- **INV-LVP-14 [V]** A `PowerMultiplier` ≠ 1 scales what a multiblock consumer — recipe machines included — must hold to run AND what it
+  spends, by the one figure `requiredPowerPerTick` / `usedPowerPerTick`. `TileMultiPowerConsumer.java:162,206-220`,
+  `TileMultiblockMachine.java:135`, `tile/TileEntityRFConsumer.java:119-120`. Unpinned: a pin needs the multiplier ≠ 1 before boot, a
+  `preInit` read of `libvulpes.cfg` the harness has no mechanism to seed (maintainer ruling 2026-10-07); at the shipped 1 the
+  behaviour is unchanged. `TileAtmosphereTerraformer` spends `usedPowerPerTick()` too, for the same unpinned reason.
 - **INV-LVP-15 [V]** Window-property values are 16 bits on the wire; a module sending more must split. `SPacketWindowProperty.java:52`,
   `inventory/modules/ModulePower.java:66-104`.
 - **INV-LVP-16 [V]** A modular-GUI target is addressed by `y > -1` (tile), else `x == -1` (held item), else entity id in `x`; ids 0-3.
@@ -366,38 +427,68 @@ and vanilla `TileEntity.java:36-39` read; the resulting key was not printed in a
   `isOutputOnly`. `TileFluidHatch.java:98-103,135-143`, `TileMultiBlock.java:516-521`.
 - **INV-LVP-24 [V]** Plug capacity is `10^tier × 10000 × energy_multiplier` at construction; a saved `maxEnergy` overrides it on load.
   `TilePlugBase.java:47-49,100-104`.
+- **INV-LVP-25 [T][BEH]** The world moves energy through a power plug only in the plug's direction: through Forge
+  Energy nothing is drained out of an input plug and nothing is pushed into an output plug, while the plug's owner
+  still moves energy through the store the other way (`cap/ForgePowerCapability.java:20-31`; MECH-LVP-09). Pinned by
+  `MachineEnergyBoundaryTest#anInputPlugCannotBeDrainedThroughForgeEnergy`, `…#anOutputPlugCannotBeFilledThroughForgeEnergy`.
+- **INV-LVP-26 [T][BEH]** A single-block consumer takes energy and gives none to an outside caller, through Forge
+  Energy or through its own store interface: it declares it cannot be extracted from, and both the capability and its
+  own `extractEnergy` honour that (`tile/TileEntityRFConsumer.java:26-29, 155-160`). Pinned by
+  `MachineEnergyBoundaryTest#aConsumerCannotBeDrainedByAnOutsideCaller`.
+- **INV-LVP-27 [T][BEH]** Resetting a linker forgets its binding's dimension as well as its position: afterwards it
+  reads as unbound and answers dimension -1 to every reader (`items/ItemLinker.java:165-174`; MECH-LVP-16). Pinned by
+  `LinkerBindingTest#aResetLinkerForgetsTheDimensionOfItsOldBinding`.
+- **INV-LVP-28 [T][BEH]** A machine packet only a screen sends is taken only from a sender who has THAT machine's screen
+  open — his open container is a `ContainerModular` that is the screen of the addressed machine — and only with a value
+  the screen can produce, such as a slider position inside the slider's range; a rocket assembler takes its stored
+  energy and build progress from no client at all (`network/PacketSenderCheck.java:99-102`,
+  `inventory/ContainerModular.java:57-59`; host `TileStationGravityController.java:289-304`,
+  `TileStationAltitudeController.java:265`, `TileStationOrientationController.java:239`,
+  `TileRocketAssemblingMachine.java:1256-1272`, `TileWarpController.java:558-560`; MECH-LVP-12). Pinned by
+  `ClientPacketSenderServerGroupTest#aStationControllerTakesATargetOnlyFromItsOwnOpenScreen`,
+  `…#anAssemblerTakesNoStateFromAClientAndItsButtonsOnlyFromItsScreen`,
+  `…#aWarpMonitorTakesADestinationOnlyFromItsOpenScreen`.
+- **INV-LVP-29 [T][BEH]** A ghost block the projector lays into a cell that held a replaceable block puts that block back
+  when it fades, never air (`tile/TileSchematic.java:55-56`, `items/ItemProjector.java:224-226`; MECH-LVP-16). Pinned by
+  `ClientPacketSenderServerGroupTest#aProjectionPutsBackWhatItStoodInWhenItFades`.
+- **INV-LVP-30 [T][BEH]** Tearing a machine down leaves its hatches holding what they held: a part whose unformed block
+  keeps a tile keeps THAT tile, and only a part whose unformed block has none is invalidated
+  (`tile/multiblock/TileMultiBlock.java:259-267`; MECH-LVP-05). Pinned by
+  `MachineLibraryGroupTest#tearingDownAMachineLeavesItsHatchesHoldingWhatTheyHeld`.
+- **INV-LVP-31 [T][BEH]** One input stack is never promised to two ingredients: an ingredient is paid only from what
+  earlier ingredients left of a slot, so a recipe listing an item twice needs two of it; and starting a recipe takes
+  exactly the slots its check claimed, except an ingredient the machine keeps, which stays in its slot
+  (`tile/multiblock/TileMultiblockMachine.java:297-332,349-378`, host `TilePrecisionLaserEtcher.java:59-60`;
+  MECH-LVP-07). Pinned by `MachineLibraryGroupTest#anIngredientListedTwiceNeedsAndTakesTwoItems`,
+  `…#theEtcherTakesWhatItsCheckClaimedAndKeepsItsLens`.
+- **INV-LVP-32 [T][BEH]** A recipe draws each fluid ingredient once in total, however many fluid input hatches could pay
+  it: each hatch is asked only for what is still owed (`tile/multiblock/TileMultiblockMachine.java:381-401`;
+  MECH-LVP-07). Pinned by `MachineLibraryGroupTest#aRecipeDrawsItsFluidOnceAcrossTwoFluidInputHatches`.
+- **INV-LVP-33 [T][BEH]** A controller whose part stands in a chunk that is not in memory refuses to form, and asking
+  never loads that chunk (`tile/multiblock/TileMultiBlock.java:350`; MECH-LVP-03). Pinned by
+  `MachineLibraryGroupTest#formingAMachineDoesNotLoadThePartsChunkItAsksAbout`.
+- **INV-LVP-34 [T][BEH]** A part whose chunk unloads un-completes its controller even when the controller stands across a
+  chunk border and its own chunk stays loaded: a part reaches its master whenever the master's OWN chunk is loaded
+  (`tile/TilePointer.java:82`, `tile/multiblock/hatch/TileInventoryHatch.java:172-180`; MECH-LVP-05). Pinned by
+  `MachineLibraryGroupTest#aPartUnloadingAcrossAChunkBorderUncompletesItsController`.
+- **INV-LVP-35 [T][BEH]** A recipe machine that is not complete tries to form again on its own every
+  `FORMATION_RETRY_PERIOD_TICKS` of world time, so one whose part's chunk unloaded and came back forms again without a
+  click (`tile/multiblock/TileMultiblockMachine.java:127`, `tile/multiblock/TileMultiPowerConsumer.java:191-197`;
+  MECH-LVP-06). Pinned by `MachineLibraryGroupTest#aRecipeMachineWhosePartCameBackFormsAgainOnItsOwn`.
 
 Assumptions: one of 24 (`[A]` on the tile-id domain above) — within the 10 % bound of the methodology's P3.
 
 ## Failure modes & edge cases
 
-- **Hatch contents on teardown.** Deconstruction `invalidate()`s hatch tiles (`TileMultiBlock.java:260-263`); the next
-  `getTileEntity` discards an invalid tile and builds a fresh one (`Chunk.java:844-848`) through `BlockHatch.createTileEntity`
-  (`BlockHatch.java:65-76`), so items and fluid in a hatch are not carried over (and not dropped). The host already hand-rolls a
-  snapshot in three machines for exactly this ([multiblock-machines](./multiblock-machines/00-overview.md) `MECH-MBM-02`).
-- **Chunk behaviour inside a tick.** `completeStructure` calls `getChunkFromBlockCoords(...).isLoaded()` (`TileMultiBlock.java:342`);
-  on the server `provideChunk` loads or **generates** the chunk before the flag is read (`ChunkProviderServer.java:144-169`), so the
-  check never refuses there and a structure across a chunk border forces its neighbour to load from a tile tick. A harness comment
-  already records "on the server it loads as it asks" (`MachineRecipeEndToEndKit.java:111-118`).
-- **Recipe machines do not re-form.** After a hatch's chunk unloads the master is incomplete (`TileInventoryHatch.java:173-181`);
-  `TileMultiblockMachine` has no periodic retry (`TileMultiblockMachine.java:105-151`), so only a right-click re-forms it.
+- **Tearing a machine down loads its unloaded chunks, by design** — `deconstructMultiBlock` reads every cell; the formation walk
+  does not (MECH-LVP-03). Ruled 2026-10-07: those chunks existed at formation, so this loads and never generates,
+  on a rare player act, while skipping a cell would leave its parts formed with nothing to undo them.
 - **Mid-recipe teardown** loses the batch: inputs were taken at start (INV-LVP-10).
-- **Fluid ingredients over several `L` hatches** are drained by asking each hatch for the *whole* ingredient (`TileMultiblockMachine.java:285-296`,
-  where the per-hatch remainder is computed at `:287-288` and never used for the drain).
-- **`MultiBattery` + several `P` plugs** multiplies the draw by the plug count (INV-LVP-13) while the gate checks the sum.
-- **Same item in two ingredient slots** of one recipe can be satisfied by one stack in `canProcessRecipe` (no claim tracking, `:318-345`).
-- **Forge-energy exposure.** `ForgePowerCapability` ignores `canReceive`/`canExtract`, so an input plug can be drained and an output
-  plug filled from outside (`cap/ForgePowerCapability.java:14-42`); `TileEntityRFConsumer.extractEnergy` ignores `simulate`
-  (`tile/TileEntityRFConsumer.java:151-153`) and its `setMaxEnergyStored` writes the **stored** value (`:165-167`).
-- **Latent material-grouping bug.** `registerOres` fills a block group with `j < 16*i + (len % 16)` (`MaterialRegistry.java:170`): with 11
-  and 2 materials the one group is right, but a registry of 16 or more would leave group 0 short.
+- **Material block groups.** `registerOres` fills each group of 16 with that group's own block count (`MaterialRegistry.java:170`);
+  the group count is `(len + 15) / 16`, and ≥ 16 materials is unpinned — no registry that large exists, and building one
+  writes Forge registries.
 - **`HashedBlockPosition.y` is a `short`** (`util/HashedBlockPosition.java:11,16,22`); heights beyond ±32767 wrap silently.
-- **`ItemLinker.resetPosition` writes `dimId` inside `MasterPos`** while `getDimId` reads the top-level key (`ItemLinker.java:169-178,105-114`),
-  so a reset keeps the previous top-level dimension for the next binding that does not set one.
 - **`ModuleProgress.setTooltip(null/"")` dereferences an unset list** (`inventory/modules/ModuleProgress.java:23,38-40`).
-- **Decoder exposure.** `PacketEntity` and `PacketItemModifcation` look the world and entity up inside the netty decoder and dereference
-  `DimensionManager.getWorld` unchecked (`PacketEntity.java:72-77`, `PacketItemModifcation.java:76-81`) — the failure `PacketMachine`'s
-  class comment describes and fixed only for itself.
 
 ## Integration seams
 
@@ -435,11 +526,14 @@ The file is libVulpes' own (`<REGISTRY_DOMAIN>.cfg`, not the host's) and is read
 | INV-LVP-18 | `MachineGuiClientGroupTest.java:648,651,653,264,411` (client) |
 | INV-LVP-22 | `ALinkerNamesTheBatteryItsTargetTest.java:164,182,233` (client) |
 | teardown does not throw | `SpaceElevatorUnlinkedDeconstructTest.java:71` (a machine whose master was never linked) |
+| INV-LVP-30 … INV-LVP-35 (formation, teardown, re-form, claims, fluid draw) | `MachineLibraryGroupTest` (server) |
+| INV-LVP-13, INV-LVP-25, INV-LVP-26, MECH-LVP-09 | `MachineEnergyBoundaryTest` (unit) |
+| INV-LVP-05, INV-LVP-28, INV-LVP-29, MECH-LVP-12, MECH-LVP-16 (projector) | `ClientPacketSenderServerGroupTest` (server); `RocketPacketSenderClientGroupTest` (client) |
+| INV-LVP-27, MECH-LVP-16 (linker reset) | `LinkerBindingTest` (unit) |
 
-No test located for: placeholder restoration, hatch-content survival across deconstruction, the `PacketMachine` drop paths, the
-`MultiBattery` draw, `ModuleBase` sync cadence, the material registry, the linker's unbound/other-dimension replies, the projector.
-(Searched `src/test/**` for `MultiBattery|TilePlaceholder|deconstructMultiBlock|MaterialRegistry|ModulePower|EmbeddedInventory|InputSyncHandler`:
-only the files above plus unrelated hits.)
+No test located for: placeholder restoration, `ModuleBase` sync cadence, the material registry, the linker's unbound/other-dimension
+replies, a `PowerMultiplier` ≠ 1 (INV-LVP-14). (Searched `src/test/**` for
+`TilePlaceholder|MaterialRegistry|ModulePower|EmbeddedInventory|InputSyncHandler`.)
 
 ## Contradictions with existing docs
 
@@ -448,27 +542,13 @@ only the files above plus unrelated hits.)
 - C3 `:225` counts 63 tile ids "all Stellurgy-prefixed" and lists none of the libVulpes tile, block, item or material ids above.
 - [network-wire](./network-wire.md) `:194-196` (Open questions) says the discriminator comes from a counter inside libVulpes and is
   "not verifiable from `src/main`"; it is the list index in `PacketHandler.java:56-58`. Its `INV-NW-01` (`:122`) cites
-  `BasePacket.idMap`, which is empty (`BasePacket.java:19-24`). Both it (`:27`) and C2 (`C2-network-wire.md:14`) still call the
+  `BasePacket.idMap`, which is empty (`BasePacket.java:37-42`). Both it (`:27`) and C2 (`C2-network-wire.md:14`) still call the
   transport "foreign"; it is in-repo since 2026-09-29.
-- C2 `CON-C2-05` (`C2-network-wire.md:85`) calls `PacketBackToRocketGui` the sole C→S packet; libVulpes' `PacketMachine`,
-  `PacketEntity`, `PacketItemModifcation` and `PacketChangeKeyState` are also C→S, and their server executors do not check range,
-  ownership or permission (`PacketMachine.java:128-132`, `TileMultiPowerConsumer.java:351-365`).
 - [inventory-containers](./inventory-containers.md) `:30` says the framework is "owned by no subsystem doc yet"; this doc is its owner.
 - [C4](../30-contracts/C4-config-surface.md) has no row for `libvulpes.cfg`.
 
 ## Open questions
 
-Written as leads: none was reproduced in a running game.
-
-1. **Hatch contents lost on deconstruction** — see *Failure modes*; confirm in-game, then decide between carrying the contents in
-   `destroyBlockAt` or dropping the `invalidate()`.
-2. **`MultiBattery.extractEnergy` over-draw** (`util/MultiBattery.java:30`) with more than one `P` plug.
-3. **Fluid over-drain across several `L` hatches** (`TileMultiblockMachine.java:285-296`).
-4. **Recipe machines never re-form** after a hatch-chunk unload (`TileMultiblockMachine.java:105-151` vs `TileMultiPowerConsumer.java:159-163`).
-5. **Server executors of `PacketMachine`/`PacketItemModifcation` trust the client's coordinates**: `ItemProjector.useNetworkData`
-   (`ItemProjector.java:709-730`) lets a holder of the projector place ghost blocks, and force chunk loads, at any position, and index
-   `machineList` with a client-sent id (`:714`).
-6. **`PowerMultiplier` charges nothing** it gates (INV-LVP-14) — decide whether the config is meant to scale spend.
-7. Areas that would need their own sub-doc: the ~30 `Module*` widgets (`ModuleContainerPan*`, `ModuleLiquidIndicator`,
+1. Areas that would need their own sub-doc: the ~30 `Module*` widgets (`ModuleContainerPan*`, `ModuleLiquidIndicator`,
    `ModuleBlockSideSelector`), `ItemProjector`'s client-side preview/GUI, `render/RenderHelper`, and the non-multiblock `TileEntity*`
    machine family. Their state is thin and mostly client rendering; they are covered here only as far as other subsystems depend on them.

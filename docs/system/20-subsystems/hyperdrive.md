@@ -242,7 +242,8 @@ ground every ship built before the thermal system existed.
 |---|---|---|---|
 | DRIVE | a field generator aboard | HARD | `msg.jumpgate.nodrive` |
 | DRIVE | the window encloses the hull | ADVISORY | `msg.jumpgate.windowundersized` |
-| DRIVE | the drive's coolant is below the refusal temperature | HARD | `msg.jumpgate.driveoverheated` |
+| DRIVE | the far end would rebuild the hull as one ship (`hullCarryRefusal` is null — the spawn's own rule, asked of the hull as it stands with the ship's chunk claim, full column, as the footprint) | HARD | `msg.jumpgate.hulltoolarge` |
+| DRIVE | the drive's coolant is below the refusal temperature (`driveRefusalKelvin`, which the CONTEXT supplies — the gate holds no configuration, so it runs without a booted game) | HARD | `msg.jumpgate.driveoverheated` |
 | POWER | `charge ≥ burstCost` | HARD | `msg.jumpgate.capacitorlow` |
 | SUPPLY | `storedEnergy ≥ inFlightDraw × transitTicks` | ADVISORY | `msg.jumpgate.energyshortfall` |
 
@@ -305,6 +306,10 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
   would do — yes for a live cell, a free slot or an idle evictable cell — and binds nothing. Pinned by
   `JumpGateTest#aFullDestinationIsAWarningThePilotConfirmsNotARefusal`,
   `SpaceManagerTest#canMaterializeForecastsMaterializeAndBindsNothing`.
+- **INV-HYP-09 [T][BEH]** A hull the far end would not rebuild as one ship is REFUSED before the burst, never
+  warned about: the jump would cut it out of this world and leave loose blocks at the other end, while the refusal
+  costs the pilot nothing (the DRIVE-stage clause on `hullCarryRefusal`, `JumpGate.java:373-382`). Pinned by
+  `JumpGateTest#aHullTheFarEndWouldNotRebuildIsRefusedBeforeTheBurst`.
 
 ## Failure modes & edge cases
 

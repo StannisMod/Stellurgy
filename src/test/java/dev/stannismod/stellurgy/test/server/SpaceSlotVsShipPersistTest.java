@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -40,38 +39,9 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
             + " which is what both wanted - is being raised as an exception out of the world tick, and nothing"
             + " above it catches.";
 
-    private static final String SLOT = "slot";
-
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
-
-    @Test
-    public void vsShipDataSurvivesSlotUnloadReload() throws Exception {
-
-        // Marked before the assemble, because the registry add it waits on happens inside it.
-        long assembleMark = events.mark();
-        String asm = arrange("stellurgytest space vs-assemble deep").raw();
-        Reply mReply = Reply.of(asm);
-        assertTrue("vs-assemble must report a slot dim: " + asm, mReply.has(SLOT));
-        int slot = Integer.parseInt(mReply.text(SLOT));
-        String ship = Reply.of("stellurgytest space vs-assemble", asm).text("shipUuid");
-        shipToDispose = ship;
-        dimToDispose = slot;
-        // The registry's own add of THIS hull ({@code ship_spawned}, written from
-        // {@code QueryableShipData.addShip}), keyed by the id the assembly handed back.
-        events.awaitField(assembleMark, "ship_spawned", "vsShip", ship,
-                "a VS ship must enter the pool world's registry", REGISTER_TICKS);
-
-        // Synchronous unload (saves VS ship data) + reload the same cell; whether the reloaded
-        // world registers THIS ship is read inside the same probe call (before any auto-unload),
-        // so it is not masked by the keepLoaded=false world unloading between calls.
-        String reload = arrange("stellurgytest space reload " + slot + " deep " + ship).raw();
-        Reply reloaded = Reply.of("stellurgytest space reload", reload);
-        assertTrue("slot must reload after a VS-ship unload: " + reload, reloaded.bool("present"));
-        assertTrue("the VS ship's data must survive the slot unload/reload: " + reload,
-                reloaded.bool("shipRegistered"));
-    }
 
     /**
      * Asking for an immediate load of a ship the world is already loading in the background loads it

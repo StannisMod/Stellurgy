@@ -116,7 +116,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C18](./30-contracts/C18-living-through-a-jump.md) | what a jump promises the people ABOARD — where they are, what they may do, what each crossing carries, and that an arrival has no failure path | `JUMP-1..16` (JUMP-7 retired) |
 | [C19](./30-contracts/C19-reference-frames.md) | which body a craft's velocity is measured AGAINST, and what a change of frame may not alter | `FRAME-1..11` |
 | [C20](./30-contracts/C20-repair.md) | what repairing a structure means — the two outcomes, who pays, how bays share a hull | `REPAIR-1..15` |
-| [C21](./30-contracts/C21-atmosphere-model.md) | what an atmosphere IS and what may be derived from it — one model for a compartment and a planet | `CON-C21-01..22` |
+| [C21](./30-contracts/C21-atmosphere-model.md) | what an atmosphere IS and what may be derived from it — one model for a compartment and a planet; zones (19-22) and rooms, the air's own thread (23-34, design stage) | `CON-C21-01..34` |
 | [C22](./30-contracts/C22-craft-motion.md) | what a craft does with momentum it did not command, manned and not | `MOTION-1..7` (MOTION-3 retired) |
 | [C23](./30-contracts/C23-deck-motion-across-the-wire.md) | what a client must be TOLD about a craft's motion, and what the server may accept back | `DECKSYNC-1..7` |
 | [C24](./30-contracts/C24-celestial-body-and-its-environment.md) | what a celestial object IS, and what the place around it offers | `BODY-1..18` |

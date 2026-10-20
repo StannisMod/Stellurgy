@@ -36,8 +36,29 @@ public class TilePlugInputGregTech extends TileForgePowerOutput {
 	@Override
 	public <T> T getCapability(Capability<T> capability, EnumFacing facing) {
 		if( capability == gregtech.api.capability.GregtechCapabilities.CAPABILITY_ENERGY_CONTAINER)
-			return (T) new GTEnergyCapability(storage);
+			return (T) new GTEnergyCapability(storage, this);
 		return super.getCapability(capability, facing);
+	}
+
+	/** The world tick {@link #amperesUsed} counts for. */
+	private long amperesTick = Long.MIN_VALUE;
+	/** Amperes GT's network has delivered into this plug during {@link #amperesTick}. */
+	private long amperesUsed;
+
+	/** How many of {@code perTick} amperes GT may still deliver into this plug this tick. */
+	public long amperesLeftThisTick(long perTick) {
+		if (world.getTotalWorldTime() != amperesTick)
+			return perTick;
+		return Math.max(0, perTick - amperesUsed);
+	}
+
+	public void useAmperes(long amperes) {
+		long now = world.getTotalWorldTime();
+		if (now != amperesTick) {
+			amperesTick = now;
+			amperesUsed = 0;
+		}
+		amperesUsed += amperes;
 	}
 
 	@Override

@@ -86,13 +86,14 @@ true so the structural blocks disappear once formed. [V] `TileOrbitalLaserDrill.
 
 ### MECH-MBM-02 — Inventory snapshot/restore across (de)construction
 
-Because libVulpes replaces hatch/data-bus TEs with placeholders during formation and destroys
-them on teardown, three tiles hand-roll a save/restore of the *contents*:
-`TileMicrowaveReciever` snapshots hatch item stacks keyed by `BlockPos.toLong()` and re-pushes
-them into placeholders (persisted under NBT `savedHatchInv`/`pos`/`slot`/`items`);
-`TileObservatory` snapshots each data-bus's full NBT; `TileAstrobodyDataProcessor` re-locks
-data-bus types on integrate/deconstruct. [V] `TileMicrowaveReciever.java:166-197,449-695`,
-`TileObservatory.java:131-229`, `TileAstrobodyDataProcessor.java:80-128`.
+A part whose block keeps a tile in both states (a hatch, a plug) keeps THAT tile across
+(de)construction, so its contents survive without a snapshot ([libvulpes](../libvulpes.md) MECH-LVP-05).
+`TileMicrowaveReciever` therefore keeps no hatch snapshot and persists no `savedHatchInv`: a snapshot
+restored by a MERGE (`dst.grow`) would double every stack. `TileObservatory` still snapshots each
+data-bus's full NBT and writes it back with `readFromNBT` — an overwrite with the same data, redundant
+and harmless.
+`TileAstrobodyDataProcessor` re-locks data-bus types on integrate/deconstruct.
+[V] `TileObservatory.java:212-306`, `TileAstrobodyDataProcessor.java:80-128`.
 
 ## Dependency edges
 

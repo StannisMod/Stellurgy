@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -45,6 +46,8 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
     private static final int SRC_X = 7600, SRC_Z = 7200;
     /** Where the relocation puts the ship down. Far enough that its new yard cannot be the old one. */
     private static final int DST_X = 7600, DST_Y = 96, DST_Z = 7400;
+    /** Where the filler craft is built — clear of the source, the destination and the second site. */
+    private static final int FILLER_X = 7400, FILLER_Z = 7200;
     /** A second build site, for the scenario that mines a block out of a ship instead of moving it. */
     private static final int AFC_X = 7800, AFC_Z = 7200;
 
@@ -94,13 +97,32 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
             + " left-behind verdict is held by TWO lines: {@code BlockDamageSavedData#move} at {@code Entry entry = entries.remove(from.toLong());} copying instead of"
             + " moving stayed GREEN on its own, because {@code StorageChunk#cutWorldBB} at {@code if (!worldObj.isRemote)}'s clear of the cut region"
             + " still emptied the old yard; with both broken it fails with \"the relocation left 4 damage records"
-            + " at the vacated subspace address 19200001,129,51200\". 2026-09-30.")
+            + " at the vacated subspace address 19200001,129,51200\". 2026-09-30. The filler craft was added on"
+            + " 2026-10-07, when given-back claims began to be reused, and the first record re-taken with it.")
+    @RedWitness(verdict = "the relocated ship does not carry the damage it left with",
+            member = "BlockDamageSavedData#move", at = "if (from == null || to == null || from.equals(to))",
+            replacedBy = "if (true)", fails = "the relocated ship does not carry the damage it left with",
+            on = "2026-10-07")
     @Test
     public void aRelocatedShipCarriesItsDamageAndLeavesNoneBehind() throws Exception {
         arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        // A shipyard claim given back is handed out again, lowest first, and a relocation gives back
+        // the ship's own claim before the re-assembled hull asks for one — so on its own the ship would
+        // come back into its old yard, and the address control below could never be met. A filler
+        // craft built FIRST holds a lower claim; disposed of before the relocation, its claim is the one
+        // the re-assembled hull takes.
+        WarShip filler = WarShip.build(events, commands(), FixtureSite.openAir(0, FILLER_X, FILLER_Z),
+                null, "the filler craft whose claim the relocated hull is to take");
         FixtureSite site = FixtureSite.openAir(0, SRC_X, SRC_Z);
-        WarShip ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
-                "the craft whose damage is carried");
+        WarShip ship;
+        try {
+            ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
+                    "the craft whose damage is carried");
+        } finally {
+            // Disposal returns once the substrate has announced the filler DESTROYED, and its claim is
+            // given back in that same removal.
+            Disposal.ship(c -> arrange(c).raw(), events, 0, filler.vsShip);
+        }
         craftNow = ship.vsShip;
 
         // A block of this ship whose subspace address we know, used only as the anchor the yard is

@@ -125,8 +125,9 @@ DimensionProperties above): `id`, `posX`, `posY`, `posZ`, `altitude`, `spawnX`/`
 `lastFuelCap`/`lastOxCap`, `lastStatusTick`, `uiStatus`, `repairInv`, `initialPartToRepairCount`,
 `assemblerPoses`/`partsProcessing`/`statesProcessing`.
 
-**multiblock-machines** — energy tiles: `amtPwr`, `canRender`, `numPanels`, `powerMadeLastTick`,
-`slot`, `items`, `savedHatchInv`. Gravity/railgun: `state`, `redstoneState`, `radius`, `bytes`,
+**multiblock-machines** — energy tiles: `amtPwr`, `canRender`, `numPanels`, `powerMadeLastTick`
+(the microwave receiver persists no hatch snapshot).
+Gravity/railgun: `state`, `redstoneState`, `radius`, `bytes`,
 `gravity`, `currGravity`, `progress`, `minTfrSize`/`minTransferSize`, `fireStatus`.
 Astrobody: `researchingAtmosphere`/`Distance`/`Mass`, `atmosphereProgress`/`distanceProgress`/
 `massProgress`. Observatory: `io`, `lb`/`ls`/`pb`/`ps`, `button`/`lastButton`, `printedButtons`,
@@ -261,6 +262,7 @@ collides with a `DimensionProperties` key (`orbitalDistance`≠`orbitalDist`, `r
 | `researchingAtmosphere`/`Distance`/`Mass` | `TileAstrobodyDataProcessor` | `readFromNBT` omits them (only `readNetworkData` reads) → research toggles reset on restart |
 | `peakInsolationMultiplier`(+`WithoutAtmosphere`) | `DimensionProperties` | written+read but both getters recompute+overwrite → dead-on-read |
 | `target_sea_level` | `DimensionProperties` | both read and write fully commented — a dead key |
+| `seatShip` | `EntityDummy` | UUID of the ship a pilot-seat dummy was bound under; read back as saved, never re-derived — an orphan loaded with its old chunk must not claim the ship given that claim since |
 | `plannedHarvestMb` | `EntityStationDeployedRocket` | `readMissionPersistentNBT` never reads it (harmless — entity `setDead()`s) |
 | `collectionMultiplier` | `SatelliteData` | read value immediately overwritten by recompute |
 | `pitch`/`roll` | `SpacePosition` | `readFromNBT` writes them back into the tag it is reading (dead writes) |

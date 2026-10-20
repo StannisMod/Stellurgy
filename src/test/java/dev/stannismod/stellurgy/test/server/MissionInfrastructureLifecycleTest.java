@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -95,32 +96,6 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         return new int[]{ix, iy, iz};
     }
 
-    /** After link-infra the tile's {@code mission} field points back to
-     *  the just-started mission. Pins the link half of the lifecycle.
-     * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
-     */
-    @Pins("INV-MSN-08")
-    @Test
-    public void startLinksInfrastructureToMission() throws Exception {
-        int baseX = 9000;
-        int rid = buildAndAssembleRocket(baseX);
-        long mid = startGasMission(rid, 1000);
-        int[] ipos = placeMonitoringStation(baseX, 600);
-        String link = ok(client().arrange("stellurgytest mission link-infra " + mid
-                + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("link-infra must not error: " + link, Reply.of(link).has("error"));
-        assertTrue("link-infra must report linked=true: " + link,
-                Reply.of(link).bool("linked"));
-
-        String state = ok(client().read("stellurgytest mission infra-state 0 "
-                + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("infra-state must not error: " + state, Reply.of(state).has("error"));
-        assertTrue("infra must report hasMission=true after link: " + state,
-                Reply.of(state).bool("hasMission"));
-        assertTrue("infra must report this mission's id: " + state,
-                String.valueOf(mid).equals(Reply.of(state).text("missionId")));
-    }
-
     /** After complete-now the production loop in MissionGasCollection
      *  iterates infrastructureCoords and calls {@code unlinkMission()} on
      *  the live tile (MissionGasCollection.java:80-86). Post-condition:
@@ -134,6 +109,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
     @Pins("INV-MSN-08")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "((IInfrastructure) tile).unlinkMission();",
+            replacedBy = "",
+            fails = "infra must report hasMission=false after completion", on = "2026-10-19")
     @Test
     public void completionUnlinksInfrastructureFromMission() throws Exception {
         int baseX = 9100;

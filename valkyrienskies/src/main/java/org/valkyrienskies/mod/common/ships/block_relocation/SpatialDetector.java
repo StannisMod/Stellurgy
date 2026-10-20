@@ -21,6 +21,13 @@ public abstract class SpatialDetector {
     public static final int maxRange = 512;
     public static final int maxRangeHalved = maxRange / 2;
     public static final int maxRangeSquared = maxRange * maxRange;
+    /**
+     * How far, in blocks along X or Z, a detection may extend from its first block. A ship's chunk
+     * claim is sized from this ({@link org.valkyrienskies.mod.common.ships.chunk_claims.VSChunkClaim#RADIUS}),
+     * so everything a detection can find has somewhere to be copied to. A structure that continues
+     * past it is not truncated: the detection reports {@link #reachExceeded} instead.
+     */
+    public static final int MAX_REACH = 128;
     public final TIntHashSet foundSet = new TIntHashSet(250);
     public final BlockPos firstBlock;
     public final MutableBlockPos tempPos = new MutableBlockPos();
@@ -31,6 +38,11 @@ public abstract class SpatialDetector {
     public TIntHashSet nextQueue = new TIntHashSet();
     // public int totalCalls = 0;
     public boolean cleanHouse = false;
+    /**
+     * Whether the structure continues past {@link #MAX_REACH}. The found set then holds only the part
+     * inside it, so it is not the whole structure and must not be taken for one.
+     */
+    public boolean reachExceeded = false;
     /**
      * The region the detection may not leave, inclusive. A block outside it is never reached, so it
      * neither joins the result nor counts toward {@link #maxSize} — which is the point: without it the
@@ -46,8 +58,9 @@ public abstract class SpatialDetector {
         maxSize = maximum;
         corners = checkCorners;
         this.footprint = footprint;
-        BlockPos minPos = new BlockPos(start.getX() - 128, 0, start.getZ() - 128);
-        BlockPos maxPos = new BlockPos(start.getX() + 128, 255, start.getZ() + 128);
+        // One block wider than the reach, so the block just past it is READ rather than taken for air.
+        BlockPos minPos = new BlockPos(start.getX() - MAX_REACH - 1, 0, start.getZ() - MAX_REACH - 1);
+        BlockPos maxPos = new BlockPos(start.getX() + MAX_REACH + 1, 255, start.getZ() + MAX_REACH + 1);
         cache = new ChunkCache(worldIn, minPos, maxPos, 0);
     }
 
@@ -191,8 +204,16 @@ public abstract class SpatialDetector {
     }
 
     protected void tryExpanding(int x, int y, int z, int hash) {
+        // The footprint first: a block outside it is not part of the craft at all, so it can neither
+        // join the result nor make the craft "continue past the reach".
         if (x < footprint.minX || x > footprint.maxX || y < footprint.minY || y > footprint.maxY
             || z < footprint.minZ || z > footprint.maxZ) {
+            return;
+        }
+        if (Math.abs(x - firstBlock.getX()) > MAX_REACH || Math.abs(z - firstBlock.getZ()) > MAX_REACH) {
+            if (isValidExpansion(x, y, z)) {
+                reachExceeded = true;
+            }
             return;
         }
         if (isValidExpansion(x, y, z)) {

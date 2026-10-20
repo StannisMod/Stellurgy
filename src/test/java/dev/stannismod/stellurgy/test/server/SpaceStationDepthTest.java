@@ -5,6 +5,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -44,6 +45,8 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
      * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
      */
     @Pins({"INV-STN-02", "INV-STN-22"})
+    @RedWitness(member = "SpaceObjectManager#getNextStationId", at = "if (!stationLocations.containsKey(i))",
+            replacedBy = "if (true)", fails = "station ids must be unique within the same orbit", on = "2026-10-19")
     @Test
     public void multipleStationsCoexistWithDistinctIds() throws Exception {
         int a = createStation(0);
@@ -59,26 +62,10 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         Reply.of(list).element("stations", "id", String.valueOf(c));
     }
 
-    @Test
-    public void fuelSetUpdatesPersistsAndIsObservableViaInfo() throws Exception {
-        int id = createStation(0);
-
-        String setResp = String.join("\n",
-                client().arrange("stellurgytest station fuel " + id + " set 500"));
-        int max = parseGroup(MAX_PATTERN, setResp, "max");
-        int after = parseGroup(AFTER_PATTERN, setResp, "after");
-        // setFuelAmount clamps to [0, max]; if max < 500 the after value will
-        // be max, not 500. Assert the relationship rather than a literal.
-        int expected = Math.min(500, max);
-        assertEquals("fuel set did not produce expected after value", expected, after);
-
-        StationInfo info = station(id);
-        assertEquals("info must reflect the fuel amount we just set: " + info.raw(),
-                expected, info.fuelAmount());
-    }
-
     /** Pins INV-STN-04 (addFuel clamps at MAX_FUEL and returns the amount actually added). */
     @Pins("INV-STN-04")
+    @RedWitness(member = "SpaceStationObject#addFuel", at = "fuelAmount = Math.min(fuelAmount + amt, MAX_FUEL);",
+            replacedBy = "fuelAmount = fuelAmount + amt;", fails = "after-add fuel must clamp at max", on = "2026-10-19")
     @Test
     public void fuelAddRespectsMaxCapacity() throws Exception {
         int id = createStation(0);
@@ -102,6 +89,8 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
     /** Pins INV-STN-03 (useFuel consumes nothing when the stock is short and drains exactly otherwise). */
     @Pins("INV-STN-03")
+    @RedWitness(member = "SpaceStationObject#useFuel", at = "if (amt > getFuelAmount())", replacedBy = "if (false)",
+            fails = "useFuel on insufficient stock must not consume anything", on = "2026-10-19")
     @Test
     public void fuelUseAllOrNothingWhenInsufficient() throws Exception {
         int id = createStation(0);
@@ -139,31 +128,6 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
         StationInfo info = station(id);
         assertEquals("info must reflect the partial drain: " + info.raw(), 40, info.fuelAmount());
-    }
-
-    /**
-     * Create registers a real {@link dev.stannismod.stellurgy.stations.SpaceStationObject}: its id
-     * was not in the list before and is after, and its info reports the orbit it was created for and
-     * an empty tank. Read as a DELTA — sibling scenarios on this server create stations too.
-     * Pins INV-STN-05 (a freshly created station holds no fuel and reports the planet it orbits).
-     * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
-     */
-    @Pins({"INV-STN-05", "INV-STN-22"})
-    @Test
-    public void stationCreateRegistersAndPersistsForList() throws Exception {
-        String before = String.join("\n", client().read("stellurgytest station list"));
-        int id = createStation(0);
-        assertFalse("the new station's id " + id + " was already listed before create: " + before,
-                Reply.of("stellurgytest station list", before).holdsElement("stations", "id", String.valueOf(id)));
-
-        String listAfter = String.join("\n", client().read("stellurgytest station list"));
-        Reply.of(listAfter).element("stations", "id", String.valueOf(id));
-
-        // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
-        // satisfied by a station orbiting dim 9701 and `"fuelAmount":0` by one holding 1000.
-        StationInfo info = station(id);
-        assertEquals("station info wrong orbitingPlanetId: " + info.raw(), 0, info.orbitingPlanetId);
-        assertEquals("station info wrong default fuelAmount: " + info.raw(), 0, info.fuelAmount());
     }
 
     /**

@@ -318,7 +318,7 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   never as a raw absolute. (`navTarget` persisting a FUTURE absolute, `TransitRecord` persisting a raw
   mid-flight `position` and `CrystalEntry.coord` persisting an observation-tick absolute are the
   places to check: `TileNavigationComputer.java`, `TransitRecord.java`,
-  `CrystalEntry.java`.) Pinned by `TransitRecordTest#roundTripPreservesLogicalStateAndCrew`, `ShipTransitTest#bothEndsOfTheFlightSurviveIt`. FOR: ADDR-11.
+  `CrystalEntry.java`.) No test pins it. FOR: ADDR-11.
 - **ADDR-13 (the geometry the player feels stays live)** `[A][BEH]` The distance — hence the cost and
   duration — between two bodies **whose frames both move** changes with time. A body's distance from
   its own system anchor does NOT: `positionFor` is `(d·cosθ, d·sinφ, d·sinθ)` `[V]`,
@@ -469,8 +469,8 @@ breaks, and a method name survives the edits a line number does not.
 | ADDR-8 | `CellWorldMapperTest` (the `coordOfPoseWithin` / `poseEscapesCell` legs) |
 | ADDR-9 | `CellFramesTest.aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves` + its static control; `CellFramesTest.twoCellsInOneMovingSystemKeepTheirDistanceIfBothRide` |
 | ADDR-10 | `CellSeamTest` (the pure layer: the margin, the neighbour it lands in, the axes that did not cross, and the return trip measured FROM the arrival); `VSShipCellSeamTest` (a real ship, moved past a real face, is carried into the neighbour, arrives inside it and stays — driven through `space seam-carry`, because a headless slot world does not tick its tiles, so the two lines in `TileAdvancedFlightComputer` that JOIN the predicate to the carry are covered by neither test); `StandoffRingTest` (the saturation that survives as the refusal path); `SystemBody.inCellOffsetAt`'s clamp |
-| ADDR-11 | `[V]` - the bytes round-trip (`SystemBodyTest.nbtRoundTripPreservesEveryField`), but "the meaning survives" is a statement about the whole save and has no single assertion |
-| ADDR-12 | `TransitRecordTest.roundTripPreservesLogicalStateAndCrew` (origin name + progress, no raw absolute); `ShipTransitTest.bothEndsOfTheFlightSurviveIt` |
+| ADDR-11 | `[V]` - the bytes round-trip (`SystemBody.java:353-379`, each part written and read under its own sub-tag), but "the meaning survives" is a statement about the whole save and has no single assertion |
+| ADDR-12 | none - the stored form is origin name + target name + progress (`TransitRecord.java:86-138`), read in code only |
 | ADDR-13 | `CellFramesTest.aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves`; `SystemBodiesProducerTest.aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays` |
 | ADDR-14 | `TargetPredictionTest.theAimedCellIsTheBodysDurableNameWhateverTheFlightCosts`; `...theAimIsWhereTheBodyWillBeWhenTheFlightEnds`; `...aMovingFrameChangesTheAnswer` (which is what fails if the pricing stops reading the frames) |
 | ADDR-15 | `NavRedactionAndSyncTest.theOrbitTierFollowsTheMeasuredDistanceNotTheCellName` |

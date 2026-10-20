@@ -125,47 +125,4 @@ public class ShipReadoutTest {
         assertNull("forward is not", r.warningFor(View.LIVE, ControlDirection.SURGE_POSITIVE));
         assertTrue("cannot hover is named", r.warnings(View.LIVE).contains(Warning.CANNOT_HOVER));
     }
-
-    /**
-     * What crosses the wire arrives intact: every figure a surface reads, including an infinite
-     * endurance, survives encoding and decoding.
-     */
-    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — each by writing a zero in place of one"
-            + " field — {@code ShipReadout#write} at {@code out.writeLong(revision);} fails \"revision\"; {@code ShipReadout#write} at {@code out.writeDouble(structural);} fails \"mass\" with 1234 against"
-            + " 10234; {@code ShipReadout#write} at {@code out.writeDouble(gravity);} fails \"field\"; {@code ShipReadout#write} at {@code out.writeDouble(authority[v][e][d]);} fails \"every figure\" on DESIGN SURGE_POSITIVE;"
-            + " {@code ShipReadout#write} at {@code out.writeDouble(torque[v][e][d]);} fails \"every figure: torque\" on DESIGN ROLL_POSITIVE BURST (it was GREEN before the"
-            + " wheel was added — a hull with no rotation sends zeros there); {@code ShipReadout#write} at {@code out.writeDouble(seconds[v][d]);} fails \"endurance\" on"
-            + " an infinite figure.")
-    @Test
-    public void theWireCarriesEveryFigure() throws IOException {
-        // A wheel aboard, so the rotational figures, their torques and a finite endurance exist to be
-        // carried: a hull with none sends zeros there, and zeros survive any encoding.
-        List<Actuator> hull = engines();
-        hull.add(Actuator.pureTorque(new ActuatorId(0, 1, 0, 0), new Vector3d(5000, 0, 0), 20_000));
-        hull.add(Actuator.pureTorque(new ActuatorId(0, 1, 0, 1), new Vector3d(0, 5000, 0), 20_000));
-        hull.add(Actuator.pureTorque(new ActuatorId(0, 1, 0, 2), new Vector3d(0, 0, 5000), 20_000));
-        ShipReadout sent = ShipFlightModel.solve(1L, slab(1234.0D), hull, hull, HELM).readout(9.81D);
-        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
-                "the arrangement carries a rotation: a finite yaw endurance and a torque behind it",
-                !Double.isInfinite(sent.burstSeconds(View.LIVE, ControlDirection.YAW_POSITIVE))
-                        && sent.torque(View.LIVE, ControlDirection.YAW_POSITIVE, Endurance.BURST) > 0.0D);
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        sent.write(new DataOutputStream(bytes));
-        ShipReadout got = ShipReadout.read(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())));
-        assertEquals("revision", sent.revision(), got.revision());
-        assertEquals("mass", sent.totalMass(), got.totalMass(), 0.0D);
-        assertEquals("field", sent.gravity(), got.gravity(), 0.0D);
-        for (View v : View.values()) {
-            for (ControlDirection d : ControlDirection.values()) {
-                for (Endurance e : Endurance.values()) {
-                    assertEquals("every figure: " + v + " " + d + " " + e,
-                            sent.authority(v, d, e), got.authority(v, d, e), 0.0D);
-                    assertEquals("every figure: torque " + v + " " + d + " " + e,
-                            sent.torque(v, d, e), got.torque(v, d, e), 0.0D);
-                }
-                assertEquals("every figure: endurance " + v + " " + d,
-                        sent.burstSeconds(v, d), got.burstSeconds(v, d), 0.0D);
-            }
-        }
-    }
 }

@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.hyperdrive.*;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 
@@ -97,19 +96,6 @@ public class HyperdriveStatsTest {
         assertEquals(0L, ShipDriveStats.NONE.burstCost());
         assertFalse("a generator of zero power is the same thing as no generator",
                 ShipDriveStats.ofPower(0L, DriveTier.baseline()).present());
-    }
-
-    @Test
-    public void driveStatsSurviveAnNbtRoundTrip() {
-        ShipDriveStats original = ShipDriveStats.ofPower(12_345L, DriveTier.baseline());
-        NBTTagCompound nbt = new NBTTagCompound();
-        original.writeToNBT(nbt);
-
-        ShipDriveStats restored = ShipDriveStats.readFromNBT(nbt);
-
-        assertEquals(original.drivePower(), restored.drivePower());
-        assertEquals(original.inFlightDraw(), restored.inFlightDraw());
-        assertEquals(original.burstCost(), restored.burstCost());
     }
 
     // ─── Speed ─────────────────────────────────────────────────────────────────

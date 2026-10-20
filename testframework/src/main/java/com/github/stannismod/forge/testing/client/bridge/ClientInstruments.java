@@ -81,6 +81,7 @@ public final class ClientInstruments {
         rows.add(new String[]{trace + "ShoveArming", "close", Kind.ARMING.name()});
         rows.add(new String[]{client + "ClientDimensions", "forgeRegisteredOnClient", Kind.READ.name()});
         rows.add(new String[]{client + "ClientDimensions", "stellurgyRegistryOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ClientShipRenderTiles", "inClaimOnClient", Kind.READ.name()});
         rows.add(new String[]{client + "ClientSpaceClock", "nowOnClient", Kind.READ.name()});
         rows.add(new String[]{client + "ClientSpaceClock", "hasSyncOnClient", Kind.READ.name()});
         rows.add(new String[]{client + "ItemModelReader", "airDrawsMissingOnClient", Kind.READ.name()});

@@ -57,8 +57,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinCrewTransferEvents", "MixinAssemblyCrewRebindEvents", "MixinDeckHoldEvents",
             "MixinGuiHandlerEvents", "MixinTileRocketAssemblingMachineEvents", "MixinTileObservatoryEvents",
             "MixinTilePlanetSelectorEvents", "MixinTileNavigationComputerEvents", "MixinTileTurretEvents",
-            "MixinBeamReplicationEvents", "MixinTileWeaponConsolePressEvents",
-            "MixinTileFireControlSensorPressEvents", "MixinWeaponOrdersSeedEvents", "MixinLinkerDesignationEvents",
+            "MixinBeamReplicationEvents", "MixinWeaponOrdersSeedEvents", "MixinLinkerDesignationEvents",
             "MixinServerPlayerPoseEvents", "MixinShotEvents", "MixinShotRegistryEvents", "MixinDamageStateEvents",
             "MixinTileFireControlSensorEvents", "MixinSubsystemNetworkRebuildEvents",
             "MixinSubsystemNodeReleaseEvents", "MixinTurretMuzzleEvents", "MixinShipDesignationEvents",
@@ -85,7 +84,10 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinClientProxyEvents", "MixinPacketShipReadoutEvents", "MixinClientBeamTrackerEvents",
             "MixinClientShotTrackerEvents", "MixinTileWeaponConsoleReadoutEvents",
             "MixinPacketThreadUtilRespawnWindow", "MixinTestClientMuteEvents", "MixinMinecraftSideTrace",
-            "MixinWorldClientShipManagerPickable", "MixinNetHandlerChunkDataPickable")));
+            "MixinEntityRocketClientGateEvents", "MixinPacketSenderReachEvents",
+            "MixinTileMultiBlockFormationEvents", "MixinTileOxygenVentScrubEvents",
+            "MixinWorldClientShipManagerPickable", "MixinNetHandlerChunkDataPickable",
+            "MixinPacketSatelliteEvents")));
 
     /**
      * Mixins that change what the game does — the declared ENVIRONMENT of a mechanics child, each with the
@@ -105,6 +107,9 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
                 + " permaload verb");
         rows.put("MixinShipFrameTravelShove", "moves a body when a test arms it: the disturbance a frame-travel"
                 + " scenario needs and no player input produces on a headless server");
+        rows.put("MixinArrivalSpawnMountRefusal", "refuses a seat mount's spawn while a test arms it: the refusal a"
+                + " world can give a mount and a test server never gives on its own, which the rebind and the"
+                + " arrival must answer");
         return rows;
     }
 

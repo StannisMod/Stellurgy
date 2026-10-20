@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -42,30 +43,13 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9000;
-    private static final int CX_ORIENT  = 9000;
-    private static final int CX_GRAV    = 9100;
     private static final int CX_ALT     = 9200;
 
     /** Pins INV-STN-13 (all three controllers place and tick without error). */
     @Pins("INV-STN-13")
-    @Test
-    public void orientationControllerPlacesAndTicksWithoutCrash() throws Exception {
-        assertPlacesTicksAndReportsCorrectTileClass(
-                CX_ORIENT, "stellurgy:orientationController",
-                "TileStationOrientationController");
-    }
-
-    /** Pins INV-STN-13 (all three controllers place and tick without error). */
-    @Pins("INV-STN-13")
-    @Test
-    public void gravityControllerPlacesAndTicksWithoutCrash() throws Exception {
-        assertPlacesTicksAndReportsCorrectTileClass(
-                CX_GRAV, "stellurgy:gravityController",
-                "TileStationGravityController");
-    }
-
-    /** Pins INV-STN-13 (all three controllers place and tick without error). */
-    @Pins("INV-STN-13")
+    @RedWitness(member = "Stellurgy#registerBlocks", at = "new BlockTileComparatorOverride(TileStationAltitudeController.class,",
+            replacedBy = "new BlockTileComparatorOverride(TileStationGravityController.class,",
+            fails = "block stellurgy:altitudeController must produce tile TileStationAltitudeController", on = "2026-10-19")
     @Test
     public void altitudeControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(

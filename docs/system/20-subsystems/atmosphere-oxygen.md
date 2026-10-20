@@ -100,7 +100,8 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   `AtmosphereHandler.java:292-294`; `Atmosphere.sendToRealPlayer:29-37`.
 - **MECH-ATM-07 vent operating cycle** — while turned on, fuelled and powered, the vent
   periodically `addBlock`s to seal (every 100t), activates adjacent scrubbers, then runs its
-  scrubbers (MECH-ATM-08) and its supply (MECH-ATM-33). Loss of power/seal clears the blob. There is
+  scrubbers (MECH-ATM-08) and its supply (MECH-ATM-33). Loss of power/seal clears the blob; a loss of
+  power is not a breach, so the gases stay with the vent until the seal is retaken. There is
   no other mode: a vent never burns a running cost every tick nor DECLARES its room's atmosphere —
   life support is a core system, not a switchable one (maintainer ruling 2026-10-06).
   `TileOxygenVent#performFunction`.
@@ -111,7 +112,9 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   (`co2Unpaid`, saved), so the cartridge pays exactly for its draw, and the draw is capped at what the
   remaining charges cover, so nothing is taken unpaid. No cartridge ⇒ nothing drawn, unless
   `scrubberRequiresCartrige` is false. The vent powers each scrubber that drew that second
-  (`10 × OxygenVentPowerMultiplier` per tick) and its oxygen supply does not read the scrubbers at
+  (`10 × OxygenVentPowerMultiplier` per tick), and a scrubber absorbs only if the vent's store already
+  holds the tick's price WITH it — so a vent short of power leaves scrubbers idle instead of paying for
+  them out of the fan's share (`LifeSupportZoneTest#aVentScrubsOnlyWhatItsStoreCanPayFor`) [T]; its oxygen supply does not read the scrubbers at
   all. Not affected by `breathingRequiresO2` or `enableToxicity`: the machines run whatever
   the air does to living things. `getComparatorOverride()` maps
   remaining charge to a 0..15 redstone level. `TileCO2Scrubber#absorb`, `TileOxygenVent#scrub`.
@@ -240,9 +243,12 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
 - **MECH-ATM-25 a breach LOSES the air, it does not delete it** — when a hull is opened the
   flood-fill drops the room's cells, but the gases are not the cells: `AreaBlob.clearBlob()` empties
   the GRAPH while `AtmosphereBlob.airState` survives, and the handler hands that state back keyed by
-  VENT rather than by membership. So the vent drains all three gases proportionally at
-  `lifeSupportBreachVentRate` per second, on its own tick counter and regardless of power (a hole
-  needs no electricity), until the room is vacuum. A hull breach therefore costs a tankful, paid
+  VENT rather than by membership. So the zone EXCHANGES with the outdoors (`AtmosphereHandler#getOutdoorAir`,
+  the world's own air): every gas moves toward the outdoors' partial pressure of it by at most
+  `lifeSupportBreachVentRate` a second, in whichever direction it differs, on its own tick counter and
+  regardless of power (a hole needs no electricity); what comes in arrives at the outdoors' temperature.
+  In space that is a drain to vacuum; on a breathable world the room becomes that world's air, so a room
+  patched after a breach holds what is outside (CON-C21-29). In space a hull breach therefore costs a tankful, paid
   when the hull is patched and the vent refills (a lost seal does not make the zone and its gases
   cease in the same tick). `SealedZone#ventBreachedAir`, shared by both ports. [V/T]
   **Only a fill that ANSWERED can breach a zone.** With the default `atmosphereHandleBitMask` the
@@ -305,7 +311,10 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   off — judged protected, spending nothing, on both chest routes — is pinned on the client by
   `client/VacuumAndSuitClientGroupTest.withBreathingNotNeedingOxygen…SpendsNoAir` (×2). Water is not
   air: the in-water breath top-up (event-handlers MECH-EVT-05) does not follow this setting, so a
-  diver still drowns with it off. [T]
+  diver breathes from his chest's tank and drowns with it empty — an enchanted ordinary chestpiece
+  reads its tank whenever the question needs oxygen supplied, whatever this setting says
+  (`ItemAirWrapper#protectsFrom`) [T]
+  `VacuumAndSuitClientGroupTest#withBreathingNotNeedingOxygenADiverBreathesFromHisChestAndDrownsWhenItIsEmpty`.
 - **MECH-ATM-29 the air is a COMPOSITION, keyed by substance** — a zone holds a sparse map of
   partial pressures over `GasRegistry`'s eleven substances rather than three named fields, so a room
   can contain something the old vocabulary could not name. Sparse on purpose: a vacuum holds an empty
@@ -461,7 +470,7 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
   gases is not the same hazard, and good air is no defence.
   `test/unit/AtmospherePredicatesTest#aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt` FOR: INV-ATM-18.
 - **INV-ATM-24 [T][SYS]** A composition survives a save including a substance the three old keys could not
-  name, and a substance this game no longer knows is dropped rather than guessed at.
+  name `[V]` (one key per gas each way, `AirState.java:571-591`), and a substance this game no longer knows is dropped rather than guessed at.
   `test/unit/AtmospherePredicatesTest#aCompositionSurvivesASaveAndAnUnknownGasIsDropped` FOR: INV-ATM-18.
 - **INV-ATM-20 [T][SYS]** Regeneration is respiration run backwards: CO2 becomes oxygen one for one,
   total pressure is unchanged (the solid carbon never held any), and it cannot process CO2 that is
@@ -529,7 +538,7 @@ commented-out `getMaxAir` path.
 | INV-ATM-19, MECH-ATM-16/20 | `test/server/LifeSupportZoneTest.java` — a maintained room holds sea-level air at 1 atm; an unpowered one has no zone at all (`airO2 == -1`); a powered recirculator clears its room's CO2, returns the oxygen, holds pressure, drops dust, **and the zone publishes a breathable atmosphere afterwards**. |
 | MECH-ATM-22/23, INV-NET-01 | `test/server/VentilationNetworkTest.java` — a plant three duct-blocks away clears a room's CO2 and takes the carbon into its own slot; and the same run with a shield cable in place of one duct moves no air at all, with the first scenario as its positive control. |
 | MECH-ATM-27/28 | `test/server/LifeSupportZoneTest.aJettisonPortThrowsItsCargoOverboard` and `.aBlockedJettisonPortHoldsItsCargo` — the pair, because an emptied slot alone is what VOIDING the cargo also looks like: the green asserts a loose item entity beside the port, and the counter-test walls the port in on every side so the outcome cannot depend on which way it was placed. |
-| MECH-ATM-25/26 | `test/server/BreachAndIsolationTest` — a breached room's air is still reachable from its vent and drains to vacuum instead of vanishing; a breached zone stops requesting from the plant; a closed bulkhead divides one hall into two zones. |
+| MECH-ATM-25/26 | `test/server/BreachAndIsolationTest` — a breached room's air is still reachable from its vent and becomes the outdoors' air — gas leaving and gas coming in, on the overworld — instead of vanishing; a breached zone stops requesting from the plant; a closed bulkhead divides one hall into two zones. The converse, that a DROPPED zone is not a breach: `test/server/LifeSupportZoneTest.aRoomWhoseVentBrownsOutKeepsItsAir`. |
 | MECH-ATM-24 zone priority | `test/server/VentilationNetworkTest.underADeficitTheHigherPriorityZoneIsServedFirst` — two rooms on one plant with the supply deliberately cut below what either alone could absorb: the prioritised room is served and the other gets NOTHING, which is what separates a priority from a share-out. Measured against a snapshot taken immediately before the solve, because the server ticks between commands. |
 | MECH-ATM-29/30/31, INV-ATM-21..24 | `test/unit/AtmospherePredicatesTest` (7 scenarios) and `test/server/CombustionFollowsTheOxidiserTest`. Falsified both ways: tying the combustion band back to breathing left ONLY the between-bands assertion red, and making the handler obey the label again turned the server room combustible with `combustible:true` beside `breathableAir:false` in one readout. The save scenario found a real defect in the implementation — an unknown substance was being stored under a null key and counted toward the pressure. |
 | MECH-ATM-20 (partly) | **not pinned**: the full-output back-up and the dust-buffer rounding are still unverified — the e2e proves dust appears, not that a jammed slot stops conversion. |
@@ -558,3 +567,14 @@ deliberately dropped so it gets re-checked), while the machine is switched off, 
 None of those is a hole in the hull. The flag is set only where the room is actually gone — a seal
 that HELD and then found its zone empty, or a seal check that ran and failed — and is deliberately not
 persisted, because after a load the check answers for itself within a hundred ticks.
+
+**A zone its owner DROPS is not a zone that found itself empty**. The drop on a
+brownout or a switch-off empties the zone's graph, and for a tick or more that emptiness looked exactly
+like "a seal that held and then found its zone empty": `SealedZone#tick` set `breached`, and since only a
+seal check clears it and no check runs while the owner cannot hold the zone, a browned-out room vented at
+the breach rate until power came back — measured, 1 atm to 0.69 in three seconds with its CO2 gone.
+`SealedZone#drop` now clears `everSealed` with the zone it empties [V]; the air waits in the vent and the
+next seal check, once the owner can hold the zone again, answers for a hull that opened meanwhile. So a
+hole opened DURING a brownout vents only after power returns and that check fails — nothing measures a
+hull while its owner cannot hold the zone. Pinned by `LifeSupportZoneTest#aRoomWhoseVentBrownsOutKeepsItsAir`,
+both halves: the air is kept while browned out, and is the room's again when the seal is retaken. [T]

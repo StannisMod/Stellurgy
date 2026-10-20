@@ -198,17 +198,6 @@ public class GalacticCoordTest {
     }
 
     @Test
-    public void nbtRoundTripPreservesIdentity() {
-        GalacticCoord c = GalacticCoord.ofSectorLocal(123L, -456L, 789L, 111L, -222L, 333L);
-        NBTTagCompound nbt = new NBTTagCompound();
-        c.writeToNBT(nbt);
-
-        GalacticCoord restored = GalacticCoord.readFromNBT(nbt);
-        assertEquals(c, restored);
-        assertEquals(c.hashCode(), restored.hashCode());
-    }
-
-    @Test
     public void readFromNbtWithoutTagIsOrigin() {
         assertEquals(GalacticCoord.ORIGIN, GalacticCoord.readFromNBT(new NBTTagCompound()));
     }

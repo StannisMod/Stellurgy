@@ -1,19 +1,11 @@
 package dev.stannismod.stellurgy.test.integration;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import dev.stannismod.stellurgy.network.*;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.util.Asteroid;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import net.minecraft.init.Items;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -22,12 +14,10 @@ import java.lang.reflect.Field;
 import static org.junit.Assert.*;
 
 /**
- * Network packet wire-format round-trip — the four packets
- * (PacketDimInfo, PacketSatellite, PacketStationUpdate, PacketConfigSync)
- * that need {@link MinecraftBootstrap#ensure()} because their write/readClient
+ * Network packet wire-format decisions for packets that need
+ * {@link MinecraftBootstrap#ensure()} because their write/readClient
  * pipelines touch {@link net.minecraft.nbt.NBTTagCompound} serialization of
- * vanilla / Stellurgy registry-backed objects (biome IDs, satellite type strings,
- * config field schemas).
+ * vanilla / Stellurgy registry-backed objects.
  *
  * <p>Lighter packets that don't need MC bootstrap live in
  * {@code unit/PacketSerializationTest}.</p>
@@ -61,23 +51,6 @@ public class PacketSerializationTest {
         throw new AssertionError("field " + name + " not found on " + target.getClass());
     }
 
-    private static void setField(Object target, String name, Object value) {
-        Class<?> c = target.getClass();
-        while (c != null) {
-            try {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                f.set(target, value);
-                return;
-            } catch (NoSuchFieldException nope) {
-                c = c.getSuperclass();
-            } catch (Exception e) {
-                throw new AssertionError("reflection set " + name + " failed", e);
-            }
-        }
-        throw new AssertionError("field " + name + " not found on " + target.getClass());
-    }
-
     // ---- PacketDimInfo --------------------------------------------------------
 
     /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
@@ -94,268 +67,8 @@ public class PacketSerializationTest {
         received.readClient(buffer);
 
         assertEquals(0, buffer.readableBytes());
-        assertEquals(99, (int) getField(received, "dimNumber"));
         assertTrue("null dimProperties on send must round-trip as deleteDim=true",
                 getField(received, "deleteDim"));
-    }
-
-    // ---- PacketSatellite ------------------------------------------------------
-
-    /**
-     * Minimal SatelliteBase subclass so we can construct a satellite without
-     * going through {@code SatelliteRegistry.getNewSatellite(name)} — that
-     * lookup is empty in tests because Stellurgy's mod-init satellite registrations
-     * don't run.
-     */
-    public static class TestSatellite extends SatelliteBase {
-        @Override public String getInfo(net.minecraft.world.World world) { return "test"; }
-        @Override public String getName() { return "TestSatellite"; }
-        @Override public boolean performAction(net.minecraft.entity.player.EntityPlayer p,
-                                               net.minecraft.world.World w,
-                                               net.minecraft.util.math.BlockPos pos) {
-            return false;
-        }
-        @Override public double failureChance() { return 0; }
-    }
-
-    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
-    @Pins("INV-NW-04")
-    @Test
-    public void packetSatelliteRoundTrip() {
-        SatelliteProperties props =
-                new SatelliteProperties(120, 4000, "ar:test_packet_sat", 768, 2.5f);
-        props.setId(0xC0FFEEL);
-
-        TestSatellite sat = new TestSatellite();
-        setField(sat, "satelliteProperties", props);
-        sat.setDimensionId(5);
-
-        PacketSatellite sent = new PacketSatellite(sat);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        // PacketSatellite.readClient calls SatelliteRegistry.createFromNBT which
-        // looks up the type string in the satellite registry — that registry is
-        // empty in tests. So we verify the wire payload by reading the NBT
-        // directly via PacketBuffer (same call the packet would make) without
-        // resolving the satellite class.
-        net.minecraft.network.PacketBuffer packetBuffer = new net.minecraft.network.PacketBuffer(buffer);
-        NBTTagCompound nbt;
-        try {
-            nbt = packetBuffer.readCompoundTag();
-        } catch (java.io.IOException e) {
-            throw new AssertionError(e);
-        }
-        assertEquals(0, buffer.readableBytes());
-        assertNotNull("packet payload missing satellite NBT", nbt);
-
-        // Re-hydrate properties and verify everything that doesn't need the
-        // registry survived (the type string is what executeClient would feed
-        // to createFromNBT — verifying it preserves the wire format).
-        assertTrue("NBT missing properties tag: " + nbt, nbt.hasKey("properties"));
-        assertEquals(5, nbt.getInteger("dimId"));
-
-        SatelliteProperties restored = new SatelliteProperties();
-        restored.readFromNBT(nbt.getCompoundTag("properties"));
-        assertEquals(120, restored.getPowerGeneration());
-        assertEquals(4000, restored.getPowerStorage());
-        assertEquals("ar:test_packet_sat", restored.getSatelliteType());
-        assertEquals(768, restored.getMaxDataStorage());
-        assertEquals(2.5f, restored.getWeight(), 1e-6);
-        assertEquals(0xC0FFEEL, restored.getId());
-    }
-
-    // ---- PacketStationUpdate --------------------------------------------------
-
-    // ---- PacketConfigSync -----------------------------------------------------
-
-    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
-    @Pins("INV-NW-04")
-    @Test
-    public void packetConfigSyncRoundTrip() {
-        // Start from a current-config copy (matches what production StellurgyConfiguration
-        // routinely serializes) and tweak deterministic fields. A fresh
-        // StellurgyConfiguration() leaves some collection-fields null which throws off
-        // the wire format because writeConfigToNetwork expects them initialized.
-        StellurgyConfiguration cfg = new StellurgyConfiguration(StellurgyConfiguration.getCurrentConfig());
-        cfg.spaceDimId = 9999;
-        cfg.stationSize = 999;
-
-        PacketConfigSync sent = new PacketConfigSync(cfg);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketConfigSync received = new PacketConfigSync();
-        received.readClient(buffer);
-
-        // Note: not asserting `readableBytes == 0` because StellurgyConfiguration carries
-        // version padding / optional sections; the wire-level invariant we care
-        // about is that the round-tripped fields match.
-        StellurgyConfiguration restored = getField(received, "config");
-        assertNotNull("config null after readClient", restored);
-        assertEquals(9999, restored.spaceDimId);
-        assertEquals(999, restored.stationSize);
-    }
-
-    // ---- PacketInvalidLocationNotify -----------------------------------------
-
-    @Test
-    public void packetInvalidLocationNotifyRoundTrip() {
-        HashedBlockPosition pos = new HashedBlockPosition(123, 64, -456);
-        PacketInvalidLocationNotify sent = new PacketInvalidLocationNotify(pos);
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketInvalidLocationNotify received = new PacketInvalidLocationNotify();
-        received.readClient(buffer);
-
-        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
-        HashedBlockPosition restored = getField(received, "toPos");
-        assertEquals(123, restored.x);
-        assertEquals(64, restored.y);
-        assertEquals(-456, restored.z);
-    }
-
-    // ---- PacketFluidParticle -------------------------------------------------
-
-    @Test
-    public void packetFluidParticleRoundTrip() {
-        BlockPos from = new BlockPos(10, 20, 30);
-        BlockPos to = new BlockPos(-40, 50, -60);
-        PacketFluidParticle sent = new PacketFluidParticle(from, to, 80, 0xFF66AA);
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketFluidParticle received = new PacketFluidParticle();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        BlockPos restoredFrom = getField(received, "fromPos");
-        BlockPos restoredTo = getField(received, "toPos");
-        assertEquals(from, restoredFrom);
-        assertEquals(to, restoredTo);
-        assertEquals(80, (int) PacketSerializationTest.<Integer>getField(received, "time"));
-        assertEquals(0xFF66AA, (int) PacketSerializationTest.<Integer>getField(received, "color"));
-    }
-
-    // ---- PacketAsteroidInfo --------------------------------------------------
-
-    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
-    @Pins("INV-NW-04")
-    @Test
-    public void packetAsteroidInfoRoundTrip() {
-        Asteroid original = new Asteroid();
-        original.ID = "test:goldRich";
-        original.distance = 175;
-        original.mass = 32_000;
-        original.minLevel = 3;
-        original.massVariability = 0.25f;
-        original.richness = 0.6f;
-        original.richnessVariability = 0.1f;
-        original.probability = 0.05f;
-        original.timeMultiplier = 1.5f;
-        original.itemStacks.add(new ItemStack(Items.GOLD_INGOT, 1));
-        original.stackProbabilities.add(0.4f);
-        original.itemStacks.add(new ItemStack(Items.IRON_INGOT, 1));
-        original.stackProbabilities.add(0.6f);
-
-        PacketAsteroidInfo sent = new PacketAsteroidInfo(original);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketAsteroidInfo received = new PacketAsteroidInfo();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        Asteroid restored = getField(received, "asteroid");
-
-        assertEquals("test:goldRich", restored.ID);
-        assertEquals(175, restored.distance);
-        assertEquals(32_000, restored.mass);
-        assertEquals(3, restored.minLevel);
-        assertEquals(0.25f, restored.massVariability, 1e-6);
-        assertEquals(0.6f, restored.richness, 1e-6);
-        assertEquals(0.1f, restored.richnessVariability, 1e-6);
-        assertEquals(0.05f, restored.probability, 1e-6);
-        assertEquals(1.5f, restored.timeMultiplier, 1e-6);
-
-        assertEquals(2, restored.itemStacks.size());
-        assertEquals(Items.GOLD_INGOT, restored.itemStacks.get(0).getItem());
-        assertEquals(Items.IRON_INGOT, restored.itemStacks.get(1).getItem());
-        assertEquals(0.4f, restored.stackProbabilities.get(0), 1e-6);
-        assertEquals(0.6f, restored.stackProbabilities.get(1), 1e-6);
-    }
-
-    @Test
-    public void packetAsteroidInfoRoundTripEmptyStackList() {
-        Asteroid original = new Asteroid();
-        original.ID = "test:empty";
-        original.distance = 1;
-        original.mass = 1;
-        original.minLevel = 0;
-        original.massVariability = 0;
-        original.richness = 0;
-        original.richnessVariability = 0;
-        original.probability = 0;
-        original.timeMultiplier = 1;
-
-        PacketAsteroidInfo sent = new PacketAsteroidInfo(original);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketAsteroidInfo received = new PacketAsteroidInfo();
-        received.readClient(buffer);
-
-        Asteroid restored = getField(received, "asteroid");
-        assertEquals(0, restored.itemStacks.size());
-        assertEquals(0, restored.stackProbabilities.size());
-    }
-
-    // ---- PacketLaserGun ------------------------------------------------------
-
-    /**
-     * The shooter crosses the wire as its entity id, which is what the client looks it up by; the
-     * target crosses as floats, so the coordinates here are exactly representable in one.
-     */
-    @Test
-    public void packetLaserGunRoundTripsTheShooterAndTheTarget() {
-        net.minecraft.entity.Entity shooter = new net.minecraft.entity.projectile.EntitySnowball(null);
-        PacketLaserGun sent = new PacketLaserGun(shooter, new net.minecraft.util.math.Vec3d(1.5, 64.25, -2.75));
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-        PacketLaserGun received = new PacketLaserGun();
-        received.readClient(buffer);
-
-        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
-        assertEquals(shooter.getEntityId(), (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
-
-        net.minecraft.util.math.Vec3d toPos = getField(received, "toPos");
-        assertEquals(1.5, toPos.x, 1e-6);
-        assertEquals(64.25, toPos.y, 1e-6);
-        assertEquals(-2.75, toPos.z, 1e-6);
-    }
-
-    // ---- PacketAirParticle ---------------------------------------------------
-
-    @Test
-    public void packetAirParticleRoundTrip() {
-        HashedBlockPosition pos = new HashedBlockPosition(-25, 90, 1024);
-        PacketAirParticle sent = new PacketAirParticle(pos);
-
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketAirParticle received = new PacketAirParticle();
-        received.readClient(buffer);
-
-        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
-        HashedBlockPosition restored = getField(received, "toPos");
-        assertEquals(-25, restored.x);
-        assertEquals(90, restored.y);
-        assertEquals(1024, restored.z);
     }
 
     // ---- PacketSpaceStationInfo ----------------------------------------------

@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.weapon.TurretDriveState;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
 
@@ -117,27 +116,6 @@ public class TurretMechanismTest {
 
         assertTrue("a derated drive turned at least as fast as a working one",
                 Math.abs(derated.getYaw()) < Math.abs(working.getYaw()));
-    }
-
-    /** A bearing survives a save: a gun reloaded is a gun still pointing where it was left. */
-    @Test
-    public void theBearingSurvivesARoundTrip() {
-        TurretMechanism mount = TurretMechanism.standard();
-        mount.commandBearing(33.0D, -12.0D);
-        for (int tick = 0; tick < 100; tick++) {
-            mount.tick(2.0D);
-        }
-        mount.setDriveState(TurretDriveState.DERATED);
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        mount.writeToNBT(nbt);
-        TurretMechanism restored = TurretMechanism.standard();
-        restored.readFromNBT(nbt);
-
-        assertEquals(mount.getYaw(), restored.getYaw(), EPSILON);
-        assertEquals(mount.getPitch(), restored.getPitch(), EPSILON);
-        assertEquals(mount.getDriveState(), restored.getDriveState());
-        assertTrue("a restored mount forgot what it was told to do", restored.hasCommand());
     }
 
     /** Aiming at a direction and reading the aim back gives the same direction. */

@@ -163,12 +163,14 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
   `bbCache==null` (`canScan`). `TileRocketAssemblingMachine.java:776`, `:920`.
 - **INV-RASM-02 [T][BEH]** A valid pad structure assembles to a spawned entity with a positive-axis
   storage chunk whose `storageChunkSize == sx*sy*sz`. `RocketAssemblySmokeTest.java:56`. Pinned by `RocketAssemblySmokeTest#fixtureRocketAssemblesToLiveEntity`, `RocketAssemblySmokeTest#rocketStorageChunkMatchesScanFootprint`.
-- **INV-RASM-03 [T][BEH]** `assembleRocket` only proceeds when `status==SUCCESS`; a scan verdict of
-  anything else aborts the build. `TileRocketAssemblingMachine.java:642`;
-  `RocketAssemblySmokeTest.java:33`. Pinned by `RocketAssemblySmokeTest#invalidRocketMissingEngineFailsAssemblyWithReason`.
+- **INV-RASM-03 [T][BEH]** `scanRocket` gives a structure with no engine the `NOENGINES` verdict
+  (`TileRocketAssemblingMachine.java:722`), and such a structure is not assembled. That
+  `assembleRocket` itself also refuses any verdict other than `SUCCESS` is `[V]`
+  (`TileRocketAssemblingMachine.java:642`): the test's assemble path refuses on the scan verdict
+  before `assembleRocket` runs. Pinned by `RocketAssemblySmokeTest#invalidRocketMissingEngineFailsAssemblyWithReason`.
 - **INV-RASM-04 [T][BEH]** The pad assembler spawns `EntityRocket` (never
   `EntityStationDeployedRocket`); the UV assembler spawns `EntityStationDeployedRocket`.
-  `UvAssemblerOutputEntityClassTest.java:81,106`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
+  `UvAssemblerOutputEntityClassTest.java:59,81`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
 - **INV-RASM-05 [V][BEH]** UV size caps are `MAX_SIZE=MAX_SIZE_Y=17` and are strictly smaller than
   the pad assembler's `MAX_SIZE_Y=128`, so the two tiles remain distinct machines.
   `TileUnmannedVehicleAssembler.java:33`; `TileRocketAssemblingMachine.java:70`. Unpinned on
@@ -278,7 +280,7 @@ assembler's world's transfer line, `DimensionManager.transferLineOf` (`metric-bo
 |-----------|-----------|
 | INV-RASM-02 | `RocketAssemblySmokeTest.java:56` |
 | INV-RASM-03 | `RocketAssemblySmokeTest.java:33` |
-| INV-RASM-04 | `UvAssemblerOutputEntityClassTest.java:81,106` |
+| INV-RASM-04 | `UvAssemblerOutputEntityClassTest.java:59,81` |
 | INV-RASM-05 | — (constants only; see the invariant) |
 | INV-RASM-06 | `RocketRequireFuelDisableAssemblesTest.java:77` |
 | INV-RASM-07 | `WearAccrualDisableTest.java:76,81` |

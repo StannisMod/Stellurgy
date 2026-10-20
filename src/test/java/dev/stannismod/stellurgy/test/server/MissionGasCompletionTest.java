@@ -3,9 +3,12 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
+import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.CraftInZone;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -100,15 +103,24 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     }
 
     /** Production gate: if `(int)stats.getStatTag("intakePower") > 0`
-     *  is false, the fluid-fill loop is skipped (MissionGasCollection
-     *  line 46). Counter-test pinning the gate.
+     *  is false, the fluid-fill loop is skipped. Counter-test pinning the gate.
+     *
+     *  <p>The rocket carries tanks the fill could reach ({@code with-fluid-cargo}, empty at launch,
+     *  both read before the mission); without them "no tank came back full" would hold whatever the
+     *  intake power, because there would be nothing to fill.</p>
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
     @Pins("INV-MSN-07")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "ip > 0 &&", replacedBy = "",
+            fails = "intakePower=0 -> no fluid entries", on = "2026-10-19")
     @Test
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
-        int rid = buildAndAssembleRocket(8100);
-        long mid = startGasMission(rid, 1000, "water", 0);
+        int rid = buildAndAssembleRocket(8100, "with-fluid-cargo");
+        Reply tanks = read("stellurgytest rocket storage-fluid " + rid);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the rocket must carry empty tanks the completion could fill: " + tanks,
+                tanks.objectArray("tanks").length > 0 && tanks.integer("totalAmount") == 0);
+        long mid = startGasMission(rid, 1000, "oxygen", 0);
         MissionCompletion cargo = completeNow(mid);
         // The completion returns its rocket on this path too; the gate is that its tanks stay empty.
         assertTrue("intakePower=0 -> no fluid entries: " + cargo.raw(),
@@ -143,6 +155,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
     @Pins("INV-MSN-07")
+    @RedWitness(member = "MissionGasCollection#onMissionComplete", at = "ip > 0 &&",
+            replacedBy = "ip <= 0 &&",
+            fails = "fluidEntries must be > 0 (production filled fluid tiles)", on = "2026-10-19")
     @Test
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
@@ -221,22 +236,44 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * production keeps the plan: the {@code duration} of the {@code MissionGasCollection} it registers
      * on the giant ({@code mission state}).</p>
      *
-     * <p>The arrangement is a derived gas giant realized ({@code space find-giant}, {@code space
-     * realize}) — properties with air and no world, as a giant has no surface — a station orbiting it, and two unmanned rockets built and
-     * assembled on that station — two, because a rocket that plans a mission is spent by it. Between the
-     * two, the giant's air gains exactly as much of the offered gas as it already held. The rocket
+     * <p>The arrangement is a derived gas giant made a place the way production makes one — a craft
+     * recorded in its zone ({@code space find-giant}, {@link CraftInZone}) — a station orbiting it, and
+     * two unmanned rockets built and assembled on that station — two, because a rocket that plans a
+     * mission is spent by it. The giant's air is first scaled to one atmosphere, so both missions are
+     * long enough for halving to show, and between the two it gains exactly as much of the offered gas
+     * as it already held; its own air is put back afterwards ({@link PlanetAir}). The rocket
      * reaching orbit is ARRANGED ({@code rocket force-orbit-reached}, which calls the production method):
      * the flight up is not the subject, and nothing in it bears on the plan.</p>
      *
      * <p>What it does not see: a player choosing a gas in the rocket's menu (both rockets plan the first
      * gas offered), the mission completing, and the flight to orbit.</p>
+     *
+     * <p>red-witnessed: with {@code EntityStationDeployedRocket#onOrbitReached} at {@code
+     * properties.getAir().partialPressure(targetGas)} replaced by {@code AirState.ONE_ATM}, this fails
+     * with "51200 ticks at 895314058, 51200 ticks at 1790628116 (hydrogen)" (2026-10-07).</p>
      */
     @Test
     public void aHarvestPlannedAtTwiceThePartialPressureTakesHalfAsLong() throws Exception {
-        Reply found = read("stellurgytest space find-giant 8").requireOk();
-        Reply realized = act("stellurgytest space realize " + found.text("cellKey") + " "
-                + found.integer("variant")).requireOk();
-        int giant = realized.integer("dim");
+        String giantCell = read("stellurgytest space find-giant 8").requireOk().text("cellKey");
+        CraftInZone.settle(cmd -> arrange(cmd).raw(), giantCell).close();
+        int giant = CellInfo.atKey(cmd -> read(cmd).raw(), giantCell)
+                .requireCellBodyOfKind("GAS_GIANT").dim;
+        requireArranged("a craft having been in the giant's zone must have made it a place: dim " + giant,
+                giant != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET);
+        PlanetAir giantsOwnAir = PlanetAir.snapshot(cmd -> read(cmd).raw(), giant);
+        try {
+            measureHalving(giant);
+        } finally {
+            giantsOwnAir.restore(cmd -> arrange(cmd).raw());
+        }
+    }
+
+    private void measureHalving(int giant) throws Exception {
+        // The whole mix scaled to ONE atmosphere (`setAtmosphereDensity` counts hundredths of one).
+        // Measured 2026-10-07 at a derived giant's own air: 40 ticks, and 20 at twice the gas — the
+        // second already ON the one-second floor, where halving cannot show. One atmosphere is far
+        // thinner than any giant's, so both missions stand clear of it.
+        arrange("stellurgytest atmosphere set-density " + giant + " 100").requireOk();
         Reply planet = read("stellurgytest planet info " + giant);
         String[] offered = planet.textArray("harvestable");
         requireArranged("the giant must offer a gas to harvest: " + planet, offered.length > 0);
@@ -249,7 +286,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int space = new dev.stannismod.stellurgy.api.StellurgyConfiguration().spaceDimId;
         arrange("stellurgytest dim time " + space);
         Reply station = arrange("stellurgytest station create " + giant).requireOk();
-        Reply info = read("stellurgytest station info " + station.integer("id")).requireOk();
+        // A reading verb: it answers the station's fields and carries no `ok`, so refusal is its `error`.
+        Reply info = read("stellurgytest station info " + station.integer("id"));
+        requireArranged("the station just created must be readable: " + info, !info.refused());
         int x = info.integer("spawnX"), y = info.integer("spawnY"), z = info.integer("spawnZ");
 
         long atHeld = plannedDurationTicks(giant, space, x, y, z);
@@ -271,6 +310,19 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * gas mission that registered on {@code giant} as a result.
      */
     private long plannedDurationTicks(int giant, int space, int x, int y, int z) throws Exception {
+        // The space dimension has no player in it here, and `PlayerChunkMap#tick` queues every chunk of
+        // a world nobody can respawn in for unloading on each tick it has no players — taking the
+        // assembled rocket with it before the next command reaches it. Held for the arrangement only.
+        String chunk = space + " " + (x >> 4) + " " + (z >> 4);
+        arrange("stellurgytest chunk forceload " + chunk).requireOk();
+        try {
+            return plannedDurationTicksHeld(giant, space, x, y, z);
+        } finally {
+            arrange("stellurgytest chunk release " + chunk).requireOk();
+        }
+    }
+
+    private long plannedDurationTicksHeld(int giant, int space, int x, int y, int z) throws Exception {
         arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z).requireOk();
         long mark = rockets.mark();
         act("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z).requireOk();
@@ -296,7 +348,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
     private Set<Integer> satelliteIds(int dim) throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (String satellite : read("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
+        for (String satellite : read("stellurgytest satellite list " + dim).objectArray("satellites")) {
             ids.add(Reply.of("satellite list", satellite).integer("id"));
         }
         return ids;

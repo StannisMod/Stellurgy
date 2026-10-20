@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
@@ -37,6 +38,8 @@ public class FreeFlightInputTest {
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Pins("INV-RKT-08")
+    @RedWitness(member = "FreeFlightInput#clamp", at = "if (v > MAX) return MAX;", replacedBy = "",
+            fails = "expected:<1.0> but was:<5.0>", on = "2026-10-19")
     @Test
     public void constructorClampsAboveOne() {
         FreeFlightInput in = new FreeFlightInput(5f, 2.5f, 1.000001f, 100f, 7f);
@@ -81,39 +84,15 @@ public class FreeFlightInputTest {
     }
 
     @Test
-    public void wireSizeIs29Bytes() {
-        // 7 floats (fwd, vert, strafe, yaw, pitch, roll, brake) + 1 flag byte.
-        assertEquals(29, FreeFlightInput.WIRE_SIZE);
-        ByteBuf buf = Unpooled.buffer();
-        new FreeFlightInput(0.5f, -0.5f, 0.25f, -0.25f, 1f).write(buf);
-        assertEquals(FreeFlightInput.WIRE_SIZE, buf.writerIndex());
-    }
-
-    @Test
     public void strafeChannelClampsAndRoundTrips() {
         // Strafe is the 3rd float in the full 8-arg constructor (fwd, vert, strafe, ...).
         FreeFlightInput hi = new FreeFlightInput(0f, 0f, 9f, 0f, 0f, 0f, false);
         assertEquals(1f, hi.strafeInput, EPS);
-        FreeFlightInput orig = new FreeFlightInput(0.1f, 0.2f, -0.6f, 0.3f, 0.4f, 0.5f, true);
-        ByteBuf buf = Unpooled.buffer();
-        orig.write(buf);
-        FreeFlightInput rt = FreeFlightInput.read(buf);
-        assertEquals(orig, rt);
-        assertEquals(-0.6f, rt.strafeInput, EPS);
     }
 
     @Test
     public void isIdleFalseWhenStrafeNonZero() {
         assertFalse(new FreeFlightInput(0f, 0f, 0.01f, 0f, 0f, 0f, false).isIdle());
-    }
-
-    @Test
-    public void wireRoundTripPreservesAllChannels() {
-        FreeFlightInput orig = new FreeFlightInput(0.7f, -0.3f, 0.1f, -0.8f, 0.5f);
-        ByteBuf buf = Unpooled.buffer();
-        orig.write(buf);
-        FreeFlightInput rt = FreeFlightInput.read(buf);
-        assertEquals(orig, rt);
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */

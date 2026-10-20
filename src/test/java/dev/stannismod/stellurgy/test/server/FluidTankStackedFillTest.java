@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -25,10 +26,8 @@ import static org.junit.Assert.assertTrue;
  * expect and makes the column a valid pump-source — drain reads
  * from the top, fills travel to the bottom.</p>
  *
- * <p>Existing coverage:
- * {@link FluidTankNBTRoundTripsAcrossRestartTest} pins single-tank
- * NBT round-trip; this class pins multi-tank fill delegation. No
- * other test exercises stacked-tank topology.</p>
+ * <p>This class pins multi-tank fill delegation. No other test
+ * exercises stacked-tank topology.</p>
  *
  * <p>Position-isolated at x=8000. Uses
  * {@link AbstractSharedServerTest} so the harness JVM cold-starts
@@ -131,6 +130,9 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
     /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
     @Pins("INV-INFRA-25")
+    @RedWitness(member = "TileFluidTank#fillInternal2", at = "amt = handler.fillInternal2(resource, doFill);",
+            replacedBy = "",
+            fails = "inject must report filled=injectAmt (no clamping)", on = "2026-10-19")
     @Test
     public void overflowingInjectionFillsBottomThenSpillsIntoTop() throws Exception {
         // Different column from the first test (position isolation).

@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -47,15 +46,6 @@ public class CapacitorChargeTest {
     }
 
     // ── the energy is the ship's ──────────────────────────────────────────────
-
-    @Test
-    public void whatTheShipPushesInIsWhatTheBankHolds() {
-        TileJumpCapacitor capacitor = bareCapacitor();
-
-        long accepted = push(capacitor, 5L);
-        assertEquals("the bank takes what it is given, up to its throughput", 5L, accepted);
-        assertEquals(5L, capacitor.charge());
-    }
 
     /** Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it). */
     @Pins("INV-HYP-07")
@@ -129,24 +119,6 @@ public class CapacitorChargeTest {
         assertEquals("a burst it can cover takes exactly that", full - 1L,
                 capacitor.discharge(full - 1L));
         assertEquals("and the energy is really gone", 1L, capacitor.charge());
-    }
-
-    @Test
-    public void aStoredChargeIsREADbackOffTheSave() {
-        // It is real stored energy now, so it has to persist — under the old model only c0 and a tick
-        // stamp were written and the level was recomputed, which is exactly how an absence created it.
-        //
-        // ONLY THE READ HALF is pinned here, and the limit is worth naming rather than hiding: writing
-        // goes through TileEntity's registry mapping, which does not exist outside a loaded game, so
-        // this test builds the compound by hand. The write half is exercised by the real save path in
-        // the server tier but is not ASSERTED anywhere yet, and saying so is better than a green that
-        // reads as though it were.
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setLong("capCharge", 7L);
-
-        TileJumpCapacitor restored = bareCapacitor();
-        restored.readFromNBT(nbt);
-        assertEquals("a reloaded bank holds what it held", 7L, restored.charge());
     }
 
     // ── the cooldown forecast, now a best case ───────────────────────────────

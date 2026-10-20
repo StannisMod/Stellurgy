@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -77,6 +78,9 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
 
     /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
     @Pins("INV-WGEN-15")
+    @RedWitness(member = "WorldProviderPlanet#updateWeather",
+            at = "|| !StellurgyConfiguration.getCurrentConfig().enableCustomPlanetWeather", replacedBy = "",
+            fails = "with custom planet weather OFF", on = "2026-10-19")
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
 

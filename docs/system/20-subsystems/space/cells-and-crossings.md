@@ -27,7 +27,7 @@ than assume the galactic one (`GalacticCoord.java:235-242,299-305,379-390,429-44
 ignore the width, so a key round-trip equals the original (`GalacticCoord.java:268,494-505`) [T]
 `GalacticCoordZoneTest.java:61`. NBT is a `galacticCoord` sub-tag `{sx,sy,sz,lx,ly,lz}` plus `zone`,`cw` only
 when zoned; an *absent* sub-tag reads as `ORIGIN` (`GalacticCoord.java:456-491`) [V][T]
-`GalacticCoordTest.java:205`. Contract: [C15](../../30-contracts/C15-cell-address-and-frame.md) ADDR-19/21/22.
+`GalacticCoordTest.java:201`. Contract: [C15](../../30-contracts/C15-cell-address-and-frame.md) ADDR-19/21/22.
 
 ### MECH-SPC-02 — A position exists only at a tick; distance goes through both frames
 `AbsolutePos` is a sector triple + `long` local, so a sector index near the `long` ceiling stays expressible
@@ -125,15 +125,18 @@ are (`VSShipCrossingOps.java:162-194`) [V]. Contract: [C18](../../30-contracts/C
 
 ### MECH-SPC-12 — Entry (ascent): an orbit line crossed from a planet-side world
 `shouldTriggerEntry` = not a slot world and pose Y above the line; the line is `min(orbit height, physics clamp −
-16)` (`ShipEntryController.java:202-229`) [V][T] `ShipEntryControllerTest.java:366,381`, driven from the flight
+16)` (`ShipEntryController.java:202-229`) [V][T] `ShipEntryControllerTest.java:365,380`, driven from the flight
 computer (`TileAdvancedFlightComputer.java:675-691`) [V]. `requestEntry` returns one `Decision`
 (`ShipEntryController.java:124-141`); a full pool **refuses, reads the crew without dismounting, messages them and
-arms a 100-tick cooldown** (`ShipEntryController.java:238-277`) [V][T] `ShipEntryControllerTest.java:213`; a failed
+arms a 100-tick cooldown** (`ShipEntryController.java:238-277`) [V][T] `ShipEntryControllerTest.java:212`; a failed
 cut hands the cell back and re-seats the captured crew (`ShipEntryController.java:323-333`) [T]
-`ShipEntryControllerTest.java:245`. The entry coordinate is a ring around where the launch body **is** at this tick
-(`aimPoint`, matched on the launch dimension), radius `max(2·512, 2·shell)`, saturating inside the cell
-(`ShipEntryController.java:60-70,344-415`; `StandoffRing.java:38-43,90-100`) [V][T]
-`ShipEntryControllerTest.java:422,173`. On settle the ledger takes the entry coordinate
+`ShipEntryControllerTest.java:244`. The entry coordinate is a ring around where the launch body **is** at this tick,
+named in the body's OWN cell — `aimPoint` answers `addressAt(tick)`, the body's named cell at the offset it stands
+at inside that cell's frame, never its absolute position re-read on the static grid, which names a cell no zone
+body stands in once the body has drifted past its static face (`ShipEntryController.java:386-402`) [V][T]
+(INV-SPC-19) — matched on the launch dimension, radius `max(2·512, 2·shell)`, saturating
+inside the cell (`ShipEntryController.java:60-70,344-415`; `StandoffRing.java:38-43,90-100`) [V][T]
+`ShipEntryControllerTest.java:172`. On settle the ledger takes the entry coordinate
 (`ShipEntryController.java:290`). After a descent the entry latch holds until the ship has been below the line
 (`DescentController.java:230`) [T] `DescentControllerTest.java:358`. Contract: C15 ADDR-16.
 
@@ -193,13 +196,24 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
   10⁻⁴ vs 10⁻³), so nothing rests on ship speed (`CellSeam.java:37-44,66-77`; `CellSeamTest.java:97,170`).
 - **INV-SPC-10** [V] A jump and a crossing act on the ship they **name**, or refuse (`VSShipCrosser.java:196-235`;
   `VSShipCrossingOps.java:131-140`; `ShipTransitManagerTest.java:543`).
-- **INV-SPC-15** [V] The entry ring is strictly outside the body's descent shell, so an entering ship never spawns
-  inside the descent trigger (`ShipEntryController.java:60-70`; `ShipEntryControllerTest.java:173`).
+- **INV-SPC-15** [V][T] The entry ring is strictly outside the body's descent shell, so an entering ship never spawns
+  inside the descent trigger. The ring is decided by `ShipEntryController#entryRingAround(GalacticCoord)` — the
+  widest ring of the bodies at the address, never narrower than the flat `ENTRY_RING_BLOCKS`, which is twice
+  `DESCENT_RADIUS_BLOCKS` (`ShipEntryController.java:59-85`). Pinned by
+  `ShipEntryControllerTest#entryCrossesSettlesInLedgerOutsideTheDescentRadius`.
 - **INV-SPC-16** [V] Settle order is pose → re-seat → unpark; a rider is never mounted onto a mount about to move
   (`ShipCrossingService.java:259-280`).
 - **INV-SPC-17** [V] "Stored" is derived from region data on disk, never remembered in memory — an in-memory flag is
   empty after a restart and would let eviction delete built-in cells (`SpaceSlotPool.java:341-352`;
   `SpaceManager.java:97-100`).
+- **INV-SPC-19** [T][BEH] An entering ship is aimed into its launch body's OWN named cell, at the point that, read
+  through the frame that cell rides, is where the body stands at that tick, however far its orbit has carried the
+  cell from the static cube its name occupies; the body is the one whose dimension the ship launched from
+  (`ShipEntryController.java:386-402`; MECH-SPC-12). Pinned by
+  `ShipEntryControllerTest#anEntryIsAimedIntoTheLaunchBodysOwnCellWhereverItsOrbitHasCarriedIt`.
+- **INV-SPC-20** [T][BEH] In the sky feed every moon points at the body it orbits: a moon's parent is the body whose
+  cell its ZONE names, never a body sharing the moon's own cell (`SystemBodiesProducer.java:296-324`; MECH-SPC-20).
+  Pinned by `MoonParentInTheSkyFeedTest#everyMoonInTheFeedPointsAtTheBodyItOrbits`.
 
 ## Failure modes & edge cases
 
@@ -215,18 +229,11 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
 
 `INV-SPC-01` GalacticCoordZoneTest.java:140 · `-02` ShipTransitManagerTest.java:275,424 · `-04`
 SpaceManagerTest.java:253,297 · `-06` CellSeamTest.java:97,170 · `-10` ShipTransitManagerTest.java:543 · `-15`
-ShipEntryControllerTest.java:173 · `-16`, `-17` are `[V]` only. `linkMoonsToTheirParents` has no test.
+ShipEntryControllerTest.java:172 · `-16`, `-17` are `[V]` only · `-19`, `-20` name their methods.
 
 ## Open questions
 
-Leads, not ledgered unless a ledger id is given; by reading, not reproduced.
+Leads by reading, not reproduced.
 
-3. **Moon→parent linkage is dead.** `SystemBodiesProducer.java:307-319` finds a moon's parent as the non-moon body
-   sharing its cell key — true only before C15 ADDR-5 retired; a moon now has a cell of its own
-   (`SystemContent.moonNameOf`), so every moon is sent `NO_PARENT`, and `parentIndex` has no reader outside the
-   packet class (grep of `src`).
-5. **Entry cell vs body name.** `ShipEntryController.aimPoint` turns the body's *absolute position now* into a
-   galactic coordinate (`ShipEntryController.java:401`), so the entry cell is whichever galactic cell contains the body
-   at that tick, not the body's durable name; after an orbit that can differ, and `zoneMembershipIn` then finds no zone
-   body for it (`SpaceSubsystem.java:478-481`). C15 ADDR-10's galactic-cell inward capture assumes the named cell.
-   Unverified at runtime.
+3. **`parentIndex` has no reader** outside the packet class (grep of `src`); a moon's parent is the body whose cell its
+   ZONE names (`SystemBodiesProducer.java:296-324`).

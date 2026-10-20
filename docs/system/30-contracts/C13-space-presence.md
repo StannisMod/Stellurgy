@@ -68,10 +68,13 @@ Presence is the wider term: every aboard player has presence; not every present 
   describe a ship that no longer exists — the problem is solved at write time, not at read time.
 - **PRES-9 (a present player claims his cell)** `[A][BEH]` A player restored into a cell that is not
   materialized causes it to be materialized and takes an occupant refcount, exactly as a restored
-  ship's owner does (R8). The claim MUST be paired with his logout — the existing pairing is
-  `SpaceEventHandler.ServerPart.heldCells` (claimed at login, `SpaceEventHandler.java:194`; given back
-  at logout) `[V]`, held in the server's `ServerState.spaceEvents` so it dies with the server.
-  An unpaired claim pins one of a small fixed pool of slot worlds for the life of the server.
+  ship's owner does (R8). The claim MUST be paired with his logout, and the pairing gives back the
+  cell that was CLAIMED — never whichever cell his ship stands in by then. The existing pairing is
+  `SpaceEventHandler.ServerPart.heldCells`, player → claimed coordinate (claimed at login from
+  `LoginRestore.Placement.claimedCell`, `SpaceEventHandler.java:190`; given back at logout,
+  `:324`) `[V][T]` `SpaceCellRelogGroupTest.java:511`, held in the server's `ServerState.spaceEvents`
+  so it dies with the server. An unpaired claim pins one of a small fixed pool of slot worlds for the
+  life of the server.
 
 - **PRES-10 (a release lets go of EVERYTHING, and says what it let go)** `[A][BEH]` Returning a player to
   the plain world is ONE operation, not a coincidence of subscribers: every subsystem that binds him

@@ -19,6 +19,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -361,6 +362,13 @@ public class EntityHoverCraft extends Entity implements IInventory, INetworkEnti
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        if (!world.isRemote && (player == null || getControllingPassenger() != player)) {
+            // The climb and descent keys are the driver's: his client sends them, and the server flies
+            // the craft by them only while he is aboard.
+            PacketSenderCheck.refuse(player, "hovercraft packet " + id + " for hovercraft " + getEntityId(),
+                    "the sender is not driving it");
+            return;
+        }
         if (id == PacketType.TURNUPDATE.ordinal()) {
             this.turningUp = nbt.getBoolean("up");
             this.turningDownforWhat = nbt.getBoolean("down");

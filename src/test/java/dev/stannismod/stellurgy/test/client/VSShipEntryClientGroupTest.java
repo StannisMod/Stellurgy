@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -658,6 +660,112 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 + " space: " + ledgered, ledgerEntry.has("found"));
         assertTrue("a refused entry must ledger NOTHING into space, and the ledger holds this craft ("
                 + durableShipName + "): " + ledgered, !ledgerEntry.bool("found"));
+    }
+
+    // ── granted, with the arrival's seat refused a mount: he is seated once the world takes one ──
+
+    /**
+     * Mount spawns the arrival world is made to refuse. Two, not one: a re-seat that came back for
+     * him exactly once by accident would pass one; two make the crossing come back after a refusal it
+     * has already come back from.
+     */
+    private static final int ARMED_MOUNT_REFUSALS = 2;
+
+    /**
+     * {@link #boardAssembledCraftAt}'s budget, in the 5-tick polls that helper counts. A DEADLINE on
+     * the physics mod building the ship off the game thread, not a measurement: its only effect is how
+     * long a ship that never becomes usable takes to fail.
+     */
+    private static final int SHIP_BUILD_POLLS = 40;
+
+    /**
+     * How long the climb from the pad through {@link #ORBIT_LINE} and the crossing's settle may take,
+     * in ticks. A DEADLINE for a chain of records, not a measurement: the verdict is the chain, and
+     * this bounds only how long a crossing that never completes takes to fail.
+     */
+    private static final int ENTRY_CHAIN_BUDGET_TICKS = 4000;
+
+    /**
+     * This test fails if {@code CrewTransfer#reseat} stops deciding that a pilot whose arriving seat
+     * the world refused a mount is NOT seated yet — so that the crossing comes back for him and seats
+     * him once the world takes the mount, rather than completing with him standing.
+     *
+     * <p>The refusal is ARMED ({@link dev.stannismod.stellurgy.test.trace.MountRefusalArming}, fault
+     * injection at the world's own answer inside the arrival spawn): a world refusing a fresh seat
+     * dummy is real and cannot be provoked on demand. The flight itself is the player's — his own key
+     * through the orbit line.</p>
+     *
+     * <p>SILENT about: a refusal that never lifts. With the fix the crossing then retries until its
+     * budget and abandons, and that branch is not exercised here.</p>
+     */
+    @RedWitness(member = "CrewTransfer#reseat",
+            at = "allSeated = false; riderBlocks.add(\"mountRefused: the world refused the mount for seat \"",
+            replacedBy = "if (false) riderBlocks.add(\"mountRefused: the world refused the mount for seat \"",
+            fails = "a pilot whose arriving seat was refused a mount must be seated once the world takes one",
+            on = "2026-10-07")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS,",
+            why = "the dose of held climb key that lifts the ship from the pad: its ticks are the input; whether"
+                    + " the climb then crosses the orbit line and settles is read after it as a chain of records")
+    @Pins("SHIPCTL-17")
+    @Test
+    public void aPilotWhoseArrivalSeatIsRefusedAMountIsSeatedOnceTheWorldTakesOne() throws Exception {
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
+        scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
+                + "config opts it in: " + status.raw(), status.registered);
+
+        boardAssembledCraftAt(site(), SHIP_BUILD_POLLS);
+
+        String armed = read("stellurgytest invoke-static "
+                + dev.stannismod.stellurgy.test.trace.MountRefusalArming.class.getName() + " open "
+                + ARMED_MOUNT_REFUSALS).raw();
+        scenario().requireArranged("the mount refusals must be armed on the server: " + armed,
+                Reply.of(armed).ok());
+        int armingHandle = Integer.parseInt(Reply.of(armed).text("returned"));
+
+        Events events = serverEvents();
+        long entryMark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
+        try {
+            try {
+                holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "the pilot's held vertical key must reach"
+                        + " his flight computer before the climb through the orbit line can be asked");
+                events.assertChain(entryMark, "a ship climbing under its own power past the orbit line"
+                        + " (" + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a"
+                        + " cell", ENTRY_CHAIN_BUDGET_TICKS, entryChain());
+            } finally {
+                bot().releaseKey(Keyboard.KEY_R);
+            }
+
+            String refused = events.since(entryMark, "seat_mount_refused");
+            Events.assertInstrumentRan(refused, "arrival_mount_refusal",
+                    "the arrival world refused the pilot's seat a mount");
+            scenario().requireArranged("the arrival world must actually have refused the pilot's seat"
+                            + " a mount, or this scenario is the ordinary granted entry: " + refused,
+                    !Events.records(refused).isEmpty());
+
+            try {
+                clientEvents().awaitMatching(clientMark, "mount",
+                        seen -> ClientEvents.endsMounted(clientEvents(), clientMark),
+                        "a chain that ENDS in a mount (a mount exists, after every dismount)",
+                        "a pilot whose arriving seat was refused a mount must be seated once the world"
+                                + " takes one - the crossing may not complete with him standing",
+                        CLIENT_REMOUNT_BUDGET_TICKS);
+            } catch (AssertionError never) {
+                Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                        "entity_mount_writes", "the client's own mounts must be observed at all before"
+                                + " an absent one can be read as a pilot the crossing stood up");
+                throw new AssertionError(never.getMessage() + " | refusals: " + refused
+                        + " | server re-seat: " + events.since(entryMark, "crossing_crew_reseated")
+                        + " | blocked: " + events.since(entryMark, "crossing_reseat_blocked"));
+            }
+            JsonObject riding = bot().reportRidingEntity();
+            assertTrue("and he must still be ON that seat: " + riding + " refusals: " + refused,
+                    isRiding(riding));
+        } finally {
+            read("stellurgytest invoke-static "
+                    + dev.stannismod.stellurgy.test.trace.MountRefusalArming.class.getName() + " close "
+                    + armingHandle);
+        }
     }
 
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────

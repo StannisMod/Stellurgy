@@ -257,14 +257,14 @@ rounds. `TileTurret.java:198-224`, `:330-360` [V]
 [T `TurretAimReachesClientTest` — falsified against a build with the sync disabled]
 
 **MECH-GUN-44 — Only a player within reach operates a console or a sensor.**
-`TileWeaponConsole#canInteractWithContainer` and `TileFireControlSensor#canInteractWithContainer`
-answer vanilla's usability rule — same world, tile not invalid, `getDistanceSq(centre) <= 64.0`
-(vanilla's `TileEntityFurnace` / `TileEntityLockableLoot#isUsableByPlayer`; on a VS ship VS's
-`MixinEntity` measures to where the block really is) — and the server branch of `useNetworkData`
-refuses a press that fails it, with one WARN naming the player, position, dimension and packet id.
-Needed because `PacketMachine` resolves the CLIENT's dimension and position (a gap that stays open for
-every other machine). Pinned by `MachineGuiClientGroupTest#aWeaponConsolePressFromBeyondReachChangesNothing`
-(a forged press from 24 blocks is judged out of reach and changes nothing). `[T]`
+This is the CENTRAL rule for every machine packet: `PacketMachine#executeServer` refuses
+a press from another world or beyond container reach (`PacketSenderCheck#withinContainerReach`,
+distanceSq ≤ 64 to the block's centre; on a VS ship VS's `MixinEntity` measures to where the block really
+is) with one WARN, before either machine sees it (libvulpes INV-LVP-05). Neither the console nor the sensor
+checks again in `useNetworkData`; `canInteractWithContainer` stays vanilla's usability rule for
+the GUI container. Pinned by `MachineGuiClientGroupTest#aWeaponConsolePressFromBeyondReachChangesNothing`
+(a forged press from 24 blocks is judged out of reach and changes nothing; the same press from the
+console is let through). `[T]`
 
 **MECH-GUN-19 — A console is a stateless EDITOR, not an owner.** It keeps no target, no hold-fire
 flag and no copy of the network's state; every button writes to `WeaponNetworkState` and every
@@ -462,8 +462,7 @@ register. `IGunPart.java:6-21`, `BlockGunPart.java:23-38` [V]
 
 **INV-GUN-05 — The mount's bearing survives a save.** Yaw, pitch, the standing command and the drive
 state round-trip; a reloaded gun points where it was left.
-`TurretMechanism.java:170-193`, `TileTurret.java:330-375` [V]
-[T `TurretMechanismTest#theBearingSurvivesARoundTrip`]
+`TurretMechanism.java:170-193`, `TileTurret.java:330-375` [V] (no test).
 
 ## Failure modes & edge cases
 

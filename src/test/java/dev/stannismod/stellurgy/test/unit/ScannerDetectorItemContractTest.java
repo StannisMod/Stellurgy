@@ -6,7 +6,6 @@ import dev.stannismod.stellurgy.item.ItemOreScanner;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -88,39 +87,6 @@ public class ScannerDetectorItemContractTest {
         ItemStack s = new ItemStack(scanner, 1);
         assertEquals("fresh scanner stack must report -1 (unprogrammed)",
                 -1L, scanner.getSatelliteID(s));
-    }
-
-    @Test
-    public void oreScannerSatelliteIdRoundTrips() {
-        ItemOreScanner scanner = new ItemOreScanner();
-        ItemStack s = new ItemStack(scanner, 1);
-        scanner.setSatelliteID(s, 0xABCD_EF01L);
-        assertTrue("setSatelliteID must attach NBT", s.hasTagCompound());
-        assertEquals(0xABCD_EF01L, scanner.getSatelliteID(s));
-    }
-
-    @Test
-    public void oreScannerSatelliteIdOverwriteIsLossless() {
-        ItemOreScanner scanner = new ItemOreScanner();
-        ItemStack s = new ItemStack(scanner, 1);
-        scanner.setSatelliteID(s, 1L);
-        scanner.setSatelliteID(s, 42L);
-        assertEquals("subsequent setSatelliteID must overwrite, not duplicate",
-                42L, scanner.getSatelliteID(s));
-    }
-
-    @Test
-    public void oreScannerSatelliteIdReadDirectlyFromKnownNbtKey() {
-        // Pin the NBT key shape — production reads "id" as a long. A
-        // future refactor that renames this key silently un-programs
-        // every player's pre-existing scanner on world load.
-        ItemOreScanner scanner = new ItemOreScanner();
-        ItemStack s = new ItemStack(scanner, 1);
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setLong("id", 13L);
-        s.setTagCompound(nbt);
-        assertEquals("scanner must read satellite id from the NBT key 'id'",
-                13L, scanner.getSatelliteID(s));
     }
 
     @Test

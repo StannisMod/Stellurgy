@@ -42,8 +42,7 @@ public class ClaimedChunkCacheController implements Iterable<Chunk> {
     public ClaimedChunkCacheController(PhysicsObject parent) {
         this.world = parent.getWorld();
         this.parent = parent;
-        // TODO: Bad :(
-        this.radius = 7;
+        this.radius = VSChunkClaim.RADIUS;
         this.claimedChunks = new Chunk[radius * 2 + 1][radius * 2 + 1];
         this.chunkBottomX = parent.getChunkClaim().getCenterPos().x - radius;
         this.chunkBottomZ = parent.getChunkClaim().getCenterPos().z - radius;

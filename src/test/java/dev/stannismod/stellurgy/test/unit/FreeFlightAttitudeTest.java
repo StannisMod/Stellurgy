@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -175,6 +176,8 @@ public class FreeFlightAttitudeTest {
 
     /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
     @Pins("INV-RKT-07")
+    @RedWitness(member = "FreeFlightPhysics#eulerFromQuat", at = "double roll = Math.atan2(sinRoll, cosRoll);",
+            replacedBy = "double roll = 0;", fails = "basis[3]", on = "2026-10-19")
     @Test
     public void eulerFromQuatRoundTripsBodyBasis() {
         Quat q = FreeFlightPhysics.integrateBodyRates(

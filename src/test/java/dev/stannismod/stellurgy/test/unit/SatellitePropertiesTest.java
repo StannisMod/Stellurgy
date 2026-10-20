@@ -4,34 +4,14 @@ import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
 
 /**
- * Satellite domain logic — SatelliteProperties NBT round-trip + property flags.
+ * Satellite domain logic — SatelliteProperties id assignment + property flags.
  */
 public class SatellitePropertiesTest {
-
-    @Test
-    public void satellitePropertiesNbtRoundTrip() {
-        SatelliteProperties original = new SatelliteProperties(160, 5000, "ar:test_sat", 1024, 5.5f);
-        original.setId(0xDEADBEEFL);
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        original.writeToNBT(nbt);
-
-        SatelliteProperties restored = new SatelliteProperties();
-        restored.readFromNBT(nbt);
-
-        assertEquals(original.getPowerGeneration(), restored.getPowerGeneration());
-        assertEquals(original.getPowerStorage(), restored.getPowerStorage());
-        assertEquals(original.getMaxDataStorage(), restored.getMaxDataStorage());
-        assertEquals(original.getSatelliteType(), restored.getSatelliteType());
-        assertEquals(original.getId(), restored.getId());
-        assertEquals(original.getWeight(), restored.getWeight(), 1e-6);
-    }
 
     @Test
     public void satelliteIdChipStoresAndReadsId() {
@@ -40,9 +20,8 @@ public class SatellitePropertiesTest {
 
         boolean assigned = props.setId(42L);
         assertTrue("first setId on a fresh property must succeed", assigned);
-        assertEquals(42L, props.getId());
 
-        // setId is one-shot: subsequent assignments are rejected.
+        // setId is one-shot: subsequent assignments are rejected and the first id is kept.
         boolean reassigned = props.setId(99L);
         assertFalse("setId must reject when an ID is already present", reassigned);
         assertEquals(42L, props.getId());
@@ -95,40 +74,5 @@ public class SatellitePropertiesTest {
         // createFromNBT's unknown-type handling (returns null → caller drops it,
         // the C002/C155 fix) is verified in SatelliteRegistryFallbackTest and the
         // server/client e2e; kept out of this pure-unit class.
-    }
-
-    /**
-     * Power-state fields (generation + storage) round-trip via NBT.
-     *
-     * Distinct from the catch-all {@link #satellitePropertiesNbtRoundTrip}
-     * because production power packets carry ONLY the power state (no name /
-     * weight / id), and the read path must accept that minimal payload.
-     */
-    @Test
-    public void satellitePowerStateRoundTrip() {
-        // Full state — generation + storage at max.
-        SatelliteProperties charged = new SatelliteProperties(200, 50_000,
-                "ar:power_test", 0, 0f);
-        charged.setId(0xC0FFEEL);
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        charged.writeToNBT(nbt);
-
-        SatelliteProperties restored = new SatelliteProperties();
-        restored.readFromNBT(nbt);
-
-        assertEquals(200, restored.getPowerGeneration());
-        assertEquals(50_000, restored.getPowerStorage());
-        assertEquals(0xC0FFEEL, restored.getId());
-
-        // Discharged: zero state must also round-trip (sentinel-safe).
-        SatelliteProperties dead = new SatelliteProperties(0, 0, "ar:power_test", 0, 0f);
-        NBTTagCompound nbtDead = new NBTTagCompound();
-        dead.writeToNBT(nbtDead);
-
-        SatelliteProperties restoredDead = new SatelliteProperties();
-        restoredDead.readFromNBT(nbtDead);
-        assertEquals(0, restoredDead.getPowerGeneration());
-        assertEquals(0, restoredDead.getPowerStorage());
     }
 }

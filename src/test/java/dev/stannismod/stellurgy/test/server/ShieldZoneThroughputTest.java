@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -70,6 +71,9 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
 
     /** Pins INV-SHD-03 (an emitter never receives more than its recharge throughput in a tick). */
     @Pins("INV-SHD-03")
+    @RedWitness(member = "TileEntityFieldGenerator#getRequested",
+            at = "return Math.min(getFreeCapacity(), getRechargeThroughput());", replacedBy = "return Math.min(getFreeCapacity(), getRechargeThroughput() + 1);",
+            fails = "the emitter asked the network for more (or less) than its throughput", on = "2026-10-19")
     @Test
     public void regenerationIsThroughputCapped() throws Exception {
         // Generator + accumulator build a bulk reserve, then an emitter attaches to the accumulator (not

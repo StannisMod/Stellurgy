@@ -89,8 +89,8 @@ None.
 
 ## Test coverage
 
-Round-trip shapes pinned indirectly by `FluidTankNBTRoundTripsAcrossRestartTest` and
-`PacketSerializationTest`; no dedicated `NBTHelper` unit test.
+Round-trip shapes pinned indirectly by `PacketSerializationTest`; no dedicated `NBTHelper` unit
+test.
 
 ## Open questions
 

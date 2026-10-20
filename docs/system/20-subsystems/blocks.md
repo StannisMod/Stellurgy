@@ -162,8 +162,13 @@ sealing math (atmosphere-oxygen), station/dimension bookkeeping (space-stations,
   state; power 15 when VARIANT≥2. `BlockStellurgyHatch.java:84,58,67`
 - **MECH-BLK-20 Data-bus NBT drop.** Drop/pick attaches `DataStorage` NBT to the item **only when data>0**
   (empty buses stack); delayed-harvest keeps the TE alive for the drop. `BlockDataBusBig.java:46,79,92`
-- **MECH-BLK-21 Seat mount.** Activation mounts/creates an `EntityDummy` rider; explosion kills the dummy,
-  and a riderless dummy whose seat block is gone by any path removes itself (SHIPCTL-20);
+- **MECH-BLK-21 Seat mount.** Activation mounts/creates an `EntityDummy` rider; explosion kills the dummy.
+  A pilot seat's dummy aboard a ship keeps the uuid of the ship it was bound under (NBT `seatShip`, never
+  re-derived from the coordinate). A dummy whose ship has no live registry record removes itself,
+  setting its rider down where it stands (a new ship handed the same claim can have a seat at the same
+  coordinate, and the mount would otherwise glue the rider onto it); a riderless dummy also removes
+  itself when its seat block no longer stands — one condition in `EntityDummy#onUpdate` (SHIPCTL-20); `BlockPilotSeat#boundDummyAt` skips such an orphan [T]
+  `VSPilotSeatDummyReuseTest#aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself`;
   `TileWearable` accrues slow wear that can block a crewed launch. `BlockSeat.java:100,79,43`
 - **MECH-BLK-22 Crystal color.** 6-meta crystal, `CrystalColorizer` supplies per-meta tint to block+item.
   `BlockCrystal.java:92` `CrystalColorizer.java:14`

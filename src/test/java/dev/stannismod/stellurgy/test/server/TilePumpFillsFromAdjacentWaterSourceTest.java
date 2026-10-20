@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -46,6 +47,9 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
 
     /** Pins INV-INFRA-22 (A pump above an adjacent water source fills its tank ( 0 mB) within ~60 ticks). */
     @Pins("INV-INFRA-22")
+    @RedWitness(member = "TilePump#performFunction", at = "if (fStack != null) tank.fill(fStack, true);",
+            replacedBy = "",
+            fails = "pump's tank must contain fluid after 60 ticks", on = "2026-10-19")
     @Test
     public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
         // Place pump.

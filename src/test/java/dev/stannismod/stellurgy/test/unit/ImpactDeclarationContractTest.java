@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind;
 import dev.stannismod.stellurgy.api.damage.*;
 import dev.stannismod.stellurgy.damage.ImpactKindMapping;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
 
@@ -22,6 +23,8 @@ public class ImpactDeclarationContractTest {
 
     /** Pins INV-DMG-05 (every ImpactKind declares how a shell bills it). */
     @Pins("INV-DMG-05")
+    @RedWitness(member = "ImpactKindMapping#toShieldKind", at = "case BEAM:", replacedBy = "",
+            fails = "no shield billing declared for impact kind BEAM", on = "2026-10-19")
     @Test
     public void everyHullImpactKindDeclaresHowAShellBillsIt() {
         for (ImpactKind kind : ImpactKind.values()) {

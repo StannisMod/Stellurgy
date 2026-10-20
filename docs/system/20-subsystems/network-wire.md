@@ -46,7 +46,12 @@ registration (`DimensionManager#withdrawDimension`; dimension-planets).
   `executeClient(EntityPlayer)`. 17 of 19 packets are this shape; their `read`/`executeServer`
   are empty guards ("should never be read on the server"). e.g. `PacketDimInfo.java:80,113`.
 - **MECH-NW-09 — every packet EXECUTES on the game thread; the player is read when it runs.** The
-  codec only decodes, on the netty thread. Each packet class is registered with a Forge
+  codec only decodes, on the netty thread, and so does each packet: its no-arg constructor,
+  `readClient` and `read` turn bytes into the packet's own fields and read or change no world,
+  entity, tile, player, manager or configuration in force — on a client that state may not exist
+  yet, and a throw while decoding is fatal to the connection. `BasePacket` class javadoc [V];
+  `PacketSatellite`, `PacketSatellitesUpdate` and `PacketStorageTileUpdate` keep the raw tag / ids
+  and resolve them in `executeClient` [V]. Each packet class is registered with a Forge
   `SimpleChannelHandlerWrapper` whose handler (`BasePacket.BasePacketHandlerClient` /
   `BasePacketHandlerServer`) queues `executeClient` / `executeServer` on that side's game thread, in
   arrival order, in the queue vanilla's packets are applied from. The player handed to it is read at
@@ -64,15 +69,15 @@ registration (`DimensionManager#withdrawDimension`; dimension-planets).
 - **MECH-NW-04 — NBT-envelope encoding.** Domain packets serialize their object to an
   `NBTTagCompound` and push it with `PacketBuffer.writeCompoundTag`, reversed with
   `readCompoundTag`. Used by Dim/Stellar/SpaceStationInfo/Satellite/SatellitesUpdate/Atm and
-  `StationUpdate.DIM_PROPERTY_UPDATE`. e.g. `PacketDimInfo.java:56`, `PacketSatellite.java:41`.
+  `StationUpdate.DIM_PROPERTY_UPDATE`. e.g. `PacketDimInfo.java:56`, `PacketSatellite.java:43`.
 - **MECH-NW-05 — typed sub-command multiplex.** `PacketStationUpdate` writes
   `type.ordinal()` then branches on a 7-value `Type` enum (orbit/dest/fuel/rotation/altitude/
   dim-property/white-burst); reader rebuilds via `Type.values()[readInt()]`.
   `PacketStationUpdate.java:44,88,229` (enum `:229`).
 - **MECH-NW-06 — FX/signal packets.** Particle packets spawn client effects gated by
   `gameSettings.particleSetting`; `PacketOxygenState` is a zero-byte ping whose entire effect
-  is writing `AtmosphereHandler.lastSuffocationTime` inside `readClient`.
-  `PacketAirParticle.java:44`, `PacketOxygenState.java:24`.
+  is marking the client's world as suffocated at its current time, in `executeClient`
+  (`ClientAtmosphere#suffocatedAt`). `PacketAirParticle.java:44`, `PacketOxygenState.java:33-36`.
 - **MECH-NW-07 — config push on login.** `PlanetEventHandler` sends `PacketConfigSync` (+ per-
   dim `PacketDimInfo`) to a joining connection; the client hands it to that connection
   (`proxy.adoptServerConfig`, api-public MECH-API-04). `PacketConfigSync.java:39`, `PlanetEventHandler.java:359`.
@@ -101,9 +106,11 @@ written to disk.
 - **INV-NW-03 [V]** `PacketBackToRocketGui` is the only Stellurgy packet with a real `executeServer`;
   it re-validates via `RocketGuiNavigation`, not trusting client-sent coords blindly.
   `PacketBackToRocketGui.java:58`.
-- **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
-  `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
-  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `PacketSerializationTest#packetSatelliteRoundTrip`, `PacketSerializationTest#packetConfigSyncRoundTrip`, `PacketSerializationTest#packetAsteroidInfoRoundTrip`, `PacketSerializationTest#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
+- **INV-NW-04 [V][SYS]** NBT-envelope packets round-trip byte-for-byte through
+  `writeCompoundTag`/`readCompoundTag`: each writes its compound and reads it back with the
+  matching call at the same point of the stream — `PacketDimInfo.java:52,88`,
+  `PacketSatellite.java:43,49`, `PacketStationUpdate.java:71,112`,
+  `PacketSpaceStationInfo.java:51,81`. FOR: wire format: same build on both sides.
 - **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
   (absent from `Stellurgy.java:334-352`) and never constructed anywhere in `src/main`. A sentinel
   records only that its `read` NPEs (`PacketSerializationTest#packetMoveRocketInSpaceDocumentsKnownBugs`),
@@ -114,6 +121,11 @@ written to disk.
 - **INV-NW-07 [V]** A hostile out-of-range `Type` ordinal fails bounded (no OOB read past a
   bad buffer) — inferred from the read at `PacketStationUpdate.java:85` (`Type.values()[in.readInt()]`,
   which throws on an out-of-range index rather than reading past anything). No test pins it.
+- **INV-NW-11 [T][BEH]** A satellite the server adds to a dimension is, once its `PacketSatellite`
+  is applied, in the CLIENT's copy of that dimension under its own id — what the client's satellite
+  chip, scanner and GUIs look up by id; it is added on the game thread (MECH-NW-09).
+  `PacketSatellite#executeClient`, `DimensionProperties#addSatellite(SatelliteBase,int,boolean)`
+  (the server's broadcast). Pinned by `SatelliteClientGroupTest#aSatelliteTheServerAddsIsInTheClientsCopyOfItsWorld`.
 
 ## Failure modes & edge cases
 
@@ -127,7 +139,7 @@ written to disk.
 - `PacketSpaceStationInfo.write` hardcodes `boolean flag = false` (TODO), so the null-guard is
   dead and a null `spaceObject` NPEs in `writeToNbt`. `PacketSpaceStationInfo.java:40`..
 - `PacketStorageTileUpdate.write` reads the vanilla `SPacketUpdateTileEntity` private field via
-  SRG name `"field_148860_e"` reflection — a dev/prod obf-name trap. `PacketStorageTileUpdate.java:52`..
+  SRG name `"field_148860_e"` reflection — a dev/prod obf-name trap. `PacketStorageTileUpdate.java:49`..
 - Serialization side effects: `PacketDimInfo.write` / `PacketStationUpdate.write` /
   `PacketSpaceStationInfo.write` call `DimensionManager.deleteDimension(...)` from inside
   `write()` when NBT throws — world mutation during wire encode. `PacketDimInfo.java:66`.
@@ -155,12 +167,13 @@ written to disk.
 
 ## Test coverage
 
-- INV-NW-04 → `test/integration/PacketSerializationTest.java:100,169,216,264,335,458`
-- INV-NW-05 → `integration/PacketSerializationTest.java:500` (`packetMoveRocketInSpaceDocumentsKnownBugs`)
+- INV-NW-04 → none (`[V]` above)
+- INV-NW-05 → `integration/PacketSerializationTest.java:134` (`packetMoveRocketInSpaceDocumentsKnownBugs`)
 - INV-NW-07 → none (`[A]` above)
+- INV-NW-11 → `test/client/SatelliteClientGroupTest#aSatelliteTheServerAddsIsInTheClientsCopyOfItsWorld`
 - Empty-buffer safety of `readClient` for Laser/AirParticle/InvalidLocation/Fluid/BiomeID/
   DimInfo/SpaceStationInfo/StationUpdate/Asteroid/ConfigSync/Satellite/SatellitesUpdate/AtmSync/
-  StellarInfo/SyncKnownPlanets → not tested (the delete-flag short-circuit tests exist, `integration/PacketSerializationTest.java:521,539`).
+  StellarInfo/SyncKnownPlanets → not tested (the delete-flag short-circuit tests exist, `integration/PacketSerializationTest.java:155,173`).
 
 ## Open questions
 

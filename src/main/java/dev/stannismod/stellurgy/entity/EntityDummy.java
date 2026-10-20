@@ -79,9 +79,35 @@ public class EntityDummy extends Entity {
         setPosition(x, y, z);
     }
 
+    /**
+     * The ship whose seat this dummy was bound to, as the registry named it at binding, or
+     * {@code null} for a seat that stood on no ship. Server only, and kept rather than re-asked: a
+     * seat position is a shipyard coordinate, and once the ship is gone the next ship handed the same
+     * claim answers for it — asking again would hand this dummy to a ship it never belonged to.
+     */
+    private java.util.UUID seatShip;
+
     /** Bind this dummy to the seat block it belongs to (see {@link #SEAT_POS}); server-side. */
     public void setSeatPos(BlockPos pos) {
         this.dataManager.set(SEAT_POS, Optional.fromNullable(pos));
+        String ship = pos == null || world == null || world.isRemote
+                ? null : VSIntegration.registeredShipIdManagingBlock(world, pos);
+        this.seatShip = ship == null ? null : java.util.UUID.fromString(ship);
+    }
+
+    /**
+     * Whether the ship this dummy's seat stood on is gone from the registry. A ship is collected
+     * without its seat being broken, so nothing else retires its dummy; one that outlived its ship is
+     * no seat's mount, whatever coordinate it is bound to.
+     */
+    public boolean outlivedItsShip() {
+        return seatShip != null && !world.isRemote
+                && Boolean.FALSE.equals(VSIntegration.shipRecordLive(world, seatShip));
+    }
+
+    /** Whether this is the mount of the seat at {@code seatPos}. */
+    public boolean isMountOf(BlockPos seatPos) {
+        return seatPos.equals(getSeatPos()) && !outlivedItsShip();
     }
 
     /** The bound seat block position (client or server), or {@code null} if unbound. */
@@ -390,7 +416,16 @@ public class EntityDummy extends Entity {
     @Override
     public void onUpdate() {
         super.onUpdate();
-        if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {
+        // A mount whose ship is gone is retired with its rider set down where it stands: the next ship
+        // handed the same claim can have a seat at this very coordinate, and re-gluing to it below would
+        // carry the rider onto a ship he never boarded. Nothing re-seats such a rider — a crossing takes
+        // its crew off their mounts before it cuts, and a seat taken before assembly is bound under no
+        // ship. A seat merely gone (its block no longer standing) retires only a riderless mount: across
+        // an assembly the pilot rides a mount bound to vacated coordinates until the rebind moves him.
+        if (!world.isRemote && (outlivedItsShip() || (getPassengers().isEmpty() && !seatStands()))) {
+            for (Entity rider : new java.util.ArrayList<>(getPassengers())) {
+                rider.dismountRidingEntity();
+            }
             setDead();
             return;
         }
@@ -418,9 +453,11 @@ public class EntityDummy extends Entity {
     @Override
     protected void readEntityFromNBT(NBTTagCompound compound) {
         if (compound.hasKey("seatX")) {
-            setSeatPos(new BlockPos(compound.getInteger("seatX"),
-                    compound.getInteger("seatY"), compound.getInteger("seatZ")));
+            // The binding as it was saved, ship included — never re-derived from the coordinate.
+            this.dataManager.set(SEAT_POS, Optional.of(new BlockPos(compound.getInteger("seatX"),
+                    compound.getInteger("seatY"), compound.getInteger("seatZ"))));
         }
+        this.seatShip = compound.hasUniqueId("seatShip") ? compound.getUniqueId("seatShip") : null;
     }
 
     @Override
@@ -430,6 +467,9 @@ public class EntityDummy extends Entity {
             compound.setInteger("seatX", seat.getX());
             compound.setInteger("seatY", seat.getY());
             compound.setInteger("seatZ", seat.getZ());
+        }
+        if (seatShip != null) {
+            compound.setUniqueId("seatShip", seatShip);
         }
     }
 

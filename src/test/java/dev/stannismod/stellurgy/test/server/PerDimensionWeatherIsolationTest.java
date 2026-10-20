@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -75,6 +76,10 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
 
     /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
     @Pins("INV-WGEN-14")
+    @RedWitness(member = "PlanetWeatherManager#wrapWorldInfoIfNeeded",
+            at = "PlanetWeatherState state = saved.getOrCreate(dim);",
+            replacedBy = "PlanetWeatherState state = saved.getOrCreate(0);",
+            fails = "planet B must NOT be raining (rain set on A only)", on = "2026-10-19")
     @Test
     public void rainOnPlanetADoesNotLeakToBOrOverworld() throws Exception {
 

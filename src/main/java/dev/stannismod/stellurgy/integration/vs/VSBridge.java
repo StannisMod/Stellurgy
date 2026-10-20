@@ -14,7 +14,9 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.entity.EntityShipMovementData;
 import org.valkyrienskies.mod.common.ships.ShipData;
+import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.ships.block_relocation.BlockFinder;
+import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
 import org.valkyrienskies.mod.common.ships.entity_interaction.EntityShipMountData;
 import org.valkyrienskies.mod.common.ships.entity_interaction.IDraggable;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
@@ -53,24 +55,6 @@ final class VSBridge {
                 ValkyrienUtils.class.getName());
     }
 
-    /**
-     * Assemble the connected structure seeded at {@code anchorPos} into a movable
-     * ship. This is the player-less equivalent of VS's
-     * {@code assembleShipAsOrderedByPlayer}: create a ship keyed on the anchor
-     * block, then queue VS to relocate every connected block into it. Called
-     * server-side; the ship does not exist when this returns, but NOT because the
-     * work happens on another thread — it does not. The queue is drained
-     * synchronously on the game thread, in the physics mod's own world tick at
-     * {@code WorldTickEvent} phase END, so the relocation lands on the NEXT tick of
-     * this world and never later: a spawn that is refused there is dropped, not
-     * retried. Anything waiting on the assembly should therefore expect it within a
-     * tick or two, and treat a longer wait as a failure rather than as slowness.
-     *
-     * <p>Scope note: this queues the block relocation only. Making the resulting
-     * ship pilotable (thrust, attitude) is handled by the flight-control layer;
-     * runtime behaviour can only be exercised with VS actually installed, not in a
-     * headless test.</p>
-     */
     /** How a tier-2 craft's blocks are found — one answer, because the refusal question below must ask
      *  exactly what the queued spawn will do. A method, not a field: nothing here is state. */
     private static BlockFinder.BlockFinderType tier2BlockSearch() {
@@ -89,14 +73,36 @@ final class VSBridge {
         if (refusal == null) {
             return null;
         }
-        // TOO_LARGE is the only refusal this search can produce: the substrate's bedrock refusal is raised
-        // only by its FIND_ALLOWED_BLOCKS detector, and FIND_ALL_BLOCKS takes every block but air and fluid.
+        // TOO_LARGE and REACH_EXCEEDED are the only refusals this search can produce: the substrate's
+        // bedrock refusal is raised only by its FIND_ALLOWED_BLOCKS detector, and FIND_ALL_BLOCKS takes
+        // every block but air and fluid.
         if (refusal == WorldServerShipManager.SpawnRefusal.TOO_LARGE) {
             return VSIntegration.AssemblyRefusal.TOO_LARGE;
+        }
+        if (refusal == WorldServerShipManager.SpawnRefusal.REACH_EXCEEDED) {
+            return VSIntegration.AssemblyRefusal.REACH_EXCEEDED;
         }
         throw new IllegalStateException("a spawn refusal the tier-2 search cannot produce: " + refusal);
     }
 
+    /**
+     * Assemble the connected structure seeded at {@code afcPos} into a movable
+     * ship. This is the player-less equivalent of VS's
+     * {@code assembleShipAsOrderedByPlayer}: create a ship keyed on the anchor
+     * block, then queue VS to relocate every connected block into it. Called
+     * server-side; the ship does not exist when this returns, but NOT because the
+     * work happens on another thread — it does not. The queue is drained
+     * synchronously on the game thread, in the physics mod's own world tick at
+     * {@code WorldTickEvent} phase END, so the relocation lands on the NEXT tick of
+     * this world and never later: a spawn that is refused there is dropped, not
+     * retried. Anything waiting on the assembly should therefore expect it within a
+     * tick or two, and treat a longer wait as a failure rather than as slowness.
+     *
+     * <p>Scope note: this queues the block relocation only. Making the resulting
+     * ship pilotable (thrust, attitude) is handled by the flight-control layer;
+     * runtime behaviour can only be exercised with VS actually installed, not in a
+     * headless test.</p>
+     */
     static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
                                   ShipLifecycleEvent.Cause cause,
                                   net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
@@ -148,6 +154,31 @@ final class VSBridge {
     }
 
     /**
+     * The footprint a craft already flying has in its shipyard: the chunk claim of the ship managing
+     * {@code afcPos}, over the full column — the claim holds that craft and nothing else. {@code null}
+     * when no ship manages that block.
+     */
+    static net.minecraft.world.gen.structure.StructureBoundingBox shipyardFootprint(World world, BlockPos afcPos) {
+        AxisAlignedBB claim = claimBounds(ValkyrienUtils.getShipManagingBlock(world, afcPos).orElse(null));
+        return claim == null ? null : new net.minecraft.world.gen.structure.StructureBoundingBox(
+                (int) claim.minX, 0, (int) claim.minZ, (int) claim.maxX - 1, 255, (int) claim.maxZ - 1);
+    }
+
+    /** What a refusal means, for a log line or a player: the substrate's limits are only readable here. */
+    static String describe(VSIntegration.AssemblyRefusal refusal) {
+        switch (refusal) {
+            case TOO_LARGE:
+                return "it has more than " + VSConfig.maxDetectedShipSize + " blocks";
+            case REACH_EXCEEDED:
+                return "it extends more than " + SpatialDetector.MAX_REACH + " blocks from its flight computer";
+            case NO_FLIGHT_COMPUTER:
+                return "the hull carries no flight computer";
+            default:
+                throw new IllegalStateException("an assembly refusal with no description: " + refusal);
+        }
+    }
+
+    /**
      * Decide whether {@code wanted} may be used as the identity of a ship about to be assembled in
      * {@code world}, clearing this ship's own remnant if one is in the way. Returns the identity to
      * assemble with, or {@code null} to mint a fresh one.
@@ -182,7 +213,8 @@ final class VSBridge {
         int blocks = existing == null || existing.getBlockPositions() == null
                 ? -1 : existing.getBlockPositions().size();
         if (blocks == 0) {
-            // Through the manager, which announces the removal: this record's registration ends here.
+            // Through the manager, which announces the removal and gives the claim back: this record's
+            // registration ends here.
             ValkyrienUtils.getServerShipManager(world).deregisterBlocklessRemnant(wanted);
             logger.info("[SPACE] adopted this ship's own blockless remnant in dim {} ({} '{}',{} still "
                             + "loaded) - the arriving ship keeps its identity",
@@ -1001,6 +1033,10 @@ final class VSBridge {
     static boolean parkShip(World world, UUID uuid) {
         ShipData ship = shipByUuid(world, uuid);
         if (ship == null) {
+            // Queued and not built yet — a crossing parks its ship in the tick it queues it.
+            ship = ValkyrienUtils.getServerShipManager(world).queuedSpawn(uuid);
+        }
+        if (ship == null) {
             return false;
         }
         ship.setPhysicsEnabled(false);
@@ -1484,6 +1520,22 @@ final class VSBridge {
      * <p>Deliberately a separate method: {@link #shipIdManagingBlock}'s callers use its null as
      * "this ship is not live", and widening that under them would change what they gate on.</p>
      */
+    /**
+     * Whether the registry holds a record for the ship {@code shipUuid} that nobody has declared
+     * finished. A ship keeps its record while unloaded, so {@code false} means the ship is gone, not
+     * merely far away. {@code null} when the registry could not be asked — which says nothing about
+     * the ship.
+     */
+    static Boolean shipRecordLive(World world, UUID shipUuid) {
+        try {
+            Optional<ShipData> data = org.valkyrienskies.mod.common.ships.QueryableShipData.get(world)
+                    .getShip(shipUuid);
+            return data.isPresent() && !data.get().isDead();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     static String registeredShipIdManagingBlock(World world, BlockPos pos) {
         try {
             Optional<ShipData> managing = ValkyrienUtils.getShipManagingBlock(world, pos);

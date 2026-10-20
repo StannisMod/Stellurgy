@@ -24,11 +24,8 @@ import java.util.LinkedHashSet;
  *
  * <h2>Why this class exists separately</h2>
  *
- * <p>These three injections used to sit in the production mixin beside a genuine behaviour fix (the
- * "already loaded" double-load guard), which meant a shipped game ran them and wrote their results
- * into mutable statics nobody there reads. The fix is production's; the observation is the tests'.
- * Splitting them is the whole point: what is left in the production mixin now changes VS's behaviour
- * and nothing else, and this file is absent from a released jar entirely.</p>
+ * <p>An observation, so it lives with the tests and is absent from a released jar. (These injections
+ * once sat in a production mixin; that mixin is gone, its guard now being VS's own code.)</p>
  *
  * <p>Behaviour-preserving by construction. The two {@code @Inject}s only read. The {@code @Redirect}
  * calls the SAME factory VS would have called and returns exactly what it returned — it exists
@@ -58,6 +55,31 @@ public abstract class MixinWorldServerShipManagerDiag {
     @Inject(method = "spawnNewShips", at = @At("HEAD"), require = 0)
     private void stellurgyTest$noteSpawnEntry(CallbackInfo ci) {
         SpawnMemory.here().noteSpawnEntry(spawnQueue.size());
+    }
+
+    /** Named so a reader can tell "no spawn was refused" from "nobody was watching the spawn pass". */
+    private static final String SPAWN_INSTRUMENT = "ship_spawn_pass";
+
+    /** Declared on every pass, refusal or not, so an absent {@code ship_spawn_refused} is a reading. */
+    @Inject(method = "spawnNewShips", at = @At("HEAD"), require = 1)
+    private void stellurgyTest$spawnPassRan(CallbackInfo ci) {
+        dev.stannismod.stellurgy.test.trace.TestTrace.instrumentHere(SPAWN_INSTRUMENT);
+    }
+
+    /**
+     * VS has decided a queued ship will not be built — the decision itself, with VS's own reason, and
+     * both of the ship's names so a scenario can ask about its own craft.
+     */
+    @Inject(method = "refuseSpawn", at = @At("HEAD"), require = 1)
+    private void stellurgyTest$spawnRefused(org.valkyrienskies.mod.common.ships.ShipData toSpawn,
+                                            BlockPos anchor, WorldServerShipManager.SpawnRefusal reason,
+                                            CallbackInfo ci) {
+        dev.stannismod.stellurgy.test.trace.TestTrace.instrumentHere(SPAWN_INSTRUMENT);
+        dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_refused",
+                "\"vsShip\":\"" + toSpawn.getUuid() + "\",\"stellurgyShip\":\""
+                        + toSpawn.getStellurgyDurableId() + "\",\"reason\":\"" + reason.name() + "\",\"x\":"
+                        + anchor.getX() + ",\"y\":" + anchor.getY() + ",\"z\":" + anchor.getZ()
+                        + ",\"dim\":" + world.provider.getDimension());
     }
 
     /**
@@ -90,12 +112,9 @@ public abstract class MixinWorldServerShipManagerDiag {
         SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners,
                 footprint);
         if (detector != null) {
-            // The flood's outcome AS A RECORD, beside the statics below: VS drops a spawn whose flood
-            // is too big or touched bedrock with one line on System.err and a `continue`, so a queued
-            // craft that never registers otherwise leaves a wait expiring on "no ship_spawned" and
-            // nothing to say why. `refused` is the drain's own rule, asked rather than restated.
-            boolean refused = org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager
-                    .refusalOf(detector) != null;
+            // The flood's INPUTS as a record. Whether VS refuses the spawn on them is VS's decision,
+            // recorded where it is taken (`ship_spawn_refused`, above) rather than re-derived here: a
+            // copy of the rule in this file had already fallen behind it once.
             dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_flood",
                     "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
                             + ",\"dim\":" + floodWorld.provider.getDimension()
@@ -104,7 +123,7 @@ public abstract class MixinWorldServerShipManagerDiag {
                             + footprint.maxZ + "\""
                             + ",\"found\":" + detector.foundSet.size()
                             + ",\"bedrock\":" + detector.cleanHouse
-                            + ",\"refused\":" + refused);
+                            + ",\"reachExceeded\":" + detector.reachExceeded);
             SpawnMemory.here().noteDetector(detector.foundSet.size(), detector.cleanHouse, stellurgyTest$blacklistSize());
             if (detector.foundSet.size() > FLOOD_SHAPE_THRESHOLD) {
                 stellurgyTest$recordFloodShape(detector, pos, floodWorld);

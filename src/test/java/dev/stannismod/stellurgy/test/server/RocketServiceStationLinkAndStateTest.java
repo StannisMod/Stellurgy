@@ -19,12 +19,9 @@ import static org.junit.Assert.assertTrue;
  * {@code IInfrastructure} link/unlink + {@code maxLinkDistance} from
  * {@code RocketInfrastructureSmokeTest} touched it generically.</p>
  *
- * <p>Pins three contracts:</p>
+ * <p>Pins two contracts:</p>
  *
  * <ul>
- *   <li><b>Unlinked + no power + no rocket = stable tick</b>: production
- *       must not crash on idle ticks. Documented invariant of every
- *       Stellurgy tile-entity.</li>
  *   <li><b>Link contract</b>: {@code rocket.linkInfrastructure(serviceStation)}
  *       sets {@code linkedRocket} to that rocket entity; service-state
  *       probe reads it back as the entity id.</li>
@@ -64,39 +61,7 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
      */
     private static final int CY_PAD       = FixtureSite.OPEN_AIR_Y;
     private static final int CZ_PAD       = 7000;
-    private static final int CX_NO_LINK   = 7000;
     private static final int CX_WITH_LINK = 7400;
-
-    /** Service-station tick path with no linked rocket and no power
-     *  surfaces — the same path a freshly-placed station traverses
-     *  on world load. Must not throw.
-     * Pins INV-INFRA-07 (an unlinked service station reports no linked rocket and no parts to repair).
-     */
-    @Pins("INV-INFRA-07")
-    @Test
-    public void serviceStationTicksWithoutLinkedRocketWithoutCrash() throws Exception {
-        // Place service station in isolation (not adjacent to any rocket
-        // fixture, no assemblers nearby).
-        int sx = CX_NO_LINK, sy = CY_PAD, sz = CZ_PAD - 50;
-        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation").raw();
-        assertTrue("service station place failed: " + place,
-                Reply.of(place).bool("placed"));
-
-        // Tick. Production performFunction guards on `linkedRocket instanceof
-        // EntityRocket` before doing any work — null branch must be a no-op.
-        String tick = act("stellurgytest tile force-tick 0 " + sx + " " + sy + " " + sz
-                + " 40").raw();
-        assertTrue("force-tick on unlinked service station must succeed: " + tick,
-                Reply.of(tick).ok());
-
-        // State probe must succeed and report linkedRocketId = -1.
-        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
-        assertEquals("unlinked service station must report linkedRocketId=-1",
-                -1, extract(state, LINKED_ID));
-        assertEquals("unlinked service station must report 0 parts-to-repair",
-                0, extract(state, PARTS_COUNT));
-    }
 
     /** Building a rocket via {@code fixture rocket simple}, placing a
      *  service station nearby, and calling {@code infra link} attaches

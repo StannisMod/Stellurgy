@@ -17,17 +17,21 @@ pool and the in-galaxy crossings are in [cells-and-crossings](cells-and-crossing
 `ShipLedger` maps the **durable** ship id (the flight computer's UUID, never the physics mod's) to `{coord,
 SETTLED|IN_TRANSIT, positionKnown}` (`ShipLedger.java:35-68`) [V]. A SETTLED ship owns one occupant refcount on
 its cell; whoever moves it releases that and re-settles (`ShipLedger.java:23-26`; for example
-`CellCrossingController.java:260,338,348`) [V]. `updatePosition` is the flight computer's per-tick self-report and
-is a no-op unless SETTLED (`ShipLedger.java:94-100`; caller `TileAdvancedFlightComputer.java:529-530`) [V][T]
-`ShipLedgerTest.java:54`. No slot dimension is stored anywhere (`ShipLedgerDataTest.java:96`) [T].
+`CellCrossingController.java:260,338,348`) [V]. Every `settle` tells the ledger's `SettleObserver` after the
+entry is written (`ShipLedger.java:95-98`); production's observer realizes a gas giant whose zone the address
+names (`SpaceSubsystem.java:105, 552`; universe MECH-UNI-13) [V][T]. `settle` is therefore the one place zone
+membership is WRITTEN, and a new way into a cell must end in it. `updatePosition` — which never changes the
+cell — is the flight computer's per-tick self-report and
+is a no-op unless SETTLED (`ShipLedger.java:114-120`; caller `TileAdvancedFlightComputer.java:529-530`) [V][T]
+`ShipLedgerTest.java:53`. No slot dimension is stored anywhere (`ShipLedgerDataTest.java:80`) [T].
 `ShipLedgerData` is a `WorldSavedData` named `stellurgy_shipledger` on the overworld map storage; keys
-`ships[{shipId,galacticCoord}]`, `transits[]`, `cellVisits[{cell,visit}]`, `spaceClock`, `version`
-(`ShipLedgerData.java:43-48,73-99,227-288`) [V]. Only SETTLED ships are in `ships`; a flying one is carried by its
+`ships[{shipId,galacticCoord}]`, `transits[]`, `cellVisits[{cell,visit}]`, `spaceClock`
+(`ShipLedgerData.java:42-46,224-285`) [V]. Only SETTLED ships are in `ships`; a flying one is carried by its
 `TransitRecord`, and `replaceAll` **refuses** (returns the ship ids, touches nothing) a snapshot that would store a
-flying ship nowhere (`ShipLedgerData.java:127-169`) [T] `ShipLedgerDataTest.java:118,150`. Save point: dim-0
+flying ship nowhere (`ShipLedgerData.java:127-169`) [T] `ShipLedgerDataTest.java:102,134`. Save point: dim-0
 `WorldEvent.Save` stages the clock always, the fleet only while the subsystem is up, and writes `saveAllData()` in a
 `finally`; neither step propagates (`SpaceSubsystemEvents.java:131-238`) [V][T]
-`SpaceRestartPersistenceTest.java:275,354`.
+`SpaceRestartPersistenceTest.java:224,303`.
 
 ### MECH-SPC-10 — The space clock is the subsystem's own counter, on both sides
 `ServerState.advanceSpaceClock()` runs **once per server tick**, in `onServerTick` *before* the null-subsystem
@@ -36,7 +40,7 @@ reads, `SpaceEventHandler.java:360-373`). `SpaceSubsystem.spaceClock()` answers 
 and the synced baseline on a client (`SpaceSubsystem.java:804-808`) [V]. It is restored on start *before* the
 `live == null` return, because it dates stamps outside this subsystem (`SpaceSubsystem.java:290-306`), and stored
 monotonically, never rolled back by a refused fleet write (`ShipLedgerData.java:216-219`) [V][T]
-`ShipLedgerDataTest.java:242`, `SpaceClockIsTheSubsystemsOwnTest.java:132,184`. `SpaceClockSync` is a baseline plus
+`ShipLedgerDataTest.java:199`, `SpaceClockIsTheSubsystemsOwnTest.java:110`. `SpaceClockSync` is a baseline plus
 local client ticks, `hasSync()` tells "not told" from tick 0, and a later baseline may move it backwards
 (`SpaceClockSync.java:35-61`) [T] `SpaceClockSyncTest.java:26,68`. The server pushes a baseline at login and every
 200 ticks, each player on his own phase (`SpaceEventHandler.java:243-247,345-373`) [V]. Contract:
@@ -77,7 +81,7 @@ left untouched, `SpaceSubsystem.java:398-426`), settle the pose, and *stay in th
 ### MECH-SPC-16 — A jump survives a restart; boot reconciles what hyperspace kept
 A `TransitRecord` is `{shipId, org, tgt, distance, travelled, arrivalTick, lastTicked, speed, crew[], snapshot?,
 lane?, hyperAnchor?}` — origin name, target name, progress, **never a raw absolute** (`TransitRecord.java:86-122`)
-[V][T] `TransitRecordTest.java:30`. Export does no world work (`ShipTransitManager.java:1109-1119`) [T]
+[V]. Export does no world work (`ShipTransitManager.java:1109-1119`) [T]
 `ShipTransitManagerTest.java:760`; the parked hull's block snapshot is re-cut every 600 ticks while anything flies
 and once at server stop (`ShipTransitManager.java:594-597,1139-1168`; `SpaceSubsystem.java:727-741`) [T]
 `ShipTransitManagerTest.java:734,801`. `importTransit` reclaims the lane first, then resumes as the parked hull if one
@@ -105,7 +109,13 @@ coverage). Contract: C18 JUMP-8.
 plus standing crew by the deck resolver's identity; it dismounts, retires the dummy and pins standing crew in
 place (`CrewTransfer.java:61,142-280`) [V]. `reseat` matches a seat by AFC-link offset **and** durable ship id; a
 seated rider is mounted on a bound dummy, a standing one is placed at his deck point and held
-(`CrewTransfer.java:297-392,458-500,870-890`) [V][T] `CrewTransferSeatMatchTest.java:54,62`. A second cut re-reads
+(`CrewTransfer.java:297-392,458-500,870-890`) [V][T] `CrewTransferSeatMatchTest.java:54,62`. A seat whose fresh
+mount the world refuses leaves that rider NOT seated: `reseat` answers not-all-seated with a `mountRefused` block,
+and the caller comes back exactly as for a seat not yet up (`CrewTransfer.java:379-389`) [T]
+`VSShipEntryClientGroupTest.java:701`. `rebindAcrossAssembly` secures the fresh mount BEFORE retiring the stale one
+and answers `MOUNT_REFUSED` when the world refuses it, leaving the pilot on his stale mount for the queue's next pass
+ [T] `VSPreAssemblyBoardingPilotControlTest#aPilotWhoseRebindIsRefusedAMountIsReboundOnceTheWorldTakesOne`.
+A second cut re-reads
 postures (`CrewTransfer.java:177-204`; called at `VSShipCrosser.java:363-369`) [V]. Offline crew are skipped — the
 login restore owns them (`CrewTransfer.java:429-436`). `AboardBodies` stows every non-crew, non-riding body inside
 the hull's stay region (+1 block) as NBT and kills it at the cut, then releases it at the same ship-relative offset,
@@ -123,13 +133,16 @@ loaded here and he is not on it) (`AboardRecord.java:82-201`) [V]; it runs every
 (`SpaceEventHandler.java:81,262-268,394-398`). The record lives in the player's bindings capability, NBT key
 `stellurgyShipAboard` `{shipId, galacticCoord?, inTransit?, afcDx/Dy/Dz, standing?+standDx/Dy/Dz}`; an absent posture
 reads SEATED, an absent coordinate means "in no cell" (`ShipAboardTag.java:55-61,221-251,265-288,313-331`) [V][T]
-`ShipAboardTagTest.java:74,161,184`; `saysSpaceborne = presence || inTransit` (`ShipAboardTag.java:151-163`).
+`ShipAboardTagTest.java:41,111,131`; `saysSpaceborne = presence || inTransit` (`ShipAboardTag.java:151-163`).
 `onPlayerLoadFromFile` opens the restore when the record says spaceborne or the saved dimension is a subsystem world
 (`SpaceEventHandler.java:148-175`). `LoginRestore.resolve` never returns null or throws: no tag → orphan; ledger
 unknown → `SHIP_UNKNOWN`; `IN_TRANSIT` → hyperspace, **no cell claimed**; `SETTLED` → materialize the **ledger**
 coordinate, never the tag's; orphan = bed, else overworld spawn (`LoginRestore.java:159-234`) [T]
-`LoginRestoreTest.java:145,161,226,240,270`. A SETTLED restore records a cell claim in `heldCells`, given back at
-logout (`SpaceEventHandler.java:190-195,262-278,327-337`); `SHIP_UNKNOWN` clears the tag, queues a notice and calls
+`LoginRestoreTest.java:145,161,226,240,270`. A SETTLED restore names the cell it claimed (`Placement.claimedCell`,
+`LoginRestore.java:133-149,197-205`); `heldCells` keeps **that coordinate** per player and logout or a release
+dematerializes it — never the ledger's coordinate at the time, which a carried, jumped or descended ship has already
+moved (`SpaceEventHandler.java:192-197,264-272,329-336`) [V][T] `SpaceCellRelogGroupTest.java:511`; `SHIP_UNKNOWN`
+clears the tag, queues a notice and calls
 `PlayerRelease.toTheWorld` (`SpaceEventHandler.java:196-225`) [T] `PlayerReleaseContractTest.java:184`. A seated
 returner is re-seated by a retry of up to 200 ticks (`SpaceEventHandler.java:384-451`). Contract:
 [C13](../../30-contracts/C13-space-presence.md) PRES-1..11.
@@ -138,7 +151,7 @@ returner is re-seated by a retry of up to 200 ticks (`SpaceEventHandler.java:384
 
 | key / location | owner | notes |
 |---|---|---|
-| `stellurgy_shipledger` (MapStorage, overworld): `ships[]`, `transits[]`, `cellVisits[]`, `spaceClock`, `version` | `ShipLedgerData` | `ShipLedgerData.java:43-48,227-288`; `positionKnown` is **not** stored, `version` is written and never read (Open question 6) |
+| `stellurgy_shipledger` (MapStorage, overworld): `ships[]`, `transits[]`, `cellVisits[]`, `spaceClock` | `ShipLedgerData` | `ShipLedgerData.java:42-46,224-285`; `positionKnown` is **not** stored (Open question 6) |
 | `TransitRecord`: `shipId arrivalTick lastTicked speed distance travelled org tgt crew snapshot lane hyperAnchor` | `TransitRecord` | `lane`/`hyperAnchor` absent when none (`TransitRecord.java:113-120`) |
 | player capability: `stellurgyShipAboard` | `ShipAboardTag` via `IPlayerBindings` | survives death; shape in MECH-SPC-19 |
 | `<world>/advRocketry/spacepool/cell_<key>/`, `…/hyperspace/`, `…/spacepool/slot<dim>/` | `SpaceSlotPool`, `WorldProviderSpaceSlot` | the first two are durable by *name*, the last is scratch (`SpaceSlotPool.java:389-405,435-439`) |
@@ -151,12 +164,12 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 - **INV-SPC-03 [V]**  The transit map and the ledger never disagree: in the map ⇔ `IN_TRANSIT`
   (`ShipTransitManagerTest.java:679`). Every put into the map is followed by the ledger's `beginTransit` and every removal by `settle`: `ShipTransitManager.java:535-536,699-705,769-770,1210-1211`.
 - **INV-SPC-05** [V] The ledger holds a coordinate, never a slot dimension; the dimension is derived
-  (`ShipLedger.java:11-16`; `SpaceManager.java:284-290`; `ShipLedgerDataTest.java:96`).
+  (`ShipLedger.java:11-16`; `SpaceManager.java:284-290`; `ShipLedgerDataTest.java:80`).
 - **INV-SPC-07** [V] The space clock advances exactly once per server tick, is monotonic across saves and is not
-  rolled back by a declined fleet write (`SpaceSubsystemEvents.java:76,166-176`; `ShipLedgerDataTest.java:242`).
+  rolled back by a declined fleet write (`SpaceSubsystemEvents.java:76,166-176`; `ShipLedgerDataTest.java:199`).
 - **INV-SPC-08** [V] The fleet write is all-or-nothing and a save-point failure never reaches the server
-  (`ShipLedgerData.java:127-169`; `SpaceSubsystemEvents.java:208-220`; `ShipLedgerDataTest.java:150`;
-  `SpaceRestartPersistenceTest.java:354`).
+  (`ShipLedgerData.java:127-169`; `SpaceSubsystemEvents.java:208-220`; `ShipLedgerDataTest.java:134`;
+  `SpaceRestartPersistenceTest.java:303`).
 - **INV-SPC-09** [V] A transit whose crew is not aboard stays open; it never reports an arrival around a stranded
   player (`ShipTransitManager.java:690-703`; `ShipTransitManagerTest.java:1057`).
 - **INV-SPC-11** [V] A hyperspace lane holds at most one ship: the allocator belongs to the world and a reclaimed
@@ -185,8 +198,8 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 
 ## Test coverage
 
-`INV-SPC-03` ShipTransitManagerTest.java:679 · `-05` ShipLedgerDataTest.java:96 · `-07` ShipLedgerDataTest.java:242,
-SpaceClockIsTheSubsystemsOwnTest.java:132,184 · `-08` ShipLedgerDataTest.java:150, SpaceRestartPersistenceTest.java:275,354 ·
+`INV-SPC-03` ShipTransitManagerTest.java:679 · `-05` ShipLedgerDataTest.java:80 · `-07` ShipLedgerDataTest.java:199,
+SpaceClockIsTheSubsystemsOwnTest.java:110 · `-08` ShipLedgerDataTest.java:134, SpaceRestartPersistenceTest.java:224,303 ·
 `-09` ShipTransitManagerTest.java:1057 · `-11` ShipTransitManagerTest.java:1134 · `-13` LoginRestoreTest.java:270 · `-14`
 HyperspaceSurvivesARestartTest.java:201 · `-18` SpaceSubsystemOwnershipTest.java:58,71,86 · `-12` is `[V]` only.
 
@@ -196,29 +209,21 @@ HyperspaceSurvivesARestartTest.java:201 · `-18` SpaceSubsystemOwnershipTest.jav
   JUMP-1/2/3/4/8/11.
 - The standing-pilot relog scenario is `@Ignore`d (`SpaceLoginRestoreSeatedPilotTest.java:99`), as are two relog
   scenarios in `SpaceCellRelogGroupTest.java:205,305`.
-- No test pairs the `heldCells` claim with its release or runs the transit arrival against a full pool;
-  `AssemblyCrewRebind` has only a mixin watcher (`MixinAssemblyCrewRebindEvents.java`); `linkMoonsToTheirParents` has
-  no test.
+- `AssemblyCrewRebind` has only a mixin watcher (`MixinAssemblyCrewRebindEvents.java`). The `heldCells` pairing is
+  pinned by `SpaceCellRelogGroupTest.java:511`, the refused mount by `VSShipEntryClientGroupTest.java:701`, and
+  `linkMoonsToTheirParents` by `MoonParentInTheSkyFeedTest.java:69`.
 
 ## Open questions
 
 Leads by reading, not reproduced.
 
-2. **`heldCells` releases a different cell than it claimed.** The claim is taken on the ledger coordinate at login
-   (`LoginRestore.java:188`) but stored as a *ship id* (`SpaceEventHandler.java:194`); release dematerializes the
-   ledger's coordinate **now** (`SpaceEventHandler.java:327-336`; same through `releaseCellClaim`). If the ship was
-   carried, jumped or transited between login and logout, the original cell keeps the claim for the server's life
-   (a pool slot pinned) and the new cell loses a count it did not owe; after a descent `ledger.remove` makes the
-   release a no-op. No test pairs them.
 4. **`ShipTransitManager.java:731-789` and `ShipCrossingService.java:281-295`** keep give-up paths that C18 JUMP-15
    forbids (a distance).
-6. **Unused or one-way state.** `ShipLedger.setPositionKnown` has no production caller and `positionKnown` is not
-   persisted (`ShipLedgerData.java:176-179,239`); `ReferenceFrames.frameOf` and `CellWorldMapper.coordOfPose` (which
-   would rename a zoned cell to the galactic lattice) have no production caller; `NBT_VERSION` is written
-   (`ShipLedgerData.java:262`) and never read.
-7. **`CrewTransfer.reseat` reports seated when the world refused the mount dummy** (`CrewTransfer.java:375-391` falls
-   to `continue` with `allSeated` still true), so a crossing can complete with that pilot standing; the ERROR is logged
-   at `CrewTransfer.java:921`.
+6. **One-way state.** `ShipLedger.setPositionKnown` has no production caller yet and `positionKnown` is not
+   persisted: "position unknown" is a PLANNED mechanic — a misjump leaves a ship position-unknown until it
+   re-localizes (`universe-model.md`, `space-model.md`) — so the field waits for its writer rather than
+   being dead. `ReferenceFrames.frameOf` and `CellWorldMapper.coordOfPose` (which would rename a zoned cell to the
+   galactic lattice) have no production caller.
 8. **Width-less target.** `arrivalStandoff` → `StandoffRing` → `plusLocalSaturating` throws for a width-less target
    (`GalacticCoord.java:325`) inside the transit tick; ADDR-22 lists only the descent scan as a guarded tick caller.
    Whether any production target arrives width-less is not established.

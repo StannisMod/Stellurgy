@@ -74,7 +74,8 @@ public final class TestBindingsCheck {
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     /** A constant: a compiled {@link Pattern} is immutable. */
     private static final Pattern MEMBER = Pattern.compile(
-            "[A-Za-z_$][\\w$]*#[A-Za-z_$][\\w$]*|[\\w./-]+\\.(?:lang|json|cfg|xml|txt)#[\\w.:-]+");
+            "[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*#[A-Za-z_$][\\w$]*(?:\\([\\w$.,\\[\\]\\s]*\\))?"
+                    + "|[\\w./-]+\\.(?:lang|json|cfg|xml|txt)#[\\w.:-]+");
     /** A constant: a compiled {@link Pattern} is immutable. */
     private static final Pattern ADDED_DEF = Pattern.compile("^\\+[ \\t]*-[ \\t]*\\*\\*(" + PinMap.ANCHOR + ")\\b");
     private static final String E2E_NAME = "E2ETest";
@@ -444,21 +445,26 @@ public final class TestBindingsCheck {
 
     /**
      * The test system's own judges, whose decisions a test may break as its subject: what they refuse is
-     * a decision of code, not the reply of an instrument. A member is admitted by its class, or, where the
-     * class also holds instruments, by the member itself. A list, not a pattern -- a new judge is named here.
+     * a decision of code, not the reply of an instrument. A member is admitted by its class (the outermost
+     * type of an {@code Outer.Inner} chain), or, where the class also holds instruments, by the member itself.
+     * A list, not a pattern -- a new judge is named here.
      */
     static boolean isJudge(String member) {
-        switch (member.substring(0, member.indexOf('#'))) {
+        String owner = member.substring(0, member.indexOf('#'));
+        switch (owner.split("\\.")[0]) {
             case "E2EModeGate":         // the server child's mode gate: what a command may do, per mode
             case "BridgeCommand":       // the client bridge's command table and the kind of each
             case "E2EConfinement":      // the build's confinement of e2e and mechanics test code
             case "PinMap":              // what pins a clause
             case "TestBindingsCheck":   // this check
+            case "WitnessReplay":       // which member a red-witness record names, and its replay
+            case "MemberAddress":       // where in a file that member is, or why the record names none
                 return true;
             default:
                 break;
         }
-        switch (member) {
+        int params = member.indexOf('(');
+        switch (params < 0 ? member : member.substring(0, params)) {
             // The client bridge's admission; the rest of the class serves the commands it admits.
             case "ForgeTestClientBootstrap#handleCommand":
             case "ForgeTestClientBootstrap#refusedInE2E":
@@ -486,7 +492,7 @@ public final class TestBindingsCheck {
             String owner = member.substring(0, member.indexOf('#'));
             boolean isProduction = owner.contains("/")
                     ? Files.isRegularFile(root.resolve("src/main/resources").resolve(owner))
-                    : production.contains(owner);
+                    : production.contains(owner.split("\\.")[0]);
             if (!isProduction && !isJudge(member)) {
                 failures.add(record[0] + ": @RedWitness names " + member
                         + ", which is no production code (src/main/java outside command/test,"

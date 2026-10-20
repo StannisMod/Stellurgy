@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.EnergyStore;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -103,6 +104,9 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
 
     /** Pins INV-INFRA-26 (A solar panel in aStellurgy dimension gains energy on a forced tick, scaled by insolation). */
     @Pins("INV-INFRA-26")
+    @RedWitness(member = "TileSolarPanel#getPowerPerOperation", at = "properties.getPeakInsolationMultiplier()",
+            replacedBy = "0d",
+            fails = "solar panel in Stellurgy dim", on = "2026-10-19")
     @Test
     public void solarPanelGeneratesInNonOverworldStellurgyDim() throws Exception {
         // Most basic non-zero check: a solar panel in a Stellurgy dim that isn't

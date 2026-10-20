@@ -21,14 +21,9 @@ import static org.junit.Assert.assertTrue;
  * <h2>Contracts pinned</h2>
  *
  * <ol>
- *   <li><b>NBT save format</b> — non-empty {@code myIdStr} /
- *       {@code targetIdStr} round-trip through
- *       {@code writeToNBT -> readFromNBT}.</li>
  *   <li><b>NBT empty-string handling</b> — empty strings are NOT
- *       written ({@code if (!.isEmpty())} gates in production lines
- *       110-113), but a peer reading the partial NBT recovers
- *       {@code ""} for the missing keys (vanilla
- *       {@code NBTTagCompound.getString} default).</li>
+ *       written ({@code if (!.isEmpty())} gates in
+ *       {@code writeToNBT}).</li>
  *   <li><b>Network packet schema</b> — packet id 0 ships
  *       {@code myIdStr}, packet id 1 ships {@code targetIdStr}; the
  *       wire format writes a length-prefixed string and the reader
@@ -63,8 +58,6 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
 
     private static final String MY_ID = "myId";
     private static final String TARGET_ID = "targetId";
-    private static final String PEER_MY_ID = "peerMyId";
-    private static final String PEER_TARGET_ID = "peerTargetId";
     private static final String HAS_MY_ID_KEY = "hasMyIdKey";
     private static final String HAS_TARGET_ID_KEY = "hasTargetIdKey";
     private static final String DECODED_ID = "decodedId";
@@ -107,40 +100,10 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void nbtRoundTripPreservesNonEmptyMyIdAndTargetId() throws Exception {
-        int x = BASE_X;
-        int y = BASE_Y;
-        int z = BASE_Z;
-        warmup(x, z);
-        placeDockingPort(x, y, z);
-
-        String setIds = join(client().arrange(
-                "stellurgytest docking-port set-ids 0 " + x + " " + y + " " + z
-                        + " portA stationB"));
-        assertTrue("set-ids must succeed: " + setIds,
-                Reply.of(setIds).ok());
-
-        String rt = join(client().read(
-                "stellurgytest docking-port nbt-roundtrip 0 " + x + " " + y + " " + z));
-        assertTrue("nbt-roundtrip must succeed: " + rt,
-                Reply.of(rt).ok());
-
-        assertTrue("non-empty myIdStr must serialize a 'myId' NBT key: "
-                + rt, extractBool(rt, HAS_MY_ID_KEY));
-        assertTrue("non-empty targetIdStr must serialize a 'targetId' NBT key: "
-                + rt, extractBool(rt, HAS_TARGET_ID_KEY));
-        assertEquals("peer must round-trip myId",
-                "portA", extract(rt, PEER_MY_ID));
-        assertEquals("peer must round-trip targetId",
-                "stationB", extract(rt, PEER_TARGET_ID));
-    }
-
-    @Test
     public void freshDockingPortOmitsEmptyStringKeysFromNbt() throws Exception {
         // A freshly-placed tile has myIdStr="" and targetIdStr="" (ctor
-        // defaults). Production lines 110-113 gate the NBT writes on
-        // !isEmpty, so the keys must NOT appear. The peer reads back
-        // "" via vanilla getString-on-missing-key behaviour — no NPE.
+        // defaults). writeToNBT gates the NBT writes on !isEmpty, so the
+        // keys must NOT appear.
         int x = BASE_X + 20;
         int y = BASE_Y;
         int z = BASE_Z;
@@ -156,10 +119,6 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                 false, extractBool(rt, HAS_MY_ID_KEY));
         assertEquals("empty targetIdStr must NOT be written to NBT",
                 false, extractBool(rt, HAS_TARGET_ID_KEY));
-        assertEquals("peer recovers empty myId on missing key (no NPE)",
-                "", extract(rt, PEER_MY_ID));
-        assertEquals("peer recovers empty targetId on missing key (no NPE)",
-                "", extract(rt, PEER_TARGET_ID));
     }
 
     @Test

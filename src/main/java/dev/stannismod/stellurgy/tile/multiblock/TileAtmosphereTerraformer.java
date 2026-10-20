@@ -397,15 +397,14 @@ public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implem
                 }
             }
         }
-        if (!StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid)
-            return;
-
         if (!world.isRemote) {
             if (last_mode != radioButton.getOptionSelected()) {
                 last_mode = radioButton.getOptionSelected();
                 this.setProgress(0, 0);
             }
-            if (radioButton.getOptionSelected() == 0) {
+            // Off, the gas requirement is skipped, not the work: the machine still runs and pays.
+            if (radioButton.getOptionSelected() == 0
+                    && StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid) {
 
                 if (requiredN2 == 0 && requiredO2 == 0) {
                     requiredN2 = StellurgyConfiguration.getCurrentConfig().terraformliquidRate;
@@ -438,7 +437,7 @@ public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implem
         if (!outOfFluid) {
             /////////from the super method
             if (!world.isRemote)
-                useEnergy(powerPerTick);
+                useEnergy(usedPowerPerTick());
             //Increment for both client and server
             currentTime++;
 

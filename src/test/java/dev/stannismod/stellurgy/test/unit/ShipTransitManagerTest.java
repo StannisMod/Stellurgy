@@ -432,7 +432,7 @@ public class ShipTransitManagerTest {
     @Test
     public void beginTransitRecordsInTransitInTheLedger() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
                 ledger, () -> NOW_TICK);
         UUID ship = UUID.randomUUID();
@@ -451,7 +451,7 @@ public class ShipTransitManagerTest {
     @Test
     public void arrivalSettlesTheLedgerAndMarksTheCellDirty() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
                 ledger, () -> 0L);
         UUID ship = UUID.randomUUID();
@@ -473,7 +473,7 @@ public class ShipTransitManagerTest {
     public void crewOnlineGatePausesAdvanceWhileNoCrewOnline() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         // crew-online mode, nobody online -> a MANNED transit is paused.
         mgr.setOfflineProgress(new OfflineProgress(OfflineProgress.Mode.CREW_ONLINE, id -> false));
         String ship = UUID.randomUUID().toString();
@@ -493,7 +493,7 @@ public class ShipTransitManagerTest {
     public void exportTransitsSnapshotsInFlightShips() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                new ShipLedger(), () -> 500L);
+                new ShipLedger((shipId, coord) -> { }), () -> 500L);
         String ship = UUID.randomUUID().toString();
 
         int originDim = space.materialize(cell(1));
@@ -602,7 +602,7 @@ public class ShipTransitManagerTest {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         HyperspaceTiles tiles = new HyperspaceTiles();
         FakeCrosser crosser = new FakeCrosser();
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger((shipId, coord) -> { }), () -> 0L);
         UUID ship = UUID.randomUUID();
         List<UUID> crew = new ArrayList<>();
         crew.add(UUID.randomUUID()); // a manned record, so the arrival hands work to the re-seat leg
@@ -629,7 +629,7 @@ public class ShipTransitManagerTest {
     public void importedTransitCompletesByPastingItsSnapshotNotCrossingHyperspace() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         HyperspaceTiles tiles = new HyperspaceTiles();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeCrosser crosser = new FakeCrosser();
         ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, ledger, () -> 0L);
         UUID ship = UUID.randomUUID();
@@ -670,7 +670,7 @@ public class ShipTransitManagerTest {
     public void anArrivalThatNeverCompletesNeverLeavesTheLedgerDisagreeingWithTheTransitMap() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         HyperspaceTiles tiles = new HyperspaceTiles();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeCrosser crosser = new FakeCrosser();
         // The crossing never produces a paste anchor, for longer than any budget the manager may hold.
         crosser.arriveFailCount = Integer.MAX_VALUE;
@@ -705,7 +705,7 @@ public class ShipTransitManagerTest {
     public void importTransitIsANoOpForAShipAlreadyInTransit() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         HyperspaceTiles tiles = new HyperspaceTiles();
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, new FakeCrosser(), new ShipLedger(),
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, new FakeCrosser(), new ShipLedger((shipId, coord) -> { }),
                 () -> 0L);
         UUID ship = UUID.randomUUID();
 
@@ -729,7 +729,7 @@ public class ShipTransitManagerTest {
         cut.setInteger("marker", 42);
         crosser.snapshotToReturn = cut;
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         int originDim = space.materialize(cell(1));
@@ -756,7 +756,7 @@ public class ShipTransitManagerTest {
         crosser.snapshotToReturn = new NBTTagCompound();
         crosser.snapshotToReturn.setInteger("recut", 1);
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         int originDim = space.materialize(cell(1));
         String jumper = UUID.randomUUID().toString();
@@ -795,7 +795,7 @@ public class ShipTransitManagerTest {
         crosser.sourceSnapshotToReturn = new NBTTagCompound();
         crosser.sourceSnapshotToReturn.setInteger("floor", 1);
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         int originDim = space.materialize(cell(1));
         mgr.beginTransit(UUID.randomUUID().toString(), cell(1), originDim, new BlockPos(0, 64, 0),
@@ -827,7 +827,7 @@ public class ShipTransitManagerTest {
         crosser.snapshotToReturn.setInteger("recut", 1);
         crosser.settleFailCount = 5; // the ship is pasted; its pose settle keeps retrying
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         int originDim = space.materialize(cell(1));
         mgr.beginTransit(UUID.randomUUID().toString(), cell(1), originDim, new BlockPos(0, 64, 0),
@@ -849,7 +849,7 @@ public class ShipTransitManagerTest {
         crosser.snapshotToReturn = new NBTTagCompound(); // a would-be re-cut that MUST NOT be used
         crosser.snapshotToReturn.setInteger("recut", 1);
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         NBTTagCompound imported = new NBTTagCompound();
@@ -867,7 +867,7 @@ public class ShipTransitManagerTest {
     public void restoredTransitRespectsTheCrewOnlineGate() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         mgr.setOfflineProgress(new OfflineProgress(OfflineProgress.Mode.CREW_ONLINE, id -> false));
         String ship = UUID.randomUUID().toString();
 
@@ -891,7 +891,7 @@ public class ShipTransitManagerTest {
         crosser.sourceSnapshotToReturn = floor; // captured at depart, before the crossing cuts the ship
         crosser.snapshotToReturn = null;         // hyperspace ship not assembled yet -> re-cut unavailable
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         int originDim = space.materialize(cell(1));
@@ -909,7 +909,7 @@ public class ShipTransitManagerTest {
     public void importTransitDropsASnapshotlessOrBlankRecordInsteadOfCreatingADoomedTransit() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         // Snapshot-less record: the ship's blocks are unrecoverable, so a restored transit would only spin to
         // MAX_ARRIVAL_ATTEMPTS then silently delete it. Drop it instead.
@@ -1111,7 +1111,7 @@ public class ShipTransitManagerTest {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         FakeCrosser crosser = new FakeCrosser();   // parkedAnchors empty: the hull did not survive
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         mgr.importTransit(new TransitRecord(ship, cell(1), cell(2), 4_000_000L, 0L, 10L, 0L,
@@ -1130,7 +1130,7 @@ public class ShipTransitManagerTest {
         FakeCrosser crosser = new FakeCrosser();
         BlockPos parkedAt = HyperspaceTiles.tilePos(0);
         crosser.parkedAnchors.add(parkedAt);
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         mgr.importTransit(new TransitRecord(UUID.randomUUID().toString(), cell(1), cell(2), 4_000_000L,
                 0L, 10_000L, 0L, 7L, new ArrayList<UUID>(), new NBTTagCompound(), 0, parkedAt));
@@ -1154,7 +1154,7 @@ public class ShipTransitManagerTest {
         crosser.shipsParkedAt.add(HyperspaceTiles.tilePos(0));   // a hull whose record did not survive
         crosser.shipsParkedAt.add(HyperspaceTiles.tilePos(1));   // ...and one that did
         crosser.shipsParkedAt.add(HyperspaceTiles.tilePos(4));   // another orphan
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         mgr.importTransit(new TransitRecord(UUID.randomUUID().toString(), cell(1), cell(2), 4_000_000L,
                 0L, 10_000L, 0L, 7L, new ArrayList<UUID>(), new NBTTagCompound(), 1, claimedLane));
@@ -1186,7 +1186,7 @@ public class ShipTransitManagerTest {
         // A ring further out than anything the surviving record touches, and well past the reach the
         // allocator would have had: it reclaimed lane 1, so a bound derived from it stopped at 3.
         crosser.shipsParkedAt.add(HyperspaceTiles.tilePos(12));
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         mgr.importTransit(new TransitRecord(UUID.randomUUID().toString(), cell(1), cell(2), 4_000_000L,
                 0L, 10_000L, 0L, 7L, new ArrayList<UUID>(), new NBTTagCompound(), 1, claimedLane));
@@ -1209,7 +1209,7 @@ public class ShipTransitManagerTest {
         FakeCrosser crosser = new FakeCrosser();
         crosser.shipsParkedAt.add(HyperspaceTiles.tilePos(0));
         crosser.disposeSucceeds = false; // e.g. the hull's chunks are still streaming in
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger((shipId, coord) -> { }), () -> 0L);
 
         int disposed = mgr.reconcileParkedShips();
 
@@ -1230,7 +1230,7 @@ public class ShipTransitManagerTest {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         FakeCrosser crosser = new FakeCrosser();
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         mgr.importTransit(new TransitRecord(ship, cell(1), cell(2), 4_000_000L, 0L, 10L, 0L, 7L,
@@ -1247,7 +1247,7 @@ public class ShipTransitManagerTest {
         BlockPos parkedAt = HyperspaceTiles.tilePos(2);
         crosser.parkedAnchors.add(parkedAt);
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), crosser,
-                new ShipLedger(), () -> 0L);
+                new ShipLedger((shipId, coord) -> { }), () -> 0L);
         String ship = UUID.randomUUID().toString();
 
         mgr.importTransit(new TransitRecord(ship, cell(1), cell(2), 4_000_000L, 0L, 10_000L, 0L, 7L,
@@ -1262,7 +1262,7 @@ public class ShipTransitManagerTest {
     public void anExportedTransitCarriesTheLaneItIsParkedIn() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                new ShipLedger(), () -> 500L);
+                new ShipLedger((shipId, coord) -> { }), () -> 500L);
         String ship = UUID.randomUUID().toString();
 
         int originDim = space.materialize(cell(1));

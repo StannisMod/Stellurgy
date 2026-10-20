@@ -77,7 +77,9 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
 - **SHIPCTL-8** *(R1)* `[A][BEH]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
   IMMEDIATELY after a successful assembly — no re-seat. "Immediately" runs from the physics object
   going live. Aboard-ness is CREW-C1/C4's; this clause owns delivery. Falsifier: the red repro
-  `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`.
+  `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`
+  (he flies it), and `…#aPilotWhoseRebindIsRefusedAMountIsReboundOnceTheWorldTakesOne` (he stays its pilot
+  when the world refuses his new mount at first; that method does not fly the ship).
 - **SHIPCTL-9** *(R2+R8)* `[A][BEH]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
   one run) An UNASSEMBLED ship does NOT accept pilot input, and the refusal is
   SURFACED **server-side at mount time**: seating on an unassembled craft answers with an action-bar
@@ -153,16 +155,24 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   placed on a ship with NO pilot seat **auto-links** (the replacement path after SHIPCTL-14); a
   second seat's placement is refused with a message. R10/R11 hold for the ship's LIFETIME. **(c)**
   Mid-flight building of non-control blocks is OUT of scope.
-- **SHIPCTL-20** `[V][SYS]` A RIDERLESS mount dummy whose seat no longer stands removes itself, on the
+- **SHIPCTL-20** `[T][SYS]` A RIDERLESS mount dummy whose seat no longer stands removes itself, on the
   server, on its own tick — whatever took the seat away, including a discarded ship whose chunks are
   deleted and whose blocks are therefore never broken. Its seat stands while the bound seat position
   holds a seat block, or — that position not loaded — while it lies in the shipyard under a REGISTERED
   ship (unloaded, and coming back); an unbound dummy's seat is the block it sits in (`EntityDummy`).
-  A RIDDEN dummy is never removed this way: across an assembly the pilot rides a stale mount bound to
-  vacated coordinates until the rebind moves him off it (`CrewTransfer.rebindAcrossAssembly`). The
+  A RIDDEN dummy is not removed for a seat that no longer stands: across an assembly the pilot rides a
+  stale mount bound to vacated coordinates until the rebind moves him off it
+  (`CrewTransfer.rebindAcrossAssembly`; such a mount was bound under no ship). A dummy bound under a ship
+  that has no live registry record IS removed, ridden or not, its rider set down where it stands: a
+  discarded ship's claim goes to the next ship, whose seat can stand at the same coordinate, and the
+  mount re-glued to it would carry the rider aboard a ship he never boarded. A crossing takes its crew
+  off their mounts before it cuts (`CrewTransfer#capture`), so no live crew rides such a mount. The
   block's own `breakBlock` remains the immediate path for a broken seat (SHIPCTL-14). It is vanilla's
   idiom for an entity bound to a block: a hanging entity checks its surface (`EntityHanging.onUpdate`),
-  a sleeping player his bed (`EntityPlayer.isInBed`). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
+  a sleeping player his bed (`EntityPlayer.isInBed`). Pinned by
+  `VSPilotSeatDummyReuseTest#aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself` (the riderless mount)
+  and `TierTwoCraftFlightModelGroupTest#aRiderOfADiscardedCraftIsNotCarriedIntoTheNextCraftOfItsClaim`
+  (the ridden one, seen through the next craft's mass). FOR: maintainer ruling 2026-10-14, *"EntutyDummy
   рядом с игроком можно оставить как требование, но чистить надо как-то автоматически"* (the dummy near
   the player may stay a requirement, but it must be cleaned up automatically), and the choice of the
   dummy-side check the same day (*"1"*).

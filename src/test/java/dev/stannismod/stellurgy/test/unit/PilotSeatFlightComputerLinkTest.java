@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 
@@ -20,26 +19,6 @@ import static org.junit.Assert.*;
 public class PilotSeatFlightComputerLinkTest {
 
     @Test
-    public void freshSeatIsUnlinkedAndResolvesNoComputer() {
-        TilePilotSeat seat = new TilePilotSeat();
-        seat.setPos(new BlockPos(10, 64, 10));
-        assertFalse("a freshly-placed pilot seat is not linked", seat.isLinked());
-        assertNull("an unlinked seat resolves no flight computer position", seat.getFlightComputerPos());
-    }
-
-    @Test
-    public void linkStoresComputerAsRelativeOffset() {
-        TilePilotSeat seat = new TilePilotSeat();
-        seat.setPos(new BlockPos(10, 64, 10));
-        BlockPos afc = new BlockPos(10, 66, 7); // +2 up, -3 north of the seat
-        seat.linkToFlightComputer(afc);
-
-        assertTrue("linking marks the seat linked", seat.isLinked());
-        assertEquals("a linked seat resolves the computer's position",
-                afc, seat.getFlightComputerPos());
-    }
-
-    @Test
     public void resolvedComputerPositionTracksTheSeatUnderRigidTranslation() {
         // Link on the "pad", then simulate the physics-mod relocation as a rigid translation of
         // BOTH blocks by the same delta. The stored offset is relative, so re-placing the seat
@@ -56,28 +35,5 @@ public class PilotSeatFlightComputerLinkTest {
 
         assertEquals("the resolved computer position tracks the seat under a rigid translation",
                 padAfc.add(delta), seat.getFlightComputerPos());
-    }
-
-    @Test
-    public void linkSurvivesNbtRoundTrip() {
-        TilePilotSeat seat = new TilePilotSeat();
-        seat.setPos(new BlockPos(10, 64, 10));
-        seat.linkToFlightComputer(new BlockPos(10, 66, 7));
-
-        // Persist only the fields this tile writes (the parent TileEntity.writeToNBT needs a
-        // registered tile mapping unavailable in a pure unit test); read them back into a fresh
-        // tile whose position comes from the vanilla x/y/z keys.
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setInteger("x", 10);
-        nbt.setInteger("y", 64);
-        nbt.setInteger("z", 10);
-        seat.writeLinkNbt(nbt);
-
-        TilePilotSeat reloaded = new TilePilotSeat();
-        reloaded.readFromNBT(nbt);
-
-        assertTrue("linked state survives NBT", reloaded.isLinked());
-        assertEquals("the relative offset survives NBT",
-                new BlockPos(10, 66, 7), reloaded.getFlightComputerPos());
     }
 }

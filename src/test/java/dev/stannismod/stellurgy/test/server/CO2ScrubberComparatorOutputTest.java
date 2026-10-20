@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -55,6 +56,9 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
 
     /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
     @Pins("INV-ATM-10")
+    @RedWitness(member = "TileCO2Scrubber#getComparatorOverride", at = "return (32766 - stack.getItemDamage() + 2184) / 2185;",
+            replacedBy = "return 0;",
+            fails = "CO2 scrubber with fresh cartridge must report comparator > 0", on = "2026-10-19")
     @Test
     public void freshCartridgeReportsNonZeroComparatorOutput() throws Exception {
         int x = PX + 30, y = PY, z = PZ;

@@ -36,7 +36,11 @@ When `terraformRequiresFluid` and the increase mode is selected, each powered ti
 requirement is unmet the tile enters `outOfFluid` (halts the timer and blocks power use). Decrease
 mode and `terraformRequiresFluid=false` skip the gas requirement entirely. `outOfFluid` toggling
 fires a block-update so the client/waila reflects it; it is **not** persisted (reset to false in
-`readFromNBT`). [V] `TileAtmosphereTerraformer.java:391-440,469-481,601-604`.
+`readFromNBT`). [V] `TileAtmosphereTerraformer.java:391-440,469-481,601-604`. Each powered tick spends
+`usedPowerPerTick()` — the figure the base gates on — not raw `powerPerTick` (unpinned: the
+two differ only at `PowerMultiplier` ≠ 1). With `terraformRequiresFluid=false` only the gas draw is
+skipped: the cycle counts and pays as with gas [T]
+`TerraformerPoweredCycleOnStellurgyPlanetTest#withFluidsNotRequiredAnUnfuelledTerraformerStillRunsItsCycle`.
 
 ### MECH-MBM-11 — Terraform eligibility guards
 `isRunning()` requires the machine enabled **and** `enableTerraforming`; if false it zeroes the
@@ -72,11 +76,15 @@ Config: see `C4-config-surface`. Full disable: `enableTerraforming=false` (isRun
   hitting the bound auto-disables the machine. `TileAtmosphereTerraformer.java:499-518`.
 - **INV-MBM-08** [V][BEH] `enableTerraforming=false` forces `currentTime=0` and blocks all accrual —
   the flag gates the consequence, not just the display. `TileAtmosphereTerraformer.java:456-467`.
+- **INV-MBM-25** [T][BEH] With `terraformRequiresFluid` off, a powered terraformer with no gas in its hatches still
+  counts its cycle and never stands out of fluid: the setting skips the gas draw, not the work
+  (`TileAtmosphereTerraformer.java:405-407`; MECH-MBM-10). Pinned by
+  `TerraformerPoweredCycleOnStellurgyPlanetTest#withFluidsNotRequiredAnUnfuelledTerraformerStillRunsItsCycle`.
 
 ## Test coverage
 
 `TerraformerMultiblockTest` (validation, the lone controller's tick, the helper an atmosphere change starts),
-`TerraformerPoweredCycleOnStellurgyPlanetTest` (INV-MBM-06),
+`TerraformerPoweredCycleOnStellurgyPlanetTest` (INV-MBM-06, INV-MBM-25),
 `TerraformerPoweredCycleOnOverworldTest` (allowTerraformNonStellurgy path).
 
 ## Failure modes & edge cases

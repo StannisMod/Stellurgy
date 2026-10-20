@@ -123,7 +123,7 @@ launch constraint at all.
 ## Test coverage
 
 The `createFromNBT` reads through the outer tag exactly once, pinned through a real save by
-`FreeFlightNbtRoundTripTest` (`:132-148`). INV-API-10 is [T].
+`FreeFlightNbtRoundTripTest` (`:100-114`). INV-API-10 is [T].
 
 ## Open questions
 

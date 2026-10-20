@@ -122,9 +122,9 @@ new store never reads it again; the legacy source `WorldInfoSavedData` is read-o
   `rotationalPeriod`), moves strictly forward, and skips <1 full extra day;
   rp=24000 equals vanilla rounding; non-positive rp falls back to 24000 —
   `unit/SleepWakeTimeTest.java:28,38,47,55`. Pinned by `SleepWakeTimeTest#rp24000MatchesVanillaRounding`, `SleepWakeTimeTest#nonVanillaPeriodsLandOnDawn`, `SleepWakeTimeTest#alreadyAtDawnSkipsToNextDay`, `SleepWakeTimeTest#nonPositivePeriodFallsBackTo24000`.
-- **INV-WGEN-12 [A][SYS]** `PlanetWeatherState` NBT round-trips all five weather fields
-  and preserves clean-weather time — `unit/PlanetWeatherStateTest.java:19,41`;
-  the fresh-state-defaults-all-zero claim is `[A]` (no test pins it). Pinned by `PlanetWeatherStateTest#planetWeatherStateNbtRoundTrip`, `PlanetWeatherStateTest#planetWeatherStateNbtRoundTripPreservesClearWeather`. FOR: save format: planet weather.
+- **INV-WGEN-12 [V][SYS]** `PlanetWeatherState` NBT writes and reads all five weather fields,
+  clean-weather time among them, under one key each — `PlanetWeatherState.java:127-149`;
+  the fresh-state-defaults-all-zero claim is `[A]` (no test pins it). FOR: save format: planet weather.
 - **INV-WGEN-13 [V][SYS]** `STORAGE_KEY` is the stable string
   `stellurgy_planet_weather` — `[V]` `PlanetWeatherSavedData.java:25` (no test pins the string); `getOrCreate` is idempotent and isolates dimensions —
   `[T]` `unit/PlanetWeatherSavedDataTest.java:26,38`. Pinned by `PlanetWeatherSavedDataTest#getOrCreateInsertsFreshStateAndIsIdempotent`, `PlanetWeatherSavedDataTest#getOrCreateIsolatesDimensions`. FOR: save format: planet weather.
@@ -134,8 +134,8 @@ new store never reads it again; the legacy source `WorldInfoSavedData` is read-o
   `server/PerDimWorldInfoMasterToggleTest`. Pinned by `PerDimensionWeatherIsolationTest#rainOnPlanetADoesNotLeakToBOrOverworld`, `PerDimensionWeatherIsolationTest#rainOnPlanetBDoesNotLeakToAOrOverworld`, `PerDimensionWeatherIsolationTest#clearOnPlanetADoesNotClearB`, `PerDimWorldInfoMasterToggleTest#masterOffLeavesPlanetOnVanillaWorldInfo`.
 - **INV-WGEN-15 [T][BEH]** Custom weather disabled ⇒ cycle defers to vanilla even for
   planets carrying rain/thunder markers — `server/WeatherCycleDisableTest`,
-  `server/PlanetWeatherGateTest`; persistence across restart —
-  `server/WeatherPersistenceTest#planetRainSurvivesRestartOnSameWorkDir:84`. Pinned by `WeatherCycleDisableTest#customWeatherCycleRunsOnlyWhenConfigEnabled`, `WeatherPersistenceTest#planetRainSurvivesRestartOnSameWorkDir`.
+  `server/PlanetWeatherGateTest`; persistence across restart — `[V]` the per-dim states are
+  written to and read from the overworld saved data, `PlanetWeatherSavedData.java:75-98`. Pinned by `WeatherCycleDisableTest#customWeatherCycleRunsOnlyWhenConfigEnabled`.
 - **INV-WGEN-16 [V][BEH]** `shouldWrap` never wraps dim 0 or the space dim, and
   `isWeatherManaged` is independent of `shouldWrap` so time-per-dim works with
   vanilla weather (`PlanetWeatherManager.java:130-164`).
@@ -168,7 +168,7 @@ Config: see `C4-config-surface`. `perDimWorldInfo` is the master switch: off ⇒
 
 - Sleep → `unit/SleepWakeTimeTest`, `client/PlanetBedSleepClientGroupTest`,
   `server/PlanetDimensionLoadTest`.
-- Weather isolation/gate/persistence → the six `server/…Weather*`/`…Isolation*`/
+- Weather isolation/gate (planet-rain persistence is `[V]` only) → the six `server/…Weather*`/`…Isolation*`/
   `…MasterToggle*` tests above.
 - Wrapper delegation → `integration/StellurgyDimensionWorldInfoTest`.
 - Event wiring → `server/EventHandlerWiringTest`,

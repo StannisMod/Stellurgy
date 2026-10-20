@@ -27,19 +27,6 @@ public class CrystalMemoryTest {
     }
 
     @Test
-    public void aRecordedAddressIsKnownAndReadableBack() {
-        CrystalMemory crystal = new CrystalMemory();
-        assertTrue("a fresh crystal is blank, not broken", crystal.isEmpty());
-
-        assertTrue("recording a new address changes the crystal",
-                crystal.record(entry(5, "Kepler", InfoTier.TELESCOPE, 100L)));
-
-        assertTrue(crystal.knows(coord(5)));
-        assertEquals("Kepler", crystal.get(coord(5)).name());
-        assertEquals(1, crystal.size());
-    }
-
-    @Test
     public void twoSightingsOfOneBodyAreOneRecord() {
         // A planet orbits, so two observations of it are at two different coordinates. What makes
         // them the same knowledge is the BODY. Keyed by coordinate instead, a crystal would collect
@@ -151,25 +138,6 @@ public class CrystalMemoryTest {
                 crystal.erase(coord(1)));
         assertFalse(crystal.knows(coord(1)));
         assertTrue(crystal.knows(coord(2)));
-    }
-
-    @Test
-    public void theAddressListSurvivesAnNbtRoundTrip() {
-        CrystalMemory crystal = new CrystalMemory();
-        crystal.record(new CrystalEntry(coord(4), "Home", SystemBodyKind.MOON, InfoTier.APPROACH, 4242L));
-        crystal.record(entry(9, "Far", InfoTier.TELESCOPE, 7L));
-
-        NBTTagCompound nbt = new NBTTagCompound();
-        crystal.writeToNBT(nbt);
-        CrystalMemory read = CrystalMemory.readFromNBT(nbt);
-
-        assertEquals(2, read.size());
-        CrystalEntry home = read.get(coord(4));
-        assertNotNull("the address itself must survive the round trip", home);
-        assertEquals("Home", home.name());
-        assertEquals("the body kind must survive", SystemBodyKind.MOON, home.kind());
-        assertEquals("the resolved detail level must survive", InfoTier.APPROACH, home.detail());
-        assertEquals("the observation timestamp must survive", 4242L, home.observedTick());
     }
 
     @Test

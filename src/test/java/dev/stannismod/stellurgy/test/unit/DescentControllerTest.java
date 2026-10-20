@@ -170,7 +170,7 @@ public class DescentControllerTest {
     @Test
     public void settledShipDescendsReleasingTheCellAndDroppingTheLedgerEntry() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();
@@ -212,7 +212,7 @@ public class DescentControllerTest {
     @Test
     public void aShipNotInSpaceCannotDescend() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger(); // SHIP was never settled
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { }); // SHIP was never settled
         SpaceManager space = new SpaceManager(new FakeBinder(SLOT_DIM), clock::get, never());
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();
@@ -242,7 +242,7 @@ public class DescentControllerTest {
     @Test
     public void aDescentBringsItsDestinationUpBeforeAskingWhereToLand() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();
@@ -262,7 +262,7 @@ public class DescentControllerTest {
     @Test
     public void anUnresolvableArrivalRefusesTheDescentAndKeepsTheShipInSpace() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();
@@ -292,7 +292,7 @@ public class DescentControllerTest {
     @Test
     public void aFailedCrossingLeavesTheShipInSpace() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         ops.failCross = true;
@@ -318,7 +318,7 @@ public class DescentControllerTest {
     @Test
     public void duplicateDescentIsNotRestarted() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM, 11);
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();
@@ -338,7 +338,7 @@ public class DescentControllerTest {
     @Test
     public void aCommittedDescentLatchesEntryOnTheSourceShipBeforeTheCut() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         DescentController ctl = new DescentController(space, ledger, ops, new FakeResolver(), clock::get);
@@ -359,7 +359,7 @@ public class DescentControllerTest {
     @Test
     public void aRefusedDescentDoesNotLatchEntry() {
         AtomicLong clock = new AtomicLong();
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         SpaceManager space = spaceWithSettledShip(ledger, clock, body(5), SLOT_DIM);
         FakeOps ops = new FakeOps();
         FakeResolver resolver = new FakeResolver();

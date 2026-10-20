@@ -9,7 +9,6 @@ import net.minecraft.init.Items;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -168,18 +167,6 @@ public class SpaceArmorContractTest {
         // texture by this. A regression that returns 0 would render the
         // suit black until a dye is applied.
         assertEquals(0xFFFFFF, armor.getColor(stack));
-    }
-
-    @Test
-    public void getColorReadsDisplayTagColorWhenPresent() {
-        ItemSpaceArmor armor = chest();
-        ItemStack stack = stackOf(armor);
-        NBTTagCompound nbt = new NBTTagCompound();
-        NBTTagCompound display = new NBTTagCompound();
-        display.setInteger("color", 0xFF8800); // amber
-        nbt.setTag("display", display);
-        stack.setTagCompound(nbt);
-        assertEquals(0xFF8800, armor.getColor(stack));
     }
 
     // ───────────────────── ItemSpaceChest specifics ──────────────────────

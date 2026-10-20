@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
@@ -9,6 +10,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
+import java.util.List;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static org.junit.Assert.assertEquals;
@@ -728,6 +730,15 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     // seals whatever the seal check makes of a scrubber block: a scrubber it counts as open air is a
     // pocket closed by the layer below, not a hole.
 
+    /**
+     * The vent's scrub interval, in ticks it can pay for: {@code TileOxygenVent#SCRUB_TICKS} at
+     * {@code SCRUB_TICKS = 20} ("once a second"). A dose of twice it holds at least one scrub.
+     */
+    private static final int SCRUB_INTERVAL_TICKS = 20;
+
+    /** A game second, the unit {@code lifeSupportBreachVentRate} is stated in. */
+    private static final int TICKS_PER_SECOND = 20;
+
     /** A position in a T2 room, relative to its site, in the probe's "dim x y z" form. */
     private static String t2At(FixtureSite site, int dx, int dy, int dz) {
         return site.dim + " " + (site.x + dx) + " " + (site.y + dy) + " " + (site.z + dz);
@@ -791,6 +802,166 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
             arrange("stellurgytest energy inject " + vent + " 1000").requireOk();
             act("stellurgytest tile force-tick " + vent + " 20").requireOk();
         }
+    }
+
+    /**
+     * Tier 2: a vent scrubs only what its store can pay for — every scrub it runs is covered by what the
+     * store held while it ran, so a vent short of power leaves scrubbers idle rather than taking their
+     * work out of the fan's share.
+     *
+     * <p>The decision is {@code TileOxygenVent#scrub} asking the store for each scrubber's price before
+     * it absorbs; read where it is made, through {@code vent_scrubbed} (working scrubbers, the store, the
+     * price the vent then asks, the CO2 left). Every scrub of both doses is judged.</p>
+     *
+     * <p>Arranged without ever letting the vent lose its seal: a vent that cannot pay its current price
+     * drops its zone, and what a dropped and retaken zone still holds is a subject of its own
+     * ({@link #aRoomWhoseVentBrownsOutKeepsItsAir}). So the store is filled before every tick, and the
+     * scrub is put below a two-scrubber price by raising the PRICE rather than starving the store: at a
+     * multiplier where two scrubbers cost more than the store can hold, no scrub can ever be paid for
+     * both, whichever tick it falls on. The vent's tick is not the test's to time — the world ticks it
+     * between the probe's calls too — and this is what makes that not matter. The multiplier is derived,
+     * not chosen: the two-scrubber price measured at a multiplier of one, against the store's capacity,
+     * under the setting's own contract that it scales the vent's power use; the fan's price at the raised
+     * setting is checked against that contract before anything is judged. The scrubbers' work is taken
+     * away (no CO2) before the price is raised, so the vent is asking its fan's price, which the full
+     * store covers, when the setting changes.</p>
+     *
+     * <p>red-witnessed: with {@code TileOxygenVent#scrub} at {@code if (!hasEnoughEnergy(powerWith(working + 1)))}
+     * never true (the shape before the fix), this fails at "a scrub must be paid for out of what the store
+     * held while it ran: {...working:2,stored:952,price:1008,co2:4857144}"; always true, at "with the store
+     * able to pay, the scrubbers must work: [{...working:0,stored:1000,price:1,co2:5000000}, ...]"
+     * (2026-10-08).</p>
+     */
+    @Pins("MECH-ATM-08")
+    @Test
+    public void aVentScrubsOnlyWhatItsStoreCanPayFor() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room: a vent with a scrubber either side");
+        String multiplierFound = setConfig("oxygenVentPowerMultiplier", "1");
+        try {
+            buildSealedT2Room(site, 1000);
+            String vent = t2Vent(site);
+            String ventPos = vent.substring(vent.indexOf(' ') + 1).replace(' ', ',');
+            int capacity = read("stellurgytest energy stored " + vent).integer("energyMax");
+            Events events = new Events(c -> read(c).raw(),
+                    ticks -> GameTicks.advanceWorld(client(), site.dim, ticks), evictionReports());
+
+            arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000) + " " + ppm(5_000));
+            chargeT2Cartridges(site);
+            List<String> full = scrubsWithAFullStore(events, vent, ventPos, capacity);
+            requireArranged("the full-store dose must have run scrubs to judge: " + full, !full.isEmpty());
+            assertEveryScrubPaidFor(full);
+            boolean anyWorked = false;
+            int twoScrubberPrice = -1;
+            for (String scrub : full) {
+                int working = Integer.parseInt(Events.text(scrub, "working"));
+                anyWorked |= working > 0;
+                if (working == 2) {
+                    twoScrubberPrice = Integer.parseInt(Events.text(scrub, "price"));
+                }
+            }
+            assertTrue("with the store able to pay, the scrubbers must work: " + full, anyWorked);
+            requireArranged("both scrubbers must have worked at a full store, to measure what two cost: " + full,
+                    twoScrubberPrice > 0);
+
+            arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000) + " 0");
+            List<String> nothingToTake = scrubsWithAFullStore(events, vent, ventPos, capacity);
+            requireArranged("with no CO2 in the room the scrubbers must fall idle before the price is raised: "
+                    + nothingToTake, !nothingToTake.isEmpty()
+                    && "0".equals(Events.text(nothingToTake.get(nothingToTake.size() - 1), "working")));
+            int fanAtOne = read("stellurgytest vent info " + vent).integer("powerPerOperation");
+
+            int multiplier = capacity / twoScrubberPrice + 1;
+            setConfig("oxygenVentPowerMultiplier", String.valueOf(multiplier));
+            Reply raised = read("stellurgytest vent info " + vent);
+            requireArranged("the raised setting must scale the fan's price by itself (" + fanAtOne + " x "
+                            + multiplier + "), the contract the two-scrubber price above " + capacity
+                            + " is derived from: " + raised,
+                    raised.integer("powerPerOperation") == fanAtOne * multiplier && raised.bool("isSealed"));
+
+            arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000) + " " + ppm(5_000));
+            List<String> beyondTwo = scrubsWithAFullStore(events, vent, ventPos, capacity);
+            requireArranged("the raised price must still leave the vent a scrub to judge: " + beyondTwo,
+                    !beyondTwo.isEmpty());
+            for (String scrub : beyondTwo) {
+                requireArranged("each judged scrub must have had CO2 to take: " + scrub,
+                        Integer.parseInt(Events.text(scrub, "working")) > 0
+                                || Long.parseLong(Events.text(scrub, "co2")) > 0L);
+            }
+            assertEveryScrubPaidFor(beyondTwo);
+        } finally {
+            setConfig("oxygenVentPowerMultiplier", multiplierFound);
+        }
+    }
+
+    private static void assertEveryScrubPaidFor(List<String> scrubs) {
+        for (String scrub : scrubs) {
+            assertTrue("a scrub must be paid for out of what the store held while it ran: " + scrub,
+                    Integer.parseInt(Events.text(scrub, "stored")) >= Integer.parseInt(Events.text(scrub, "price")));
+        }
+    }
+
+    /**
+     * The vent's scrubs over two scrub intervals of forced ticks, its store filled to {@code capacity}
+     * before each, so no tick of the dose can find the vent unable to pay what it last asked.
+     */
+    private List<String> scrubsWithAFullStore(Events events, String vent, String ventPos, int capacity)
+            throws Exception {
+        long mark = events.markInstrumented();
+        // EXPERIMENT: two scrub intervals of the vent running, which hold at least one scrub; what it
+        // measures is every scrub in them, so no record is waited for.
+        for (int step = 0; step < 2 * SCRUB_INTERVAL_TICKS; step++) {
+            arrange("stellurgytest energy inject " + vent + " " + capacity);
+            act("stellurgytest tile force-tick " + vent + " 1");
+        }
+        String window = events.since(mark, "vent_scrubbed");
+        Events.assertInstrumentRan(window, "vent_scrub_events", "the vent's scrubs");
+        return Events.recordsWhere(window, "pos", ventPos);
+    }
+
+    /**
+     * A sealed room whose vent browns out keeps its air: a vent that cannot pay lets go of its zone, and
+     * that is not a hole in the hull, so nothing is let out to space. The air waits in the vent for the
+     * seal to be taken again.
+     *
+     * <p>Read as nitrogen and CO2, which the vent never supplies; the vent's tank pays oxygen only into a
+     * sealed room, so after the brownout nothing in the room's air can change but a loss. The run lasts
+     * three seconds past the brownout, the unit {@code lifeSupportBreachVentRate} is stated in, so a room
+     * wrongly taken for breached has lost air three times over.</p>
+     *
+     * <p>red-witnessed: with {@code SealedZone#drop} at {@code everSealed = false;} absent (the shape before
+     * the fix: the zone the drop empties reads as a seal that found its room gone), this fails at "a room
+     * whose vent browns out must keep its nitrogen and CO2: {...airN2:785000000,airO2:210000000,
+     * airCO2:5000000...} -> {...isSealed:false,...airN2:635000000,airO2:60000000,airCO2:0...}" (2026-10-08).</p>
+     */
+    @Pins("MECH-ATM-07")
+    @Test
+    public void aRoomWhoseVentBrownsOutKeepsItsAir() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed room whose vent runs out of power");
+        buildSealedT2Room(site, 1000);
+        String vent = t2Vent(site);
+        requireArranged("a breached room must lose air at all, or a brownout taken for a breach could not show",
+                configValue("lifeSupportBreachVentRate") > 0L);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000) + " " + ppm(5_000));
+        Reply before = read("stellurgytest vent info " + vent);
+        int fan = before.integer("powerPerOperation");
+        requireArranged("an idle vent must ask a positive price for its fan: " + before, fan > 0);
+
+        act("stellurgytest tile force-tick " + vent + " "
+                + (before.integer("energyStored") / fan + 1 + 3 * TICKS_PER_SECOND));
+        Reply after = read("stellurgytest vent info " + vent);
+
+        requireArranged("the vent must have browned out and let go of its zone: " + after, !after.bool("isSealed"));
+        assertTrue("a room whose vent browns out must keep its nitrogen and CO2: " + before + " -> " + after,
+                before.longInteger("airN2") == after.longInteger("airN2")
+                        && before.longInteger("airCO2") == after.longInteger("airCO2"));
+
+        arrange("stellurgytest energy inject " + vent + " 1000");
+        Reply resealed = arrange("stellurgytest vent reseal " + vent);
+        requireArranged("the re-powered vent must take its seal back: " + resealed, resealed.bool("sealed"));
+        Reply back = read("stellurgytest vent info " + vent);
+        assertTrue("and the room must have that air when the seal is taken back: " + before + " -> " + back,
+                before.longInteger("airN2") == back.longInteger("airN2")
+                        && before.longInteger("airCO2") == back.longInteger("airCO2"));
     }
 
     /** The cartridge damage of the scrubber at this position: the charges it has spent. */
@@ -888,7 +1059,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     @RedWitness(member = "SealedZone#checkSeal",
             at = "if (!ok && (handler.isFilling(owner) || handler.lastFillClosed(owner) == null))",
             replacedBy = "if (false)", fails = "a reloaded sealed room must keep its nitrogen and CO2",
-            on = "2026-10-05")
+            on = "2026-10-07")
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "runT2Seconds(site, 6);",
             why = "six seconds of the reloaded vent running, longer than one whole seal-check interval, so a"
                     + " room that came back unsealed has had time to be found sealed again; the verdict compares"

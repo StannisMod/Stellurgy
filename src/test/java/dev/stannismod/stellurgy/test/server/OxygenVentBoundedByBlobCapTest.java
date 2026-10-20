@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,6 +86,9 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     /** Pins INV-ATM-08 (the blob is bounded by the vent size cap). */
     @Pins("INV-ATM-08")
+    @RedWitness(member = "AtmosphereBlob#run", at = "searchNextPosition.getDistance(this.getRootPosition()) <= maxSize",
+            replacedBy = "true",
+            fails = "a sealed corridor longer than the 8-block cap must NOT pressurise", on = "2026-10-19")
     @Test
     public void ventSealsWithinCapButNotBeyondIt() throws Exception {
         // Control: a corridor entirely inside the cap -> must pressurise.

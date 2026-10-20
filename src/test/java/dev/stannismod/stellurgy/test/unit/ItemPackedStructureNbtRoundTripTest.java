@@ -65,22 +65,4 @@ public class ItemPackedStructureNbtRoundTripTest {
                         + "gate to skip blank items before reading content",
                 item.getStructure(stack));
     }
-
-    /**
-     * Pin: {@code ItemPackedStructure} declares {@code hasSubtypes=true}.
-     * Set in the constructor (line 13); needed for per-meta variant
-     * rendering — {@code itemSpaceStation} ships multiple metas, each
-     * one a different station-type, and the vanilla item-mesh system
-     * relies on {@code hasSubtypes()} to dispatch the right model per
-     * meta. A regression here would render every station the same.
-     */
-    @Test
-    public void itemPackedStructureDeclaresHasSubtypes() {
-        ItemPackedStructure item = new ItemPackedStructure();
-        assertTrue("ItemPackedStructure must declare hasSubtypes=true — "
-                        + "itemSpaceStation depends on per-meta variant "
-                        + "rendering for its station-type display, and the "
-                        + "vanilla item-mesh system gates on getHasSubtypes()",
-                item.getHasSubtypes());
-    }
 }

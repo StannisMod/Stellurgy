@@ -73,9 +73,24 @@ were appended for Free Flight so earlier ids stay stable. Ids ≥ `BUTTON_ID_OFF
 and ≥ `STATION_LOC_OFFSET(50)+25` are reused as a numeric range for GUI-tile buttons
 and station-pad selection `:3405`,`:3412`.
 
-Server-authority checks live in `useNetworkData`: `SET_FLIGHT_MODE`/`FREE_FLIGHT_INPUT`/
-`SET_FLIGHT_ASSIST`/`ENGINE_START` verify the sender is a passenger of this rocket
-(and FF mode / not-in-flight where relevant) before mutating `:3348`–`3404`.
+**A client's packet passes the rocket's own per-id table before anything runs**
+(`acceptsFromClient`, asked by `useNetworkData`, which is `final`: the rule, then the subclass hook
+`useAcceptedNetworkData`)
+[V][T] `EntityRocket.java:3360-3364,3531-3589`, `RocketPacketSenderClientGroupTest`. The
+channel has already checked that the rocket is in the sender's world and tracked to him
+(libvulpes INV-LVP-05). On top: `REQUESTNBT` and `SENDSPACEPOS` from anyone who sees it (every
+client asks for the data on spawn and reports the space position every second of space flight,
+passenger or not — maintainer ruling 2026-10-07 kept `SENDSPACEPOS` there); `SENDINTERACT`
+within item-use reach of the HULL box; the screen's packets (`DECONSTRUCT`,
+`OPENPLANETSELECTION`, `SENDPLANETDATA`, `MENU_CHANGE`, the GUI-tile and pad buttons) from a passenger or a
+player within the screen's range; flying it (`LAUNCH`, `ABORTLAUNCH`, `OPENGUI`, `TOGGLE_RCS`,
+`TURNUPDATE`, the four Free-Flight ids) from a passenger only; every other id — the rocket's
+NBT and blocks, mounting, the world switch, infrastructure, landing, dismounting — is the
+server's to send and is never taken from a client. `SET_FLIGHT_MODE`/`FREE_FLIGHT_INPUT`/
+`SET_FLIGHT_ASSIST`/`ENGINE_START` additionally check FF mode / not-in-flight where relevant
+before mutating. `EntityStationDeployedRocket` overrides `useAcceptedNetworkData`, so its
+`MENU_CHANGE` passes the table first [T]
+`RocketPacketSenderClientGroupTest#aDeployedRocketsGasSelectionIsWeighedByTheRocketsRule`.
 
 `EntityStationDeployedRocket` extends the routing for `MENU_CHANGE` (gas selector)
 `EntityStationDeployedRocket.java:524`,`:534`,`:545`. `EntityElevatorCapsule` uses its
@@ -85,8 +100,12 @@ own private packet ids (0–4) not the `PacketType` enum `EntityElevatorCapsule.
 
 - **INV-RKT-15 [V][SYS]** `PacketType` is append-only; the four FF ids sit at the end so
   saved/old-client wire ids do not shift `EntityRocket.java:3848`. FOR: wire format: packet type ids.
-- **INV-RKT-16 [V]** Every state-mutating sub-packet re-verifies passenger authority
-  server-side before acting `EntityRocket.java:3352,3371,3385,3397`.
+- **INV-RKT-16 [V][T]** No sub-packet acts for a client the rocket's per-id table does not
+  accept — passenger, screen range or hull reach as the id requires; an unlisted id is the
+  server's alone `EntityRocket.java:3367-3369,3565-3597`; `RocketPacketSenderClientGroupTest`. Pinned by
+  `RocketPacketSenderClientGroupTest#aRocketTakesItsStateOnlyFromTheServer`,
+  `RocketPacketSenderClientGroupTest#aRocketScreenPacketFromBeyondItsScreenRangeIsRefused`,
+  `RocketPacketSenderClientGroupTest#aDeployedRocketsGasSelectionIsWeighedByTheRocketsRule`.
 - **INV-RKT-17 [V][SYS]** `flightMode` is written unconditionally (even for CLASSIC) so
   the field round-trips without "missing == default" ambiguity `:3094`; missing key
   still degrades safely to CLASSIC via `readFromNBT` `RocketFlightMode.java:29`. FOR: save format: flightMode key.
@@ -111,7 +130,7 @@ None owned here; NBT/wire are contractual, not config-gated.
 
 ## Test coverage
 
-`RocketFlightModeNbtTest` covers `flightMode` round-trip and back-compat
-(`RocketFlightModeNbtTest.java:30,50,58,72`). FF NBT defaults (missing-key →
+`RocketFlightModeNbtTest` covers `flightMode` defaults and back-compat
+(`RocketFlightModeNbtTest.java:29,35,40,47,54`); the round-trip itself is not asserted. FF NBT defaults (missing-key →
 armed/hover/FA-on) are exercised indirectly by `FreeFlightCycleTest`. No direct
 round-trip test asserts the full `EntityRocket` NBT table → open question.

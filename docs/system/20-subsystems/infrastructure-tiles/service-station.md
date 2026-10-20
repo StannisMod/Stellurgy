@@ -46,11 +46,13 @@ the rising-edge detector for assembler rescan (shared key name with the monitori
 
 ## Invariants
 
-- **INV-INFRA-06 [T][BEH]** `performFunction` on an unlinked, powered service station is a
-  safe no-op: repair queue stays empty, no crash.
-  [T ServiceStationUnlinkedPerformFunctionTest.java:60-66] Pinned by `ServiceStationUnlinkedPerformFunctionTest#performFunctionOnUnlinkedPoweredStationIsSafeNoOp`.
-- **INV-INFRA-07 [T][BEH]** An unlinked service station reports `linkedRocketId==-1` and 0
-  parts-to-repair. [T RocketServiceStationLinkAndStateTest.java:83-85] Pinned by `RocketServiceStationLinkAndStateTest#serviceStationTicksWithoutLinkedRocketWithoutCrash`.
+- **INV-INFRA-06 [V][BEH]** `performFunction` on an unlinked, powered service station is a
+  safe no-op: repair queue stays empty, no crash. Guarded three times over — the outer
+  `linkedRocket instanceof EntityRocket` [V TileRocketServiceStation.java:273], the inner
+  `linkedRocket != null` [V :280], and `tryStandaloneRepair` returning on an empty queue [V :352].
+- **INV-INFRA-07 [V][BEH]** An unlinked service station holds no linked rocket and an empty
+  repair queue: the queue starts empty [V TileRocketServiceStation.java:71] and is filled only by
+  the scan behind the link guard [V :273].
 - **INV-INFRA-08 [T][BEH]** The broken-part scan collects exactly the worn parts of the linked
   rocket. [T ServiceStationBrokenPartScanContractTest.java] Pinned by `ServiceStationBrokenPartScanContractTest#injectedBrokenPartAppearsInPartsToRepairAfterLink`, `ServiceStationBrokenPartScanContractTest#multipleInjectionsAreAllScanned`.
 - **INV-INFRA-09 [V][BEH]** Standalone repair simulates material consumption before committing;
@@ -82,6 +84,5 @@ Config: see `C4-config-surface`. Disabling assemblers falls back to standalone r
 
 ## Test coverage
 
-INV-INFRA-06 → ServiceStationUnlinkedPerformFunctionTest:60-66 · INV-INFRA-07 →
-RocketServiceStationLinkAndStateTest:83-85 · INV-INFRA-08 →
+INV-INFRA-06/07 → none (`[V]`: no single break of either can redden a test) · INV-INFRA-08 →
 ServiceStationBrokenPartScanContractTest.

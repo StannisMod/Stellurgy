@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -154,11 +156,21 @@ public class ShipEntryControllerTest {
         return new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0, 0);
     }
 
+    /** Pins INV-SPC-15 (the entry ring lies strictly outside the descent radius of a body with no size). */
+    @Pins("INV-SPC-15")
+    @RedWitness(verdict = "the entry ring lies outside the descent radius",
+            member = "ShipEntryController#entryRingAround(GalacticCoord)", at = "long widest = ENTRY_RING_BLOCKS;",
+            replacedBy = "long widest = DESCENT_RADIUS_BLOCKS / 2L;",
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
+    @RedWitness(verdict = "the entry ring lies outside the descent radius",
+            member = "ShipEntryController#ENTRY_RING_BLOCKS", at = "DESCENT_RADIUS_BLOCKS * 2L",
+            replacedBy = "DESCENT_RADIUS_BLOCKS / 2L",
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
     @Test
     public void entryCrossesSettlesInLedgerOutsideTheDescentRadius() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -180,7 +192,7 @@ public class ShipEntryControllerTest {
         // The hysteresis contract: the spawn ring lies strictly OUTSIDE the descent radius, so a
         // fresh entry can never immediately trip the descent trigger.
         double distance = entry.coord.staticFrameDistanceTo(body(5));
-        assertTrue("ring distance " + distance + " must exceed the descent radius",
+        assertTrue("the entry ring must lie outside the descent radius: ring distance " + distance,
                 distance > ShipEntryController.DESCENT_RADIUS_BLOCKS);
         // The realized pose matches the ledgered coordinate (the honest-3D mapping).
         double[] expectedPose = CellWorldMapper.poseWorldOf(entry.coord);
@@ -200,7 +212,7 @@ public class ShipEntryControllerTest {
         // Pool of ONE, already held by another occupied cell -> materialize must throw.
         SpaceManager space = new SpaceManager(new FakeBinder(10), clock::get, never());
         space.materialize(body(99)); // refcount 1, not evictable
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -230,7 +242,7 @@ public class ShipEntryControllerTest {
     public void failedCrossingReleasesTheCellAndArmsTheCooldown() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ops.failCross = true;
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
@@ -257,7 +269,7 @@ public class ShipEntryControllerTest {
     public void settleRetriesWhileTheAsyncReassemblyIsNotUpYet() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ops.teleportFailCount = 2; // re-assembly queryable on the third tick
         ops.reseatFailCount = 1;   // seats resolve one tick after that
@@ -294,7 +306,7 @@ public class ShipEntryControllerTest {
     public void everySettleHalfAddressesTheShipTheCrossingCreated() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -318,7 +330,7 @@ public class ShipEntryControllerTest {
     public void duplicateAndLedgeredShipsDoNotReenter() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -381,13 +393,24 @@ public class ShipEntryControllerTest {
     }
 
     /**
-     * How far {@code coord} lies from {@code where}, in blocks. Measured rather than compared field by
-     * field: what this test is about is WHICH POINT was chosen, and a distance says that without also
-     * pinning the sector/local split production happens to express it in.
+     * How far {@code coord} lies from {@code where} at {@code tick}, in blocks, once it is established
+     * that {@code coord} names {@code rider}'s cell. Measured rather than compared field by field: what
+     * this test is about is WHICH POINT was chosen.
      */
-    private static double gapTo(GalacticCoord coord, AbsolutePos where) {
-        return AbsolutePos.ofSectorLocal(coord.sectorX(), coord.sectorY(), coord.sectorZ(),
-                coord.localX(), coord.localY(), coord.localZ()).distanceTo(where);
+    private static double gapTo(GalacticCoord coord, SystemBody rider, long tick, AbsolutePos where) {
+        assertTrue("the aim " + coord + " must name the cell of " + rider.name()
+                + ", whose frame is the only one it can be read through", coord.sameCell(rider.name()));
+        return placeThrough(rider, coord, tick).distanceTo(where);
+    }
+
+    /**
+     * Where {@code coord} IS at {@code tick}, read as production reads a coordinate in a cell a body
+     * stands in: the frame that body defines, displaced by the coordinate's in-cell offset. Never the
+     * sector triple on the static grid — a cell rides its body, and the static grid is where the cell
+     * would be if nothing moved.
+     */
+    private static AbsolutePos placeThrough(SystemBody rider, GalacticCoord coord, long tick) {
+        return rider.frame().originAt(tick).plus(coord.localX(), coord.localY(), coord.localZ());
     }
 
     /** An orbiting body: named at its own cell, riding a frame that carries it around its star. */
@@ -399,45 +422,54 @@ public class ShipEntryControllerTest {
     }
 
     /**
-     * This test fails if production breaks the contract that a ship arriving in space is put beside
-     * where its launch body IS, rather than beside the address that body is named after — so the
-     * spawn ring tracks a planet along its orbit instead of standing at a fixed point it has left.
+     * This test fails if {@code ShipEntryController#aimPoint} stops deciding that an entering ship is
+     * aimed into its launch body's OWN named cell, at the point that — read through the frame that
+     * cell rides — is where the body stands at that tick, however far the body has carried its cell
+     * from the static cube its name occupies.
      */
+    @Pins("INV-SPC-19")
+    @RedWitness(member = "ShipEntryController#aimPoint", at = "return b.addressAt(tick);",
+            replacedBy = "AbsolutePos at = b.absoluteAt(tick); return GalacticCoord.ofSectorLocal(at.sectorX(),"
+                    + " at.sectorY(), at.sectorZ(), at.localX(), at.localY(), at.localZ());",
+            fails = "must name the cell of", on = "2026-10-19")
     @Test
-    public void anArrivalIsAimedAtTheBodyAndNotAtTheNameItIsCalledAfter() {
+    public void anEntryIsAimedIntoTheLaunchBodysOwnCellWhereverItsOrbitHasCarriedIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);
         SystemBody planet = orbiting(name, LAUNCH_DIM);
         List<SystemBody> atAddress = new ArrayList<>();
         atAddress.add(planet);
 
-        // Even at the epoch the body does not stand at its own name: the name is its CELL, and an
-        // orbiting body sits an orbital radius away from that cell's centre from the very first tick.
-        // So the gap the old aim ignored is never zero, not even before anything has moved.
-        assertEquals("the aim lands ON the body, at tick 0 as much as later",
+        // The arrangement must put the body outside the static cube its name occupies, or a static
+        // reading of its position and its own cell would agree and the decision could not be seen.
+        // The orbit above is 100 units of 1 000 000 blocks: a hundred million blocks, three cells.
+        long later = 250L; // a quarter of the 1000-tick period: the body is somewhere else than at 0
+        for (long tick : new long[] {0L, later}) {
+            AbsolutePos at = planet.absoluteAt(tick);
+            assertFalse("arrangement: at tick " + tick + " the body must stand outside the static "
+                            + "cube of its name " + name.cellKey() + " (it is at " + at + ")",
+                    GalacticCoord.ofSectorLocal(at.sectorX(), at.sectorY(), at.sectorZ(),
+                            at.localX(), at.localY(), at.localZ()).sameCell(name));
+        }
+        assertTrue("arrangement: the body must have moved between the two ticks",
+                planet.absoluteAt(0L).distanceTo(planet.absoluteAt(later)) > 0d);
+
+        assertEquals("the aim lies in the body's own cell and lands ON the body, at tick 0",
                 0.0, gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name),
-                        planet.absoluteAt(0L)), 1e-6);
-        assertTrue("and the name is already an orbital radius away from it",
-                gapTo(name, planet.absoluteAt(0L)) > 1_000_000d);
+                        planet, 0L, planet.absoluteAt(0L)), 1e-6);
+        assertEquals("and at a later tick, where the body has gone", 0.0,
+                gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, later, name),
+                        planet, later, planet.absoluteAt(later)), 1e-6);
 
-        // Later the body has moved on and the name still has not. The aim must follow the body: this
-        // is the whole defect — a ship was ringed around the name while the planet was elsewhere.
-        // A QUARTER of the orbital period below, deliberately: a whole number of periods puts the body
-        // back where it started and the assertion below would compare a point with itself and pass.
-        long later = 250L;
-        GalacticCoord aim = ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, later, name);
-        assertEquals("the aim lands on the body at that tick", 0.0,
-                gapTo(aim, planet.absoluteAt(later)), 1e-6);
-        assertNotEquals("and by then that is a different point from the epoch's",
-                ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name), aim);
-
-        // A moon shares its parent's NAME, so an address can hold several bodies in different places.
-        // The one a ship is leaving is the one whose DIMENSION it launched from.
+        // An address can hold more than one body; the one a ship is leaving is the one whose
+        // DIMENSION it launched from. The other here stands 5000 blocks off the cell's origin, so
+        // choosing it moves the aim by exactly that much.
         List<SystemBody> family = new ArrayList<>();
-        family.add(orbiting(name, LAUNCH_DIM + 1));
+        family.add(new SystemBody(name, planet.frame(), BodyEphemeris.fixed(5000L, 0L, 0L),
+                SystemBodyKind.STATION_SLOT, LAUNCH_DIM + 1, 0));
         family.add(planet);
         assertEquals("the launch dimension picks which of the family is aimed at", 0.0,
                 gapTo(ShipEntryController.aimPoint(family, LAUNCH_DIM, later, name),
-                        planet.absoluteAt(later)), 1e-6);
+                        planet, later, planet.absoluteAt(later)), 1e-6);
 
         // An EMPTY address holds no body, so there is no position that beats the name: an unplaced
         // launch or the config home anchor. This one is a real answer and not a degraded one.

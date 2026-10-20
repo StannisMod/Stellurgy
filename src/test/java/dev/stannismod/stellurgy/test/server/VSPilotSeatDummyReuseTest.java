@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -22,8 +23,9 @@ import static org.junit.Assert.assertTrue;
  * leaks an extra dummy whose riderless twin clears the ship's pilot input each server tick and
  * fights the seated pilot's controls.
  *
- * <p>Runs on a bare, unassembled pilot seat block (the rule is about the seat↔dummy binding, not
- * about the ship), so no VS is needed and the pin holds in both suite configurations.</p>
+ * <p>The reuse scenario runs on a bare, unassembled pilot seat block (the rule is about the
+ * seat↔dummy binding, not about the ship). The other builds a ship, because its subject is a mount
+ * whose ship is gone.</p>
  */
 public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
 
@@ -72,10 +74,9 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
     @Test
     @Pins("SHIPCTL-20")
     @RedWitness(member = "EntityDummy#onUpdate",
-            at = "if (!world.isRemote && getPassengers().isEmpty() && !seatStands()) {",
-            replacedBy = "if (!world.isRemote && getPassengers().isEmpty() && false) {",
+            at = "(outlivedItsShip() || (getPassengers().isEmpty() && !seatStands()))", replacedBy = "(false)",
             fails = "the riderless dummy of a seat that went with its discarded ship was never removed",
-            on = "2026-10-14")
+            on = "2026-10-17")
     public void aRiderlessDummyWhoseSeatWentWithItsShipRemovesItself() throws Exception {
         int[] builder = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-seat", 4, 12,
                 "the craft whose seat the dummy is bound to stands in this volume");
