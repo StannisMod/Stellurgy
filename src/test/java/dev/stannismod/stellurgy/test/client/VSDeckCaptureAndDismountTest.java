@@ -764,7 +764,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // He must be AWAY on the client, because the claim below is about a body the deck has never
         // touched: a client still standing on the deck is still being captured there.
         awaitClientPlacedNear(awayMark, sx + FLY_IN_AWAY_BLOCKS, sz + FLY_IN_AWAY_BLOCKS,
-                "the negative leg needs a body that has never stood on this deck");
+                "the negative leg needs a body this deck is not holding — buildShip stood him on it,"
+                        + " and this distance is past its stay margin");
         // THE FLY-IN POINT IS PLACED RELATIVE TO THE DECK, not to the pose. The pose is the centre of
         // mass, and where that sits under the deck is a property of the hull, not of this scenario:
         // the craft this was written against had it 0.91 below the deck top, so 3 blocks of world
