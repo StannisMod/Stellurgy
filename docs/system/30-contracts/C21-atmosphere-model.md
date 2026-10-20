@@ -153,13 +153,13 @@ first-class (no windowless, doorless room may be breathed in forever); the catch
 own work and the breathing of bodies; the air runs on its own thread; a cell's seal is its blockstate; an
 unobserved body only consumes; offline players count in every room.
 
-- **CON-C21-23** `[PLANNED][SYS]` A room is a **record of the world**, not of a machine: it outlives
-  every port and every body in it, and it is saved with the world. A cell belongs to at most one room.
-  FOR: CON-C21-27 (a closed volume must be findable without a machine standing in it).
-- **CON-C21-24** `[PLANNED][SYS]` **SEAL-STATE.** Whether a cell lets air through is a function of that
+- **CON-C21-23** `[PLANNED][BEH]` A room is a **record of the world**, not of a machine: it outlives
+  every port and every body in it, and it is saved with the world. A cell belongs to at most one room —
+  so a closed volume is findable without a machine standing in it (CON-C21-27).
+- **CON-C21-24** `[PLANNED][BEH]` **SEAL-STATE.** Whether a cell lets air through is a function of that
   cell's blockstate ALONE — never of its neighbours, a tile entity or the world. A machine that opens or
-  closes a seal (an airlock) does it by changing its blockstate, and its rendering reads the same state.
-  FOR: CON-C21-33 (the solver reads copies sent to it, not the live world).
+  closes a seal (an airlock) does it by changing its blockstate, and its rendering reads the same state;
+  so the solver can read copies sent to it rather than the live world (CON-C21-33).
 - **CON-C21-25** `[PLANNED][BEH]` A room's life — that it exists, whether it is closed, whether it is
   losing air — is decided by its closure and its loading, never by a machine's power or switch. Power
   gates only a machine's WORK on the room (supply, scrubbing, regeneration).
@@ -186,15 +186,15 @@ unobserved body only consumes; offline players count in every room.
   world is ticking, from the air it then breathes.
 - **CON-C21-32** `[PLANNED][BEH]` A player logged out in a room is a breather of that room at the full
   rate, in every room.
-- **CON-C21-33** `[PLANNED][SYS]` **The air is solved off the game thread and published whole.**
+- **CON-C21-33** `[PLANNED][BEH]` **The air is solved off the game thread and published whole.**
   Everything the world decides from the air reads the latest published view; how far that view lags the
   world is bounded and stated (a watermark of the last tick it reflects). The solver reads no live world
   object — it holds its own copies, sent to it. No outcome depends on wall-clock time: the air advances
-  only by the ticks the world sends it, so a paused game is a paused air. FOR: CON-C21-27 (finding every
-  closed volume near every breather must not cost the game thread its tick).
-- **CON-C21-34** `[PLANNED][SYS]` Everything the world sends the air periodically is phased by the
+  only by the ticks the world sends it, so a paused game is a paused air. Finding every closed volume near
+  every breather (CON-C21-27) thereby costs the game thread none of its tick.
+- **CON-C21-34** `[PLANNED][BEH]` Everything the world sends the air periodically is phased by the
   SENDER's identity, never by a shared `% N` clock, and a burst — a chunk load, an explosion — is bounded
-  per tick, never paid in one. FOR: CON-C21-33 (the bounded lag it states).
+  per tick, never paid in one; that is what keeps the lag CON-C21-33 states bounded.
 
 ## Status
 
@@ -207,7 +207,7 @@ half-built: the state answers, and the types still carry their own flags.
 | 01 one representation | **half-built** | the composition is a sparse map over the gas registry and every derived question is answered from it (`AirState.deriveAtmosphere`). The hazard-type singletons are a table; what survives is one concrete `Atmosphere` carrying `isBreathable`/`allowsCombustion` as hand-assigned `final` fields, unchangeable after construction. A second answer still exists — immutable and in one place — until the flags become derivations of a composition |
 | 02 presence is availability | **BUILT `[T]` over a gas giant only, except depletion. VIOLATED for every other body**: the only harvest mechanic, `EntityStationDeployedRocket`, is gated to giants twice (`offeredGases`, and the in-orbit check), so a gas in a rocky world's air is present and unextractable. Maintainer ruled 2026-10-05 to close it with a new mechanic, not by narrowing this clause | the offer is `DimensionProperties.getHarvestableGases` (`DimensionProperties.java:694`): every gas present in the world's air with a registered fluid, and nothing else — pinned by `server/MissionGasCompletionTest.aHarvesterIsOfferedExactlyTheGasesTheAirHolds` (a one-nano-atm trace is offered; empty air offers nothing). The yield follows the partial pressure: `GasHarvest.missionSeconds` draws at intake × pp, pinned by `unit/GasHarvestTest`. There is no second list of harvestable or spawnable gases, no `AtmosphereRegister`, no planet NBT `fluids` key and no planet-level XML `<gas>`; a file carrying `<gas>` outside `<atmosphere>` is refused for that body (`integration/PlanetFileStatesItsAirTest`). **Open**: the harvest does not deplete the air (a planet has no amounts yet; maintainer 2026-10-04); there is no depth axis, the pp is the body's reference level (maintainer 2026-10-04); the `onOrbitReached` → `GasHarvest` wiring is unpinned |
 | 03 a gas earns its slot | **built `[T]`** | `GasRegistry` — eleven substances, each declaring at least one role, enforced at registration and pinned by `unit/AtmospherePredicatesTest.everyGasHasAJobAndEveryHazardHasAGas`, which also refuses a hazard role no substance can raise |
-| 04 floor is honest | **BUILT, both halves `[T]`** | SUBSTANCE: an unknown gas is dropped rather than stored under a null key (which would count silently toward the pressure). UNITS: nano-atmospheres in a `long`, so the resolution and range are STATED and a Martian trace survives being stored — pinned by `unit/AirStateTest.aTraceOnAThinWorldKeepsItsDigits` (falsified by millionths: Mars reads 0.118% instead of 0.13%) and `.oneCompositionHoldsAGasGiantAndATraceAtTheSameTime` (falsified by narrowing the store to an int). What is gone is absent from the composition, the pressure and every predicate alike (`.whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero`) |
+| 04 floor is honest | **BUILT, both halves `[T]`** | SUBSTANCE: an unknown gas is dropped rather than stored under a null key (which would count silently toward the pressure). UNITS: nano-atmospheres in a `long`, so the resolution and range are STATED and a Martian trace survives being stored (`[V]` `AirState.java:75,102`, amounts kept as `long`, unrounded) — the range is pinned by `unit/AirStateTest.oneCompositionHoldsAGasGiantAndATraceAtTheSameTime` (falsified by summing through an int). What is gone is absent from the composition, the pressure and every predicate alike (`.whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero`) |
 | 05 predicates, not flags | **half-built** | every ignition path asks `AtmosphereHandler.allowsCombustionAt`, which reads the air; no consumer branches on the type's combustion FLAG (the chest decides whether to spend its tank by asking about the hazard). The two flags survive as final fields of each `Atmosphere` value and still pick the blob default |
 | 06 monotonicity | **half pinned `[T]`** | the poison half: `unit/AtmospherePredicatesTest.aPoisonMakesAirToxicAndDrawingItOffClearsIt` (adding and removing a poison). The oxidiser half — the sweep across the configured bands — needs a loaded configuration and is **unpinned** |
 | 07 oxidiser, not breathability | **BUILT and pinned `[T]`** | `AirState.allowsCombustion()` reads the OXIDISER role against its own config band. Pinned on the production path by `server/CombustionFollowsTheOxidiserTest`; the gap BETWEEN the two bands needs a loaded configuration and is unpinned. Falsified both ways: tying the band back to breathing, and making the handler obey the label again |

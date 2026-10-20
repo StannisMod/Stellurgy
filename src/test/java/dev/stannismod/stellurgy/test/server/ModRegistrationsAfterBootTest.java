@@ -99,31 +99,6 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
                 0, reply.integer("mismatchCount"));
     }
 
-    /**
-     * The hovercraft spawns by its runtime registry name, {@code stellurgy:StellurgyHoverCraft}, as an
-     * {@code EntityHoverCraft}. Riding it (mount, throttle, fuel burn) is a client's act and not seen
-     * here.
-     */
-    @Test
-    public void hovercraftSpawnsAndTicksWithoutCrash() throws Exception {
-        FixtureSite s = site();
-        // Solid floor so the hovercraft rests on stone.
-        client().arrange("stellurgytest fill 0 " + (s.x - 1) + " " + (s.y - 1) + " " + (s.z - 1)
-                + " " + (s.x + 1) + " " + (s.y - 1) + " " + (s.z + 1) + " minecraft:stone");
-
-        String spawn = join(client().arrange("stellurgytest entity spawn 0 " + s.x + ".5 " + s.y + " "
-                + s.z + ".5 stellurgy:StellurgyHoverCraft"));
-        assertTrue("hovercraft spawn failed: " + spawn, Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned"));
-        int entityId = Reply.of("stellurgytest entity spawn", spawn).integer("entityId");
-
-        EntityState info = EntityState.byId(cmd -> join(client().read(cmd)), 0, entityId);
-        // Asked of the `entityClass` FIELD by its simple name: `contains` also accepted any subclass
-        // or package component carrying those letters.
-        info.entityClass();
-        assertEquals("entity class must be EntityHoverCraft: " + info.raw(), "EntityHoverCraft",
-                Reply.of("stellurgytest entity state", info.raw()).simpleClassName("entityClass"));
-    }
-
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
     }

@@ -1619,7 +1619,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             at = "return new HazardExposure(kept, false);", replacedBy = "return new HazardExposure(kept, true);",
             fails = "with breathing not needing oxygen a suit in vacuum must spend no air and still keep him whole",
             on = "2026-10-06")
-    @RedWitness(verdict = "on", member = "HazardExposure#needsSuppliedOxygen",
+    @RedWitness(verdict = "on", member = "HazardExposure#needsSuppliedOxygen()",
             at = "return needsSuppliedOxygen;", replacedBy = "return false;",
             fails = "the same chest must drain once breathing needs oxygen", on = "2026-10-06")
     @Test

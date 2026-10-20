@@ -156,6 +156,16 @@ public class ShipEntryControllerTest {
         return new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0, 0);
     }
 
+    /** Pins INV-SPC-15 (the entry ring lies strictly outside the descent radius of a body with no size). */
+    @Pins("INV-SPC-15")
+    @RedWitness(verdict = "the entry ring lies outside the descent radius",
+            member = "ShipEntryController#entryRingAround(GalacticCoord)", at = "long widest = ENTRY_RING_BLOCKS;",
+            replacedBy = "long widest = DESCENT_RADIUS_BLOCKS / 2L;",
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
+    @RedWitness(verdict = "the entry ring lies outside the descent radius",
+            member = "ShipEntryController#ENTRY_RING_BLOCKS", at = "DESCENT_RADIUS_BLOCKS * 2L",
+            replacedBy = "DESCENT_RADIUS_BLOCKS / 2L",
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
     @Test
     public void entryCrossesSettlesInLedgerOutsideTheDescentRadius() {
         AtomicLong clock = new AtomicLong();
@@ -182,7 +192,7 @@ public class ShipEntryControllerTest {
         // The hysteresis contract: the spawn ring lies strictly OUTSIDE the descent radius, so a
         // fresh entry can never immediately trip the descent trigger.
         double distance = entry.coord.staticFrameDistanceTo(body(5));
-        assertTrue("ring distance " + distance + " must exceed the descent radius",
+        assertTrue("the entry ring must lie outside the descent radius: ring distance " + distance,
                 distance > ShipEntryController.DESCENT_RADIUS_BLOCKS);
         // The realized pose matches the ledgered coordinate (the honest-3D mapping).
         double[] expectedPose = CellWorldMapper.poseWorldOf(entry.coord);

@@ -22,7 +22,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -49,7 +52,7 @@ import java.util.stream.Stream;
  * <p><b>What it does not see.</b> Whether the replacement is a SEMANTIC inversion of the member's decision
  * (a reader's question); a record whose quote is so short that any failure contains it.</p>
  */
-final class WitnessReplay {
+public final class WitnessReplay {
 
     /** Where a member may be declared: the roots the test runtime compiles, the test root last. */
     private static String[] roots() {
@@ -78,6 +81,8 @@ final class WitnessReplay {
                 gradle = true;
             } else if ("--root".equals(args[i])) {
                 root = Paths.get(args[++i]).toAbsolutePath();
+            } else {
+                throw new IllegalArgumentException("unknown argument `" + args[i] + "`: --tiers, --gradle, --root");
             }
         }
         if (tiers.isEmpty()) {
@@ -108,32 +113,66 @@ final class WitnessReplay {
         return "red witnesses: " + records.size() + " replayable record(s) located, " + stale + " stale";
     }
 
-    /** Null when the record's fragment occurs exactly once in its member; otherwise why not. */
-    private String locate(Record r) throws IOException {
-        String cls = r.member.substring(0, r.member.indexOf('#'));
-        Path file = typeFile(cls);
-        if (file == null) {
-            return "MISSING no type " + cls;
-        }
-        String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        int[] body = memberBody(src, r.member.substring(r.member.indexOf('#') + 1));
-        if (body == null) {
-            return "MISSING no member " + r.member;
-        }
-        int hits = occurrences(src, body, r.at);
-        return hits == 1 ? null : (hits == 0 ? "MISSING" : "AMBIGUOUS") + " the fragment occurs " + hits + " times";
+    /**
+     * Whether a record naming {@code member} ({@code Type#name}, {@code Outer.Inner#name},
+     * {@code Type#name(T1,T2)}, {@code Type#FIELD}) with fragment {@code at} locates in the tree under
+     * {@code root}: null when the fragment occurs exactly once in the one member the record names; otherwise
+     * why not -- MISSING, AMBIGUOUS, or REFUSED when the record names no single member (an overloaded name with
+     * no parameter list, a type name declared in several places).
+     */
+    public static String locate(Path root, String member, String at) throws IOException {
+        return new WitnessReplay(root, new ArrayList<>(), false).find(member, at).problem;
     }
 
-    private static int occurrences(String src, int[] body, String at) {
+    /** Null when the record's fragment occurs exactly once in its member; otherwise why not. */
+    private String locate(Record r) throws IOException {
+        return find(r.member, r.at).problem;
+    }
+
+    /** Where a record's fragment is: its file, that file's text and the fragment's span -- or the problem. */
+    private static final class Found {
+        Path file;
+        String src;
+        int start;
+        int end;
+        String problem;
+    }
+
+    private Found find(String member, String at) throws IOException {
+        Found f = new Found();
+        int hash = member.indexOf('#');
+        if (hash < 0) {
+            f.problem = "REFUSED `" + member + "` names no member (Type#member)";
+            return f;
+        }
+        String type = member.substring(0, hash);
+        Object where = typeFile(type);
+        if (where instanceof String) {
+            f.problem = (String) where;
+            return f;
+        }
+        f.file = (Path) where;
+        f.src = new String(Files.readAllBytes(f.file), StandardCharsets.UTF_8);
+        MemberAddress span = MemberAddress.resolve(f.src, type, member.substring(hash + 1));
+        if (span.refusal != null) {
+            f.problem = (span.refusal.startsWith("no ") ? "MISSING " : "REFUSED ") + span.refusal;
+            return f;
+        }
         // NOT-A-PROBE-REPLY: Java source -- the record's fragment, whitespace-insensitive, inside its member.
         Matcher m = Pattern.compile(Arrays.stream(at.trim().split("\\s+")).map(Pattern::quote)
-                .collect(Collectors.joining("\\s*"))).matcher(src);
-        m.region(body[0], body[1]);
-        int n = 0;
+                .collect(Collectors.joining("\\s*"))).matcher(f.src);
+        m.region(span.start, span.end);
+        int hits = 0;
         while (m.find()) {
-            n++;
+            if (hits++ == 0) {
+                f.start = m.start();
+                f.end = m.end();
+            }
         }
-        return n;
+        if (hits != 1) {
+            f.problem = (hits == 0 ? "MISSING" : "AMBIGUOUS") + " the fragment occurs " + hits + " times";
+        }
+        return f;
     }
 
     /** One replayable record: its test, and the member, fragment, replacement and quote it carries. */
@@ -212,31 +251,12 @@ final class WitnessReplay {
     }
 
     private String replay(Record r) throws Exception {
-        String cls = r.member.substring(0, r.member.indexOf('#'));
-        String member = r.member.substring(r.member.indexOf('#') + 1);
-        Path file = typeFile(cls);
-        if (file == null) {
-            return "MISSING no type " + cls;
+        Found f = find(r.member, r.at);
+        if (f.problem != null) {
+            return f.problem;
         }
-        String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        int[] body = memberBody(src, member);
-        if (body == null) {
-            return "MISSING no member " + r.member;
-        }
-        // NOT-A-PROBE-REPLY: Java source -- the record's fragment, whitespace-insensitive, inside its member.
-        Pattern fragment = Pattern.compile(Arrays.stream(r.at.trim().split("\\s+")).map(Pattern::quote)
-                .collect(Collectors.joining("\\s*")));
-        Matcher m = fragment.matcher(src);
-        m.region(body[0], body[1]);
-        List<int[]> hits = new ArrayList<>();
-        while (m.find()) {
-            hits.add(new int[]{m.start(), m.end()});
-        }
-        if (hits.size() != 1) {
-            return (hits.isEmpty() ? "MISSING" : "AMBIGUOUS") + " the fragment occurs " + hits.size() + " times";
-        }
-        String replaced = src.substring(0, hits.get(0)[0]) + r.replacedBy + src.substring(hits.get(0)[1]);
-        String failure = throughGradle ? throughGradle(file, replaced, r) : inProcess(file, replaced, r);
+        String replaced = f.src.substring(0, f.start) + r.replacedBy + f.src.substring(f.end);
+        String failure = throughGradle ? throughGradle(f.file, replaced, r) : inProcess(f.file, replaced, r);
         if (failure == null) {
             return "NOT-RED the method passed with the replacement applied";
         }
@@ -250,51 +270,48 @@ final class WitnessReplay {
         return s.replaceAll("\\s+", " ").trim();
     }
 
-    private Path typeFile(String cls) throws IOException {
-        for (String base : roots()) {
-            try (Stream<Path> walk = Files.walk(root.resolve(base))) {
-                List<Path> hit = walk.filter(p -> p.getFileName().toString().equals(cls + ".java"))
-                        .collect(Collectors.toList());
-                if (!hit.isEmpty()) {
-                    return hit.get(0);
+    /** Every source file of the compiled roots, by the simple names of the types it declares; built once. */
+    private Map<String, List<Path>> declaring;
+
+    /**
+     * The file that holds the type a record names (its outermost name, for an {@code Outer.Inner} chain), or
+     * why there is no single one. A type is the file that bears its name; a nested type, with no file of its
+     * own, is the one file that declares it. Two files bearing the name, or -- for a nested type -- two files
+     * declaring it, are REFUSED, naming them: the record names it through a type that is unique.
+     */
+    private Object typeFile(String type) throws IOException {
+        String outer = type.split("\\.")[0];
+        if (declaring == null) {
+            declaring = new HashMap<>();
+            for (String base : roots()) {
+                Path dir = root.resolve(base);
+                if (!Files.isDirectory(dir)) {
+                    continue;
                 }
-            }
-        }
-        // NOT-A-PROBE-REPLY: Java source -- a nested type's declaration, to find the file that holds it.
-        Pattern decl = Pattern.compile("\\b(?:class|enum|interface)\\s+" + Pattern.quote(cls) + "\\b");
-        List<Path> found = new ArrayList<>();
-        for (String base : roots()) {
-            try (Stream<Path> walk = Files.walk(root.resolve(base))) {
-                for (Path p : walk.filter(q -> q.toString().endsWith(".java")).collect(Collectors.toList())) {
-                    if (decl.matcher(new String(Files.readAllBytes(p), StandardCharsets.UTF_8)).find()) {
-                        found.add(p);
+                try (Stream<Path> walk = Files.walk(dir)) {
+                    for (Path p : walk.filter(q -> q.toString().endsWith(".java")).collect(Collectors.toList())) {
+                        String src = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
+                        for (String name : new LinkedHashSet<>(MemberAddress.declaredTypes(src))) {
+                            declaring.computeIfAbsent(name, k -> new ArrayList<>()).add(p);
+                        }
                     }
                 }
             }
         }
-        return found.size() == 1 ? found.get(0) : null;
-    }
-
-    /**
-     * The span inside the braces of the first declaration of {@code member}, or null. A declaration's name
-     * follows its type or a modifier; a CALL does not, and {@code if (!member(a)) {} } has the same shape
-     * after the name, so without that the first such call was taken for the declaration.
-     */
-    private static int[] memberBody(String src, String member) {
-        // NOT-A-PROBE-REPLY: Java source -- a member's declaration.
-        Matcher m = Pattern.compile("[\\w>\\]]\\s+" + Pattern.quote(member)
-                + "\\s*\\([^;{]*\\)\\s*(?:throws[^{;]*)?\\{").matcher(src);
-        if (!m.find()) {
-            return null;
+        List<Path> all = declaring.getOrDefault(outer, new ArrayList<>());
+        List<Path> named = all.stream().filter(p -> p.getFileName().toString().equals(outer + ".java"))
+                .collect(Collectors.toList());
+        List<Path> pick = named.isEmpty() ? all : named;
+        if (pick.size() == 1) {
+            return pick.get(0);
         }
-        int depth = 1;
-        int i = m.end();
-        while (i < src.length() && depth > 0) {
-            char c = src.charAt(i);
-            depth += c == '{' ? 1 : c == '}' ? -1 : 0;
-            i++;
+        if (pick.isEmpty()) {
+            return "MISSING no type " + outer;
         }
-        return new int[]{m.end(), i - 1};
+        return "REFUSED the type " + outer + " is declared in " + pick.size() + " files ("
+                + pick.stream().map(p -> root.relativize(p).toString().replace('\\', '/'))
+                .collect(Collectors.joining(", ")) + ") -- name it through a type that is unique, as Outer."
+                + outer + "#member";
     }
 
     /** The failure message of the record's method with the replaced file compiled first; null if it passed. */

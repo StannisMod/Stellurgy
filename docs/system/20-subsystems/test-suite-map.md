@@ -211,6 +211,34 @@ nothing about whether it triggers.
   `PinMapTest#aSharedSimpleNameCitedUnderOneClasssDirectoryIsThatClass`. FOR: maintainer ruling
   2026-10-19, *"второе"* (gloss: of "rename one of the duplicate classes" or "teach PinMap the
   qualified name", the second).
+- **INV-TST-11 [T][SYS]** A red-witness record whose `member` is an overloaded method name with no
+  parameter list names no member: the build refuses it, and the refusal lists every overload's
+  parameter types. The judge never picks one (`test/contract/MemberAddress.java`, `resolve`). Pinned by
+  `WitnessReplayTest#anOverloadedNameWithoutParametersIsRefusedNamingEachOverload`. FOR: maintainer ruling
+  2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the replayer resolved an
+  overloaded name to its first declaration without saying so, could not address a nested type's member and
+  could not replay a field).
+- **INV-TST-12 [T][SYS]** A parameter list in a record's `member` (`Type#m(double,boolean)` — simple
+  type names, no generic arguments, `T...` as `T[]`) names exactly the overload whose declared
+  parameters it matches, and the record's fragment is looked for in that overload alone
+  (`test/contract/MemberAddress.java`, `resolve`). Pinned by `WitnessReplayTest#aParameterListNamesThatOverloadAlone`.
+  FOR: maintainer ruling 2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the
+  replayer resolved an overloaded name to its first declaration without saying so).
+- **INV-TST-13 [T][SYS]** A record's member belongs to the innermost named type around its
+  declaration: a nested type's method is that type's and never its outer type's, a nested type is named by
+  its own name or by an `Outer.Inner` chain, an enum constant's body through its constant
+  (`Enum.CONSTANT#m`), and a nested type name declared in more than one file is refused, naming the files
+  (`test/contract/MemberAddress.java`, `memberLevelOf`; `test/contract/WitnessReplay.java`, `typeFile`).
+  Pinned by `WitnessReplayTest#aMemberBelongsToTheInnermostNamedTypeAroundIt` and
+  `WitnessReplayTest#aNestedTypeNameDeclaredInTwoFilesIsRefusedNamingThem`. FOR: maintainer ruling
+  2026-10-19, *"оформляй"* (gloss: "file it" — said of the report that the replayer took the first
+  same-named member anywhere in a file, so a nested type's member could not be addressed).
+- **INV-TST-14 [T][SYS]** A record naming a FIELD (`Type#FIELD`) addresses the field's declaration from
+  its name through the `;` that ends it, and only a field of the class body: a method's local variable
+  of that name is not a member (`test/contract/MemberAddress.java`, `resolve`). Pinned by
+  `WitnessReplayTest#aFieldIsItsDeclarationThroughItsSemicolon`. FOR: maintainer ruling 2026-09-30, *"Да,
+  добавь форму для полей в правило и резолвер"* (gloss: "Yes, add the form for fields to the rule and to
+  the resolver").
 
 ## Failure modes & edge cases
 

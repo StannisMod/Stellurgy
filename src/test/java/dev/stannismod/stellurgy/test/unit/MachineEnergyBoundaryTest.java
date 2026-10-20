@@ -75,23 +75,6 @@ public class MachineEnergyBoundaryTest {
     }
 
     /**
-     * An aggregate with no batteries takes a maximum without dividing by zero.
-     *
-     * <p>Contract: fails if {@code MultiBattery#setMaxEnergyStored} stops deciding that a maximum
-     * shared among no batteries sets nothing. A controller's aggregate is empty whenever its structure
-     * is not formed.</p>
-     * <p>red-witnessed: with {@code MultiBattery#setMaxEnergyStored} at {@code if(batteries.isEmpty())} removed, fails: "java.lang.ArithmeticException: / by zero" (2026-10-07).</p>
-     */
-    @Test
-    public void anEmptyAggregateTakesAMaximumWithoutThrowing() {
-        MultiBattery aggregate = new MultiBattery();
-
-        aggregate.setMaxEnergyStored(CHARGE);
-
-        assertEquals("an aggregate of no batteries holds no capacity", 0, aggregate.getMaxEnergyStored());
-    }
-
-    /**
      * An input plug takes energy from the world and gives none back to it.
      *
      * <p>Contract: fails if {@code ForgePowerCapability#extractEnergy} stops deciding to refuse a

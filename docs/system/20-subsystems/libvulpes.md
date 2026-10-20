@@ -192,7 +192,7 @@ placeholder**: a block implementing `ITimeModifier` (the four motors: ×1, ×1/1
 list of `IUniversalEnergy`: `acceptEnergy` fills sequentially with the remainder; `getUniversalEnergyStored` sums; `extractEnergy`
 takes sequentially too, asking each battery only for what is still owed and stopping when it is paid, so a machine with several
 power plugs pays its request once in total; an empty aggregate takes a maximum without dividing by zero
-[V][T] `util/MultiBattery.java:26-37,57-65`, `MachineEnergyBoundaryTest` (two plugs pay once; an empty aggregate). A consumer fills its
+[V][T] `util/MultiBattery.java:26-37,57-65`, `MachineEnergyBoundaryTest` (two plugs pay once; the empty-aggregate guard is `[V]` only). A consumer fills its
 `batteries` at integrate time with every tile whose block is in the `P` mapping, a producer with the `p` mapping
 [V] `TileMultiPowerConsumer.java:291-299`, `TileMultiPowerProducer.java:115-127`. `TilePlugBase` (the plug tiles) holds a battery of
 `10^tier × 10000 × energy_multiplier` (tier fixed to 1 by the plug block), exposes **Forge Energy always and Tesla when present** by

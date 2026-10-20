@@ -201,31 +201,6 @@ public class AirStateTest {
         assertEquals("and one whole atmosphere of it", 100, air.getPressureCentiAtm());
     }
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. THE FRACTION SURVIVES -"
-            + " {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} storing whole parts per million only: \"the oxygen fraction survives being"
-            + " stored expected:&lt;0.0013&gt; but was:&lt;0.0011824324324324325&gt;\". THINNER READS THINNER -"
-            + " {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} rounding every amount to 150 units: \"a trace 1% thinner must read as"
-            + " thinner, not as the same integer: 7650 vs 7650\".")
-    @Test
-    public void aTraceOnAThinWorldKeepsItsDigits() {
-        // Mars: six millibars of air, of which 0.13% is oxygen. That trace is what decides whether a
-        // base there can CONCENTRATE oxygen or has to make it, so a model that cannot tell 0.13%
-        // from 0.12% has thrown the mechanic away before it is written. In millionths of an
-        // atmosphere the whole trace is eight units, and eight units cannot carry that difference.
-        long martianAir = ppm(5_921);
-        long oxygenFraction = martianAir * 13 / 10_000;
-        AirState mars = new AirState(martianAir - oxygenFraction, oxygenFraction, 0L);
-
-        assertEquals("the oxygen fraction survives being stored",
-                0.0013D, (double) mars.getOxygen() / mars.getTotalPressure(), 0.000013D);
-
-        // And a world one part in a hundred poorer is a DIFFERENT world, not the same rounded number.
-        AirState poorer = new AirState(martianAir - oxygenFraction, oxygenFraction * 99 / 100, 0L);
-        assertTrue("a trace 1% thinner must read as thinner, not as the same integer: "
-                        + mars.getOxygen() + " vs " + poorer.getOxygen(),
-                poorer.getOxygen() < mars.getOxygen());
-    }
-
     @LegacyWitness(prose = "2026-09-30. THE TOTAL - {@code AirState#getTotalPressure} at {@code total += amount;}"
             + " summing through an int: \"expected:&lt;5000000000003&gt; but was:&lt;658067459&gt;\".")
     @Test

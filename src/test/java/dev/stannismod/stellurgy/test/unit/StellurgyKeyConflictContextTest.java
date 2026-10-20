@@ -34,7 +34,7 @@ public class StellurgyKeyConflictContextTest {
 
     /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
     @Pins("INV-CLR-08")
-    @RedWitness(member = "StellurgyKeyConflictContext#conflicts", at = "this == other", replacedBy = "true",
+    @RedWitness(member = "StellurgyKeyConflictContext.PILOTING#conflicts", at = "this == other", replacedBy = "true",
             fails = "null", on = "2026-10-19")
     @Test
     public void pilotingAndNotPilotingNeverConflict() {

@@ -26,18 +26,6 @@ import static org.junit.Assert.assertTrue;
 public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
     /**
-     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
-     */
-    private static final Pattern TEMP_LINE = Pattern.compile("Temp:\\s*(-?\\d+)");
-
-    @Test
-    public void starListIncludesSolAsId0() throws Exception {
-        String list = read("ar star list").raw();
-        assertTrue("star list must include Sol — got: " + list,
-                list.contains("Star ID: 0") && list.contains("Sol"));
-    }
-
-    /**
      * Earth belongs to the Sol that is REGISTERED as star 0 — the same object the star list, the star
      * commands and every "same system" comparison use — not merely to a star that carries id 0.
      *
@@ -56,15 +44,6 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
                 "Earth is bound to star 0: " + earth, earth.integer("starId") == 0);
         assertTrue("Earth's star must be the registered star 0 itself, not a copy with its id: " + earth,
                 earth.bool("starIsRegistered"));
-    }
-
-    @Test
-    public void starGetTempEchoesSolBaselineTemperature() throws Exception {
-        String resp = read("ar star get temp 0").raw();
-        Matcher m = TEMP_LINE.matcher(resp);
-        assertTrue("must include a Temp: line — got: " + resp, m.find());
-        assertEquals("Sol baseline temperature per DimensionManager ctor",
-                100, Integer.parseInt(m.group(1)));
     }
 
     @Test

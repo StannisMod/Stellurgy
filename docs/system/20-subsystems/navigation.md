@@ -52,19 +52,19 @@ and shares nothing with this package.
 An entry's identity is `dim:<dimId>` when it carries a dimension, else `cell:<cellKey>` for a hand-noted
 bare coordinate. The coordinate it carries is the observation, never the identity; so one planet seen at
 two orbital positions is one entry, and a body and a bare point at the same coordinate are two. [V]
-`CrystalEntry.java:89-94`, `CrystalMemory.java:48-52`. [T] `CrystalMemoryTest.java:48`, `:68`.
+`CrystalEntry.java:89-94`, `CrystalMemory.java:48-52`. [T] `CrystalMemoryTest.java:35`, `:55`.
 
 ### MECH-NVG-02 — Merge by freshness
 Same identity: the larger `observedTick` wins outright; on equal ticks the entry whose detail tier is
 `atLeast` the other's wins (the incoming one on an exact tier tie). Merging different identities throws.
 `record` returns whether the crystal changed. [V] `CrystalEntry.java:124-139`, `CrystalMemory.java:48-64`.
-[T] `CrystalMemoryTest.java:91`, `:103`.
+[T] `CrystalMemoryTest.java:78`, `:90`.
 
 ### MECH-NVG-03 — Copy is add-only; sync is the symmetric union
 `copyFrom` records every source entry into the target (never removes, never mutates the source); `sync`
 copies B into A, then a snapshot of A's pre-merge state into B, so both end as the union with the
 fresher record of each shared body. Returns the number of entries changed (0 = already in step). [V]
-`CrystalMemory.java:71-82`, `CrystalSync.java:23-33`. [T] `CrystalMemoryTest.java:114`, `:132`;
+`CrystalMemory.java:71-82`, `CrystalSync.java:23-33`. [T] `CrystalMemoryTest.java:101`, `:119`;
 `NavRedactionAndSyncTest.java:136`, `:151`, `:165`. Exception to "already in step": see Failure modes.
 
 ### MECH-NVG-04 — Unlimited capacity, wholesale blanking only
@@ -170,10 +170,10 @@ a rolled-back clock.
 
 - **INV-NVG-01** `[V]` A `CrystalMemory` holds at most one entry per identity key; the key is the body's
   `dimId` when it has one, else the coordinate's cell. `CrystalMemory.java:48-64`; `CrystalEntry.java:89`.
-  `[T]` `CrystalMemoryTest.java:48`, `:81`.
+  `[T]` `CrystalMemoryTest.java:35`, `:68`.
 - **INV-NVG-02** `[V]` `record`/`copyFrom`/`sync` never remove an address and never replace a record with
   an older observation. `CrystalMemory.java:71-82`, `CrystalEntry.java:132-137`. `[T]`
-  `CrystalMemoryTest.java:103`, `:114`.
+  `CrystalMemoryTest.java:90`, `:101`.
 - **INV-NVG-03** `[V]` Merging two different identities throws; callers must key first. `CrystalEntry.java:128-131`.
 - **INV-NVG-04** `[V]` A `CrystalEntry` always has a coordinate; null `name`/`kind`/`detail` are normalised
   (`""`, `PLANET`, `TELESCOPE`). `CrystalEntry.java:54-60`.

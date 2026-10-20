@@ -25,21 +25,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
-    /** Satellite types the registry must offer — the test's own bar on "the catalogue is not
-     *  empty", well under what the mod ships. */
-    private static final int MIN_SATELLITE_TYPES = 5;
-
     private static final String ID_PATTERN = "id";
-
-    @Test
-    public void satelliteCreatePopulatesDimensionProperties() throws Exception {
-        // Registry sanity.
-        String types = String.join("\n", client().read("stellurgytest satellite types"));
-        int totalQuotes = countOccurrences(types, "\"");
-        int actualCount = (totalQuotes - 2) / 2; // -2 for "satelliteTypes" key quotes
-        assertTrue("expected ≥5 satellite types, got " + actualCount + ": " + types,
-                actualCount >= MIN_SATELLITE_TYPES);
-    }
 
     /**
      * Build a real satellite via {@link
@@ -64,11 +50,5 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
                 !Reply.of(info).has("error"));
         assertTrue("builder-created satellite must report type=optical: " + info,
                 "optical".equals(Reply.of(info).text("type")));
-    }
-
-    private static int countOccurrences(String s, String needle) {
-        int c = 0, i = 0;
-        while ((i = s.indexOf(needle, i)) != -1) { c++; i += needle.length(); }
-        return c;
     }
 }

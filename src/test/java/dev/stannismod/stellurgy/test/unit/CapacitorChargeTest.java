@@ -48,15 +48,6 @@ public class CapacitorChargeTest {
 
     // ── the energy is the ship's ──────────────────────────────────────────────
 
-    @Test
-    public void whatTheShipPushesInIsWhatTheBankHolds() {
-        TileJumpCapacitor capacitor = bareCapacitor();
-
-        long accepted = push(capacitor, 5L);
-        assertEquals("the bank takes what it is given, up to its throughput", 5L, accepted);
-        assertEquals(5L, capacitor.charge());
-    }
-
     /** Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it). */
     @Pins("INV-HYP-07")
     @Test

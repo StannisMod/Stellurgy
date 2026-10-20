@@ -52,7 +52,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
 
     /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
     @Pins("INV-MBM-11")
-    @RedWitness(member = "TileMultiBlock#completeStructure", at = "&& !getAllowableBlocks(structure[y][z][x]).contains(new BlockMeta(block,meta))",
+    @RedWitness(member = "TileMultiBlock#completeStructure(IBlockState)", at = "&& !getAllowableBlocks(structure[y][z][x]).contains(new BlockMeta(block,meta))",
             replacedBy = "&& false",
             fails = "structure validated despite missing corner panel", on = "2026-10-19")
     @Test

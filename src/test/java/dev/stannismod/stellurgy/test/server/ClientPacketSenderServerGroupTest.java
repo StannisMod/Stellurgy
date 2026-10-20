@@ -677,7 +677,7 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      */
     @Pins("INV-SHD-26")
     @RedWitness(verdict = "a radius sent by a player with no screen open changed the generator",
-            member = "PacketSetFieldRadius#apply", at = ": null;",
+            member = "PacketSetFieldRadius.Handler#apply", at = ": null;",
             replacedBy = ": (TileEntityFieldGenerator) player.world.getTileEntity(message.pos);",
             fails = "a radius sent by a player with no screen open changed the generator", on = "2026-10-19")
     @RedWitness(verdict = "a radius sent through the generator's own screen must be taken",
@@ -723,15 +723,15 @@ public class ClientPacketSenderServerGroupTest extends AbstractSharedServerTest 
      */
     @Pins("INV-SHD-26")
     @RedWitness(verdict = "a bias sent by a player with no screen open changed the console",
-            member = "PacketSetShieldResistanceBias#apply", at = ": null;",
+            member = "PacketSetShieldResistanceBias.Handler#apply", at = ": null;",
             replacedBy = ": (TileEntityShieldConsole) player.world.getTileEntity(message.pos);",
             fails = "a bias sent by a player with no screen open changed the console", on = "2026-10-19")
     @RedWitness(verdict = "a bias packet naming a far position made the server load the chunk there",
-            member = "PacketSetShieldResistanceBias#apply", at = "if (console == null) {",
+            member = "PacketSetShieldResistanceBias.Handler#apply", at = "if (console == null) {",
             replacedBy = "player.world.getTileEntity(message.pos); if (console == null) {",
             fails = "a bias packet naming a far position made the server load the chunk there", on = "2026-10-19")
     @RedWitness(verdict = "a request to open a console's map at a far position made the server load the chunk there",
-            member = "PacketOpenGui#apply", at = "if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP) {",
+            member = "PacketOpenGui.Handler#apply", at = "if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP) {",
             replacedBy = "player.world.getTileEntity(message.pos);"
                     + " if (message.guiId != AdvancedForceFieldSystem.GUI_NETWORK_MAP) {",
             fails = "a request to open a console's map at a far position made the server load the chunk there",

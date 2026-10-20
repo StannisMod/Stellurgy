@@ -396,7 +396,6 @@ dev.stannismod.stellurgy.test.server.ZoneAirIsAReservoirTest#drawingGasOutLeaves
 dev.stannismod.stellurgy.test.server.ZoneAirIsAReservoirTest#gasArrivingMixesByHowMuchOfEachThereIs
 dev.stannismod.stellurgy.test.unit.AirStateTest#aRoomIsItsFractionsAndNotTheNumbersUnderneathThem
 dev.stannismod.stellurgy.test.unit.AirStateTest#aSeparatorTakesTheStaleGasAndLeavesTheBreathableOne
-dev.stannismod.stellurgy.test.unit.AirStateTest#aTraceOnAThinWorldKeepsItsDigits
 dev.stannismod.stellurgy.test.unit.AirStateTest#aVacuumCannotBeWarmed
 dev.stannismod.stellurgy.test.unit.AirStateTest#aZoneWithNoGasInItIsVacuumWhateverItsComposition
 dev.stannismod.stellurgy.test.unit.AirStateTest#breathableAirReadsAsOneAtmosphere

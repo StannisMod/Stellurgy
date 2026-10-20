@@ -397,7 +397,7 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
      * load that chunk on its own.</p>
      */
     @Pins("INV-LVP-33")
-    @RedWitness(member = "TileMultiBlock#completeStructure", at = "if(!world.isBlockLoaded(globalPos, false))",
+    @RedWitness(member = "TileMultiBlock#completeStructure(IBlockState)", at = "if(!world.isBlockLoaded(globalPos, false))",
             replacedBy = "if(!world.getChunkFromBlockCoords(globalPos).isLoaded())",
             fails = "a controller whose part stands in an unloaded chunk must refuse to form, and asking must not"
                     + " load that chunk", on = "2026-10-19")

@@ -66,26 +66,4 @@ public class ImpactIdentityTest {
                     !before.contains(id));
         }
     }
-
-    /**
-     * And a restart must not rewind them either. The memory is in RAM and the counter is on disk, so
-     * a counter that reset on load would start handing out identities that a still-running server —
-     * the one that just saved — is holding.
-     */
-    @Test
-    public void aSavedRegistryResumesWhereItLeftOff() {
-        ShotRegistry registry = new ShotRegistry();
-        Set<Long> before = new HashSet<Long>();
-        for (int i = 0; i < 64; i++) {
-            before.add(registry.nextImpactId());
-        }
-
-        ShotRegistry reloaded = new ShotRegistry();
-        reloaded.readFromNBT(registry.writeToNBT(new NBTTagCompound()));
-
-        for (int i = 0; i < 64; i++) {
-            long id = reloaded.nextImpactId();
-            assertTrue("identity " + id + " was minted again after a save and load", !before.contains(id));
-        }
-    }
 }

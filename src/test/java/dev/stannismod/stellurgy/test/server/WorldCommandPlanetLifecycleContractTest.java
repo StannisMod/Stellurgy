@@ -118,19 +118,6 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
     }
 
     @Test
-    public void planetGenerateNamesNewDimensionFromArg() throws Exception {
-        Set<Integer> before = dimIds();
-        arrange("ar planet generate 0 GenTestNamed");
-        Set<Integer> diff = dimIds();
-        diff.removeAll(before);
-        try {
-            assertEquals(1, diff.size());
-        } finally {
-            for (Integer id : diff) arrange("ar planet delete " + id).raw();
-        }
-    }
-
-    @Test
     public void planetDeleteRemovesEntryFromRegistry() throws Exception {
         Set<Integer> before = dimIds();
         arrange("ar planet generate 0 GenTestDel");

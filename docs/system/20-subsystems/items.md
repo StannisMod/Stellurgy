@@ -90,10 +90,10 @@ Config: see `C4-config-surface`.
 
 ## Invariants
 
-- **INV-ITM-01 [T][SYS]** Fresh chip with no NBT returns its sentinel default: PlanetID → `INVALID_PLANET` (ChipNBTRoundTripTest.java:56), Asteroid UUID/type → `null` (ChipNBTRoundTripTest.java:133), StationChip UUID → `0` (ChipNBTRoundTripTest.java:118). Pinned by `ChipNBTRoundTripTest#planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt`, `ChipNBTRoundTripTest#asteroidChipUuidAndTypeRoundTrip`, `ChipNBTRoundTripTest#stationChipUuidDefaultsToZero`. FOR: save format: chip NBT survives reload.
+- **INV-ITM-01 [T][SYS]** Fresh chip with no NBT returns its sentinel default: PlanetID → `INVALID_PLANET` (ChipNBTRoundTripTest.java:56), Asteroid UUID/type → `null` (ChipNBTRoundTripTest.java:112), StationChip UUID → `0` (ChipNBTRoundTripTest.java:97). Pinned by `ChipNBTRoundTripTest#planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt`, `ChipNBTRoundTripTest#asteroidChipUuidAndTypeRoundTrip`, `ChipNBTRoundTripTest#stationChipUuidDefaultsToZero`. FOR: save format: chip NBT survives reload.
 - **INV-ITM-02 [A][SYS]** `set…` then `get…` round-trips through NBT and survives `ItemStack.copy()` without aliasing the original (setter and getter: `ItemAsteroidChip.java:43-66`, `ItemPlanetIdentificationChip.java:70,102`; no test pins either half). FOR: save format: chip NBT survives reload.
-- **INV-ITM-03 [T][BEH]** `erase()` / `setTagCompound(null)` drops the entire compound (ChipNBTRoundTripTest.java:104). Pinned by `ChipNBTRoundTripTest#planetChipEraseClearsAllNbt`.
-- **INV-ITM-04 [T][SYS]** `setDimensionId(INVALID_PLANET)` still attaches a tag carrying the sentinel (ChipNBTRoundTripTest.java:78) — mirrors the code note at ItemPlanetIdentificationChip.java:73. Pinned by `ChipNBTRoundTripTest#planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel`. FOR: save format: chip NBT survives reload.
+- **INV-ITM-03 [T][BEH]** `erase()` / `setTagCompound(null)` drops the entire compound (ChipNBTRoundTripTest.java:83). Pinned by `ChipNBTRoundTripTest#planetChipEraseClearsAllNbt`.
+- **INV-ITM-04 [V][SYS]** `setDimensionId(INVALID_PLANET)` still attaches a tag carrying the sentinel (`ItemPlanetIdentificationChip.java:73-79`). FOR: save format: chip NBT survives reload.
 - **INV-ITM-05 [T][BEH]** `ItemData` max-data table: dmg0→1000, any non-zero dmg→0 (ItemDataCarrierNBTRoundTripTest.java:140); a programmed data stick never stacks past 1 (ItemDataCarrierNBTRoundTripTest.java:117; ItemData.java:37). Pinned by `ItemDataCarrierNBTRoundTripTest#dataStickMaxDataIsZeroForNonZeroDamage`, `ItemDataCarrierNBTRoundTripTest#dataStickNeverStacksPastOne`.
 - **INV-ITM-06 [T][SYS]** `ItemSpaceElevatorChip.getBlockPositions` never returns null and yields an empty list on a fresh stack; `setBlockPositions([])` clears the `list` key and does not attach NBT to a tagless stack (ItemDataCarrierNBTRoundTripTest.java:59,70). The clear removes `"list"`, matching the fix noted at ItemSpaceElevatorChip.java:43. Pinned by `ItemDataCarrierNBTRoundTripTest#elevatorChipEmptyStackReturnsEmptyPositionList`, `ItemDataCarrierNBTRoundTripTest#elevatorChipSetEmptyOnFreshStackDoesNotAttachNbt`, `ItemDataCarrierNBTRoundTripTest#elevatorChipSetEmptyAfterNonEmptyClearsList`. FOR: save format: chip NBT survives reload.
 - **INV-ITM-07 [T][BEH]** `ItemPressureTank.getCapacity` = base×2^damage (ArmorComponentContractTest.java:77). Pinned by `ArmorComponentContractTest#pressureTankCapacityScalesAsPowerOfTwoWithItemDamage`.
@@ -115,7 +115,7 @@ Config: see `C4-config-surface`.
 
 ## Test coverage
 
-INV-ITM-01, 03..07, 09..11 pinned by `test/unit/ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`, `SpecialPurposeItemContractTest`, `ArmorComponentContractTest`; satellite assembly by `test/server/SatelliteBuilderPressBuildContractTest`. INV-ITM-08, 12..14 verified in code only; INV-ITM-02 is an assumption. INV-ITM-15 is an assumption.
+INV-ITM-01, 03, 05..07, 09..11 pinned by `test/unit/ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`, `SpecialPurposeItemContractTest`, `ArmorComponentContractTest`; satellite assembly by `test/server/SatelliteBuilderPressBuildContractTest`. INV-ITM-04, 08, 12..14 verified in code only; INV-ITM-02 is an assumption. INV-ITM-15 is an assumption.
 
 ## Open questions
 

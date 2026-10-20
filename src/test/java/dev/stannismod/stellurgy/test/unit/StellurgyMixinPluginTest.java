@@ -55,12 +55,19 @@ public class StellurgyMixinPluginTest {
 
     /** Pins INV-MIX-01 (the WorldInfo mixins weave iff perDimWorldInfo is on and all other mixins always weave). */
     @Pins("INV-MIX-01")
-    @RedWitness(member = "StellurgyMixinPlugin#shouldApply", at = "shouldApply(perDimWorldInfoEnabled, true, true,",
-            replacedBy = "shouldApply(true, true, true,", fails = "null", on = "2026-10-19")
+    @RedWitness(verdict = "the wrapper mixin", member = "StellurgyMixinPlugin#shouldApply(boolean,boolean,boolean,String)",
+            at = "return perDimWorldInfoEnabled;", replacedBy = "return true;",
+            fails = "the WorldInfo wrapper mixin wove with perDimWorldInfo off", on = "2026-10-20")
+    @RedWitness(verdict = "the weather-sync mixin",
+            member = "StellurgyMixinPlugin#shouldApply(boolean,boolean,boolean,String)",
+            at = "|| MIXIN_PLAYER_LIST.equals(mixinClassName)", replacedBy = "",
+            fails = "the weather-sync mixin wove with perDimWorldInfo off", on = "2026-10-20")
     @Test
     public void worldInfoMixinsSkippedWhenPerDimWorldInfoDisabled() {
-        assertFalse(StellurgyMixinPlugin.shouldApply(false, WORLD_SERVER_MULTI));
-        assertFalse(StellurgyMixinPlugin.shouldApply(false, PLAYER_LIST));
+        assertFalse("the WorldInfo wrapper mixin wove with perDimWorldInfo off",
+                StellurgyMixinPlugin.shouldApply(false, WORLD_SERVER_MULTI));
+        assertFalse("the weather-sync mixin wove with perDimWorldInfo off",
+                StellurgyMixinPlugin.shouldApply(false, PLAYER_LIST));
         // The per-dim TIME mixin is gated by the SAME master flag, so disabling
         // the subsystem un-weaves it too — no weather/time leak between flags.
         assertFalse(StellurgyMixinPlugin.shouldApply(false, WORLD_SERVER));

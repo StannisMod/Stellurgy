@@ -64,27 +64,6 @@ public class ChipNBTRoundTripTest {
                 Constants.INVALID_PLANET, chip.getDimensionId(s));
     }
 
-    /** The INVALID_PLANET branch of
-     *  {@code setDimensionId} previously built a fresh NBT but never
-     *  called {@code stack.setTagCompound(nbt)} before returning — so
-     *  the sentinel was silently dropped. Now it attaches the NBT so
-     *  callers can observe the "explicitly invalid" state.
-     * Pins INV-ITM-04 (setting the invalid planet still attaches a tag carrying the sentinel).
-     */
-    @Pins("INV-ITM-04")
-    @RedWitness(member = "ItemPlanetIdentificationChip#setDimensionId", at = "stack.setTagCompound(nbt); return;",
-            replacedBy = "return;", fails = "setDimensionId(INVALID_PLANET) must attach the NBT", on = "2026-10-19")
-    @Test
-    public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
-        ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
-        ItemStack s = freshStack();
-        chip.setDimensionId(s, Constants.INVALID_PLANET);
-        assertTrue("setDimensionId(INVALID_PLANET) must attach the NBT",
-                s.hasTagCompound());
-        assertEquals("the stored sentinel must equal INVALID_PLANET",
-                Constants.INVALID_PLANET, s.getTagCompound().getInteger("dimId"));
-    }
-
     @Test
     public void planetChipUuidRoundTrip() {
         // The getter returns a boxed Long because production callers

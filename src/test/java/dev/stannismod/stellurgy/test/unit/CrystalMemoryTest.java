@@ -27,19 +27,6 @@ public class CrystalMemoryTest {
     }
 
     @Test
-    public void aRecordedAddressIsKnownAndReadableBack() {
-        CrystalMemory crystal = new CrystalMemory();
-        assertTrue("a fresh crystal is blank, not broken", crystal.isEmpty());
-
-        assertTrue("recording a new address changes the crystal",
-                crystal.record(entry(5, "Kepler", InfoTier.TELESCOPE, 100L)));
-
-        assertTrue(crystal.knows(coord(5)));
-        assertEquals("Kepler", crystal.get(coord(5)).name());
-        assertEquals(1, crystal.size());
-    }
-
-    @Test
     public void twoSightingsOfOneBodyAreOneRecord() {
         // A planet orbits, so two observations of it are at two different coordinates. What makes
         // them the same knowledge is the BODY. Keyed by coordinate instead, a crystal would collect

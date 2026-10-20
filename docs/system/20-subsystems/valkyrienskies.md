@@ -138,7 +138,7 @@ beyond `unloadDistance` [V] `VS/mod/common/ships/ship_world/WorldShipLoadingCont
 claim's chunks, and a chunk-provider mixin keeps them out of the drop set [V] `WorldServerShipManager.java:485-493`, `VS/mixin/world/gen/MixinChunkProviderServer.java:27-32`.
 A request already satisfied — load of a loaded ship, unload of an unloaded one — is a no-op on the server [V] `WorldServerShipManager.java:440-443`,
 `WorldServerShipManager.java:472-474`, `WorldServerShipManager.java:504-506`,
-[T] `src/test/java/dev/stannismod/stellurgy/test/server/SpaceSlotVsShipPersistTest.java:113`; on the client it logs an error and continues [V] `WorldClientShipManager.java:59-62`, `WorldClientShipManager.java:85-88`.
+[T] `src/test/java/dev/stannismod/stellurgy/test/server/SpaceSlotVsShipPersistTest.java:84`; on the client it logs an error and continues [V] `WorldClientShipManager.java:59-62`, `WorldClientShipManager.java:85-88`.
 The distances are config (`tunable`); their defaults are ordered watch < load < unwatch < unload [V] `VS/mod/common/config/VSConfig.java:154-174`.
 
 ### MECH-VSK-07 — Disposal: dead means discard, empty means collect
@@ -223,7 +223,7 @@ and stores the told velocities where its consumers look [V] `:57-70`. Watchers a
 `VSWorldData` (registry + allocator) is a world capability, written as a CBOR byte array by Jackson over **fields** (getters and setters ignored; `transient` fields
 dropped by Jackson's default `[A]`, so `dead` and the registry back-pointer are not saved) [V] `VS/mod/common/ships/ship_world/VSWorldData.java:7-9`,
 `VS/mod/common/capability/framework/VSDefaultCapability.java:90-101`, `VS/mod/common/util/jackson/VSJacksonUtil.java:60-67`, `ShipData.java:99`. A round trip through
-a Stellurgy slot unload/reload keeps the registry [T] `SpaceSlotVsShipPersistTest.java:65`. A record that cannot be read or written stops the load or the
+a Stellurgy slot unload/reload keeps the registry [V] (the capability is written and read whole, `VSDefaultCapability.java:90-130`; no test asserts it). A record that cannot be read or written stops the load or the
 save instead of standing in an empty one (INV-VSK-16; Failure modes) [V] `VSDefaultCapability.java:90-130`. The block set and force positions are not sent to clients (`@PacketIgnore`) [V] `ShipData.java:51-63`.
 
 ### MECH-VSK-16 — Identity added by Stellurgy
@@ -349,11 +349,11 @@ Tunable; values are not pinned here.
 | anchor | test |
 |---|---|
 | MECH-VSK-01 | `test/unit/VendoredAssetDomainTest.java:87` |
-| MECH-VSK-06 | `test/server/SpaceSlotVsShipPersistTest.java:113` |
+| MECH-VSK-06 | `test/server/SpaceSlotVsShipPersistTest.java:84` |
 | MECH-VSK-07 | `test/server/VSCrossingLeavesNoShipBehindTest.java:78` |
 | MECH-VSK-12 | `test/server/ShipDamageSurvivesRelocationTest.java:93` |
 | MECH-VSK-13 | `test/unit/StandingOnAHullCountsAsBeingAtItTest.java:47` |
-| MECH-VSK-15 | `test/server/SpaceSlotVsShipPersistTest.java:65` |
+| MECH-VSK-15 | none (`[V]` only) |
 | INV-VSK-13 | `test/server/VsVendorSmokeTest.java:42`, `test/server/VSShipMotionServerTest.java:94` |
 | INV-VSK-15 | `test/client/VSShipIndexClientGroupTest#anUnloadedShipLeavesNoTileForTheClientToDraw` |
 
@@ -364,4 +364,4 @@ terrain collider — a grep of `src/test` and `testframework` for `poseSendIsOve
 
 ## Open questions
 
-- Does Forge write a world capability for every dimension, or only dimensions with their own `WorldInfo`? `[A]` — `SpaceSlotVsShipPersistTest.java:65` shows a slot world round-trips, nothing more.
+- Does Forge write a world capability for every dimension, or only dimensions with their own `WorldInfo`? `[A]` — nothing in the test corpus asserts even that a slot world round-trips.

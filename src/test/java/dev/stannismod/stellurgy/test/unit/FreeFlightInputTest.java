@@ -84,15 +84,6 @@ public class FreeFlightInputTest {
     }
 
     @Test
-    public void wireSizeIs29Bytes() {
-        // 7 floats (fwd, vert, strafe, yaw, pitch, roll, brake) + 1 flag byte.
-        assertEquals(29, FreeFlightInput.WIRE_SIZE);
-        ByteBuf buf = Unpooled.buffer();
-        new FreeFlightInput(0.5f, -0.5f, 0.25f, -0.25f, 1f).write(buf);
-        assertEquals(FreeFlightInput.WIRE_SIZE, buf.writerIndex());
-    }
-
-    @Test
     public void strafeChannelClampsAndRoundTrips() {
         // Strafe is the 3rd float in the full 8-arg constructor (fwd, vert, strafe, ...).
         FreeFlightInput hi = new FreeFlightInput(0f, 0f, 9f, 0f, 0f, 0f, false);

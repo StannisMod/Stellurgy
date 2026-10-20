@@ -74,9 +74,10 @@ Config: see `C4-config-surface` (controllers only tick when `world.provider inst
   `targetRotationsPerHour[0]` and the station's rotation around EAST then changes
   (StationControllersTickContractTest:217-261). Pinned by `StationControllersTickContractTest#orientationControllerWalksStationRotationTowardTarget`.
 - **INV-STN-13 [T][BEH]** Each of the three controller blocks places with its own tile entity class
-  (`Stellurgy#registerBlocks`; StationControllersSmokeTest). That their `update` is a no-op off a
+  (`Stellurgy#registerBlocks`; StationControllersSmokeTest). The orientation and gravity controllers'
+  classes are `[V]` only (`Stellurgy.java:1134-1135`). That their `update` is a no-op off a
   space world is `[V]` (first line of each `update`), so the smoke test's ticks in dim 0 observe
-  nothing about ticking on a station. Pinned by `StationControllersSmokeTest#orientationControllerPlacesAndTicksWithoutCrash`, `StationControllersSmokeTest#gravityControllerPlacesAndTicksWithoutCrash`, `StationControllersSmokeTest#altitudeControllerPlacesAndTicksWithoutCrash`.
+  nothing about ticking on a station. Pinned by `StationControllersSmokeTest#altitudeControllerPlacesAndTicksWithoutCrash`.
 - **INV-STN-14 [V][BEH]** Convergence steps are bounded per tick (altitude `0.02`, gravity `0.001`,
   orientation `getMaxRotationalAcceleration`) so a target change ramps rather than snaps; the exact
   rates are `tunable` (`TileStationAltitudeController.java:183`, `TileStationGravityController.java:210`,

@@ -197,7 +197,10 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
 - **INV-SPC-10** [V] A jump and a crossing act on the ship they **name**, or refuse (`VSShipCrosser.java:196-235`;
   `VSShipCrossingOps.java:131-140`; `ShipTransitManagerTest.java:543`).
 - **INV-SPC-15** [V][T] The entry ring is strictly outside the body's descent shell, so an entering ship never spawns
-  inside the descent trigger (`ShipEntryController.java:60-70`; `ShipEntryControllerTest.java:183`).
+  inside the descent trigger. The ring is decided by `ShipEntryController#entryRingAround(GalacticCoord)` — the
+  widest ring of the bodies at the address, never narrower than the flat `ENTRY_RING_BLOCKS`, which is twice
+  `DESCENT_RADIUS_BLOCKS` (`ShipEntryController.java:59-85`). Pinned by
+  `ShipEntryControllerTest#entryCrossesSettlesInLedgerOutsideTheDescentRadius`.
 - **INV-SPC-16** [V] Settle order is pose → re-seat → unpark; a rider is never mounted onto a mount about to move
   (`ShipCrossingService.java:259-280`).
 - **INV-SPC-17** [V] "Stored" is derived from region data on disk, never remembered in memory — an in-memory flag is

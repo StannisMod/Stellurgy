@@ -134,7 +134,7 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
     @Pins("INV-ITM-05")
-    @RedWitness(member = "ItemData#getMaxData", at = "damage == 0 ? 1000 : 0", replacedBy = "1000",
+    @RedWitness(member = "ItemData#getMaxData(int)", at = "damage == 0 ? 1000 : 0", replacedBy = "1000",
             fails = "damage 1 -> max data 0 (inert variant)", on = "2026-10-19")
     @Test
     public void dataStickMaxDataIsZeroForNonZeroDamage() {

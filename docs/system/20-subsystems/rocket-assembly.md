@@ -170,7 +170,7 @@ holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blo
   before `assembleRocket` runs. Pinned by `RocketAssemblySmokeTest#invalidRocketMissingEngineFailsAssemblyWithReason`.
 - **INV-RASM-04 [T][BEH]** The pad assembler spawns `EntityRocket` (never
   `EntityStationDeployedRocket`); the UV assembler spawns `EntityStationDeployedRocket`.
-  `UvAssemblerOutputEntityClassTest.java:81,106`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
+  `UvAssemblerOutputEntityClassTest.java:59,81`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
 - **INV-RASM-05 [V][BEH]** UV size caps are `MAX_SIZE=MAX_SIZE_Y=17` and are strictly smaller than
   the pad assembler's `MAX_SIZE_Y=128`, so the two tiles remain distinct machines.
   `TileUnmannedVehicleAssembler.java:33`; `TileRocketAssemblingMachine.java:70`. Unpinned on
@@ -280,7 +280,7 @@ assembler's world's transfer line, `DimensionManager.transferLineOf` (`metric-bo
 |-----------|-----------|
 | INV-RASM-02 | `RocketAssemblySmokeTest.java:56` |
 | INV-RASM-03 | `RocketAssemblySmokeTest.java:33` |
-| INV-RASM-04 | `UvAssemblerOutputEntityClassTest.java:81,106` |
+| INV-RASM-04 | `UvAssemblerOutputEntityClassTest.java:59,81` |
 | INV-RASM-05 | — (constants only; see the invariant) |
 | INV-RASM-06 | `RocketRequireFuelDisableAssemblesTest.java:77` |
 | INV-RASM-07 | `WearAccrualDisableTest.java:76,81` |

@@ -55,7 +55,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
 
     /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
     @Pins("INV-MBM-09")
-    @RedWitness(member = "TileMultiBlock#completeStructure", at = "&& !getAllowableBlocks(structure[y][z][x]).contains(new BlockMeta(block,meta))",
+    @RedWitness(member = "TileMultiBlock#completeStructure(IBlockState)", at = "&& !getAllowableBlocks(structure[y][z][x]).contains(new BlockMeta(block,meta))",
             replacedBy = "&& false",
             fails = "structure validated despite missing 'p' plug", on = "2026-10-19")
     @Test

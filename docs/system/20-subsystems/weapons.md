@@ -462,8 +462,7 @@ register. `IGunPart.java:6-21`, `BlockGunPart.java:23-38` [V]
 
 **INV-GUN-05 — The mount's bearing survives a save.** Yaw, pitch, the standing command and the drive
 state round-trip; a reloaded gun points where it was left.
-`TurretMechanism.java:170-193`, `TileTurret.java:330-375` [V]
-[T `TurretMechanismTest#theBearingSurvivesARoundTrip`]
+`TurretMechanism.java:170-193`, `TileTurret.java:330-375` [V] (no test).
 
 ## Failure modes & edge cases
 

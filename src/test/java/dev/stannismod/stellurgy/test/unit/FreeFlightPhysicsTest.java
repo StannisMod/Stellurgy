@@ -145,8 +145,9 @@ public class FreeFlightPhysicsTest {
 
     /** Pins INV-RKT-12 (with thrust not permitted the craft is a Newtonian brick that only falls). */
     @Pins("INV-RKT-12")
-    @RedWitness(member = "FreeFlightPhysics#step", at = "gravity, canThrust);", replacedBy = "gravity, true);",
-            fails = "no fuel: no thrust", on = "2026-10-19")
+    @RedWitness(member = "FreeFlightPhysics#step(double,double,double,float,float,float,FreeFlightInput,double,double,boolean)",
+            at = "boolean thrustApplied = canThrust && wantsThrust;", replacedBy = "boolean thrustApplied = wantsThrust;",
+            fails = "no fuel: no thrust", on = "2026-10-20")
     @Test
     public void cannotThrustDisablesThrustButStillRotatesAndApplyGravity() {
         Step s = FreeFlightPhysics.step(0, 0, 0, 0f, 0f,
@@ -179,10 +180,11 @@ public class FreeFlightPhysicsTest {
      * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
     @Pins("INV-RKT-23")
-    @RedWitness(verdict = "burning buys every bit of the speed it paid for", member = "FreeFlightPhysics#step",
-            at = "return step(mx, my, mz,",
-            replacedBy = "return step(Math.min(mx, 50.0), Math.min(my, 50.0), Math.min(mz, 50.0),",
-            fails = "burning for 1000 ticks must buy every bit of the speed it paid for", on = "2026-10-19")
+    @RedWitness(verdict = "burning buys every bit of the speed it paid for",
+            member = "FreeFlightPhysics#step(double,double,double,float,float,float,FreeFlightInput,double,double,boolean)",
+            at = "return new Step(newMx, newMy, newMz,",
+            replacedBy = "return new Step(Math.min(newMx, 50.0), Math.min(newMy, 50.0), Math.min(newMz, 50.0),",
+            fails = "burning for 1000 ticks must buy every bit of the speed it paid for", on = "2026-10-20")
     @Test
     public void newtonianFlightBoundsAccelerationAndNotSpeed() {
         int burnTicks = 1000;
