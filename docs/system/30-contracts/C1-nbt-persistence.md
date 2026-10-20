@@ -424,7 +424,7 @@ sweeps within one interval, which is the only honest state to reload into.
 |---|---|---|
 | `reserve` | repair bay TE (`TileRepairBay#writeToNBT` / `#readFromNBT`) | compound written by vanilla `ItemStackHelper.saveAllItems` (its `Items` list): the reserve of finished blocks `[V]` |
 | `energy` | repair bay TE | int: the FE buffer's contents. The SIZE is not saved — it is the config's (`repairBayEnergyCapacity`), read live `[V]` |
-| `credits` | repair bay TE, rocket service station TE | list of `{item, stages}`: stages paid for and not yet spent, keyed by `<item registry name>@<meta>`; only positive entries are written. Written by `BayEngine#writeTo` into the machine's own tag — for the station since TASK-323 wave B `[V]` |
+| `credits` | repair bay TE, rocket service station TE | list of `{item, stages}`: stages paid for and not yet spent, keyed by `<item registry name>@<meta>`; only positive entries are written. Written by `BayEngine#writeTo` into the machine's own tag — for the station since 2026-10-06 `[V]` |
 | `banked` | repair bay TE, rocket service station TE | int: energy already put toward the next step of work — what makes a bay (and the station's own repair) resumable (C20 REPAIR-8); `BayEngine#writeTo` `[V]` |
 
 **Not saved, deliberately**: the bay's claimed position, its answer (`RepairOutcome`) and its size —

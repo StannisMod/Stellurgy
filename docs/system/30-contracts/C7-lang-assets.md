@@ -161,7 +161,7 @@ nothing new ships and the block still reads as an instrument.
 | `tile.reactiveBlock.name` | `blockstates/reactiveblock.json` |
 | `item.stellurgy:repairWelder.name`, `msg.welder.repaired`, `msg.welder.undamaged`, `msg.welder.nocost`, `msg.welder.nomaterials`, `msg.welder.nocharge` | `models/item/repairwelder.json` |
 | `tile.repairBay.name`, `tile.repairBayPart.name`, `msg.repairbay.{repairing,undamaged,no_recipe,no_materials,no_charge,unfillable,no_structure}` (the bay's `RepairOutcome` NAME lower-cased — `TileRepairBay#statusLine`), `msg.repairbay.size` (added 2026-10-06, en_US only) | `blockstates/repairbay.json`, `blockstates/repairbaypart.json` (placeholder libVulpes machine textures; no recipes) |
-| `msg.serviceStation.{repairing,undamaged,no_recipe,no_materials,no_charge,no_structure}` — the rocket service station's own repair, its `RepairOutcome` NAME lower-cased, shown in the screen line that read only `serviceProgressNA` before (`TileRocketServiceStation#updateText`; TASK-323 wave B, 2026-10-06, en_US + ru_RU). No `unfillable`: a rocket has no holes | — (no new asset) |
+| `msg.serviceStation.{repairing,undamaged,no_recipe,no_materials,no_charge,no_structure}` — the rocket service station's own repair, its `RepairOutcome` NAME lower-cased, shown in the screen line that read only `serviceProgressNA` before (`TileRocketServiceStation#updateText`; 2026-10-06, en_US + ru_RU). No `unfillable`: a rocket has no holes | — (no new asset) |
 
 **The LOWERCASE in this table's header is the whole rule.** An asset file named in the case a
 registry name is DECLARED in (`mirrorPlatingAluminium.json`) is not found: a lookup lowercases,
