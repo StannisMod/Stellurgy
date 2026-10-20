@@ -1296,7 +1296,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
      * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
-     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
+     * the screen's own button, which {@code WeaponClientGroupTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      *
      * <p>The waits on {@code machine_packet_judged} are links, not verdicts: the record is written at
@@ -1398,7 +1398,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * before the server reads the press, so a press from beyond a chest's reach leaves its mode alone,
      * and the same press from the player standing on it switches it to illuminating. Both presses are
      * forged by the real client ({@link ForgedMachinePress}); the screen's own button is
-     * {@code WeaponGuiButtonsReachTheServerTest}'s.
+     * {@code WeaponClientGroupTest}'s.
      *
      * <p>The placement waits link on vanilla's own position packet ({@code client_pos_look_applied}
      * after {@code /tp}); no Stellurgy code decides it, so there is nothing of ours to break. The waits on

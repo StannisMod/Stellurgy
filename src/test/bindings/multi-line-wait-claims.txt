@@ -4,8 +4,6 @@
 # Each stands among identical lines (a repeated wait, a repeated loop header), so its one-line form needs the
 # code reshaped through the IDE. The list only shrinks, and a line absent at its base fails the build.
 # Line: <class>#<method> @Wait|@ServerOnly <at>
-dev.stannismod.stellurgy.test.client.APlayersHandRepairsTest#aDamagedBlockAPlayerBreaksLeavesNoDamageBehind @Wait bot().waitWorldTicks(1); JsonObject pick = bot().reportMouseOver();
-dev.stannismod.stellurgy.test.client.APlayersHandRepairsTest#aDamagedBlockAPlayerBreaksLeavesNoDamageBehind @Wait bot().waitWorldTicks(1); bot().setKey(KEY_ATTACK, false);
 dev.stannismod.stellurgy.test.client.FreeFlightModeTest#throttleCutKeyNeutralisesThrust @Wait advanceServerAndClient(12); double myClimb = rocketInfo(rocketId).motionY;
 dev.stannismod.stellurgy.test.client.FreeFlightModeTest#throttleCutKeyNeutralisesThrust @Wait advanceServerAndClient(12); double myCut = rocketInfo(rocketId).motionY;
 dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot @Wait bot().waitWorldTicks(5); aim = bot().reportMouseOver();

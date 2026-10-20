@@ -60,8 +60,8 @@ cold, quiet ship can only be engaged by someone who has stopped being quiet them
 at the trigger, so an ally's position is never written anywhere a gun could read it and no stale
 order, race or second console can produce a shot at them. The gun checks again at the trigger as
 depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
-[T `SensorFriendIsNeverAcquiredTest`, falsified: with the screen removed the code-carrying player
-enters the list at quality 0.30 and the test reddens]
+[T `WeaponClientGroupTest#aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes` (INV-FCS-07),
+falsified: with the screen removed the code-carrying player enters the list and the test reddens]
 
 - **MECH-FCS-04 [T][BEH] — Being ON our own ship is itself the credential; being near it is not.** An
   entity on the sensor's own ship is excluded whatever it is carrying: a crew does not acquire code
@@ -137,7 +137,7 @@ GUI button fires on the client (`ModuleButton.actionPerform` is client-only), an
 is read by the sweep on the server; so the press travels as a `PacketMachine` and the server flips
 its OWN mode in `useNetworkData`, answering to the GUI's `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
 on a dedicated server. `TileFireControlSensor#onInventoryButtonPressed`,
-`#useNetworkData` [V] [T `WeaponGuiButtonsReachTheServerTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
+`#useNetworkData` [V] [T `WeaponClientGroupTest#theSensorsModeButtonSwitchesTheSensorOnTheServer` (INV-FCS-08)]
 `canBeUsedBy` is vanilla's usability rule (`MachineReach#reaches`: same world, still there,
 distanceSq ≤ 64.0), `canInteractWithContainer` answers with it, and `PacketMachine` refuses a press
 that fails it before the sensor sees it — weapons MECH-GUN-44, network-wire MECH-NW-10 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
@@ -178,6 +178,16 @@ sensor on a named ship that is not simulated (no transform) and for a sensor blo
 no ship owns — a remnant, whose coordinates are a shipyard address (`weapons` MECH-GUN-46). [V]
 Not pinned on the sensor itself: the remnant decision it shares is pinned through the gun
 (`TurretStandaloneTest#aGunInTheShipyardThatNoShipOwnsNeitherTurnsNorFires`).
+
+- **INV-FCS-07** [T][BEH] A player carrying the installation's code is in no sweep's contact list; the same
+  player, in the same place, carrying another code is in one within the same number of sweeps, and the
+  battery fires on him as an ACQUISITION (MECH-FCS-03). `TacticalScan#trackOf`,
+  `TileFireControlSensor#publish` [V]. Pinned by
+  `WeaponClientGroupTest#aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes`.
+- **INV-FCS-08** [T][BEH] A press of the sensor's mode button on a real client switches the server's
+  sensor: its next sweeps are taken in `ACTIVE` mode (MECH-FCS-14).
+  `TileFireControlSensor#onInventoryButtonPressed`, `#useNetworkData` [V]. Pinned by
+  `WeaponClientGroupTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`.
 
 ## Failure modes & edge cases
 

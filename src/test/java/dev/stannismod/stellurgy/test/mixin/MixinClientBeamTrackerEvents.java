@@ -25,8 +25,7 @@ import java.util.Map;
  * corner — read off the tracker's own entry after the write, never off the packet. Client log. The
  * edge memory is {@link ClientBeamMemory}, and it forgets a gun whenever the tracker stops holding it
  * (extinguished, gone stale, or a new world's tracker built empty), so a beam that goes out and
- * relights is recorded again. Read by {@code BeamReachesClientTest} and
- * {@code ABentBeamIsDrawnBentTest}.</p>
+ * relights is recorded again. Read by {@code WeaponClientGroupTest}.</p>
  *
  * <p>SILENT about a heartbeat that changes nothing drawn, and about the path's points moving without
  * their count changing.</p>

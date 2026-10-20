@@ -3,8 +3,6 @@
 # a STIMULUS loop, wherever its loop is written: its call site carries a STIMULUS @Wait naming its line, and its
 # act steers -- is shaped by what the stimulus reads -- or there is no act and the wait is a link. A re-click,
 # a re-teleport or a stepped subsystem repeated until the record appears is a dose. The list only shrinks.
-dev.stannismod.stellurgy.test.client.ABentBeamIsDrawnBentTest#aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt 2
-dev.stannismod.stellurgy.test.client.BeamReachesClientTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot 2
 dev.stannismod.stellurgy.test.client.ClientGuiTestSupport#openGuiByRightClick 1
 dev.stannismod.stellurgy.test.client.FreeFlightModeTest#mountFreshFreeFlightRocket 1
 dev.stannismod.stellurgy.test.client.MachineGuiClientGroupTest#openMachineGui 1

@@ -62,10 +62,10 @@ thrower, blown up, chunk unloaded — reaches that channel by the same road burn
 that ended without saying so would leave a beam drawn on a gun that had stopped firing. The channel
 decides what is worth a packet (`projectile-substrate` MECH-SHOT-29); the gun decides only what is true.
 `TileTurret#holdBeam`, `#burnOneTick`, `#extinguishBeam` [V]
-[T `BeamReachesClientTest`, `BeamReplicationCadenceTest`]
+[T `WeaponClientGroupTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot`, `BeamReplicationCadenceTest`]
 
 **MECH-GUN-37 — What the gun offers the channel is a PATH, not two ends.** A beam can be turned — a mirror sends it back along the reflected direction as a further leg of the same tick — so the corner is a real point on the line it occupies. The tick's emission carries the whole path, the channel compares the whole path when deciding whether the drawing has moved (two ends can stay put while a corner walks along the plating), and the packet carries a point count. A beam nothing turned is exactly its two ends, which is the overwhelming case and costs one extra byte. `HeldBeam.Emission#path`, `TileTurret#replicatedPath`, `BeamReplication.Channel#offer` [V]
-[T `ABentBeamIsDrawnBentTest` — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
+[T `WeaponClientGroupTest#aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt` (INV-GUN-08) — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
 
 ## Responsibility boundary
 
@@ -260,7 +260,7 @@ commanded bearing, the traverse rate and the drive state, and the client runs th
 `TurretMechanism` against them. Sent only when the command has moved more than 2 degrees or the drive
 state changed — a battery would otherwise put its barrels on the connection at the same rate as its
 rounds. `TileTurret.java:198-224`, `:330-360` [V]
-[T `TurretAimReachesClientTest` — falsified against a build with the sync disabled]
+[T `WeaponClientGroupTest#theBearingTheServerCommandsArrivesAtTheClient` (INV-GUN-09) — falsified against a build with the sync disabled]
 
 **MECH-GUN-44 — Only a player within reach operates a console or a sensor.**
 `TileWeaponConsole#canBeUsedBy` and `TileFireControlSensor#canBeUsedBy` answer `MachineReach#reaches`
@@ -281,7 +281,7 @@ Its BUTTONS reach that state through a packet: a GUI button fires on the client,
 state does not exist, so Hold Fire and Clear Target send a `PacketMachine` and the server applies
 them in `useNetworkData` (the toggle computed from the server's own flag), under the GUI's
 `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileWeaponConsole.java:595-603`); nothing is written to the client tile, which a dedicated server would never hear. `TileWeaponConsole#onInventoryButtonPressed`, `#useNetworkData` [V]
-[T `WeaponGuiButtonsReachTheServerTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`]
+[T `WeaponClientGroupTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer` (INV-GUN-11)]
 
 **MECH-GUN-38 — The console's screen is TOLD by the server, while it is open.** Every line the screen
 shows — network status, hold-fire, gun and on-target counts, the target, the sensor's contact — is
@@ -294,7 +294,7 @@ builds its lines BLANK until the first readout lands, rather than answering "no 
 empty JVM. The client never derives a line itself (`TileWeaponConsole.java:432-440`): on a dedicated server the panel would always read "no network" / not holding, and in single player it would read the integrated server's objects
 across threads. `TileWeaponConsole#getModules`, `#readoutTag`, `#showReadout`,
 `ReadoutSync` [V]
-[T `WeaponGuiButtonsReachTheServerTest#theConsolesScreenShowsTheServersNetwork`]
+[T `WeaponClientGroupTest#theConsolesScreenShowsTheServersNetwork` (INV-GUN-12)]
 
 **MECH-GUN-39 — A player names a target by LOOKING at it through a linker bound to the weapon
 (ruled 2026-10-04).** Two acts. **Bind**: a linker clicked on a console (a SNEAKING right-click — a
@@ -315,8 +315,9 @@ machine is not loaded here, a console with no network. The design question (a cl
 only ~5 blocks, useless for a battery) was put to the maintainer, who chose the line-of-sight form.
 Both `onLinkStart` and `onLinkComplete` bind the linker to the console (`TileWeaponConsole.java:397-408`); the order itself is given by `onLinkAimed` (`:415`). `ItemLinker#onItemRightClick`, `#lineOfSight`, `ILinkAimedTile`,
 `LinkerDesignation`, `TileWeaponConsole#onLinkAimed`, `TileTurret#onLinkAimed` [V]
-[T `ALinkerNamesTheBatteryItsTargetTest` — a real client binds, looks and clicks; the battery turns
-onto a block 22 blocks off and fires, then onto a creature]
+[T `WeaponClientGroupTest#aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker` (`libvulpes`
+INV-LVP-22) — a real client binds, looks and clicks; the battery turns onto a block 22 blocks off and
+fires, then onto a creature, then back onto the block]
 
 **MECH-GUN-40 — A pilot names a SHIP as his battery's target with T (rulings 2026-10-05).**
 *"по нажатию T выдавать целеуказание на корабль, находящийся в окрестности курсора игрока (по сути же
@@ -391,7 +392,8 @@ stop shooting. Releasing it resumes. `TileWeaponConsole.java:133-150`, `WeaponNe
 aim is recomputed each tick from the entity's body centre, and an entity that dies or logs out simply
 stops being found, which leaves the mount holding its bearing rather than swinging to a remembered
 position. `TileTurret.java:172-206` [V]
-[T `TurretFriendOrFoeTest`]
+[T `WeaponClientGroupTest#aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot` — the gun follows
+the player it was pointed at]
 
 **MECH-GUN-22 — Friend-or-foe is a credential the TARGET carries.** *(Only a
 PLAYER can present it — `CodeUtils.entityHasMatchingCode` returns false for anything else,
@@ -401,8 +403,8 @@ who is friendly. A gun with no code recognises nobody, deliberately: a battery t
 indistinguishable from a broken one. The code lives on the NETWORK when there is one, because "whose
 side are we on" is a property of the installation and guns that disagreed would shoot the crew at
 random. `TileTurret.java:208-230`, `TileWeaponConsole.java:133-160`, `CodeUtils#entityHasMatchingCode` [V]
-[T `TurretFriendOrFoeTest`, falsified: with the check removed the gun shoots the code-carrying
-player]
+[T `WeaponClientGroupTest#aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot` (INV-GUN-10),
+falsified: with the check removed the gun is permitted to fire on the code-carrying player]
 
 **MECH-GUN-36 — Commanding a battery is UNGUARDED, and that is the ruling (2026-08-20).** The
 console's commands — `assignTarget`, `assignTargetEntity`, `setAccessCode`, `clearTarget`,
@@ -491,6 +493,24 @@ state round-trip; a reloaded gun points where it was left.
   its build, but is never commanded onto a world target and its trigger forms no muzzle: nothing reads
   its shipyard address as a place in the world (MECH-GUN-46). Pinned by
   `TurretStandaloneTest#aGunInTheShipyardThatNoShipOwnsNeitherTurnsNorFires`.
+- **INV-GUN-08** [T][BEH] A beam a mirror turned reaches a client near it with its corner in it, and a
+  beam nothing turned reaches it with none: what the player is shown is the path the server resolved,
+  never a line between its two ends (MECH-GUN-37). `PacketBeamState#of` carries the path point by point
+  [V]. Pinned by `WeaponClientGroupTest#aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt`.
+- **INV-GUN-09** [T][BEH] The bearing the server commands a turret reaches a client that tracks it: the
+  client's own mount reports itself on target on the SERVER's commanded bearing, and points there
+  within the aim tolerance (MECH-GUN-18). `TileTurret#getUpdateTag`, `TurretMechanism#isOnTarget` [V].
+  Pinned by `WeaponClientGroupTest#theBearingTheServerCommandsArrivesAtTheClient`.
+- **INV-GUN-10** [T][BEH] A gun on target holds fire on a player carrying its installation's access code,
+  and fires on the same player once the code he carries does not match (MECH-GUN-22). `TileTurret#canFireNow`
+  [V]. Pinned by `WeaponClientGroupTest#aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot`.
+- **INV-GUN-11** [T][BEH] A press of the console's Hold Fire button on a real client holds the battery
+  on the server (MECH-GUN-19). `TileWeaponConsole#onInventoryButtonPressed`, `#useNetworkData` [V].
+  Pinned by `WeaponClientGroupTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`.
+- **INV-GUN-12** [T][BEH] A console's open screen shows the server's network — its gun count, its hold
+  fire and its status — and follows it when it changes (MECH-GUN-38). `TileWeaponConsole#getModules`,
+  `#readoutTag`, `ReadoutSync#isUpdateRequired` [V]. Pinned by
+  `WeaponClientGroupTest#theConsolesScreenShowsTheServersNetwork`.
 
 ## Failure modes & edge cases
 

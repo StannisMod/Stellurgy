@@ -39,12 +39,16 @@ designed against a floor price and a working ancestor, and both constrain it.
   inside a rocket's `StorageChunk` is at no position of a world the reader can see — its `WorldDummy`
   reports no chunk loaded — and has one home only, its own `IPartWear`; the station writes that home
   directly, `TileRocketServiceStation#restage` `[V]`. There is no map half to leave behind.)* Pinned by
-  `RepairWelderTest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderTest#aWornEngineAboardIsRestagedByTheBayOutOfOneSpare`.
-- **REPAIR-2 (the floor is hand replacement, and it is already the price list)** `[V][BEH]` Breaking a
+  `RepairWelderTest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderTest#aWornEngineAboardIsRestagedByTheBayOutOfOneSpare`,
+  and from a real client's hand by `WeaponClientGroupTest#aWelderInAPlayersHandTakesOneStageOff`.
+- **REPAIR-2 (the floor is hand replacement, and it is already the price list)** `[T][BEH]` Breaking a
   damaged block and placing a fresh one repairs that position at the cost of one block, clearing its
-  record (`DamageInvalidationHandler.java` `[V]`). Every rung is priced against this: a rung
+  record (`DamageInvalidationHandler#onBlockBroken`, `#onBlockPlaced` `[V]`). Every rung is priced against this: a rung
   that costs MORE than hand replacement for the same result is dead content, and one that costs less
-  must say what the player gave up instead — a machine, its energy, or the time it took.
+  must say what the player gave up instead — a machine, its energy, or the time it took. Pinned, each half
+  by a real client's hand against a probe's silent change as the control, by
+  `WeaponClientGroupTest#aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed`,
+  `…#aDamagedBlockAPlayerBreaksLeavesNoDamageBehind`.
 - **REPAIR-3 (nothing is created from nothing)** `[T][BEH]` Every stage restored and every hole filled is paid
   for with material that leaves an inventory. No rung invents a generic "matter"; T2/T3 consume the
   real items the ship's economy already makes. **Falsifiable:** run a bay with a reserve that
@@ -169,7 +173,8 @@ designed against a floor price and a working ancestor, and both constrain it.
 | --- | --- |
 | REPAIR-1 | `RepairWelderTest.oneUseTakesOneStageAndIsPaidForTwice` — one use, exactly one stage, written through `DamageState`; plus `ShipDamageSurvivesRelocationTest.breakingAndReplacingTheFlightComputerDoesNotRepairTheHull` for the record-clearing half from the other side |
 | REPAIR-1 (tile home) | `RepairWelderTest.aWornEngineAboardIsRestagedByTheBayOutOfOneSpare` — an engine's tile-kept wear restaged through `DamageState`, six stages out of one spare engine |
-| REPAIR-2 | the same flight-computer scenario: replacing a block clears ITS record and no other's |
+| REPAIR-1 (a player's hand) | `WeaponClientGroupTest.aWelderInAPlayersHandTakesOneStageOff` — a real client's right-click with a charged welder reaches the repair and takes exactly one stage off |
+| REPAIR-2 | the same flight-computer scenario: replacing a block clears ITS record and no other's; and a real client's hand, each half against a probe's silent change as the control — `WeaponClientGroupTest.aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed` (a placement into a hole is a new block) and `WeaponClientGroupTest.aDamagedBlockAPlayerBreaksLeavesNoDamageBehind` (a break takes the record with it) |
 | REPAIR-3 | `RepairWelderTest` — material and charge both leave on a repair, and NEITHER leaves on any refusal. Asserted as direction only (`after < before`), never as an amount: the fraction is tuned |
 | REPAIR-4, REPAIR-5 | `RepairWelderTest.aHoleIsRebuiltWithTheBlockItsRecordNamesAndTheRecordIsSpent` — the provenance block put back, the record gone, one block drawn, and the bay's next look finds nothing and spends nothing |
 | REPAIR-5, REPAIR-9 | `DamageLayerTest` pins provenance round-tripping; `StructuralDamageContractTest` pins the cheaper-to-finish ordering |

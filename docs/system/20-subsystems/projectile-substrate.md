@@ -181,7 +181,7 @@ stops burning with no tick in which to say so, and an edge-triggered channel wou
 across the sky until the player relogged. The heartbeat must therefore be quicker than the client's
 timeout, which is a two-sided arrangement the test reads from both ends rather than restating.
 `BeamReplication.java`, `PacketBeamState.java`, `ClientBeamTracker.java`, `RenderBeams.java` [V]
-[T `BeamReplicationCadenceTest`, `BeamReachesClientTest`]
+[T `BeamReplicationCadenceTest`, `WeaponClientGroupTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot` (INV-SHOT-09)]
 
 **MECH-SHOT-32 — A shell that could not pay the whole price does not stop a beam.** `isIntercepted`
 is true on an UNDERPAY as well as on a full stop; `isFullyAbsorbed` is the one that means the shell
@@ -239,7 +239,8 @@ than a position stream: the client integrates its own copy with the same arithme
 when the server says the round stopped. The end packet is what keeps a client from drawing a round
 sailing through the hull that stopped it. `ShotReplication.java:43-79`, `PacketShotSpawn.java:12-27`,
 `PacketShotEnd.java:12-21`, `ClientShotTracker.java:13-28` [V]
-[T `ShotReachesClientTest`]
+[T `WeaponClientGroupTest#aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot` (INV-SHOT-10),
+`…#aRoundThatStopsNearbyIsToldToTheClientAsEnded` (INV-SHOT-11)]
 
 **MECH-SHOT-14 — Who is told is decided by the PATH, not by the muzzle.** A player is told when the
 round's forward segment (capped at 200 ticks of flight) passes within `shotVisibilityRadius` of them —
@@ -247,7 +248,7 @@ which is what makes a round fired from four kilometres away visible to the perso
 case a muzzle-distance filter gets exactly backwards. The end packet is keyed on the end point instead:
 a player too far to be in range there cannot see the impact either, and their copy ages out on its
 stated lifetime. `ShotReplication.java:33-40,43-79`, `ProximityBroadcast.java` (MECH-SHOT-30) [V]
-[T `ShotReachesClientTest` — the far-shot control]
+[T `WeaponClientGroupTest#aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot` — the far-shot control]
 
 **MECH-SHOT-12 — A shot ends for a stated reason at a stated place, remembered briefly after it is
 gone.** Absence from the registry cannot tell a hit from a timeout, so the last 64 endings keep their
@@ -295,6 +296,19 @@ nothing, or bore through what it already passed. `StructureDamageEngine.java:179
 See the gap below. `StructureCrossing.java:134-136` [V]
 
 **INV-SHOT-06** — retired: the war is always on (maintainer ruling 2026-10-03, *"Убираем этот гейт, слишком жирно. Война всегда включена."*). No key switches the mechanic off and the substrate has no off state: a launch is refused only for a client world or a full registry.
+
+- **INV-SHOT-09** [T][BEH] A held beam is drawn by the client of a player standing near the gun, and is
+  never sent to a client whose player is beyond the visibility radius of its segment (MECH-SHOT-29).
+  `ProximityBroadcast#sendNearSegment` decides who is told [V]. Pinned by
+  `WeaponClientGroupTest#aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot`.
+- **INV-SHOT-10** [T][BEH] A round whose path passes within `shotVisibilityRadius` of a player is drawn by
+  his client, and one whose path never does is not sent to it (MECH-SHOT-13, MECH-SHOT-14).
+  `ShotReplication`, `ProximityBroadcast#sendNearSegment` [V]. Pinned by
+  `WeaponClientGroupTest#aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot`.
+- **INV-SHOT-11** [T][BEH] A round that ends near a player is told to his client as ENDED, with the reason
+  it ended — a round that stopped in structure is told so (MECH-SHOT-13, MECH-SHOT-12).
+  `ShotReplication#announceEnd`, `ShotSubstrate#step` [V]. Pinned by
+  `WeaponClientGroupTest#aRoundThatStopsNearbyIsToldToTheClientAsEnded`.
 
 ## Failure modes & edge cases
 

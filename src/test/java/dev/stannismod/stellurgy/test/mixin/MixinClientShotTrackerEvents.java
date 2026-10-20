@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * (HEAD of {@code ClientShotTracker.end}), each carrying the round's server id; the end carries the
  * reason and the point the flash is drawn at. Those two methods are the only doors from the spawn
  * and end packets into what the renderer draws, so a round this client was told about is a record
- * here and one it was not told about is not. Client log. Read by {@code ShotReachesClientTest}.
+ * here and one it was not told about is not. Client log. Read by {@code WeaponClientGroupTest}.
  *
  * <p>SILENT about a round the client drops on its own because it outlived its declared lifetime —
  * that is the tracker's tick, not a packet.</p>
