@@ -96,3 +96,7 @@ registration site is uniformly `misc-oddities`.
 - **R9 — `StellurgyHoverCraft` entity id is inconsistent with its siblings [V].** `Stellurgy`+PascalCase
   path with a divergent legacy name string `hovercraft` (`Stellurgy.java:670`), while `mountDummy` /
   `rocket` / `laserNode` / `deployedRocket` use camelCase without the prefix. Cosmetic. LOW.
+- **R10 — `hullTransponder` is registered with no recipe, on purpose [V].** The block
+  (`Stellurgy.java:1322`) and its tile id `StellurgyHullTransponder` (`:766-767`) exist; a survival player
+  cannot craft it until its price is set (maintainer, 2026-10-07: *«Да, рецепта пока не будет»* — no
+  recipe for now). Creative and commands reach it. Not a defect: an id with no recipe is a decision.

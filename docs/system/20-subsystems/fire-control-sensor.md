@@ -1,7 +1,7 @@
 ---
 id: fire-control-sensor
 owns: [api/sensor/, sensor/, tile/sensor/]
-entrypoints: [TileFireControlSensor#update, TacticalScan#sweep, SignatureModel#passiveQuality, WeaponNetworkState#getAcquiredTrack]
+entrypoints: [TileFireControlSensor#update, TacticalScan#sweep, ThreatOrder#of, SignatureModel#passiveQuality, WeaponNetworkState#getAcquiredTrack]
 depends-on: [subsystem-network, weapons, integration-vs, shields, api-public]
 depended-by: [weapons]
 contracts: [C1, C3, C4, C7, C12]
@@ -31,9 +31,10 @@ seam (`ITargetSignature`).
 |---|---|
 | `api.sensor.SensorMode` | `PASSIVE` (listen, emit nothing) / `ACTIVE` (illuminate, emit). `isEmitting()` is the whole price of the second |
 | `api.sensor.ITargetSignature` | the seam the heat subsystem will implement: a radiator temperature and a radiating area, kept separate |
-| `api.sensor.TargetTrack` | one contact: entity, world position, velocity, quality 0..1, mode, radiance, distance. Immutable |
+| `api.sensor.TargetTrack` | one contact, an entity (`ofEntity`, by uuid) or a HULL (`ofHull`, by the substrate's ship id, carrying the ship's world bounds as its extent): world position (a hull's is the middle of its extent), velocity, quality 0..1, mode, radiance (NaN for a hull — no signature), distance (a hull's to the nearest point of its extent). Immutable |
 | `sensor.SignatureModel` | `σT⁴`, the two terms it feeds, and the estimate used while nothing states its own signature |
-| `sensor.TacticalScan` | one sweep: candidates, the two exclusions, the per-mode quality, the ranking |
+| `sensor.TacticalScan` | one sweep: the two candidate sources (creatures, loaded hulls), the exclusions, the per-mode quality |
+| `sensor.ThreatOrder` | the order the contacts are handed over in: lock, arrival time, range, quality, identity — strict priority |
 | `tile.sensor.TileFireControlSensor` | the block: mode, energy, cadence, the published contact, the readout |
 
 ## Mechanics
@@ -59,7 +60,14 @@ cold, quiet ship can only be engaged by someone who has stopped being quiet them
 **MECH-FCS-03 — A friend never becomes a CONTACT.** The credential is screened during the sweep, not
 at the trigger, so an ally's position is never written anywhere a gun could read it and no stale
 order, race or second console can produce a shot at them. The gun checks again at the trigger as
-depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
+depth. `TacticalScan.java:163-165`, `TileTurret.java:622-644` [V]
+A HULL is screened the same way, by the network's hull rule (`weapons` MECH-GUN-42) — the function the
+gun asks at the trigger — so a ship the installation calls a friend never enters the list
+(`TacticalScan.java:100-102`); and a creature aboard such a ship is screened with it, being aboard a
+vouched-for hull counting as a credential the way being aboard our own ship does (MECH-FCS-04;
+`TacticalScan.java:171-176`). The cost, stated: a boarder on an allied deck is shielded from the
+allied battery. A sensor on NO network has no rule, holds no hull at all, and vouches for none
+(MECH-FCS-16). [V] Not seen by a test: the occupant half.
 [T `WeaponClientGroupTest#aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes` (INV-FCS-07),
 falsified: with the screen removed the code-carrying player enters the list and the test reddens]
 
@@ -73,7 +81,9 @@ falsified: with the screen removed the code-carrying player enters the list and 
   never this verdict: a body in an empty corner of a tilted hull, in the band around it, or on
   another craft whose box overlaps is a contact. A ship's allegiance by its crew's code
   (`HullAllegianceRule.CODE_ON_CREW`) asks the same predicate. A ground installation has no such
-  frame and no such exclusion. `TacticalScan#isAboard`. Pinned by
+  frame and no such exclusion. The sensor's own HULL is excluded too, by its id, before any rule or
+  credential is asked about, so a ship with no transponder never acquires itself
+  (`TacticalScan.java:92-96`; INV-FCS-10). `TacticalScan#trackOf`. Pinned by
   `ASensorAboardAShipTest#aBodyBesideTheHullThatStandsOnNothingOfItIsAContact` (the band beside the
   hull; until 2026-10-18 the box itself was the verdict, and such a body was screened as crew).
   Not seen by a test: the capture half — a crew member mid-jump during a sweep.
@@ -97,10 +107,53 @@ active mode draws FE per tick; a sensor that cannot pay reports itself underpowe
 passive-quality tracks. The alternative — quietly reporting the lock it would have had — is a readout
 that disagrees with the guns. `TileFireControlSensor.java:129-142,178-181` [V]
 
-**MECH-FCS-08 — The sensor ranks; it does not decide.** Contacts are sorted by quality, nearest
-breaking a tie, and only the first is published. A battery that has to choose should choose the one
-it can actually hit, and among equals the one arriving first. The rest of the list exists for the
-readout and for the probe. `TacticalScan.java:76-79` [V]
+**MECH-FCS-08 — The sensor ranks by a THREAT ASSESSMENT; it does not decide (ruling 2026-10-07,
+*«Оценка угрозы»* — threat assessment).** Only the first contact is published; the order is strict
+priority with no weights (`ThreatOrder.java:71-75`): (1) a contact the battery can LOCK
+(`fireControlSensorLockQualityToFire`) before one it cannot; (2) reserved — a contact this picture has
+seen ACT before one it has not: nothing observes an act yet, so no input feeds it and it is not
+written; (3) the smaller time to contact, range over closing speed — the contact's velocity relative to
+the sensor's own, projected on the line of sight to the point its range is measured to; every contact
+that is not closing compares equal here. "Closing" starts at a floor of 1e-9 blocks/tick
+(`ThreatOrder.java:57`): a creature at rest reads exactly zero, but a parked hull reads the physics
+substrate's numerical residue (measured: 1.5e-17 blocks/tick, pointed at the sensor), and a floor of
+zero would make that residue an arrival; the floor is eight orders above it and a contact at it covers
+a block in about thirty years; (4) the nearer; (5) the better held; (6)
+the smaller identity, so equals never reorder between sweeps. It reads neither the contact's KIND, nor
+its size or signature (a mob and a battleship differ by orders of magnitude, so any presence term is
+"hull always first"), nor anything about whose it is. Before acts are observed the battery therefore
+serves whatever ARRIVES first. `fireControlSensorMaxTracks` truncates AFTER the sort
+(`TacticalScan.java:122-123`), so the order also decides which contacts a full sensor forgets. The rest
+of the list exists for the readout and for the probe. [V] Not built: a stickiness against the first
+contact flapping between sweeps — its need and its form are unmeasured.
+
+**MECH-FCS-15 — A loaded HULL is a candidate, held only by illuminating, and in range by its
+NEAREST point.** The sweep's second source is every loaded ship (`VSIntegration#loadedShipBoxes`,
+world bounds UNgrown) other than the sensor's own (`TacticalScan.java:90-110`). Its extent is the world
+bounding box, its range the distance from the sensor to the nearest point of that box, and its quality
+`SignatureModel#activeQuality` at that distance (`TacticalScan.java:127-148`): measured to its centre,
+a long ship whose bow is a few blocks off would be out of range. Its velocity is the substrate's at
+the box's middle; a hull the substrate cannot measure is no contact. A LISTENING sensor holds no hull
+(`TacticalScan.java:129`): what it would hear is the hull's heat, and no heat can be read by a ship's
+identity yet — resolving one by a position the sensor guessed would be a stand-in, so it is absence.
+[V]
+
+**MECH-FCS-16 — A sensor on no weapons network holds no hull, and says so.** The hull rule is the
+network's (`TileFireControlSensor.java:222-232`); without one there is no rule, no hull candidate and
+no vouched-for hull — never a default rule nobody chose. Such a sensor publishes nothing anyway, so
+only its readout differs, and the panel carries a line saying it holds no ships
+(`TileFireControlSensor.java:483-486`, `msg.fireControlSensor.line.hullsUnscreened`). [V]
+
+**MECH-FCS-17 — A sensor that cannot look says it is blind; it never reports an empty sky.** Two
+states leave a sweep unable to measure anything: a sensor aboard a ship with no usable pose
+(`TileFireControlSensor.java:215-221`), and one whose ship has a pose but no measurable motion yet — a
+registered ship whose physics is not loaded, where every arrival time would be taken against an
+unknown motion (`TacticalScan.java:83-88`, which answers EMPTY rather than an empty list). Either way
+the sensor holds and publishes nothing, the same as for a clear sky, so the difference lives in the
+readout: the tile carries `blind` to its client (`TileFireControlSensor.java:588,613`) and the panel
+adds a line (`TileFireControlSensor.java:487-489`, `msg.fireControlSensor.line.blind`). Switching the
+sensor off clears it (`:131`). [V] — no test reaches the pose-without-motion state; the arrangement
+needs a ship registered with its physics object absent, which no probe produces today.
 
 **MECH-FCS-09 — The credential and the network are the installation's, not the block's.** A sensor on
 a network uses that network's access code, falling back to its own — the same rule a gun follows,
@@ -126,7 +179,8 @@ detection path rather than being written. `SensorMode.java:37-41`,
 
 **MECH-FCS-13 — The readout is REPLICATED, because the sweep happens where a player cannot see it.**
 The panel's numbers — mode, whether the illuminator is being paid for, how many contacts, the best
-one's quality and distance, and whether that is a lock — travel in the tile's update tag and the
+one's quality and distance, whether that is a lock, and whether the sensor is on a network at all
+(MECH-FCS-16) — travel in the tile's update tag and the
 client draws its own copy. A readout composed from server-only state renders as zeroes over a real
 connection and looks correct only in single player, where both sides share one JVM.
 Sent on a threshold — a contact appearing or going, the mode changing, the illuminator losing power,
@@ -188,6 +242,51 @@ Not pinned on the sensor itself: the remnant decision it shares is pinned throug
   sensor: its next sweeps are taken in `ACTIVE` mode (MECH-FCS-14).
   `TileFireControlSensor#onInventoryButtonPressed`, `#useNetworkData` [V]. Pinned by
   `WeaponClientGroupTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`.
+- **INV-FCS-09** [T][BEH] An illuminating sensor on a battery's network, with a hostile hull in range,
+  publishes THAT hull as its contact — the contact names the ship's id — and the battery's gun fires on
+  it as an acquisition, with nobody having named a target (MECH-FCS-15, `weapons` MECH-GUN-47).
+  `TacticalScan#sweep`, `TileTurret#interceptOf` [V]. Pinned by
+  `HullContactGroupTest#aHostileHullInRangeIsTheContactAndTheBatteryFiresOnIt`.
+- **INV-FCS-10** [T][BEH] A sensor aboard a ship never holds that ship, with no transponder aboard and
+  every rule's credential absent, while it holds another hull in the same sweeps (MECH-FCS-04).
+  `TacticalScan#sweep` [V]. Pinned by `HullContactGroupTest#aSensorNeverHoldsItsOwnHull`.
+- **INV-FCS-11** [T][BEH] Under the hull rule `TRANSPONDER` with the network's code X, a hull whose
+  transponder holds a device coded X is in no sweep's list; the sweep after its device is recoded to
+  another code, or taken out, holds it again, and the sweep after a device coded X is back holds it no
+  more — the credential is read off the device at each screening (`weapons` MECH-GUN-42).
+  `HullAllegianceRule#isFriend`, `TileHullTransponder#getCarriedCode` [V]. Pinned by
+  `HullContactGroupTest#aTransponderCarryingOurCodeKeepsItsHullOffTheListUntilTheCredentialGoes`.
+  Not seen by a test: the transponder BROKEN — it stops vouching twice over (the tile leaves the index
+  on invalidation, and the block's drop empties the slot it leaves), so no single inversion reddens it.
+- **INV-FCS-12** [T][BEH] A transponder vouches only for the hull it is ABOARD, by ship id: a second
+  hull whose world bounds overlap the vouched-for one is a contact in the same sweep that leaves the
+  first out. `HullAllegianceRule#aboard` [V]. Pinned by
+  `HullContactGroupTest#aTransponderVouchesOnlyForTheHullItIsAboard`.
+- **INV-FCS-13** [T][BEH] With a hull and a creature both held and lockable, the contact handed over
+  is the one that arrives first: a closing hull farther than a creature at rest is handed over before
+  it, and the same hull at rest is handed over after it — the same candidates in the same scan order
+  both times (MECH-FCS-08). `TacticalScan#sweep`, `ThreatOrder#of` [V]. Pinned by
+  `HullContactGroupTest#theContactHandedOverFollowsArrivalTimeNotScanOrder`.
+- **INV-FCS-14** [T][SYS] The order of `ThreatOrder#of` is the stated threat assessment and nothing
+  else: a lockable contact never ranks below an unlockable one; with everything else equal the nearer
+  ranks first and the faster-closing ranks first; exchanging a creature contact for a hull contact of
+  identical quality, range and motion leaves the order unchanged; and the order is total, the same
+  whatever order the candidates were listed in (MECH-FCS-08). FOR: the maintainer's ruling of
+  2026-10-07 that ranking across kinds is a threat assessment, *«Оценка угрозы»*. Pinned by
+  `SignatureModelTest#aContactTheBatteryCanLockOutranksOneItCannot`,
+  …#allElseEqualTheNearerRanksFirst, …#allElseEqualTheFasterClosingRanksFirst,
+  …#theOrderIsBlindToWhetherAContactIsAHull, …#theOrderIsTotalAndIndependentOfEnumeration.
+- **INV-FCS-15** [T][BEH] An illuminating sensor holds a hull whose NEAREST point is inside its radius
+  while the hull's centre is beyond it, at the quality of the nearest point's distance, and does not
+  hold the same hull once its nearest point is outside (MECH-FCS-15). `TacticalScan#hullTrackOf` [V].
+  Pinned by `HullContactGroupTest#aHullIsInRangeWhenItsNearestPointIs`.
+- **INV-FCS-16** [T][BEH] A listening sensor holds no hull — a hull with no coolant loop included —
+  and the same sensor illuminating holds that hull (MECH-FCS-15). `TacticalScan#hullTrackOf` [V].
+  Pinned by `HullContactGroupTest#aListeningSensorHoldsNoHullAndAnIlluminatingOneDoes`.
+- **INV-FCS-17** [T][BEH] With `enableFireControlSensor` off a sensor acquires no hull: it never sweeps,
+  so a hostile hull in range is never published and the battery does not fire on it; on again, the
+  same sensor acquires the same hull (INV-FCS-02). `TileFireControlSensor#update` [V]. Pinned by
+  `HullContactGroupTest#aHostileHullInRangeIsTheContactAndTheBatteryFiresOnIt`.
 
 ## Failure modes & edge cases
 
@@ -197,11 +296,14 @@ structure, so the consequence is a battery that knows about something it cannot 
 that shoots through a wall — but a radar seeing through a planet is wrong, and the fix (a swept test
 per candidate per sweep) has a cost that has not been measured. [A]
 
-**Only entities can be contacts.** A hostile SHIP is not acquirable, because nothing
-here converts a hull into a target; the same absence means an ALLIED hull can never be acquired
-either, which is why a gun pointed at a point on an allied hull still fires (`weapons`, friend-or-foe screening). A hull CAN
-be a target — by a pilot's designation (`weapons` MECH-GUN-40) — and the installation has a rule for
-telling a friendly one (MECH-GUN-42); acquiring one is not built. [A]
+**A hull is heard by nobody, and is held only by its box.** Hulls are contacts (MECH-FCS-15), but
+only an illuminating sensor holds one: a ship's heat is built (`ship-heat`) and reachable only by a
+block position, so there is no way yet to ask what ONE ship radiates by its identity, and the unit
+bridge between the heat model and the signature model is uncalibrated. Until both exist a listening
+sensor hears no hull at all, hot or cold. The extent is the world bounding box, conservative for a
+rotated hull, and the point a gun is handed is its middle — inside the envelope, not necessarily on
+matter, so a round can pass through a hollow hull (a miss, which is a normal outcome). Choosing a
+point on the hull's real blocks, and a part of it, are later work. [A]
 
 **Every temperature is estimated.** No production object states its own signature, so
 `SignatureModel` guesses from what the world knows (living body, burning body, bounding-box area).
@@ -219,10 +321,14 @@ elevation. [A]
 ## Relationships
 
 - **weapons** — the only consumer. It reads the contact off `WeaponNetworkState`, leads with the
-  velocity, and refuses to fire below the lock threshold. The gun still works with no sensor.
+  velocity, and refuses to fire below the lock threshold; a HULL contact it re-reads by the ship's id
+  every tick and screens with the hull rule at the trigger (MECH-GUN-47). The hull rule itself
+  (`HullAllegiance`) is the weapons subsystem's, and the sensor asks the same function. The gun still
+  works with no sensor.
 - **subsystem-network** — the sensor is a `Weapon`-domain sink and its contact rides that domain's
   shared state; it is deliberately NOT a controller, so it does not count as the console whose
   absence clears a battery's target.
-- **integration-vs** — one conversion, at the origin of the sweep.
+- **integration-vs** — one conversion, at the origin of the sweep; the loaded hulls, their world
+  bounds and their motion, all through `VSIntegration`.
 - **shields** — `CodeUtils` (the vendored AFFS access-code layer) is the credential this screens on.
 - **stellurgytest-probe-catalog** — `/stellurgytest sensor read|mode|code|charge|sees`.

@@ -322,6 +322,9 @@ public class TestProbeCommand extends CommandBase {
                 case "sensor":
                     handleFireControlSensor(server, sender, tail(args));
                     break;
+                case "transponder":
+                    handleHullTransponder(server, sender, tail(args));
+                    break;
                 case "sound":
                     handleSound(server, sender, tail(args));
                     break;
@@ -602,7 +605,12 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"trackingEntity\":" + (turret.getTargetEntity() != null)
                     + ",\"acquired\":" + (turret.acquiredTrack() != null)
                     + (turret.acquiredTrack() == null ? ""
-                            : ",\"acquiredQuality\":" + turret.acquiredTrack().getQuality())
+                            : ",\"acquiredQuality\":" + turret.acquiredTrack().getQuality()
+                                    + ",\"acquiredShip\":" + (turret.acquiredTrack().getShip() == null ? "null"
+                                            : "\"" + escapeJson(turret.acquiredTrack().getShip()) + "\"")
+                                    + ",\"acquiredX\":" + turret.acquiredTrack().getPosition().x
+                                    + ",\"acquiredY\":" + turret.acquiredTrack().getPosition().y
+                                    + ",\"acquiredZ\":" + turret.acquiredTrack().getPosition().z)
                     + ",\"code\":\"" + escapeJson(turret.getEffectiveAccessCode()) + "\""
                     + ",\"manual\":" + turret.isManuallyControlled()
                     + ",\"inputs\":\"" + escapeJson(spec.getDeclaredInputs().toString()) + "\""
@@ -835,7 +843,11 @@ public class TestProbeCommand extends CommandBase {
                     + (best == null ? "" : ",\"quality\":" + best.getQuality()
                             + ",\"locked\":" + best.isLocked(floor)
                             + ",\"distance\":" + best.getDistance()
-                            + ",\"radiance\":" + best.getRadianceWattsPerSquareMetre()
+                            // A hull has no signature a sensor can read: absent as a value, not NaN.
+                            + ",\"radiance\":" + (Double.isNaN(best.getRadianceWattsPerSquareMetre()) ? "null"
+                                    : String.valueOf(best.getRadianceWattsPerSquareMetre()))
+                            + ",\"contactShip\":" + (best.getShip() == null ? "null"
+                                    : "\"" + escapeJson(best.getShip()) + "\"")
                             + ",\"contactX\":" + best.getPosition().x
                             + ",\"contactY\":" + best.getPosition().y
                             + ",\"contactZ\":" + best.getPosition().z
@@ -844,6 +856,69 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown sensor subcommand\",\"sub\":\"" + escapeJson(sub) + "\"}");
+    }
+
+    /**
+     * {@code /stellurgytest transponder ...} — the hull transponder's one slot, as a player's hand would
+     * work it.
+     * <ul>
+     *   <li>{@code read <dim> <x> <y> <z>} — whether a device is in the slot and the code it carries;</li>
+     *   <li>{@code put <dim> <x> <y> <z> <code>} — a fresh code device carrying {@code code} into the
+     *       slot, through the slot's own setter, after the slot's own admission;</li>
+     *   <li>{@code take <dim> <x> <y> <z>} — the device out of the slot;</li>
+     *   <li>{@code recode <dim> <x> <y> <z> <code>} — the device IN the slot given another code, through
+     *       {@code CodeUtils#setCode}, the write the device's own screen makes: the same stack object, so
+     *       a tile that had copied the old code would go on answering it.</li>
+     * </ul>
+     */
+    private void handleHullTransponder(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5) {
+            send(sender, jsonError("usage: /stellurgytest transponder read|put|take|recode <dim> <x> <y> <z> [code]"));
+            return;
+        }
+        String sub = args[0].toLowerCase(java.util.Locale.ROOT);
+        net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+        if (world == null) {
+            send(sender, jsonError("world not loaded"));
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.weapon.TileHullTransponder)) {
+            send(sender, jsonError("no hull transponder at " + pos));
+            return;
+        }
+        dev.stannismod.stellurgy.tile.weapon.TileHullTransponder transponder =
+                (dev.stannismod.stellurgy.tile.weapon.TileHullTransponder) tile;
+        net.minecraft.item.ItemStack held = transponder.getStackInSlot(0);
+        if ("put".equals(sub) && args.length >= 6) {
+            net.minecraft.item.Item device = net.minecraft.item.Item.getByNameOrId("affs:code_device");
+            if (device == null) {
+                send(sender, jsonError("no affs:code_device"));
+                return;
+            }
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(device);
+            dev.stannismod.stellurgy.affs.util.CodeUtils.setCode(stack, args[5]);
+            if (!held.isEmpty() || !transponder.isItemValidForSlot(0, stack)) {
+                send(sender, jsonError("the slot does not take this device (occupied: " + !held.isEmpty() + ")"));
+                return;
+            }
+            transponder.setInventorySlotContents(0, stack);
+        } else if ("take".equals(sub)) {
+            transponder.removeStackFromSlot(0);
+        } else if ("recode".equals(sub) && args.length >= 6) {
+            if (held.isEmpty()) {
+                send(sender, jsonError("no device in the slot to recode"));
+                return;
+            }
+            dev.stannismod.stellurgy.affs.util.CodeUtils.setCode(held, args[5]);
+        } else if (!"read".equals(sub)) {
+            send(sender, jsonError("unknown transponder subcommand: " + sub));
+            return;
+        }
+        net.minecraft.item.ItemStack now = transponder.getStackInSlot(0);
+        send(sender, "{\"ok\":true,\"hasDevice\":" + !now.isEmpty()
+                + ",\"code\":\"" + escapeJson(transponder.getCarriedCode()) + "\"}");
     }
 
     /** One-line error payload, so a new verb does not hand-build JSON and get a quote wrong. */
@@ -2257,6 +2332,30 @@ public class TestProbeCommand extends CommandBase {
                             parseDoubleOr(args[5], 0))
                     .contains(args[2]);
             send(sender, "{\"ok\":true,\"ship\":\"" + escapeJson(args[2]) + "\",\"contains\":" + contains + "}");
+            return;
+        }
+        // ship-bounds <dim> <shipId> — the NAMED ship's world bounds, ungrown: the extent a sensor
+        // measures a hull's range to. `known:false` with no box for an id this world's registry does
+        // not know.
+        if (args.length >= 3 && "ship-bounds".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAShipId) {
+                send(sender, jsonError("not a ship id: " + args[2]));
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB box =
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipWorldBoundsOf(world, uuid);
+            send(sender, "{\"ok\":true,\"ship\":\"" + escapeJson(args[2]) + "\",\"known\":" + (box != null)
+                    + (box == null ? "" : ",\"minX\":" + box.minX + ",\"minY\":" + box.minY + ",\"minZ\":" + box.minZ
+                            + ",\"maxX\":" + box.maxX + ",\"maxY\":" + box.maxY + ",\"maxZ\":" + box.maxZ)
+                    + "}");
             return;
         }
         // ship-registered <dim> <shipUuid> — whether this world's ship registry holds the NAMED ship,
@@ -15158,7 +15257,8 @@ public class TestProbeCommand extends CommandBase {
                     zombie.setEntityInvulnerable(true);
                     zombie.setUniqueId(new java.util.UUID(Long.parseLong(args[5]), Long.parseLong(args[6])));
                     boolean spawned = world.spawnEntity(zombie);
-                    send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
+                    send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\""
+                            + ",\"entityId\":" + zombie.getEntityId() + "}");
                     return;
                 }
                 default:

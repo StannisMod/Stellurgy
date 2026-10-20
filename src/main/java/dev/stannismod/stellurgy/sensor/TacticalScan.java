@@ -3,7 +3,9 @@ package dev.stannismod.stellurgy.sensor;
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
 import dev.stannismod.stellurgy.api.sensor.SensorMode;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.weapon.HullAllegiance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.IMob;
@@ -14,8 +16,9 @@ import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * One sweep: everything a sensor can currently hold, in the order it would shoot at them.
@@ -24,8 +27,18 @@ import java.util.List;
  * <p>A friend is not something a gun declines to fire at — a friend never becomes a contact in the
  * first place. That is a stronger statement than it looks: a battery cannot be talked into shelling
  * its own crew by a race, a stale target or a console left pointing at the wrong thing, because the
- * name of the friendly was never written down anywhere a gun could read it. The two exclusions are
- * the credential a target carries, and simply being aboard the ship the sensor is bolted to.</p>
+ * name of the friendly was never written down anywhere a gun could read it. A creature is excluded by
+ * the credential it carries, by being aboard the ship the sensor is bolted to, or by being aboard a
+ * hull the installation's rule vouches for; a hull is excluded by being the sensor's own ship, or by
+ * that rule.</p>
+ *
+ * <h3>Two sources of candidates</h3>
+ * <p>The living world — every creature in the envelope — and the loaded hulls. A hull is in range when
+ * the NEAREST point of its world bounds is, and it is held at the quality of that distance: measured
+ * to its centre, a long ship whose bow is a few blocks away would be out of range. A hull is held
+ * only by ILLUMINATING: what a listening sensor would hear of one is its heat, and no sensor can read
+ * a hull's heat by the hull's identity yet, so a listening sensor hears no hull at all rather than a
+ * guess at where its radiators might be.</p>
  *
  * <h3>World frame, always</h3>
  * <p>Entities live in the world's coordinates and a ship's blocks live in the ship's, so a sensor
@@ -39,7 +52,7 @@ public final class TacticalScan {
     }
 
     /**
-     * Look around and answer what is out there, best contact first.
+     * Look around and answer what is out there, best contact first ({@link ThreatOrder}).
      *
      * @param world          the server world the sensor sits in
      * @param origin         the sensor's own position, in WORLD coordinates
@@ -48,40 +61,101 @@ public final class TacticalScan {
      * @param mode           listening, or illuminating
      * @param activePlateau  the quality an illuminated contact is held at inside the envelope
      * @param friendlyCode   the installation's access code; anything carrying it is not a contact
+     * @param hullRule       how the installation tells a friendly hull, or null for a sensor on no
+     *                       network — which then has no way to tell one, and holds no hull at all
      * @param hostilesOnly   whether harmless livestock and villagers may be acquired
+     * @param lockFloor      the quality a contact must reach before a gun may fire at it
      * @param maxTracks      how many contacts the device can hold at once
+     * @return the contacts, possibly none; or EMPTY when the sensor could not look at all — its own
+     *         ship has a pose but no measurable motion (registered, its physics not yet loaded), so
+     *         every arrival time would be taken against a motion nobody knows. "Looked and saw
+     *         nothing" and "could not look" are different answers, and the caller must say which.
      */
-    public static List<TargetTrack> sweep(World world, Vec3d origin, String ownShipId,
-                                          double radiusBlocks, SensorMode mode, double activePlateau,
-                                          String friendlyCode, boolean hostilesOnly, int maxTracks) {
+    public static Optional<List<TargetTrack>> sweep(World world, Vec3d origin, String ownShipId,
+                                                    double radiusBlocks, SensorMode mode,
+                                                    double activePlateau, String friendlyCode,
+                                                    HullAllegiance hullRule, boolean hostilesOnly,
+                                                    double lockFloor, int maxTracks) {
         if (world == null || world.isRemote || origin == null || radiusBlocks <= 0.0D || maxTracks <= 0) {
-            return Collections.emptyList();
+            return Optional.of(Collections.emptyList());
+        }
+        Vec3d ownVelocity = Vec3d.ZERO;
+        if (ownShipId != null) {
+            double[] carried = VSIntegration.shipVelocityAtPointFor(world, ownShipId, origin.x, origin.y,
+                    origin.z);
+            if (carried == null) {
+                return Optional.empty();
+            }
+            ownVelocity = new Vec3d(carried[0], carried[1], carried[2]);
         }
 
-        AxisAlignedBB envelope = new AxisAlignedBB(
-                origin.x - radiusBlocks, origin.y - radiusBlocks, origin.z - radiusBlocks,
-                origin.x + radiusBlocks, origin.y + radiusBlocks, origin.z + radiusBlocks);
-
         List<TargetTrack> tracks = new ArrayList<>();
-        for (EntityLivingBase candidate : world.getEntitiesWithinAABB(EntityLivingBase.class, envelope)) {
-            TargetTrack track = trackOf(candidate, origin, ownShipId, radiusBlocks, mode, activePlateau,
-                    friendlyCode, hostilesOnly, world);
+        List<String> vouched = new ArrayList<>();
+        for (Map.Entry<String, AxisAlignedBB> hull : VSIntegration.loadedShipBoxes(world).entrySet()) {
+            String shipId = hull.getKey();
+            if (shipId.equals(ownShipId)) {
+                // Our own ship, by identity, before any credential is asked about: a ship with no
+                // transponder aboard never acquires itself.
+                continue;
+            }
+            if (hullRule == null) {
+                continue;
+            }
+            if (hullRule.isFriend(world, shipId, friendlyCode)) {
+                vouched.add(shipId);
+                continue;
+            }
+            TargetTrack track = hullTrackOf(world, shipId, hull.getValue(), origin, radiusBlocks, mode,
+                    activePlateau);
             if (track != null) {
                 tracks.add(track);
             }
         }
 
-        // Best held first, nearest breaking a tie: a battery that has to choose should choose the
-        // one it can actually hit, and among equals the one that will arrive first.
-        tracks.sort(Comparator.<TargetTrack>comparingDouble(t -> -t.getQuality())
-                .thenComparingDouble(TargetTrack::getDistance));
-        return tracks.size() <= maxTracks ? tracks : new ArrayList<>(tracks.subList(0, maxTracks));
+        AxisAlignedBB envelope = new AxisAlignedBB(
+                origin.x - radiusBlocks, origin.y - radiusBlocks, origin.z - radiusBlocks,
+                origin.x + radiusBlocks, origin.y + radiusBlocks, origin.z + radiusBlocks);
+        for (EntityLivingBase candidate : world.getEntitiesWithinAABB(EntityLivingBase.class, envelope)) {
+            TargetTrack track = trackOf(candidate, origin, ownShipId, vouched, radiusBlocks, mode,
+                    activePlateau, friendlyCode, hostilesOnly);
+            if (track != null) {
+                tracks.add(track);
+            }
+        }
+
+        tracks.sort(ThreatOrder.of(origin, ownVelocity, lockFloor));
+        return Optional.of(tracks.size() <= maxTracks ? tracks : new ArrayList<>(tracks.subList(0, maxTracks)));
     }
 
-    /** One candidate, or null if it is not a contact at all. */
+    /** One hull, or null if it is not a contact: out of range, not lit, or not measurable. */
+    private static TargetTrack hullTrackOf(World world, String shipId, AxisAlignedBB extent, Vec3d origin,
+                                           double radiusBlocks, SensorMode mode, double activePlateau) {
+        if (mode != SensorMode.ACTIVE || extent == null) {
+            return null;
+        }
+        double distance = ThreatOrder.nearestPoint(extent, origin).distanceTo(origin);
+        if (distance > radiusBlocks) {
+            return null;
+        }
+        double quality = SignatureModel.activeQuality(distance, radiusBlocks, activePlateau);
+        if (quality <= 0.0D) {
+            return null;
+        }
+        Vec3d centre = new Vec3d((extent.minX + extent.maxX) * 0.5D, (extent.minY + extent.maxY) * 0.5D,
+                (extent.minZ + extent.maxZ) * 0.5D);
+        double[] motion = VSIntegration.shipVelocityAtPointFor(world, shipId, centre.x, centre.y, centre.z);
+        if (motion == null) {
+            // Not loaded on this side after all: neither where it is going nor when it arrives is known.
+            return null;
+        }
+        return TargetTrack.ofHull(shipId, extent, new Vec3d(motion[0], motion[1], motion[2]), quality, mode,
+                distance);
+    }
+
+    /** One creature, or null if it is not a contact at all. */
     private static TargetTrack trackOf(EntityLivingBase candidate, Vec3d origin, String ownShipId,
-                                       double radiusBlocks, SensorMode mode, double activePlateau,
-                                       String friendlyCode, boolean hostilesOnly, World world) {
+                                       List<String> vouched, double radiusBlocks, SensorMode mode,
+                                       double activePlateau, String friendlyCode, boolean hostilesOnly) {
         if (candidate == null || candidate.isDead) {
             return null;
         }
@@ -93,10 +167,17 @@ public final class TacticalScan {
         if (CodeUtils.entityHasMatchingCode(candidate, friendlyCode)) {
             return null;
         }
-        if (isAboard(world, ownShipId, candidate)) {
+        if (ShipFrameTravel.isOnShip(candidate, ownShipId)) {
             // Standing on our own deck. The crew of a ship carry no credential by default and are
             // not going to acquire one mid-boarding-action; being aboard IS the credential.
             return null;
+        }
+        for (String friend : vouched) {
+            if (ShipFrameTravel.isOnShip(candidate, friend)) {
+                // Aboard a hull the installation calls a friend: the same reasoning, one ship over. A
+                // round at him would land in that friendly hull first.
+                return null;
+            }
         }
 
         Vec3d position = bodyCentre(candidate);
@@ -125,7 +206,7 @@ public final class TacticalScan {
             return null;
         }
 
-        return new TargetTrack(candidate.getUniqueID(), position, velocityOf(candidate), quality, mode,
+        return TargetTrack.ofEntity(candidate.getUniqueID(), position, velocityOf(candidate), quality, mode,
                 radiance, distance);
     }
 
@@ -142,11 +223,5 @@ public final class TacticalScan {
     private static Vec3d velocityOf(Entity entity) {
         return new Vec3d(entity.posX - entity.lastTickPosX, entity.posY - entity.lastTickPosY,
                 entity.posZ - entity.lastTickPosZ);
-    }
-
-    /** Whether this entity is on the ship the sensor is part of — held by its deck or standing on it. */
-    private static boolean isAboard(World world, String ownShipId, Entity entity) {
-        return entity instanceof EntityLivingBase
-                && dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isOnShip((EntityLivingBase) entity, ownShipId);
     }
 }

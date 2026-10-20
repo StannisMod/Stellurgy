@@ -149,6 +149,16 @@ source, an untranslated ru row is a visible-English row, not a break.
 The blockstate is the console's own `minecraft:orientable` with `atmospheredetector` as its face, so
 nothing new ships and the block still reads as an instrument.
 
+## Hull transponder
+
+| lang key | asset files (LOWERCASE registry name) |
+|---|---|
+| `tile.hullTransponder.name` (en_US, ru_RU) | `blockstates/hulltransponder.json` (no recipe — C3 R10) |
+| `msg.weaponConsole.allegiance.transponder` (en_US, ru_RU) — the console's sentence for the rule `HullAllegianceRule.TRANSPONDER` | — (no new asset) |
+
+The blockstate is the same `minecraft:orientable` with the existing `servicemonitor` texture as its
+face: a placeholder, no new PNG ships.
+
 ## Beam emitter, armour, welder
 
 | lang key | asset files (LOWERCASE registry name) |
@@ -182,7 +192,7 @@ Every readout line of the weapon console and the sensor GUI ("Network: balanced"
 |---|---|
 | `msg.weaponConsole.status.{noNetwork,disconnected,powerLimited,idle,cableLimited,balanced,unknown}` | `TileWeaponConsole#networkStatusKey` |
 | `msg.weaponConsole.line.{network,networkHolding,guns,gunsOutOfArc,targetNone,target,sensorNone,sensor,sensorTooPoor}` | `TileWeaponConsole` readout lines |
-| `msg.fireControlSensor.mode.{passive,active}`, `msg.fireControlSensor.line.{mode,modeUnderpowered,contacts,lockNone,lock,lockTooPoor}` | `TileFireControlSensor` readout lines |
+| `msg.fireControlSensor.mode.{passive,active}`, `msg.fireControlSensor.line.{mode,modeUnderpowered,contacts,lockNone,lock,lockTooPoor,hullsUnscreened,blind}` (`hullsUnscreened` en_US + ru_RU: a sensor on no network holds no ship; `blind` en_US + ru_RU: the sweep could not measure its own ship) | `TileFireControlSensor` readout lines |
 
 **A whole sentence per key, with its placeholders in it** — never a label concatenated with a value.
 Word order is not the same in every language, so a line assembled from fragments can only ever come

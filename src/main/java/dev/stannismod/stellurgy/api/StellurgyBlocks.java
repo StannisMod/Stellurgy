@@ -74,6 +74,11 @@ public class StellurgyBlocks {
      * same either way.
      */
     public static Block blockFireControlSensor;
+    /**
+     * A ship's credential holder: one slot for a code device, read by the hull rule that calls a ship
+     * a friend when its transponder carries our code.
+     */
+    public static Block blockHullTransponder;
     /** The hyperdrive family: the machines that make a jump possible. */
     public static Block blockHyperdriveGenerator;
     public static Block blockHyperdriveCoil;

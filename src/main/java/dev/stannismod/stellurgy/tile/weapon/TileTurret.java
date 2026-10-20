@@ -476,6 +476,11 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      * ground.</p>
      */
     private Vec3d interceptOf(TargetTrack track) {
+        if (track.isHull()) {
+            // A hull is re-read by its id, as a ship order is: the position the sweep took is up to a
+            // whole hold old, and a hull that cannot be found this tick is aimed at nowhere.
+            return shipIntercept(track.getShip());
+        }
         Vec3d position = track.getPosition();
         Entity live = entityById(track.getEntity());
         if (live != null) {
@@ -485,7 +490,8 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
     }
 
     /**
-     * Where to point so the round meets the hull this network was told to engage: the middle of its
+     * Where to point so the round meets a hull — one this network was told to engage, or one its
+     * sensor acquired: the middle of its
      * world bounds — the hull as a whole — led by the ship's own motion there. Null when the ship is
      * not loaded on this side, since neither its place nor its motion is then known.
      */
@@ -618,6 +624,13 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         if (ship != null) {
             // A hull carries no credential, so the installation's own rule says whose it is.
             return networkState().getHullAllegiance().isFriend(world, ship, getEffectiveAccessCode());
+        }
+        TargetTrack acquired = engagementIsAcquired() ? acquiredTrack() : null;
+        if (acquired != null && acquired.isHull()) {
+            // An acquired hull was screened by the same rule at the sweep; asked again here, it is the
+            // half that answers within a tick of a credential arriving aboard.
+            return networkState().getHullAllegiance().isFriend(world, acquired.getShip(),
+                    getEffectiveAccessCode());
         }
         Entity engaged = engagedEntity();
         return engaged != null

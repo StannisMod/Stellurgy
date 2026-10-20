@@ -92,6 +92,8 @@ told what to shoot at, and works out where to aim from what it was told); how en
 | `weapon.WeaponNetworkState` | the network's shared target and hold-fire switch |
 | `tile.weapon.TileTurret` | the controller tile: buffer, heat, cooldown, assembly, the tick |
 | `tile.weapon.TileWeaponConsole` | the network's editor: target, hold-fire, readouts. Owns no state of its own |
+| `weapon.HullAllegianceRule` | the hull friend-or-foe rules a console cycles: `CODE_ON_WEAPONS`, `CODE_ON_CREW`, `NONE`, `TRANSPONDER` |
+| `tile.weapon.TileHullTransponder` / `weapon.HullTransponderDomain` | a ship's credential holder (one code-device slot), and the index that finds the loaded ones |
 | `block.weapon.BlockTurret` / `BlockGunPart` | the controller block, and one class for every part |
 
 ## The parts a player can place, and what each is worth
@@ -351,8 +353,39 @@ credential, so `HullAllegiance#isFriend(world, ship, code)` decides, and the con
 button cycles the network through `HullAllegianceRule`: `CODE_ON_WEAPONS` (a console or gun aboard that
 ship carries our code — a new network's rule, the one its owner controls), `CODE_ON_CREW` (a player
 aboard carries our code — "aboard" is `ShipFrameTravel#isOnShip`, held by that ship's deck or standing
-on it, never inside its box; fire-control-sensor MECH-FCS-04), `NONE`. An empty code recognises no hull, as it recognises no creature. A
-friend is not fired on (`TileTurret#targetIsFriendly`).
+on it, never inside its box; fire-control-sensor MECH-FCS-04), `NONE`, and — a fourth on the cycle,
+ruling 2026-10-20, the default unchanged — `TRANSPONDER` (a HULL TRANSPONDER aboard that ship holds a
+code device carrying our code; `HullAllegianceRule.java:86-100`). An empty code recognises no hull, as it recognises no creature. A
+friend is not fired on (`TileTurret#targetIsFriendly`), and since hulls are acquired the same rule
+screens them at the sweep (fire-control-sensor MECH-FCS-03). The live consequence of the default: once
+hulls are acquired, a player's own parked or unarmed ship that answers no rule is a contact for his
+own base's sensor.
+
+**The hull transponder (rulings 2026-10-07, 2026-10-20).** *«Отдельный блок-транспондер»* (a separate
+transponder block). Block `hullTransponder`, tile `TileHullTransponder`: one slot that admits only an
+AFFS code device (`TileHullTransponder.java:169-171`). The credential stays a physical object — take
+the device, or the block, and the accreditation goes with it; a boarding party switches a hull's side
+by pocketing one item. The code is read off the device at every screening, never copied onto the tile
+(`TileHullTransponder.java:51-53`), so a code changed on the device changes the hull's standing with
+no other step. "Aboard" is the transponder block's ship by id (`HullAllegianceRule#aboard`), never a
+position, so two hulls sharing space vouch only for themselves; one matching transponder suffices. It
+takes no power, no cable and no tick — a transponder that could run flat would make a supply fault a
+ship its own side shoots at. The transponders loaded in a world are found through their own minimal
+index, `HullTransponderDomain` (`HullTransponderDomain.java:21`, a subsystem-network domain with no
+console, no member counting and no solve), never by scanning a ship's blocks; the tile registers on
+load and leaves on invalidation or unload (`TileHullTransponder.java:57-80`). It has no recipe
+(*«Да, рецепта пока не будет»* — no recipe for now). It is not the shield's carried transponder:
+the two share the carried code, not behaviour. [V]
+
+**MECH-GUN-47 — An ACQUIRED hull is engaged as a hull.** When the sensor's contact is a hull
+(fire-control-sensor MECH-FCS-15) the gun treats it as an acquisition in every respect, and as a hull
+in the three places an entity's handling would be wrong: it is re-read by the ship's id every tick —
+aimed at the middle of its current world bounds, led by its motion, exactly as a ship order is
+(`TileTurret.java:479-483`), never at where the sweep last saw it; it is held to the lock floor like
+any acquisition (MECH-GUN-27), because a ship ORDER is the only thing that bypasses that gate and an
+acquired hull is not one; and at the trigger it is screened by the network's hull rule
+(`TileTurret.java:628-634`), the depth half that answers within a tick of a credential arriving aboard.
+[V] What re-reads authoritative state each tick here is the same per-tick refresh entities get.
 
 **MECH-GUN-43 — A battery's orders live on its CONSOLES and come back after a restart (rulings 2026-10-05).** The network is still never saved — it has no durable name and is rebuilt from
 the world — but every order (access code, hold-fire, hull rule, and the target: point, creature or
@@ -511,6 +544,18 @@ state round-trip; a reloaded gun points where it was left.
   fire and its status — and follows it when it changes (MECH-GUN-38). `TileWeaponConsole#getModules`,
   `#readoutTag`, `ReadoutSync#isUpdateRequired` [V]. Pinned by
   `WeaponClientGroupTest#theConsolesScreenShowsTheServersNetwork`.
+- **INV-GUN-13** [T][BEH] A gun whose network's sensor holds a hull too poorly resolved to lock is on
+  target and is not permitted to fire: it tracks the hull and puts no round into it (MECH-GUN-47,
+  MECH-GUN-27). `TileTurret#isLockedWellEnoughToFire` [V]. Pinned by
+  `HullContactGroupTest#aWeaklyHeldHullIsTrackedButNeverFiredOn`.
+- **INV-GUN-14** [T][BEH] A gun on an acquired hull points where the hull IS: moved after the sweep that
+  published it, the hull is followed by exactly the move, while the contact the sweep published stays
+  where it was taken (MECH-GUN-47). `TileTurret#interceptOf` [V]. Pinned by
+  `HullContactGroupTest#aGunFollowsAnAcquiredHullWhereItIsNotWhereTheSweepSawIt`.
+- **INV-GUN-15** [T][BEH] A gun firing on an acquired hull stops at the trigger, before any sweep has
+  screened again, once a device carrying the network's code is put into a transponder aboard that hull
+  under the rule `TRANSPONDER` (MECH-GUN-47, MECH-GUN-42). `TileTurret#targetIsFriendly` [V]. Pinned by
+  `HullContactGroupTest#aCredentialArrivingAboardStopsTheShootingAtTheTrigger`.
 
 ## Failure modes & edge cases
 
@@ -522,9 +567,10 @@ is what a fire-control sensor is for. Neither path compensates for the round's f
 **Friend-or-foe screening has one open edge.** Acquisition screens at LIST level: an ally carrying the
 code, and anybody standing on the sensor's own ship, never becomes a contact at all
 (`fire-control-sensor` MECH-FCS-03/04). A SHIP order is screened by the
-installation's hull rule (MECH-GUN-42), so a gun pointed at an allied ship spares it. A gun pointed at a
-POINT on an allied hull (a linker's block click, MECH-GUN-39) still fires — a point carries no ship —
-and nothing ACQUIRES a hull (see `fire-control-sensor`, hull acquisition). [A]
+installation's hull rule (MECH-GUN-42), so a gun pointed at an allied ship spares it, and an ACQUIRED
+hull is screened by the same rule at the sweep and again at the trigger (MECH-GUN-47). A gun pointed at
+a POINT on an allied hull (a linker's block click, MECH-GUN-39) still fires — a point carries no ship.
+[A]
 
 **MECH-GUN-28 — A shot-up mount walks DOWN a ladder of named states, and the last rung still
 fires.** The controller reads its own block's condition every tick and derives a drive state from it:

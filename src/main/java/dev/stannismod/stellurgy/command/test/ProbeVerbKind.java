@@ -313,6 +313,7 @@ enum ProbeVerbKind {
             case "selector info":
             case "sensor read":
             case "sensor sees":
+            case "transponder read":
             case "separator info":
             case "server tick-count":
             case "server wait":
@@ -386,6 +387,7 @@ enum ProbeVerbKind {
             case "vs player-ship-data":
             case "vs seat-status":
             case "vs seat-yard":
+            case "vs ship-bounds":
             case "vs ship-contains":
             case "vs ship-registered":
             case "vs ship-frame-check":
@@ -564,6 +566,9 @@ enum ProbeVerbKind {
             case "sensor charge":
             case "sensor code":
             case "sensor mode":
+            case "transponder put":
+            case "transponder recode":
+            case "transponder take":
             case "server stall":
             case "shield charge":
             case "shield console-bias":

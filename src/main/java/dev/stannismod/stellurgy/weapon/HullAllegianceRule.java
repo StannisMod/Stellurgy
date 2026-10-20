@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.weapon;
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import dev.stannismod.stellurgy.tile.weapon.TileHullTransponder;
 import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 import net.minecraft.entity.player.EntityPlayer;
@@ -72,6 +73,29 @@ public enum HullAllegianceRule implements HullAllegiance {
     NONE("msg.weaponConsole.allegiance.none") {
         @Override
         public boolean isFriend(World world, String shipId, String accessCode) {
+            return false;
+        }
+    },
+
+    /**
+     * A ship is a friend when a hull transponder aboard it holds a code device carrying our code. The
+     * credential is a carried object put into a block: whoever takes the device, or the block, takes
+     * the accreditation with it. One matching transponder is enough; others aboard do not count
+     * against it.
+     */
+    TRANSPONDER("msg.weaponConsole.allegiance.transponder") {
+        @Override
+        public boolean isFriend(World world, String shipId, String accessCode) {
+            String ours = CodeUtils.normalize(accessCode);
+            if (ours.isEmpty() || shipId == null) {
+                return false;
+            }
+            for (TileHullTransponder transponder : SubsystemNetworkManager.of(world).nodesIn(HullTransponderDomain.INSTANCE, world,
+                    TileHullTransponder.class)) {
+                if (aboard(world, shipId, transponder.getPos()) && ours.equals(transponder.getCarriedCode())) {
+                    return true;
+                }
+            }
             return false;
         }
     };

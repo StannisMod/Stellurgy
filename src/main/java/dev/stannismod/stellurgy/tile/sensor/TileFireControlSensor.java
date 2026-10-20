@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
+import dev.stannismod.stellurgy.weapon.HullAllegiance;
 import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
@@ -41,6 +42,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The thing that finds a target, so that a human does not have to name one.
@@ -105,10 +107,16 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
     private double clientQuality;
     private double clientDistance;
     private boolean clientLocked;
+    private boolean clientOnNetwork;
+    private boolean clientBlind;
+    /** Whether the last sweep could not look at all (server side); see {@link #isBlind()}. */
+    private boolean blind;
     private int sentContacts = -1;
     private double sentQuality = -1.0D;
     private SensorMode sentMode;
     private boolean sentUnderpowered;
+    private Boolean sentOnNetwork;
+    private Boolean sentBlind;
 
     @Override
     public void update() {
@@ -120,6 +128,7 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
             // a place in the network — a disabled sensor is not a node that quietly keeps its buffer
             // topped up. Anything it had already published expires on its own.
             contacts = Collections.emptyList();
+            blind = false;
             if (registered) {
                 SubsystemNetworkManager.of(world).unregister(this);
                 SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
@@ -159,9 +168,12 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         int count = contacts.size();
         double quality = best == null ? 0.0D : best.getQuality();
         SensorMode effective = effectiveMode();
+        boolean onNetwork = isOnNetwork();
         boolean changed = count != sentContacts
                 || effective != sentMode
                 || isUnderpowered() != sentUnderpowered
+                || !Boolean.valueOf(onNetwork).equals(sentOnNetwork)
+                || !Boolean.valueOf(blind).equals(sentBlind)
                 || Math.abs(quality - sentQuality) > 0.05D;
         if (!changed) {
             return;
@@ -170,6 +182,8 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         sentQuality = quality;
         sentMode = effective;
         sentUnderpowered = isUnderpowered();
+        sentOnNetwork = onNetwork;
+        sentBlind = blind;
         IBlockState state = world.getBlockState(pos);
         world.notifyBlockUpdate(pos, state, state, 2);
     }
@@ -202,11 +216,20 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
             // Aboard a ship whose transform is not available: every distance measured from here
             // would be measured from a stale pose, so the sweep does not happen at all.
             contacts = Collections.emptyList();
+            blind = true;
             return;
         }
-        contacts = TacticalScan.sweep(world, origin, shipId(), config.fireControlSensorRadius,
-                effectiveMode(), config.fireControlSensorActiveLockQuality, effectiveAccessCode(),
-                config.fireControlSensorAcquireHostilesOnly, config.fireControlSensorMaxTracks);
+        WeaponNetworkState network = networkState();
+        // The hull rule is the network's — the same rule its guns screen a hull with at the trigger —
+        // and a sensor on no network has none: it then holds no hull at all, rather than a default
+        // rule nobody chose for it.
+        HullAllegiance hullRule = network == null ? null : network.getHullAllegiance();
+        Optional<List<TargetTrack>> swept = TacticalScan.sweep(world, origin, shipId(),
+                config.fireControlSensorRadius, effectiveMode(), config.fireControlSensorActiveLockQuality,
+                effectiveAccessCode(), hullRule, config.fireControlSensorAcquireHostilesOnly,
+                config.fireControlSensorLockQualityToFire, config.fireControlSensorMaxTracks);
+        contacts = swept.orElse(Collections.emptyList());
+        blind = !swept.isPresent();
     }
 
     /**
@@ -254,6 +277,23 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
     /** True while this sensor is set to illuminate and cannot afford to. */
     public boolean isUnderpowered() {
         return isClient() ? clientUnderpowered : mode == SensorMode.ACTIVE && !poweredForActive;
+    }
+
+    /**
+     * Whether this sensor is on a weapons network — the client's copy on a client. Off one it holds
+     * no hull, because the rule that tells a friendly hull is the network's.
+     */
+    public boolean isOnNetwork() {
+        return isClient() ? clientOnNetwork : networkState() != null;
+    }
+
+    /**
+     * Whether the last sweep could not look at all — the client's copy on a client. Its ship has no
+     * usable pose or no measurable motion yet, so its empty contact list means "blind", not "nothing
+     * out there", and the panel says so.
+     */
+    public boolean isBlind() {
+        return isClient() ? clientBlind : blind;
     }
 
     /** How many contacts the panel should show — the client's copy on a client. */
@@ -440,6 +480,13 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         modules.add(new ModuleText(10, 46, modeLine(), 0x2b2b2b));
         modules.add(new ModuleText(10, 58, contactLine(), 0x2b2b2b));
         modules.add(new ModuleText(10, 70, lockLine(), 0x2b2b2b));
+        if (!isOnNetwork()) {
+            modules.add(new ModuleText(10, 82, readoutText("msg.fireControlSensor.line.hullsUnscreened"),
+                    0x2b2b2b));
+        }
+        if (isBlind()) {
+            modules.add(new ModuleText(10, 94, readoutText("msg.fireControlSensor.line.blind"), 0x2b2b2b));
+        }
         return modules;
     }
 
@@ -537,6 +584,8 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         nbt.setDouble("quality", best == null ? 0.0D : best.getQuality());
         nbt.setDouble("distance", best == null ? 0.0D : best.getDistance());
         nbt.setBoolean("locked", isBestLocked());
+        nbt.setBoolean("onNetwork", isOnNetwork());
+        nbt.setBoolean("blind", isBlind());
         return nbt;
     }
 
@@ -560,6 +609,8 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         clientQuality = nbt.getDouble("quality");
         clientDistance = nbt.getDouble("distance");
         clientLocked = nbt.getBoolean("locked");
+        clientOnNetwork = nbt.getBoolean("onNetwork");
+        clientBlind = nbt.getBoolean("blind");
     }
 
     private static SensorMode modeOf(SensorMode[] modes, int ordinal) {

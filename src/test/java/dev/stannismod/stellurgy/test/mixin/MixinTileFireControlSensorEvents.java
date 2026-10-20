@@ -4,7 +4,10 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor;
+import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldServer;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,10 +25,14 @@ import java.util.List;
  * <p>The RETURN of {@code sweep}, one record per sweep — every {@code fireControlSensorScanIntervalTicks}
  * ticks while the sensor is enabled — carrying the contact list the sweep just decided:
  * {@code contacts} (how many), {@code names} (each contact's entity name, comma-separated, {@code ?}
- * for one no longer in the world), {@code tracks} (each contact as an object: {@code entityId}, the
- * entity's id or -1 for one no longer in the world, and the {@code distance} and {@code quality} the
- * sweep decided for it — a reader asking about ONE body addresses it by id rather than by a name
- * two bodies of one kind share), and about the best one {@code quality} and {@code locked}
+ * for one no longer in the world, {@code hull} for a ship), {@code tracks} (each contact as an object,
+ * in the order the sweep ranked them: {@code entityId}, the entity's id or -1 for a hull or one no
+ * longer in the world; {@code ship}, a hull's id or null; the {@code distance} and {@code quality} the
+ * sweep decided for it; its velocity {@code vx/vy/vz} and position {@code x/y/z} as the track carries
+ * them; and for a hull its extent {@code minX..maxZ} — a reader asking about ONE body addresses it by
+ * id rather than by a name two bodies of one kind share), the sensor's world origin
+ * {@code originX/Y/Z} as production's own frame seam places it ({@code origin:null} when it has none),
+ * and about the best one {@code quality} and {@code locked}
  * (production's own {@code isLocked} against the configured lock floor), plus the sensor's
  * {@code mode} as it actually worked this sweep and whether it is {@code emitting}. Per sweep and not
  * per change, because a reader judging "never acquired over N sweeps" needs the sweeps it was not
@@ -106,15 +113,33 @@ public abstract class MixinTileFireControlSensorEvents {
             }
             Entity entity = self.getWorld() instanceof WorldServer && track.getEntity() != null
                     ? ((WorldServer) self.getWorld()).getEntityFromUuid(track.getEntity()) : null;
-            names.append(entity == null ? "?" : entity.getName());
+            names.append(track.isHull() ? "hull" : entity == null ? "?" : entity.getName());
             tracks.append("{\"entityId\":").append(entity == null ? -1 : entity.getEntityId())
+                    .append(",\"ship\":").append(track.isHull() ? "\"" + track.getShip() + "\"" : "null")
                     .append(",\"distance\":").append(track.getDistance())
-                    .append(",\"quality\":").append(track.getQuality()).append('}');
+                    .append(",\"quality\":").append(track.getQuality())
+                    .append(",\"vx\":").append(track.getVelocity().x)
+                    .append(",\"vy\":").append(track.getVelocity().y)
+                    .append(",\"vz\":").append(track.getVelocity().z)
+                    .append(",\"x\":").append(track.getPosition().x)
+                    .append(",\"y\":").append(track.getPosition().y)
+                    .append(",\"z\":").append(track.getPosition().z);
+            AxisAlignedBB extent = track.getExtent();
+            if (extent != null) {
+                tracks.append(",\"minX\":").append(extent.minX).append(",\"minY\":").append(extent.minY)
+                        .append(",\"minZ\":").append(extent.minZ).append(",\"maxX\":").append(extent.maxX)
+                        .append(",\"maxY\":").append(extent.maxY).append(",\"maxZ\":").append(extent.maxZ);
+            }
+            tracks.append('}');
         }
         TargetTrack best = self.getBestContact();
         double floor = StellurgyConfiguration.getCurrentConfig().fireControlSensorLockQualityToFire;
+        Vec3d origin = TurretFireControl.worldPositionOf(self.getWorld(), self.getPos(),
+                TurretFireControl.shipIdAt(self.getWorld(), self.getPos()));
         TestTrace.record(self.getWorld(), "sensor_swept", "\"pos\":\"" + self.getPos().getX() + ","
                 + self.getPos().getY() + "," + self.getPos().getZ() + "\""
+                + (origin == null ? ",\"origin\":null"
+                        : ",\"originX\":" + origin.x + ",\"originY\":" + origin.y + ",\"originZ\":" + origin.z)
                 + ",\"contacts\":" + contacts.size()
                 + ",\"names\":\"" + names + "\""
                 + ",\"tracks\":[" + tracks + "]"

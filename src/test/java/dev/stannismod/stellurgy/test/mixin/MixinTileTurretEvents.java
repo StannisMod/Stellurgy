@@ -51,7 +51,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *       whole payload, so a hot gun cooling on target writes one record a tick. SILENT
  *       about a gun that is NOT on target and about the beam family, which never asks it.</li>
  *   <li><b>{@code turret_fired}</b> — the RETURN of {@code launch} when it answered true: a round was
- *       admitted to the world. Carries the round's id. SILENT about a launch the substrate refused
+ *       admitted to the world. Carries the round's id, and {@code acquiredShip} — the hull the gun's
+ *       sensor contact named when the round left, or null. SILENT about a launch the substrate refused
  *       and about the beam family.</li>
  *   <li><b>{@code turret_launch_refused}</b> — the same RETURN when it answered false: the gun was
  *       permitted and the round was NOT admitted (no clear line of fire, or the substrate refused).
@@ -199,6 +200,8 @@ public abstract class MixinTileTurretEvents {
                 + ",\"shot\":" + self.getLastShotId()
                 + ",\"drive\":\"" + self.getMechanism().getDriveState().name() + "\""
                 + ",\"acquired\":" + (self.acquiredTrack() != null)
+                + ",\"acquiredShip\":" + (self.acquiredTrack() == null || !self.acquiredTrack().isHull() ? "null"
+                        : "\"" + self.acquiredTrack().getShip() + "\"")
                 + ",\"manual\":" + self.isManuallyControlled());
     }
 

@@ -763,6 +763,8 @@ public class Stellurgy {
                 new ResourceLocation(Constants.modId, "ARweaponConsole"));
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor.class,
                 new ResourceLocation(Constants.modId, "ARfireControlSensor"));
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.weapon.TileHullTransponder.class,
+                new ResourceLocation(Constants.modId, "StellurgyHullTransponder"));
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.damage.repair.TileRepairBay.class,
                 new ResourceLocation(Constants.modId, "StellurgyRepairBay"));
 
@@ -1093,6 +1095,11 @@ public class Stellurgy {
         StellurgyBlocks.blockFireControlSensor = new BlockTile(dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor.class,
                 GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("fireControlSensor")
                 .setCreativeTab(tabAdvRocketry).setHardness(3f);
+        // MODULAR, with the player's inventory: the one thing done at this block is putting a code
+        // device into its slot or taking it out.
+        StellurgyBlocks.blockHullTransponder = new BlockTile(dev.stannismod.stellurgy.tile.weapon.TileHullTransponder.class,
+                GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("hullTransponder")
+                .setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockGuidanceComputer = new BlockTile(TileGuidanceComputer.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("guidanceComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockAdvancedFlightComputer = new dev.stannismod.stellurgy.block.BlockAdvancedFlightComputer(GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("advancedFlightComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
         // MODULARNOINV, not MODULAR: the console needs the whole panel for its own controls, and a
@@ -1312,6 +1319,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockTurret.setRegistryName("turret"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockWeaponConsole.setRegistryName("weaponConsole"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockFireControlSensor.setRegistryName("fireControlSensor"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHullTransponder.setRegistryName("hullTransponder"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunBarrel.setRegistryName("gunBarrel"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunAmmoFeed.setRegistryName("gunAmmoFeed"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunBeamEmitter.setRegistryName("gunBeamEmitter"));

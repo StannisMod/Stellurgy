@@ -391,6 +391,17 @@ world that came back holding a contact would be asserting a fact about an entity
 logged out or moved a chunk away while the chunk was unloaded. A sensor comes back seeing nothing and
 sweeps within one interval, which is the only honest state to reload into.
 
+## `TileHullTransponder` — a ship's credential holder
+
+| key | meaning |
+|---|---|
+| `device` | the code device in the one slot, as vanilla's `ItemStack#writeToNBT` writes it — the device's own code rides inside it (`affs_code`, `CodeUtils.CODE_TAG`); absent when the slot is empty, read back as empty (`TileHullTransponder.java:231-244`) `[V]` |
+
+**The code is NOT saved on the tile.** It lives on the device and is read off it at every screening
+(`weapons`, the hull transponder), so a save holds one copy of the credential and a reload cannot
+bring back a code the device no longer carries. The tile moves into a ship at assembly through this
+same writer and reader, which is how a transponder put in before assembly is aboard after it.
+
 ## Player-binding and moon-zone keys
 
 | Key | Where | What |
