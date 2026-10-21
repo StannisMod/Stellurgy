@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.satellite.SatelliteAssembly;
 import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
@@ -41,7 +42,6 @@ public class TileSatelliteBuilder extends TileWasteHeatPowerConsumer implements 
     //Slot 8: chip printing slot
     //Slot 9: chip duping slot
     //Slot 10: temp holding space (Inaccessible)
-    private static final byte modularFunctionSlotStart = 1;
     private static final byte modularFunctionSlotEnd = 6;
     private static final byte outputSlot = 7;
     private static final byte chipSlot = 8;
@@ -102,10 +102,6 @@ public class TileSatelliteBuilder extends TileWasteHeatPowerConsumer implements 
      * If unsure check canAssembleSatellite() first
      */
     public void assembleSatellite() {
-        //Basic properties of the satellite
-        int powerStorage = 0, powerGeneration = 0, maxData = 0;
-        float weight = 0;
-
         //Get the primary function from slot 0
         String satType = SatelliteRegistry.getSatelliteProperty(getStackInSlot(primaryFunctionSlot)).getSatelliteType();
         SatelliteBase sat = SatelliteRegistry.getNewSatellite(satType);
@@ -117,24 +113,7 @@ public class TileSatelliteBuilder extends TileWasteHeatPowerConsumer implements 
             return;
 
         if (!world.isRemote) {
-            //Grab properties from the items in slots 1-6
-            for (int currentSlotIndex = modularFunctionSlotStart; currentSlotIndex <= modularFunctionSlotEnd; currentSlotIndex++) {
-                ItemStack stack = getStackInSlot(currentSlotIndex);
-                if (SatelliteRegistry.getSatelliteProperty(stack) != null) {
-                    if (SatelliteRegistry.getSatelliteProperty(stack).getPropertyFlag() == SatelliteProperties.Property.BATTERY.getFlag())
-                        powerStorage += SatelliteRegistry.getSatelliteProperty(getStackInSlot(currentSlotIndex)).getPowerStorage();
-                    if (SatelliteRegistry.getSatelliteProperty(stack).getPropertyFlag() == SatelliteProperties.Property.POWER_GEN.getFlag())
-                        powerGeneration += SatelliteRegistry.getSatelliteProperty(getStackInSlot(currentSlotIndex)).getPowerGeneration();
-                    if (SatelliteRegistry.getSatelliteProperty(stack).getPropertyFlag() == SatelliteProperties.Property.DATA.getFlag())
-                        maxData += SatelliteRegistry.getSatelliteProperty(getStackInSlot(currentSlotIndex)).getMaxDataStorage();
-                }
-
-                weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
-            }
-
-            //Set final satellite properties
-            //720 here is the base power buffer, so the satellite has SOMETHING to run on
-            SatelliteProperties properties = new SatelliteProperties(powerGeneration, powerStorage + 720, satType, maxData, weight);
+            SatelliteProperties properties = SatelliteAssembly.propertiesOf(this, satType);
             properties.setId(DimensionManager.getInstance().getNextSatelliteId());
 
             //Create the output item

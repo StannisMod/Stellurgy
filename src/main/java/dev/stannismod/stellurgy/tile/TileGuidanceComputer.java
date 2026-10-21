@@ -13,15 +13,27 @@ import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip.LandingLocation;
 import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleNumericTextbox;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 import dev.stannismod.stellurgy.network.PacketBackToRocketGui;
+import dev.stannismod.stellurgy.satellite.SatellitePlacement;
+import dev.stannismod.stellurgy.space.SpaceSubsystem;
+import dev.stannismod.stellurgy.universe.SystemBody;
+import dev.stannismod.stellurgy.universe.UniverseRegistry;
+import io.netty.buffer.ByteBuf;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
@@ -40,13 +52,33 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import javax.annotation.Nonnull;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalDouble;
 
-public class TileGuidanceComputer extends TileInventoryHatch implements IModularInventory, IButtonInventory {
+public class TileGuidanceComputer extends TileInventoryHatch implements IModularInventory, IButtonInventory,
+        INetworkMachine, IGuiCallback {
+
+    private static final byte PACKET_RELEASE_ALTITUDE = 20;
+    private static final byte PACKET_RELEASE_INCLINATION = 21;
+    private static final byte PACKET_RELEASE_STATUS = 22;
+    private static final double METRES_PER_KM = 1000d;
 
     private int destinationId;
     private Vector3F<Float> landingPos;
     private Map<Integer, HashedBlockPosition> landingLoc;
+    /** Whether a release altitude was set; unset, a satellite goes to its body's orbit line. */
+    private boolean releaseAltitudeStated;
+    /** The altitude, metres above the surface, a satellite released by this rocket is put at, when stated. */
+    private double releaseAltitudeM;
+    /** The inclination, degrees, of the orbit a satellite released by this rocket is put on; 0 is equatorial. */
+    private double releaseInclinationDeg;
+    /** What the server last said about the release orbit, for the open screen: the orbit line and the bounds, km. */
+    private ReleaseStatus releaseStatus = ReleaseStatus.unknown();
+    private ModuleNumericTextbox altitudeBox;
+    private ModuleNumericTextbox inclinationBox;
+    private ModuleText releaseStatusText;
 
     public TileGuidanceComputer() {
         super(1);
@@ -61,7 +93,204 @@ public class TileGuidanceComputer extends TileInventoryHatch implements IModular
     public List<ModuleBase> getModules(int ID, EntityPlayer player) {
         List<ModuleBase> modules = super.getModules(ID, player);
         RocketGuiNavigation.addBackButtonIfApplicable(modules, player, this);
+
+        if (world.isRemote) {
+            modules.add(new ModuleText(30, 18, LibVulpes.proxy.getLocalizedString("msg.guidanceComputer.releaseAltitude"), 0x2a2a2a));
+            altitudeBox = new ModuleNumericTextbox(this, 120, 16, 48, 12, 9);
+            altitudeBox.setText(releaseAltitudeStated ? String.valueOf(Math.round(releaseAltitudeM / METRES_PER_KM)) : "");
+            modules.add(altitudeBox);
+            modules.add(new ModuleText(30, 34, LibVulpes.proxy.getLocalizedString("msg.guidanceComputer.releaseInclination"), 0x2a2a2a));
+            inclinationBox = new ModuleNumericTextbox(this, 120, 32, 48, 12, 4);
+            inclinationBox.setText(String.valueOf(Math.round(releaseInclinationDeg)));
+            modules.add(inclinationBox);
+            releaseStatusText = new ModuleText(8, 52, releaseStatusLine(), 0x2a2a2a);
+            modules.add(releaseStatusText);
+        } else {
+            sendReleaseStatus(player);
+        }
         return modules;
+    }
+
+    /**
+     * The altitude, metres above the surface, a satellite this rocket releases is put at, when one was
+     * set; empty means its body's orbit line.
+     */
+    public OptionalDouble statedReleaseAltitudeM() {
+        return releaseAltitudeStated ? OptionalDouble.of(releaseAltitudeM) : OptionalDouble.empty();
+    }
+
+    /** The inclination of the orbit a satellite this rocket releases is put on, radians. */
+    public double releaseInclinationRad() {
+        return Math.toRadians(releaseInclinationDeg);
+    }
+
+    /** Set the release altitude, metres above the surface; empty returns it to the body's orbit line. */
+    public void setReleaseAltitudeM(OptionalDouble altitudeM) {
+        releaseAltitudeStated = altitudeM.isPresent();
+        releaseAltitudeM = altitudeM.orElse(0d);
+        markDirty();
+    }
+
+    /** Set the release inclination, degrees. */
+    public void setReleaseInclinationDeg(double inclinationDeg) {
+        releaseInclinationDeg = inclinationDeg;
+        markDirty();
+    }
+
+    /**
+     * What a release from here would get, as the server can state it: the altitudes the destination body
+     * admits and its orbit line. Only the server knows the universe, so the open screen is told.
+     */
+    private ReleaseStatus computeReleaseStatus() {
+        UniverseRegistry reg = UniverseRegistry.get(world);
+        long tick = SpaceSubsystem.spaceClock();
+        DimensionProperties props = DimensionManager.getEffectiveDimId_byID(
+                getDestinationDimId(world.provider.getDimension(), pos), pos);
+        if (props == null) {
+            return ReleaseStatus.noOrbit();
+        }
+        Optional<SystemBody> body = SatellitePlacement.bodyOf(reg, props.getId());
+        if (!body.isPresent()) {
+            return ReleaseStatus.noOrbit();
+        }
+        SatellitePlacement.Answer<SatellitePlacement.AltitudeBounds> bounds =
+                SatellitePlacement.boundsAbout(reg, body.get(), props, tick);
+        if (!bounds.isPresent()) {
+            return ReleaseStatus.noOrbit();
+        }
+        SatellitePlacement.AltitudeBounds b = bounds.get();
+        return new ReleaseStatus(true, b.lowestM / METRES_PER_KM, b.highestM / METRES_PER_KM,
+                b.orbitLineM / METRES_PER_KM);
+    }
+
+    private void sendReleaseStatus(EntityPlayer player) {
+        releaseStatus = computeReleaseStatus();
+        PacketHandler.sendToPlayer(new PacketMachine(this, PACKET_RELEASE_STATUS), player);
+    }
+
+    private String releaseStatusLine() {
+        if (!releaseStatus.known) {
+            return "";
+        }
+        if (!releaseStatus.orbitPossible) {
+            return LibVulpes.proxy.getLocalizedString("msg.guidanceComputer.releaseNoOrbit");
+        }
+        double altitudeKm = releaseAltitudeStated ? releaseAltitudeM / METRES_PER_KM : releaseStatus.orbitLineKm;
+        boolean reachable = altitudeKm >= releaseStatus.lowestKm && altitudeKm <= releaseStatus.highestKm;
+        return String.format(Locale.ROOT, "%s %d–%d km",
+                LibVulpes.proxy.getLocalizedString(reachable ? "msg.guidanceComputer.releaseReachable"
+                        : "msg.guidanceComputer.releaseUnreachable"),
+                Math.round(releaseStatus.lowestKm), Math.round(releaseStatus.highestKm));
+    }
+
+    @Override
+    public void onModuleUpdated(ModuleBase module) {
+        if (module == altitudeBox) {
+            String text = altitudeBox.getText();
+            setReleaseAltitudeM(parseNumber(text).isPresent()
+                    ? OptionalDouble.of(parseNumber(text).getAsDouble() * METRES_PER_KM) : OptionalDouble.empty());
+            PacketHandler.sendToServer(new PacketMachine(this, PACKET_RELEASE_ALTITUDE));
+        } else if (module == inclinationBox) {
+            setReleaseInclinationDeg(parseNumber(inclinationBox.getText()).orElse(0d));
+            PacketHandler.sendToServer(new PacketMachine(this, PACKET_RELEASE_INCLINATION));
+        }
+        if (releaseStatusText != null) {
+            releaseStatusText.setText(releaseStatusLine());
+        }
+    }
+
+    /** A typed number, or empty for a field left blank or holding only a sign. */
+    private static OptionalDouble parseNumber(String text) {
+        try {
+            return text.isEmpty() || "-".equals(text) ? OptionalDouble.empty() : OptionalDouble.of(Long.parseLong(text));
+        } catch (NumberFormatException tooLong) {
+            return OptionalDouble.empty();
+        }
+    }
+
+    @Override
+    public void writeDataToNetwork(ByteBuf out, byte id) {
+        if (id == PACKET_RELEASE_ALTITUDE) {
+            out.writeBoolean(releaseAltitudeStated);
+            out.writeDouble(releaseAltitudeM);
+        } else if (id == PACKET_RELEASE_INCLINATION) {
+            out.writeDouble(releaseInclinationDeg);
+        } else if (id == PACKET_RELEASE_STATUS) {
+            out.writeBoolean(releaseAltitudeStated);
+            out.writeDouble(releaseAltitudeM);
+            out.writeDouble(releaseInclinationDeg);
+            out.writeBoolean(releaseStatus.orbitPossible);
+            out.writeDouble(releaseStatus.lowestKm);
+            out.writeDouble(releaseStatus.highestKm);
+            out.writeDouble(releaseStatus.orbitLineKm);
+        }
+    }
+
+    @Override
+    public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) {
+        if (packetId == PACKET_RELEASE_ALTITUDE) {
+            nbt.setBoolean("stated", in.readBoolean());
+            nbt.setDouble("altitude", in.readDouble());
+        } else if (packetId == PACKET_RELEASE_INCLINATION) {
+            nbt.setDouble("inclination", in.readDouble());
+        } else if (packetId == PACKET_RELEASE_STATUS) {
+            nbt.setBoolean("stated", in.readBoolean());
+            nbt.setDouble("altitude", in.readDouble());
+            nbt.setDouble("inclination", in.readDouble());
+            nbt.setBoolean("possible", in.readBoolean());
+            nbt.setDouble("lowest", in.readDouble());
+            nbt.setDouble("highest", in.readDouble());
+            nbt.setDouble("orbitLine", in.readDouble());
+        }
+    }
+
+    @Override
+    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        if (side.isServer() && id == PACKET_RELEASE_ALTITUDE) {
+            setReleaseAltitudeM(nbt.getBoolean("stated") ? OptionalDouble.of(nbt.getDouble("altitude")) : OptionalDouble.empty());
+            sendReleaseStatus(player);
+        } else if (side.isServer() && id == PACKET_RELEASE_INCLINATION) {
+            setReleaseInclinationDeg(nbt.getDouble("inclination"));
+        } else if (side.isClient() && id == PACKET_RELEASE_STATUS) {
+            releaseAltitudeStated = nbt.getBoolean("stated");
+            releaseAltitudeM = nbt.getDouble("altitude");
+            releaseInclinationDeg = nbt.getDouble("inclination");
+            releaseStatus = new ReleaseStatus(nbt.getBoolean("possible"), nbt.getDouble("lowest"),
+                    nbt.getDouble("highest"), nbt.getDouble("orbitLine"));
+            if (releaseStatusText != null) {
+                releaseStatusText.setText(releaseStatusLine());
+            }
+        }
+    }
+
+    /** What the server said about a release orbit from here, in km; {@link #unknown()} until it has said. */
+    private static final class ReleaseStatus {
+        static ReleaseStatus unknown() {
+            return new ReleaseStatus(false, false, 0d, 0d, 0d);
+        }
+
+        static ReleaseStatus noOrbit() {
+            return new ReleaseStatus(true, false, 0d, 0d, 0d);
+        }
+
+        final boolean known;
+        final boolean orbitPossible;
+        final double lowestKm;
+        final double highestKm;
+        final double orbitLineKm;
+
+        ReleaseStatus(boolean orbitPossible, double lowestKm, double highestKm, double orbitLineKm) {
+            this(true, orbitPossible, lowestKm, highestKm, orbitLineKm);
+        }
+
+        private ReleaseStatus(boolean known, boolean orbitPossible, double lowestKm, double highestKm,
+                              double orbitLineKm) {
+            this.known = known;
+            this.orbitPossible = orbitPossible;
+            this.lowestKm = lowestKm;
+            this.highestKm = highestKm;
+            this.orbitLineKm = orbitLineKm;
+        }
     }
 
     @Override
@@ -328,6 +557,10 @@ public class TileGuidanceComputer extends TileInventoryHatch implements IModular
             stationList.appendTag(tag);
         }
         nbt.setTag("stationMapping", stationList);
+        if (releaseAltitudeStated) {
+            nbt.setDouble("releaseAltitude", releaseAltitudeM);
+        }
+        nbt.setDouble("releaseInclination", releaseInclinationDeg);
         return nbt;
     }
 
@@ -349,6 +582,9 @@ public class TileGuidanceComputer extends TileInventoryHatch implements IModular
             int id = tag.getInteger("id");
             landingLoc.put(id, new HashedBlockPosition(pos[0], pos[1], pos[2]));
         }
+        releaseAltitudeStated = nbt.hasKey("releaseAltitude");
+        releaseAltitudeM = nbt.getDouble("releaseAltitude");
+        releaseInclinationDeg = nbt.getDouble("releaseInclination");
     }
 
     @Override

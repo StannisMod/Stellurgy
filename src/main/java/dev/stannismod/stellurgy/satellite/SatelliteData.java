@@ -42,6 +42,12 @@ public abstract class SatelliteData extends SatelliteBase {
                 "\nData: " + ZUtils.formatNumber(data.getData());
     }
 
+    /** Decided by the quantity it collects: a survey of distances looks out, every other quantity at the body. */
+    @Override
+    public java.util.Optional<dev.stannismod.stellurgy.api.satellite.InstrumentSubject> instrumentSubject() {
+        return data.getDataType().subject();
+    }
+
     @Override
     public boolean acceptsItemInConstruction(@Nonnull ItemStack item) {
         int flag = SatelliteRegistry.getSatelliteProperty(item).getPropertyFlag();

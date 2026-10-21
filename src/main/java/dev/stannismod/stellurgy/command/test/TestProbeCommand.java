@@ -11893,6 +11893,94 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"player\":\"" + escapeJson(player.getName()) + "\"}");
             return;
         }
+        if (args.length >= 8 && "rocket-with".equalsIgnoreCase(args[0])) {
+            handleSatelliteRocketWith(server, sender, args);
+            return;
+        }
+        if (args.length >= 2 && "deploy".equalsIgnoreCase(args[0])) {
+            // satellite deploy <rocketEntityId>: every hatch of that rocket deployed through the production
+            // per-hatch entry the rocket's orbit reach runs (EntityRocket#deploySatelliteFromHatch).
+            EntityRocket rocket = rocketById(server, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (rocket == null || rocket.storage == null) {
+                send(sender, "{\"error\":\"no rocket with storage of that entity id\"}");
+                return;
+            }
+            int hatches = 0;
+            for (dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch hatch : rocket.storage.getSatelliteHatches()) {
+                rocket.deploySatelliteFromHatch(hatch);
+                hatches++;
+            }
+            send(sender, "{\"ok\":true,\"hatches\":" + hatches + "}");
+            return;
+        }
+        if (args.length >= 2 && "rocket-hatches".equalsIgnoreCase(args[0])) {
+            // satellite rocket-hatches <rocketEntityId>: what each satellite hatch of that rocket holds now.
+            EntityRocket rocket = rocketById(server, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (rocket == null || rocket.storage == null) {
+                send(sender, "{\"error\":\"no rocket with storage of that entity id\"}");
+                return;
+            }
+            StringBuilder held = new StringBuilder();
+            for (dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch hatch : rocket.storage.getSatelliteHatches()) {
+                net.minecraft.item.ItemStack stack = hatch.getStackInSlot(0);
+                dev.stannismod.stellurgy.api.satellite.SatelliteProperties props = stack.isEmpty() ? null
+                        : dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperties(stack);
+                if (held.length() > 0) {
+                    held.append(',');
+                }
+                held.append("{\"occupied\":").append(!stack.isEmpty())
+                        .append(",\"satId\":").append(props == null ? -1L : props.getId()).append('}');
+            }
+            send(sender, "{\"ok\":true,\"hatches\":[" + held + "]}");
+            return;
+        }
+        if (args.length >= 2 && "place".equalsIgnoreCase(args[0])) {
+            handleSatellitePlace(server, sender, parseLongOr(args[1], Long.MIN_VALUE));
+            return;
+        }
+        if (args.length >= 5 && "leftovers".equalsIgnoreCase(args[0])) {
+            // satellite leftovers <dim> <x> <y> <z>: what stands or lies within four blocks of that place —
+            // satellite entities of any id, and loose items. A world that is not loaded answers an error.
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB around = new net.minecraft.util.math.AxisAlignedBB(new BlockPos(
+                    parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0))).grow(4d);
+            int satellites = 0;
+            for (dev.stannismod.stellurgy.entity.EntitySatellite e : world.getEntitiesWithinAABB(
+                    dev.stannismod.stellurgy.entity.EntitySatellite.class, around)) {
+                if (!e.isDead) {
+                    satellites++;
+                }
+            }
+            int items = world.getEntitiesWithinAABB(net.minecraft.entity.item.EntityItem.class, around).size();
+            send(sender, "{\"ok\":true,\"satellites\":" + satellites + ",\"items\":" + items + "}");
+            return;
+        }
+        if (args.length >= 3 && "blow".equalsIgnoreCase(args[0])) {
+            handleSatelliteBlow(server, sender, parseIntOr(args[1], Integer.MIN_VALUE), parseIntOr(args[2], 0));
+            return;
+        }
+        if (args.length >= 5 && "prime-tnt".equalsIgnoreCase(args[0])) {
+            // satellite prime-tnt <dim> <x> <y> <z>: a primed TNT entity there, on vanilla's fuse.
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            net.minecraft.entity.item.EntityTNTPrimed tnt = new net.minecraft.entity.item.EntityTNTPrimed(world,
+                    Double.parseDouble(args[2]), Double.parseDouble(args[3]), Double.parseDouble(args[4]), null);
+            // Held where it was put: in a cell's void a falling charge would burn out far below its target.
+            tnt.setNoGravity(true);
+            tnt.motionX = 0d;
+            tnt.motionY = 0d;
+            tnt.motionZ = 0d;
+            boolean spawned = world.spawnEntity(tnt);
+            send(sender, "{\"ok\":" + spawned + ",\"e\":" + tnt.getEntityId() + ",\"fuse\":" + tnt.getFuse() + "}");
+            return;
+        }
         if (args.length >= 3 && "create".equalsIgnoreCase(args[0])) {
             // satellite create <dim> <typeId> [powerGen] [powerStorage] [maxData] [weight]
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
@@ -12971,6 +13059,193 @@ public class TestProbeCommand extends CommandBase {
      * satellite in the dim — bypassing the multiblock-validation requirement
      * that headless harness can't satisfy.</p>
      */
+    /** The rocket entity of that id in whichever server world holds it, or {@code null}. */
+    private static EntityRocket rocketById(MinecraftServer server, int entityId) {
+        for (net.minecraft.world.WorldServer world : server.worlds) {
+            net.minecraft.entity.Entity e = world.getEntityByID(entityId);
+            if (e instanceof EntityRocket) {
+                return (EntityRocket) e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * satellite rocket-with &lt;dim&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;altitudeKm|line&gt; &lt;inclinationDeg&gt;
+     * &lt;primaryMeta&gt; [powerMeta]: ARRANGES a rocket at that spot holding a guidance computer and one
+     * satellite hatch, as an assembled rocket holds them. The guidance computer carries a planet chip naming
+     * {@code dim} and the release orbit set through its own setters (the ones its screen calls) — {@code line}
+     * leaves the altitude unset. The hatch holds a chassis whose parts are a primary function and a power
+     * source of the given metadata, summed into properties by the builder's own sum, with an id minted as the
+     * builder mints one. The two blocks are laid, copied into the rocket's storage and removed again.
+     */
+    private void handleSatelliteRocketWith(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        BlockPos computerPos = new BlockPos(x, y, z);
+        BlockPos hatchPos = computerPos.up();
+        world.setBlockState(computerPos, dev.stannismod.stellurgy.api.StellurgyBlocks.blockGuidanceComputer.getDefaultState());
+        world.setBlockState(hatchPos, dev.stannismod.stellurgy.api.StellurgyBlocks.blockLoader.getStateFromMeta(1));
+        dev.stannismod.stellurgy.util.StorageChunk storage = dev.stannismod.stellurgy.util.StorageChunk.copyWorldBB(world,
+                new net.minecraft.util.math.AxisAlignedBB(computerPos, hatchPos));
+        world.setBlockToAir(hatchPos);
+        world.setBlockToAir(computerPos);
+
+        dev.stannismod.stellurgy.tile.TileGuidanceComputer computer = storage.getGuidanceComputer();
+        java.util.List<dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch> hatches = storage.getSatelliteHatches();
+        if (computer == null || hatches.size() != 1) {
+            send(sender, "{\"error\":\"the copied storage did not hold one guidance computer and one hatch\""
+                    + ",\"computer\":" + (computer != null) + ",\"hatches\":" + hatches.size() + "}");
+            return;
+        }
+        net.minecraft.item.ItemStack chip = new net.minecraft.item.ItemStack(
+                dev.stannismod.stellurgy.api.StellurgyItems.itemPlanetIdChip);
+        ((dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip) chip.getItem()).setDimensionId(chip, dim);
+        computer.setInventorySlotContents(0, chip);
+        computer.setReleaseAltitudeM("line".equalsIgnoreCase(args[5]) ? java.util.OptionalDouble.empty()
+                : java.util.OptionalDouble.of(Double.parseDouble(args[5]) * 1000d));
+        computer.setReleaseInclinationDeg(Double.parseDouble(args[6]));
+
+        net.minecraft.item.ItemStack chassis = new net.minecraft.item.ItemStack(
+                dev.stannismod.stellurgy.api.StellurgyItems.itemSatellite);
+        dev.stannismod.stellurgy.item.ItemSatellite item = (dev.stannismod.stellurgy.item.ItemSatellite) chassis.getItem();
+        dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory parts = item.readInvFromNBT(chassis);
+        net.minecraft.item.ItemStack primary = new net.minecraft.item.ItemStack(
+                dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePrimaryFunction, 1, parseIntOr(args[7], 0));
+        parts.setInventorySlotContents(0, primary);
+        if (args.length >= 9) {
+            parts.setInventorySlotContents(1, new net.minecraft.item.ItemStack(
+                    dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePowerSource, 1, parseIntOr(args[8], 0)));
+        }
+        item.writeInvToNBT(chassis, parts);
+        dev.stannismod.stellurgy.api.satellite.SatelliteProperties primaryProps =
+                dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(primary);
+        if (primaryProps == null) {
+            send(sender, "{\"error\":\"no primary function registered at that metadata\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.api.satellite.SatelliteProperties props =
+                dev.stannismod.stellurgy.satellite.SatelliteAssembly.propertiesOf(parts, primaryProps.getSatelliteType());
+        props.setId(DimensionManager.getInstance().getNextSatelliteId());
+        item.setSatellite(chassis, props);
+        hatches.get(0).setInventorySlotContents(0, chassis);
+
+        EntityRocket rocket = new EntityRocket(world, storage, new dev.stannismod.stellurgy.api.StatsRocket(),
+                x + 0.5d, y, z + 0.5d);
+        boolean spawned = world.spawnEntity(rocket);
+        send(sender, "{\"ok\":" + spawned + ",\"rocketId\":" + rocket.getEntityId() + ",\"satId\":" + props.getId()
+                + ",\"powerGeneration\":" + props.getPowerGeneration() + "}");
+    }
+
+    /**
+     * satellite place &lt;satId&gt;: READS where a satellite is as production keeps it — its record, its
+     * orbit, the point production says it stands at now and whether that point is live — and what stands
+     * there: the satellite entities naming it within a block and a half, the attitude the first one
+     * carries, and the loose items within four blocks. Absences are values: no record, no orbit, no point,
+     * no live slot.
+     */
+    private void handleSatellitePlace(MinecraftServer server, ICommandSender sender, long satId) {
+        SatelliteBase sat = DimensionManager.getInstance().getSatellite(satId);
+        if (sat == null) {
+            send(sender, "{\"ok\":true,\"present\":false}");
+            return;
+        }
+        StringBuilder out = new StringBuilder("{\"ok\":true,\"present\":true,\"dim\":" + sat.getDimensionId()
+                + ",\"powerGeneration\":" + sat.getProperties().getPowerGeneration());
+        java.util.Optional<dev.stannismod.stellurgy.api.satellite.SatelliteOrbit> orbit = sat.getOrbit();
+        out.append(",\"hasOrbit\":").append(orbit.isPresent());
+        if (orbit.isPresent()) {
+            out.append(",\"radiusM\":").append(orbit.get().radiusM())
+                    .append(",\"inclinationRad\":").append(orbit.get().inclinationRad())
+                    .append(",\"epoch\":").append(orbit.get().epochTick());
+        }
+        java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> point =
+                dev.stannismod.stellurgy.satellite.SatellitePlacement.standingPoint(
+                        dev.stannismod.stellurgy.universe.UniverseRegistry.get(server),
+                        sat, dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
+        if (!point.isPresent()) {
+            send(sender, out.append(",\"point\":null,\"slotDim\":null}").toString());
+            return;
+        }
+        dev.stannismod.stellurgy.space.GalacticCoord p = point.get();
+        out.append(",\"point\":{\"cell\":\"").append(escapeJson(p.cellKey())).append('"')
+                .append(",\"sx\":").append(p.sectorX()).append(",\"sy\":").append(p.sectorY())
+                .append(",\"sz\":").append(p.sectorZ())
+                .append(",\"x\":").append(p.localX()).append(",\"y\":").append(p.localY())
+                .append(",\"z\":").append(p.localZ()).append('}');
+        dev.stannismod.stellurgy.space.SpaceSubsystem stack = liveStack();
+        int slotDim = stack == null ? dev.stannismod.stellurgy.space.SpaceManager.UNBOUND_SLOT
+                : stack.manager.slotDimOf(p);
+        net.minecraft.world.WorldServer slot = slotDim == dev.stannismod.stellurgy.space.SpaceManager.UNBOUND_SLOT
+                ? null : net.minecraftforge.common.DimensionManager.getWorld(slotDim);
+        if (slot == null) {
+            send(sender, out.append(",\"slotDim\":null}").toString());
+            return;
+        }
+        BlockPos at = new BlockPos(p.localX(), p.localY(), p.localZ());
+        out.append(",\"slotDim\":").append(slotDim).append(",\"chunkLoaded\":")
+                .append(slot.getChunkProvider().getLoadedChunk(at.getX() >> 4, at.getZ() >> 4) != null);
+        net.minecraft.util.math.AxisAlignedBB near = new net.minecraft.util.math.AxisAlignedBB(at).grow(1.5d);
+        java.util.List<dev.stannismod.stellurgy.entity.EntitySatellite> standing = new java.util.ArrayList<>();
+        for (dev.stannismod.stellurgy.entity.EntitySatellite e : slot.getEntitiesWithinAABB(
+                dev.stannismod.stellurgy.entity.EntitySatellite.class, near)) {
+            if (e.getSatelliteId() == satId && !e.isDead) {
+                standing.add(e);
+            }
+        }
+        out.append(",\"entities\":").append(standing.size());
+        if (!standing.isEmpty()) {
+            dev.stannismod.stellurgy.entity.EntitySatellite e = standing.get(0);
+            out.append(",\"entityId\":").append(e.getEntityId())
+                    .append(",\"toStar\":[").append(e.toStar().x()).append(',').append(e.toStar().y()).append(',')
+                    .append(e.toStar().z()).append(']')
+                    .append(",\"toBody\":[").append(e.toBody().x()).append(',').append(e.toBody().y()).append(',')
+                    .append(e.toBody().z()).append(']');
+        }
+        int items = slot.getEntitiesWithinAABB(net.minecraft.entity.item.EntityItem.class,
+                new net.minecraft.util.math.AxisAlignedBB(at).grow(4d)).size();
+        send(sender, out.append(",\"itemsNear\":").append(items).append('}').toString());
+    }
+
+    /**
+     * satellite blow &lt;entityId&gt; &lt;count&gt;: the headless test player ({@code player ensure-fake}) strikes
+     * that entity {@code count} times in this one call, each blow a vanilla attack packet handed to the
+     * server's own handler ({@code NetHandlerPlayServer#processUseEntity}), as a client's attack reaches it.
+     * The player must stand where the handler's reach check admits him. A player with no connection is given
+     * a throwaway one for the call.
+     */
+    private void handleSatelliteBlow(MinecraftServer server, ICommandSender sender, int entityId, int count) {
+        if (fakePlayer == null) {
+            send(sender, "{\"error\":\"no headless test player (player ensure-fake)\"}");
+            return;
+        }
+        net.minecraft.entity.Entity target = fakePlayer.world.getEntityByID(entityId);
+        if (target == null) {
+            send(sender, "{\"error\":\"no entity of that id in the player's world\"}");
+            return;
+        }
+        net.minecraft.network.NetHandlerPlayServer had = fakePlayer.connection;
+        try {
+            net.minecraft.network.NetHandlerPlayServer handler = had != null ? had
+                    : new net.minecraft.network.NetHandlerPlayServer(server,
+                            new net.minecraft.network.NetworkManager(net.minecraft.network.EnumPacketDirection.SERVERBOUND),
+                            fakePlayer);
+            for (int i = 0; i < count; i++) {
+                handler.processUseEntity(new net.minecraft.network.play.client.CPacketUseEntity(target));
+            }
+        } finally {
+            fakePlayer.connection = had;
+        }
+        send(sender, "{\"ok\":true,\"blows\":" + count + "}");
+    }
+
     private void handleSatelliteBuilder(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 5 && "press-build-unregistered".equalsIgnoreCase(args[0])) {
             // /stellurgytest satellite-builder press-build-unregistered <dim> <x> <y> <z> [type]

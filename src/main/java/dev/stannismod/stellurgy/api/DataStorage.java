@@ -188,6 +188,26 @@ public class DataStorage {
             return DataType.values()[id];
         }
 
+        /**
+         * What this quantity is measured on: distance is read off other bodies across space; every other
+         * quantity is a property of the body being surveyed. {@code UNDEFINED} measures nothing and has none.
+         */
+        public java.util.Optional<dev.stannismod.stellurgy.api.satellite.InstrumentSubject> subject() {
+            switch (this) {
+                case UNDEFINED:
+                    return java.util.Optional.empty();
+                case DISTANCE:
+                    return java.util.Optional.of(dev.stannismod.stellurgy.api.satellite.InstrumentSubject.SPACE);
+                case HUMIDITY:
+                case TEMPERATURE:
+                case COMPOSITION:
+                case ATMOSPHEREDENSITY:
+                case MASS:
+                    return java.util.Optional.of(dev.stannismod.stellurgy.api.satellite.InstrumentSubject.BODY);
+            }
+            throw new AssertionError("no subject decided for " + this);
+        }
+
         public String toString() {
             return "data." + name().toLowerCase(Locale.ENGLISH) + ".name";
         }

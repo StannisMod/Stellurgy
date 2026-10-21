@@ -225,6 +225,33 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * An explosion DETONATED in a server world ({@code ExplosionEvent.Detonate}, fired from
+     * {@code Explosion#doExplosionA} once it has listed what it reaches and before it acts on them): where,
+     * and the classes of the entities it reaches. Silent about the damage each takes and about the blocks it
+     * breaks, and about an explosion a handler cancelled at its start, which never detonates.
+     */
+    @SubscribeEvent
+    public static void onExplosionDetonate(net.minecraftforge.event.world.ExplosionEvent.Detonate event) {
+        World world = event.getWorld();
+        instrument(world, "server_bus_explosion_detonated");
+        if (world == null || world.isRemote) {
+            return;
+        }
+        StringBuilder hit = new StringBuilder();
+        for (Entity e : event.getAffectedEntities()) {
+            if (hit.length() > 0) {
+                hit.append(',');
+            }
+            hit.append('"').append(str(e.getClass().getSimpleName())).append('"');
+        }
+        net.minecraft.util.math.Vec3d at = event.getExplosion().getPosition();
+        record(world, "explosion_detonated",
+                "\"x\":" + num(at.x) + ",\"y\":" + num(at.y) + ",\"z\":" + num(at.z)
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"hit\":[" + hit + "]");
+    }
+
+    /**
      * A right-click WITH AN ITEM that reached this side ({@code PlayerInteractEvent.RightClickItem},
      * fired from {@code PlayerInteractionManager.processRightClick} on the server and from the
      * client's own use path) — the sibling of {@code right_click_block} above, for an item used

@@ -120,6 +120,8 @@ public class ClientProxy extends CommonProxy {
         RenderingRegistry.registerEntityRenderingHandler(EntityUIStar.class, (IRenderFactory<EntityUIStar>) new RenderStarUIEntity(null));
         RenderingRegistry.registerEntityRenderingHandler(EntityElevatorCapsule.class, (IRenderFactory<EntityElevatorCapsule>) new RenderElevatorCapsule(null));
         RenderingRegistry.registerEntityRenderingHandler(EntityHoverCraft.class, (IRenderFactory<EntityHoverCraft>) new RenderHoverCraft(null));
+        RenderingRegistry.registerEntityRenderingHandler(dev.stannismod.stellurgy.entity.EntitySatellite.class,
+                (IRenderFactory<dev.stannismod.stellurgy.entity.EntitySatellite>) new dev.stannismod.stellurgy.client.render.entity.RenderSatellite(null));
     }
 
     @Override

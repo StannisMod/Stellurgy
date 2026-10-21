@@ -480,6 +480,13 @@ commands.stellurgy.weather.invalid=Current dimension (%s) is not a Stellurgy pla
 
 msg.crystalliser.gravityTooHigh=Gravity is not low enough!
 msg.rocket.satelliteDeployFailed=A satellite could not be deployed: its type is no longer available. The chassis was left in the hatch.
+msg.rocket.satelliteNoOrbit=A satellite was not released: no orbit about this body at the altitude set on the guidance computer. The chassis was left in the hatch.
+msg.guidanceComputer.releaseAltitude=Satellite altitude, km
+msg.guidanceComputer.releaseInclination=Inclination, deg
+msg.guidanceComputer.releaseReachable=Orbit reachable:
+msg.guidanceComputer.releaseUnreachable=Unreachable, holds
+msg.guidanceComputer.releaseNoOrbit=No orbit can be held about this body
+entity.stellurgy.satellite.name=Satellite
 msg.observetory.scan.tooltip=Scans for new asteroids, consumes 100 distance data
 msg.observetory.scan.button=Scan!
 msg.observetory.scan.crystal=Memory crystal

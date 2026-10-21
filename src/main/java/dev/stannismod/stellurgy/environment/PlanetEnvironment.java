@@ -16,8 +16,6 @@ import java.util.Optional;
  */
 public final class PlanetEnvironment {
 
-    /** Physical seconds per game tick: one game day stands for one Earth day. */
-    private static final double SECONDS_PER_TICK = 86_400d / AstronomicalBodyHelper.TICKS_PER_DAY;
     /**
      * Samples taken per period of the path when accruing dose. A low orbit crosses its high-dose
      * segment in about a tenth of a period, so 64 put six or more samples inside it. A bound on work,
@@ -27,13 +25,11 @@ public final class PlanetEnvironment {
 
     /** The body's field, or {@code null} for a body that keeps none. */
     private final PlanetaryDipole dipole;
-    private final long rotationPeriodTicks;
-    private final double rotationPhaseRad;
+    private final BodyRotation rotation;
 
-    private PlanetEnvironment(PlanetaryDipole dipole, long rotationPeriodTicks, double rotationPhaseRad) {
+    private PlanetEnvironment(PlanetaryDipole dipole, BodyRotation rotation) {
         this.dipole = dipole;
-        this.rotationPeriodTicks = rotationPeriodTicks;
-        this.rotationPhaseRad = rotationPhaseRad;
+        this.rotation = rotation;
     }
 
     /**
@@ -42,10 +38,7 @@ public final class PlanetEnvironment {
      */
     public static PlanetEnvironment of(Optional<PlanetaryDipole> dipole, long rotationPeriodTicks,
                                        double rotationPhaseRad) {
-        if (rotationPeriodTicks <= 0L) {
-            throw new IllegalArgumentException("rotation period must be positive: " + rotationPeriodTicks);
-        }
-        return new PlanetEnvironment(dipole.orElse(null), rotationPeriodTicks, rotationPhaseRad);
+        return new PlanetEnvironment(dipole.orElse(null), BodyRotation.of(rotationPeriodTicks, rotationPhaseRad));
     }
 
     /**
@@ -78,13 +71,12 @@ public final class PlanetEnvironment {
             long span = Math.min(step, toTick - t);
             long mid = t + span / 2L;
             Vector3d bodyFixed = new Vector3d(path.positionAt(mid)).rotateZ(-rotationAngle(mid));
-            dose += dipole.trappedDoseRate(bodyFixed) * span * SECONDS_PER_TICK;
+            dose += dipole.trappedDoseRate(bodyFixed) * span * AstronomicalBodyHelper.SECONDS_PER_TICK;
         }
         return dose;
     }
 
     private double rotationAngle(long tick) {
-        long turn = Math.floorMod(tick, rotationPeriodTicks);
-        return rotationPhaseRad + 2d * Math.PI * turn / rotationPeriodTicks;
+        return rotation.angleAt(tick);
     }
 }

@@ -265,6 +265,13 @@ key.toggleJetpack=Переключить реактивный ранец
 enchantment.stellurgy.spacebreathing.desc=Позволяет сделать компоненты брони герметичными
 
 msg.rocket.satelliteDeployFailed=Спутник не удалось развернуть: его тип больше недоступен. Корпус остался в отсеке.
+msg.rocket.satelliteNoOrbit=Спутник не выпущен: на высоте, заданной в бортовом компьютере, орбиты вокруг этого тела нет. Корпус остался в отсеке.
+msg.guidanceComputer.releaseAltitude=Высота спутника, км
+msg.guidanceComputer.releaseInclination=Наклонение, град
+msg.guidanceComputer.releaseReachable=Орбита достижима:
+msg.guidanceComputer.releaseUnreachable=Недостижима, держится
+msg.guidanceComputer.releaseNoOrbit=Орбиту вокруг этого тела не удержать
+entity.stellurgy.satellite.name=Спутник
 msg.observetory.scan.tooltip=Поиск новых астероидов, потребляет 100 единиц данных расстояния
 msg.observetory.scan.button=Сканировать!
 msg.observetory.scan.crystal=Кристалл памяти

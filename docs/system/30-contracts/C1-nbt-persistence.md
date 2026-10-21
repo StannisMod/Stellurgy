@@ -189,7 +189,9 @@ mass for may not be undone by a chunk reload).
 family per propellant type. `SatelliteProperties`/`SatelliteRegistry`: `satId`, `dataType`,
 `maxData`, `weight`, `powerGeneration`, `powerStorage`, `satelliteId`, `satelliteName`.
 `DataStorage`: `Data`, `maxData`, `DataType`, `locked`. `SatelliteBase`: `dataType`, `item`,
-`properties`, `dimId`. `StellarBody`: `id`, `name`, `posX`/`Y`/`Z`, `size`, `temperature`,
+`properties`, `dimId`, and `orbit` once released — `radius` (m), `inclination` (rad), `node` (rad), `mu`
+(m³/s²), `epoch` (tick); absent means no orbit. `TileGuidanceComputer`: `releaseAltitude` (m, only when
+set) and `releaseInclination` (degrees). `EntitySatellite` is never saved. `StellarBody`: `id`, `name`, `posX`/`Y`/`Z`, `size`, `temperature`,
 `seperation`, `diskAngle`, `isBlackHole`, `subStars`.
 
 **items** — `ItemStationChip` (stack): `name`, `dimid`, `x`/`y`/`z` (float).

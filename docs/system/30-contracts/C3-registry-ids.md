@@ -12,7 +12,7 @@ inventory that decays in one direction (the source gains a member and nothing go
 keeps what the source cannot say — where ids are minted, the naming rules, and the hazards.
 
 **Where ids are minted.** Every id is minted in `Stellurgy.java` (subsystem `misc-oddities`): entities
-via `EntityNetworkIds.register` (`Stellurgy.java:655-670`), tile entities via
+via `EntityNetworkIds.register` (`Stellurgy.java:648-665`), tile entities via
 `GameRegistry.registerTileEntity` in `preInit`, items in `registerItems`, blocks and fluid blocks in
 `registerBlocks`, biomes in `registerBiomes`. The block / item / biome classes are owned by their
 behavioural subsystem (blocks → `blocks`, items → `items`, …); the **id string** and its namespace are

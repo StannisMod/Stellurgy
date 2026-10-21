@@ -26,6 +26,8 @@ public abstract class SatelliteBase {
     protected UniversalBattery battery;
     private int dimId = Constants.INVALID_PLANET;
     private boolean isDead;
+    /** The orbit it was released onto, or {@code null} while it has no place: not yet released, or a mission. */
+    private SatelliteOrbit orbit;
 
     public SatelliteBase() {
         satelliteProperties = new SatelliteProperties();
@@ -72,6 +74,25 @@ public abstract class SatelliteBase {
      * @return chance from 0 to 1 of failing this tick
      */
     public abstract double failureChance();
+
+    /**
+     * What this satellite's primary function looks at, which decides the way its instruments face. A
+     * device that acts on the world it orbits — every function other than a survey of space — looks at
+     * the body; a type that surveys space says so. Empty for a function that observes nothing.
+     */
+    public java.util.Optional<InstrumentSubject> instrumentSubject() {
+        return java.util.Optional.of(InstrumentSubject.BODY);
+    }
+
+    /** The orbit this satellite was released onto; empty while it has no place on one. */
+    public java.util.Optional<SatelliteOrbit> getOrbit() {
+        return java.util.Optional.ofNullable(orbit);
+    }
+
+    /** Put this satellite on {@code orbit}: done once, at release. */
+    public void setOrbit(@Nonnull SatelliteOrbit orbit) {
+        this.orbit = orbit;
+    }
 
     /**
      * @return the power per tick the satellite produces
@@ -194,6 +215,11 @@ public abstract class SatelliteBase {
             satellite.writeToNBT(itemNBT);
         nbt.setTag("item", itemNBT);
 
+        if (orbit != null) {
+            NBTTagCompound orbitNBT = new NBTTagCompound();
+            orbit.writeToNBT(orbitNBT);
+            nbt.setTag("orbit", orbitNBT);
+        }
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
@@ -201,6 +227,7 @@ public abstract class SatelliteBase {
         dimId = nbt.getInteger("dimId");
         satellite = new ItemStack(nbt.getCompoundTag("item"));
         battery.readFromNBT(nbt);
+        orbit = nbt.hasKey("orbit") ? SatelliteOrbit.readFromNBT(nbt.getCompoundTag("orbit")) : null;
         if (satelliteProperties.getPowerStorage() == 0) {
             satelliteProperties.setPowerStorage(720);
             battery = new UniversalBattery(720);

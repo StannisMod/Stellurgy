@@ -336,7 +336,10 @@ enum ProbeVerbKind {
             case "satellite info":
             case "satellite list":
             case "satellite markers":
+            case "satellite leftovers":
+            case "satellite place":
             case "satellite poslist-size":
+            case "satellite rocket-hatches":
             case "satellite terminal-info":
             case "satellite ticking-list":
             case "satellite types":
@@ -589,6 +592,8 @@ enum ProbeVerbKind {
             case "satellite create":
             case "satellite create-spy-telescope":
             case "satellite force-charge":
+            case "satellite prime-tnt":
+            case "satellite rocket-with":
             case "satellite imprint-terminal":
             case "satellite set-dead":
             case "satellite weather-add-pos":
@@ -771,6 +776,8 @@ enum ProbeVerbKind {
             case "rocket tick":
             case "rocket toggle-rcs":
             case "satellite announce-unknown":
+            case "satellite blow":
+            case "satellite deploy":
             case "satellite deploy-unresolved":
             case "satellite force-tick-dim":
             case "satellite tick":

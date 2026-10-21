@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
@@ -90,6 +91,152 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
         } finally {
             Reply dead = arrange("stellurgytest satellite set-dead " + dim + " " + id);
             scenario().requireArranged("the scenario's satellite must be marked dead: " + dead, dead.ok());
+        }
+    }
+
+    /**
+     * INV-SAT-17: a player's right-click on a satellite standing in its live cell opens the builder's part
+     * panel on it, and a power part put into that panel raises the satellite's generation by the part's own.
+     *
+     * <p>The satellite is released by the production deploy from a rocket a probe arranged, its cell is held
+     * live, and the player is put beside its point on a block laid for him — a cell is a void. The click is
+     * the real use key, aimed by the client's own look at the satellite's centre; the part is moved by the
+     * container's own slot clicks. The generations are the parts' registered ones — the small panel 4, the
+     * large 40 — inputs of the experiment, so the swap must leave 44.</p>
+     *
+     * <p>What it does not see: the render (how the parts face), which is appearance; the primary function's
+     * slot, which the panel shows and refuses; the attitude the client is sent.</p>
+     */
+    @Pins("INV-SAT-17")
+    @RedWitness(verdict = "opens", member = "EntitySatellite#processInitialInteract",
+            at = "player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), world, getEntityId(), -1, 0);",
+            replacedBy = "", fails = "the right-click must open the satellite's panel", on = "2026-10-21")
+    @RedWitness(verdict = "takes effect", member = "OrbitalPartsInventory#store",
+            at = "satellite.setProperties(chassis);", replacedBy = "",
+            fails = "INV-SAT-17: the swapped part did not take effect", on = "2026-10-21")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(1);",
+            why = "one client tick is the dose by construction: the client re-picks its crosshair at the start"
+                    + " of each tick, so the look set before it is the one picked after it; no record names a pick")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(useKeyHeldTicks);",
+            why = "the use key is held for a few ticks so the client's keybind poll sees its press edge; the"
+                    + " verdict is linked on the server's container record after it")
+    @Test
+    public void aClickOpensTheSatellitesPanelAndASwappedPartTakesEffect() throws Exception {
+        // itemSatellitePrimaryFunction 1 (composition) with itemSatellitePowerSource 0 (the small panel).
+        final int composition = 1;
+        final int smallPanel = 0;
+        // The parts' registered generations (Stellurgy's registerSatelliteProperty): 4 and 40 RF/t.
+        final int smallPanelGeneration = 4;
+        final int largePanelGeneration = 40;
+        // Deadlines for one discrete hand-off each: a respawn, a chunk's satellite standing up, a container
+        // opening, a packet applied. Expiry says the thing never happened.
+        final int linkBudgetTicks = 200;
+        // How long the use key is held: a press edge must be seen by the client's keybind poll.
+        final int useKeyHeldTicks = 4;
+        // The player stands two blocks along +Z from the satellite, which stands with its feet at its point.
+        final double standOff = 2d;
+        final double eyeHeight = 1.62d;
+
+        scenario().arranging("a satellite released and standing in its live cell, the player beside it");
+        dev.stannismod.stellurgy.test.FixtureSite site = site();
+        site.requireClear(c -> arrange(c).raw(), 1, 3, "a rocket holding a guidance computer and one satellite hatch");
+        Reply rocket = arrange("stellurgytest satellite rocket-with " + site.dim + " " + site.x + " " + site.y + " "
+                + site.z + " line 51.6 " + composition + " " + smallPanel).requireOk("arranging the rocket");
+        long satId = rocket.longInteger("satId");
+        act("stellurgytest satellite deploy " + rocket.integer("rocketId")).requireOk("deploying the hatch");
+        // Removed now, while its chunk is still loaded: the player is about to leave this world, and an
+        // unloaded rocket can no longer be named by its entity id.
+        dev.stannismod.stellurgy.test.Disposal.rocket(c -> arrange(c).raw(), rocket.integer("rocketId"));
+        Reply placed = read("stellurgytest satellite place " + satId);
+        scenario().requireArranged("the satellite must be released with a point: " + placed,
+                placed.bool("present") && placed.has("point"));
+        Reply point = Reply.of(placed.object("point"));
+        scenario().requireArranged("its cell must be galactic to be held by its sectors: " + point,
+                point.text("cell").indexOf('.') < 0);
+        int x = point.integer("x");
+        int y = point.integer("y");
+        int z = point.integer("z");
+        Reply occupied = arrange("stellurgytest space occupy " + point.longInteger("sx") + " "
+                + point.longInteger("sy") + " " + point.longInteger("sz")).requireOk("holding the cell live");
+        int slotDim = occupied.integer("slotDim");
+        try {
+            arrange("stellurgytest fill " + slotDim + " " + (x - 1) + " " + (y - 1) + " " + (z + 1) + " " + x + " "
+                    + (y - 1) + " " + (z + 2) + " minecraft:stone").requireOk("a block for the player to stand on");
+            emptyTheHandOnClient("the hand must hold only the part about to be given");
+            String bot = PlayerState.botName(c -> read(c).raw());
+            Events server = serverEvents();
+            long serverMark = server.mark();
+            long clientMark = clientEvents().mark();
+            arrange("stellurgytest space enter " + bot + " " + slotDim + " " + x + " " + y + " " + (z + standOff))
+                    .requireOk("putting the player beside the satellite");
+            awaitClientDim(clientMark, slotDim, "the player must arrive in the satellite's cell");
+            // The placement packet sets the look as well as the position: aiming before the client has
+            // applied it lets it overwrite the aim.
+            awaitClientPlacedNear(clientMark, x, z + standOff, "the player must stand beside the satellite");
+            server.awaitRecordWithFields(serverMark, "entity_joined_world",
+                    "the satellite must stand up once the player's arrival loads its chunk", linkBudgetTicks,
+                    "cls", "EntitySatellite", "dim", String.valueOf(slotDim));
+            // The crosshair can only meet what the client holds: the server's entity reaches it with the tracker.
+            clientEvents().awaitRecordWithFields(clientMark, "entity_joined_world",
+                    "the client must be sent the satellite before it can be aimed at", linkBudgetTicks,
+                    "cls", "EntitySatellite", "dim", String.valueOf(slotDim));
+            arrange("give " + bot + " stellurgy:satellitePowerSource 1 1");
+
+            // Aimed by the server's own position-look write: a correction the server sends later carries the
+            // rotation it holds, which is this one, where a look set on the client alone would be overwritten.
+            float pitch = (float) Math.toDegrees(Math.atan2(eyeHeight - 0.5d, standOff));
+            long beforeAim = clientEvents().mark();
+            arrange("tp " + bot + " " + x + " " + y + " " + (z + standOff) + " 180 " + pitch);
+            awaitClientLookApplied(beforeAim, "the client must apply the aim at the satellite");
+            // The client picks what its crosshair is on at the start of each of its own ticks, so the
+            // look applied just now is picked one client tick later and not before.
+            bot().waitWorldTicks(1);
+            JsonObject aim = bot().reportMouseOver();
+            scenario().requireArranged("the crosshair must be on the satellite before the click: " + aim,
+                    aim.has("typeOfHit") && "ENTITY".equals(aim.get("typeOfHit").getAsString()));
+
+            scenario().asserting("the right-click opens the satellite's panel");
+            long beforeClick = server.mark();
+            bot().input().setKey(-99, true);
+            advanceServerAndClient(useKeyHeldTicks);
+            bot().input().setKey(-99, false);
+            server.awaitRecordWithFields(beforeClick, "container_opened",
+                    "the right-click must open the satellite's panel", linkBudgetTicks,
+                    "who", bot, "container", "ContainerModular");
+
+            scenario().asserting("a large panel put into the panel raises the satellite's generation");
+            JsonObject slots = bot().reportSlots();
+            int from = -1;
+            int to = -1;
+            for (com.google.gson.JsonElement e : slots.getAsJsonArray("slots")) {
+                JsonObject slot = e.getAsJsonObject();
+                boolean ofPlayer = slot.get("playerSlot").getAsBoolean();
+                boolean filled = slot.get("hasStack").getAsBoolean();
+                if (ofPlayer && filled && slot.get("item").getAsString().equalsIgnoreCase("stellurgy:satellitePowerSource")) {
+                    from = slot.get("slot").getAsInt();
+                } else if (!ofPlayer && !filled && to < 0 && slot.get("slot").getAsInt() > 0) {
+                    to = slot.get("slot").getAsInt();
+                }
+            }
+            scenario().requireArranged("the panel must show an empty part slot and the player's large panel: "
+                    + slots, from >= 0 && to >= 0);
+            long beforeSwap = clientEvents().mark();
+            bot().clickSlot(from, 0, "PICKUP");
+            bot().clickSlot(to, 0, "PICKUP");
+            clientEvents().awaitRecordWithField(beforeSwap, "client_satellite_packet_applied", "satellite",
+                    String.valueOf(satId), "the swapped part must be sent to the client as the satellite's new make-up",
+                    linkBudgetTicks);
+            Reply after = read("stellurgytest satellite place " + satId);
+            assertEquals("INV-SAT-17: the swapped part did not take effect: " + after,
+                    smallPanelGeneration + largePanelGeneration, after.integer("powerGeneration"));
+        } finally {
+            bot().closeScreen();
+            arrange("stellurgytest space release " + point.longInteger("sx") + " " + point.longInteger("sy") + " "
+                    + point.longInteger("sz"));
+            Reply left = read("stellurgytest satellite place " + satId);
+            if (left.bool("present")) {
+                arrange("stellurgytest satellite set-dead " + left.integer("dim") + " " + satId);
+            }
         }
     }
 

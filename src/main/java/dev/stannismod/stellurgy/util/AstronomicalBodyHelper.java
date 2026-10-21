@@ -275,6 +275,11 @@ public class AstronomicalBodyHelper {
      * tick, and writing that product at the call site is how the two calendars drift apart.
      */
     public static final int TICKS_PER_YEAR = DAYS_PER_YEAR * TICKS_PER_DAY;
+    /**
+     * Physical seconds one game tick stands for: one game day is one Earth day. The conversion every
+     * physical rate — an orbit's motion, a dose rate — is integrated over ticks through.
+     */
+    public static final double SECONDS_PER_TICK = 86_400d / TICKS_PER_DAY;
 
     /**
      * The size multiplier for a body seen from {@code orbitalDistance} away, relative to one AU: 1 at

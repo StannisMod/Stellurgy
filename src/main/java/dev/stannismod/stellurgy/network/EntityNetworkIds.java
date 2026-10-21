@@ -61,6 +61,8 @@ public final class EntityNetworkIds {
             // the vendored physics engine
             "valkyrienskies:entity_mountable",
             "valkyrienskies:entity_mountable_chair",
+            // this mod, continued
+            "stellurgy:satellite",
     };
 
     private static final Map<String, Integer> IDS = index(SPACE);

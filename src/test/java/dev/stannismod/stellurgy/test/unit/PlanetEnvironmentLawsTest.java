@@ -269,8 +269,8 @@ public class PlanetEnvironmentLawsTest {
      * decides a calibration verdict — and so does any split of the day into two consecutive intervals.
      */
     @Pins("INV-ENV-04")
-    @RedWitness(member = "PlanetEnvironment#accruedDose", at = "* span * SECONDS_PER_TICK", replacedBy = "* span",
-            fails = "INV-ENV-04", on = "2026-10-20")
+    @RedWitness(member = "PlanetEnvironment#accruedDose", at = "* span * AstronomicalBodyHelper.SECONDS_PER_TICK",
+            replacedBy = "* span", fails = "INV-ENV-04", on = "2026-10-21")
     @Test
     public void accrualAgreesWithTheSample() {
         PlanetEnvironment env = earth();

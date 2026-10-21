@@ -34,13 +34,14 @@ vocabulary of `DataType`).
 | `RadiationBelts` | the belt profile over the shell parameter `L` and the fall toward the loss cone; Earth-calibrated |
 | `MagnetosphereDerivation` | a body's dipole from mass, radius, spin, kind, distance from its star and seed |
 | `Trajectory` | a path about a body over time, as the dose integration consumes it |
+| `BodyRotation` | how a body turns: meridian 0's angle at a tick — the one rule the field and a satellite's release share |
 
 ## Mechanics
 
 - **MECH-ENV-01 [V][SYS] A sample is ONE bundle.** `sample` returns the field and the trapped dose
   rate together, at a position in the body-centred frame whose axes do not turn with the body (z the
   spin axis). The field is fixed to the body, so the body's rotation (its period and phase at tick
-  zero) carries it round. `PlanetEnvironment.java:55-63,86-89`. FOR: maintainer 2026-09-02, on the local
+  zero, `BodyRotation`) carries it round. `PlanetEnvironment.java:48-56,79-81`, `BodyRotation.java:27-30`. FOR: maintainer 2026-09-02, on the local
   environment as one query or one call per family: *"один пакет."*
 - **MECH-ENV-02 [V][SYS] The dipole.** A moment, an axis tilted from the spin axis, and a centre offset
   from the body's. The magnetosphere ends at the Chapman–Ferraro stand-off — where the dipole's field,
@@ -57,7 +58,7 @@ vocabulary of `DataType`).
   орбиты … Сбой зависит от поля в точке, где спутник сейчас"*, answered *"этот"*.
 - **MECH-ENV-04 [V][SYS] Dose along a path.** `accruedDose` integrates the trapped dose rate along a
   trajectory between two ticks with a fixed number of samples per period of the path, one game day
-  standing for one Earth day (3.6 s a tick). `PlanetEnvironment.java:71-84`. FOR: maintainer 2026-10-20,
+  standing for one Earth day (3.6 s a tick, `AstronomicalBodyHelper.SECONDS_PER_TICK`). `PlanetEnvironment.java:64-77`. FOR: maintainer 2026-10-20,
   on what the field does to a satellite: *"и то и другое в зависимости от дозы"* (both data loss and
   wear, by dose).
 - **MECH-ENV-05 [V][SYS] Where a dipole comes from.** Strength by the empirical magnetic Bode's law,

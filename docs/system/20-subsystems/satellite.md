@@ -1,21 +1,27 @@
 ---
 id: satellite
-owns: [satellite/, tile/satellite/, api/satellite/]
-entrypoints: [SatelliteData#tickEntity, SatelliteWeatherController#tickEntity, TileSatelliteBuilder#assembleSatellite, TileSatelliteTerminal#performFunction, TileTerraformingTerminal#update]
-depends-on: [api-public, dimension-planets, network-wire, items, util-core, world-gen, wirelessdata]
+owns: [satellite/, tile/satellite/, api/satellite/, entity/EntitySatellite, client/render/entity/RenderSatellite]
+entrypoints: [SatelliteData#tickEntity, SatelliteWeatherController#tickEntity, TileSatelliteBuilder#assembleSatellite, TileSatelliteTerminal#performFunction, TileTerraformingTerminal#update, EntityRocket#deploySatelliteFromHatch, SatelliteMaterializer#onChunkLoad, EntitySatellite#onUpdate]
+depends-on: [api-public, dimension-planets, network-wire, items, util-core, world-gen, wirelessdata, space, universe, environment]
 depended-by: [misc-oddities, blocks, items, commands-gameplay]
-contracts: [C1, C2, C3, C4]
+contracts: [C1, C2, C3, C4, C19]
 confidence: high
 ---
 
 ## Purpose
 
-Concrete satellite *types* (the orbital devices a player builds and launches) plus the
-three ground-side tiles that build, query and drive them. Each satellite is a server-side
-data object stored in a planet's `DimensionProperties` satellite list; this subsystem owns
-the behaviour of each type (`tickEntity`, `performAction`, NBT) and the machines that mint
-and interrogate them. The abstract base (`SatelliteBase`, `SatelliteProperties`,
-`SatelliteRegistry`, `DataStorage`) lives in `api-public` and is *not* owned here.
+Concrete satellite *types* (the orbital devices a player builds and launches), the three
+ground-side tiles that build, query and drive them, and the satellite as a **physical object on
+its orbit**. Each satellite is a record in a planet's `DimensionProperties` satellite list: its
+type's behaviour (`tickEntity`, `performAction`, NBT), the parts it was built from, and — once a
+rocket has released it — its orbit. Where its body's space cell is live, the record is also
+**present**: a block-sized entity standing at its point, oriented by its parts, clickable for a
+repair in orbit and destructible. The cell's frame flies the orbit (C19 FRAME-5), so the satellite
+stands still in the cell as a parked ship does; its phase is computed from its orbit and the clock,
+and changes only its relation to what does not fly with the frame — the body's field, the turning
+surface, the star. The abstract base (`SatelliteBase`, `SatelliteProperties`, `SatelliteRegistry`,
+`DataStorage`) lives in `api-public`; the orbit value (`SatelliteOrbit`) and the instrument subject
+(`InstrumentSubject`) beside it are owned here.
 
 ## Responsibility boundary
 
@@ -44,6 +50,15 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
 | `TileSatelliteBuilder` | multiblock: assembles a satellite item from part slots; copies chips `TileSatelliteBuilder.java:31` |
 | `TileSatelliteTerminal` | Satellite Control Center: chip → link → data download + erase button `TileSatelliteTerminal.java:40` |
 | `TileTerraformingTerminal` | redstone-gated tile that drives a biome-changer chip's terraform loop `TileTerraformingTerminal.java:46` |
+| `SatelliteOrbit` | a circular orbit's elements — radius, inclination, node, the body's gravitational parameter, the release tick — and the phase and position computed from them; a `Trajectory` for the environment `api/satellite/SatelliteOrbit.java:18` |
+| `InstrumentSubject` | what a primary function looks at: the body, or space `api/satellite/InstrumentSubject.java:7` |
+| `SatelliteAssembly` | the one sum of a chassis' parts into properties, read by assembly and by repair `satellite/SatelliteAssembly.java:13` |
+| `SatellitePlacement` | the altitudes a body admits, the orbit a release gets, the point a satellite stands at `satellite/SatellitePlacement.java:26` |
+| `SatelliteAttitude` | which way the parts face at a tick: the nearest star, the body `satellite/SatelliteAttitude.java:26` |
+| `SatelliteMaterializer` | stands a satellite's entity up where its live cell's chunk loads, or at release `satellite/SatelliteMaterializer.java:33` |
+| `OrbitalPartsInventory` | a satellite's parts as the builder panel's seven slots, for a repair in orbit `satellite/OrbitalPartsInventory.java:24` |
+| `EntitySatellite` | the satellite's presence in a live cell: kinematic, never saved, clickable, destructible `entity/EntitySatellite.java:47` |
+| `RenderSatellite` | draws the chassis, its dish and antennas, and each part facing by rule `client/render/entity/RenderSatellite.java:34` |
 
 ## Mechanics
 
@@ -70,7 +85,9 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   block per tick with particle packets. `setDead` releases the rain marker (rain/drain only).
   [V] `SatelliteWeatherController.java:98,174,283,200`
 - **MECH-SAT-08 Satellite assembly.** `TileSatelliteBuilder.assembleSatellite` sums power/data/
-  weight from part slots 1-6, mints `SatelliteProperties` with a fresh id from
+  weight from part slots 1-6 through `SatelliteAssembly.propertiesOf` (720 RF of base buffer on top
+  of the batteries) — the parts stay in the chassis' own `inv`, so a launched satellite carries
+  them — mints `SatelliteProperties` with a fresh id from
   `DimensionManager.getNextSatelliteId()`, stamps the chassis (`ItemSatellite`) and the id
   chip via `sat.getControllerItemStack`, then moves chassis→holding→(output after
   `completionTime`). Gated by `canAssembleSatellite` (needs primary function, a power gen,
@@ -96,6 +113,73 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   terminal buffer and an `IDataItem` in slot 1, moving only what the receiver accepts.
   [V] `TileSatelliteTerminal.java:352,388`
 
+### The satellite on its orbit
+
+- **MECH-SAT-14 [V][SYS] An orbit is its elements; the phase is computed.** A released satellite holds
+  a circular orbit: radius from the body's centre, inclination, the longitude of the ascending node, the
+  body's gravitational parameter (Earth's, 3.986 004 418e14 m³/s², times the body's mass in Earth
+  masses) and the release tick. Its phase — the angle from the node — advances at `√(μ/r³)`, one game
+  tick standing for 3.6 s, and its position is computed in the body-centred frame whose axes do not turn
+  with the body, z along the spin axis: the frame the environment is asked in. Nothing ticks. At release
+  the node lies under the body's meridian 0 and the satellite is at the node; meridian 0 is where
+  `BodyRotation` puts it — the body's rotational period, angle zero at tick zero — the same rule the
+  field turns by. `SatelliteOrbit.java:46-91`, `BodyRotation.java:27-30`, `SatellitePlacement.java:141-174`.
+  FOR: maintainer 2026-10-20, asked *"фазу считать по времени из элементов орбиты"*, answered *"этот"*.
+- **MECH-SAT-15 [V][BEH] Where it stands.** The cell's frame flies the orbit, so the satellite stands
+  still in its body's cell: at the body's address displaced by its place on the orbit at release, in
+  chart blocks along the cell's axes — x stays x, the spin axis is Y, y is −Z. Two satellites released at
+  different ticks stand at different points. A satellite with no orbit, a body the universe does not name,
+  or a cell with no lattice gives no point. `SatellitePlacement.java:180-207`, `SatelliteOrbit.java:92-98`.
+  FOR: maintainer 2026-10-20: *"У нас и корабль "стоит" на орбите. Спутник будет так же стоять"*.
+- **MECH-SAT-16 [V][BEH] Release: the orbit is chosen on the guidance computer.** When a rocket deploys
+  a hatch's satellite, the orbit is the body's at the altitude and inclination set on its guidance
+  computer — with no altitude set, the body's orbit line (its line's world Y is its altitude, a world
+  block being a metre); with no inclination, equatorial; a rocket with no guidance computer releases at
+  both defaults. A body admits altitudes from its descent shell (below it there is no cell to stand in)
+  to its sphere of influence (beyond it the satellite is no longer in its frame). Outside them, or about
+  a body with no size, mass or sphere, no orbit exists: the satellite stays in the hatch and the pilot is
+  told. The guidance computer's screen shows the range and whether the setting is inside it — the server
+  computes it, the client is told. `EntityRocket.java:2608-2650`, `SatellitePlacement.java:107-169`,
+  `TileGuidanceComputer.java` (`statedReleaseAltitudeM`, `computeReleaseStatus`). FOR: maintainer
+  2026-10-20, choosing how a satellite gets its orbit: the altitude and inclination set at launch on the
+  rocket's guidance computer, the planet's orbit line by default; 2026-10-21 on the bounds: *"да"*.
+- **MECH-SAT-17 [V][BEH] Presence in a live cell.** A satellite's entity exists only in a loaded chunk
+  of the live cell that holds its point: it is stood up when that chunk loads, and at release when it is
+  already loaded. It is never saved with the cell — the record is the satellite — so a reload or a
+  re-bound slot cannot duplicate it, and it dies once its record has left its body's list. It is
+  kinematic: it integrates nothing, never moves, and is no physics ship. With no live cell the subsystem
+  does no work for it. `SatelliteMaterializer.java:40-99`, `EntitySatellite.java` (`onUpdate`,
+  `writeToNBTOptional`). FOR: maintainer 2026-10-20 on the satellite as an entity rather than a one-block
+  ship: *"её можно уничтожить, и она кликабельна"*; 2026-10-21 on where it is while nobody sees it:
+  *"ок"*.
+- **MECH-SAT-18 [V][BEH] Attitude.** Its power generation faces the nearest star of its system and its
+  dish its body, along the vectors the cell's sky is drawn along: the star's position at the tick minus
+  the satellite's point, through the frames. Recomputed every 20 ticks — the sky feed's cadence — on a
+  phase smeared by satellite id, and at once on its first update; the satellite's own phase is not
+  applied, because the cell does not draw it. `SatelliteAttitude.java:51-82`, `EntitySatellite.java`
+  (`onUpdate`). FOR: maintainer 2026-10-20: *"солнечные панели - к ближайшей звезде … тарелка для
+  передачи данных - к планете"*; 2026-10-21 on the star of the cell's sky: *"согласен"*.
+- **MECH-SAT-19 [V][BEH] Instruments face what the primary function surveys.** A data satellite's
+  instruments face by the quantity it collects — distance is read across space, so away from the body;
+  every other quantity is the body's, so toward it; a device that acts on its world faces it. Derived
+  from the type, never stored. `DataStorage.java` (`DataType#subject`), `SatelliteData.java`
+  (`instrumentSubject`), `SatelliteBase.java` (`instrumentSubject`). FOR: maintainer 2026-10-20:
+  *"всякие измерительные приборы, если он исследует космос - от планеты, если исследует планету - к
+  планете"*.
+- **MECH-SAT-20 [V][BEH] Repair in orbit.** Right-click opens the builder's part panel on the satellite's
+  own chassis: its seven slots at the builder's places. The primary function (slot 0) is shown and never
+  moves — swapping it would make another type with another controller. A change to slots 1–6 re-sums the
+  properties through the one sum assembly uses, keeps the satellite's id and type, and is sent to every
+  client. `OrbitalPartsInventory.java:49-62`, `SatelliteAssembly.java:28-48`, `EntitySatellite.java`
+  (`processInitialInteract`, `getModules`). FOR: maintainer 2026-10-20: *"По клику открывается... ну пока
+  что пусть такая же панель, что и в сборнике. Это интерактивный ремонт"*; 2026-10-21 on slot 0: *"ок"*.
+- **MECH-SAT-21 [V][BEH] Destruction leaves nothing.** An explosion or a projectile destroys a satellite,
+  and so do two blows from a player within 5 ticks — the first is taken for a missed click. Its record
+  leaves its body's list, a zero-strength explosion plays (sound and particles, no damage), and nothing
+  drops. `EntitySatellite.java` (`attackEntityFrom`, `destroy`). FOR: maintainer 2026-10-20: *"При
+  разрушении, по сути взрыве, спутника ничего не остаётся. Только анимашка взрыва"*; 2026-10-21 on the
+  two blows: *"ок"*.
+
 ## State & persistence
 
 NBT keys: see `C1-nbt-persistence` (satellite). Notes: `data` is a nested `DataStorage` in distinct scopes (the satellite
@@ -104,6 +188,12 @@ object vs the terminal tile), so the two never collide (`SatelliteData.java:149`
 through `sendChanges` window props. `TileTerraformingTerminal.writeToNBT`/`readFromNBT` are **no-ops** — its state is
 re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist only as packet-22 wire fields (transient).
 `SatelliteSpyTelescope` NBT bodies are empty. [V] `TileTerraformingTerminal.java:298,346`
+
+A released satellite writes `orbit` {`radius`, `inclination`, `node`, `mu`, `epoch`} beside its other keys;
+absent means no orbit (not yet released, or a mission). Its parts are the chassis item's `inv`, inside `item`.
+The guidance computer writes `releaseAltitude` (metres, only when one is set) and `releaseInclination`
+(degrees). `EntitySatellite` writes nothing: it is never saved. Its attitude rides two synced data
+parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 
 ## Invariants
 
@@ -132,6 +222,51 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
   until that satellite's first `performAction`, which raises its own cap to 8 000. The cap is per satellite, never a
   mutable static that one satellite's action would raise for every changer.
   `SatelliteBiomeChanger.java:24,114,125`
+- **INV-SAT-11 [T][SYS] The phase is the clock's.** At every tick a released satellite's position lies at
+  its orbit's radius from the body; one period of `2π√(r³/μ)` later it is where it was; at release it lies
+  at the node under the body's meridian 0; a quarter period after the node it stands at the latitude of
+  its inclination. REGIONS: `equatorial`, `inclined`, `polar`, `retrograde`. Pinned by
+  `SatelliteLawsTest#thePhaseIsTheClocks`. FOR: maintainer 2026-10-20, asked *"фазу считать по времени из
+  элементов орбиты"*, answered *"этот"*.
+- **INV-SAT-12 [T][SYS] Standing still is orbiting.** A satellite's standing point lies at its orbit's
+  radius from the body, along its place on the orbit at release; carried onto the cell's axes, every
+  length is kept and the frame's handedness with it. Pinned by `SatelliteLawsTest#standingStillIsOrbiting`. FOR:
+  maintainer 2026-10-20: *"Спутник будет так же стоять. Это некоторое приближение понятия "на орбите""*.
+- **INV-SAT-13 [T][SYS] Releases at different ticks stand apart.** Two satellites released onto the same
+  altitude and inclination at different ticks of one rotation stand at different points; released at the
+  same tick, at the same point. Pinned by `SatelliteLawsTest#releasesAtDifferentTicksStandApart`. FOR:
+  maintainer 2026-10-21, on the point taken from the place on the orbit at release: *"ок"*.
+- **INV-SAT-14 [T][SYS] The attitude is computed from the tick.** The power-generation direction is the
+  unit vector from the satellite's point to the NEAREST star at that tick, the dish's the unit vector to
+  its body; when the star has moved between two ticks the attitude has followed it; with no star there is
+  none. REGIONS: `one star`, `two stars`, `moved star`, `no star`. Pinned by
+  `SatelliteLawsTest#theAttitudeIsComputedFromTheTick`. FOR: maintainer 2026-10-21, on facing the star of
+  the cell's sky: *"согласен"*.
+- **INV-SAT-15 [T][SYS] The quantity decides the instruments.** Distance faces space; humidity,
+  temperature, composition, atmosphere density and mass face the body; an undefined quantity faces
+  neither; a data satellite faces as the quantity it collects does.
+  REGIONS: `space survey`, `body survey`, `undefined`. Pinned by
+  `SatelliteLawsTest#theQuantityDecidesTheInstruments`. FOR: maintainer 2026-10-20: *"если он исследует
+  космос - от планеты, если исследует планету - к планете"*.
+- **INV-SAT-16 [T][BEH] Present only where its cell is live, and there at its point.** A released satellite
+  stands up nowhere while its cell is not live; once the chunk of its live cell that holds its point loads,
+  it stands up there, at exactly that point. Pinned by
+  `SatelliteOnItsOrbitGroupTest#aSatelliteStandsAtItsPointOnlyWhereItsCellIsLive`.
+- **INV-SAT-17 [T][BEH] A click opens its panel, and a swapped part takes effect.** A player's right-click on a
+  standing satellite opens the builder's part panel on it; a power part put into it raises the satellite's
+  generation by that part's own. Pinned by
+  `SatelliteClientGroupTest#aClickOpensTheSatellitesPanelAndASwappedPartTakesEffect`.
+- **INV-SAT-18 [T][BEH] Destroyed, it leaves nothing.** One blow from a player leaves it standing; two in a row
+  destroy it, and so does an explosion; destroyed, its record is gone, nothing stands or lies where it stood,
+  and only its own explosion is seen. Pinned by `SatelliteOnItsOrbitGroupTest#aSatelliteDestroyedLeavesNothing`.
+- **INV-SAT-20 [T][BEH] Its panels face the star its sky draws.** The star direction a standing satellite
+  carries and the star vector its cell's sky feed sends name one direction, to within the angle the
+  satellite's offset from the sky's observer subtends and the star's motion over either side's cadence.
+  Pinned by `SatelliteOnItsOrbitGroupTest#theStarASatelliteFacesIsTheStarItsSkyDraws`.
+- **INV-SAT-19 [T][BEH] The guidance computer chooses the orbit.** A release goes to the altitude and
+  inclination its rocket's guidance computer sets; with no altitude set, to the body's orbit line; where the
+  body admits no orbit at the altitude set, the satellite stays in the hatch and nothing is released. Pinned
+  by `SatelliteOnItsOrbitGroupTest#aSatelliteGoesToTheOrbitItsGuidanceComputerSets`.
 
 ## Failure modes & edge cases
 
@@ -159,6 +294,15 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
   `satelliteControlCenter`, `weatherController`, `biomeChanger`, `satelliteIdChip`,
   `satellitePowerSource`, `satellitePrimaryFunction` registered from `Stellurgy.java`
   (misc-oddities), referenced here.
+- **Entity (C3):** `stellurgy:satellite` (`EntitySatellite`), declared last in `EntityNetworkIds`; tracking
+  range 256, update every 20 ticks, no velocity. Its attitude rides the entity's own synced data
+  parameters, its satellite id the spawn data — no packet of its own.
+- **Space and universe:** the standing point is the body's `addressAt` plus the place on the orbit
+  (`GalacticCoord.plusLocal`); a live cell's slot is `SpaceManager.slotDimOf`; bounds read
+  `DescentShell.orbitLineWorldY` and `SpaceSubsystem.zoneSphereRadiusOf`; the attitude reads the system's
+  stars through `UniverseRegistry.systemBodiesAt` at the space clock, as the sky feed (C14) does.
+- **Environment:** `SatelliteOrbit` is a `Trajectory`; meridian 0 is `BodyRotation`'s, the same rule the
+  field turns by.
 - **Capabilities:** `SatelliteMicrowaveEnergy implements IUniversalEnergyTransmitter`
   (libVulpes); terminals extend libVulpes `TileInventoriedRFConsumer` / `TileMultiPowerConsumer`.
 - **Cross-subsystem:** `DimensionProperties.add_water_locked_pos` / rain marker
@@ -171,6 +315,10 @@ Config: see `C4-config-surface` (`enableTerraforming` false ⇒ the terminal sti
 
 ## Test coverage
 
+INV-SAT-11..15 → `SatelliteLawsTest` (unit); INV-SAT-16, -18, -19, -20 → `SatelliteOnItsOrbitGroupTest` (server);
+INV-SAT-17 → `SatelliteClientGroupTest` (client). Not pinned: the render's appearance (how the parts look),
+and the guidance computer's screen fields. "Never a physics ship" holds by construction — the materializer
+spawns a plain entity and nothing on its path reaches the physics substrate.
 INV-SAT-01/02 → `SatelliteTickBehaviourTest`; INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,

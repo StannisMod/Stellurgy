@@ -661,6 +661,8 @@ public class Stellurgy {
         EntityNetworkIds.register(new ResourceLocation(Constants.modId, "StellurgyStarUIButton"), EntityUIStar.class, "StellurgyStarUIButton", this, 64, 20, false);
         EntityNetworkIds.register(new ResourceLocation(Constants.modId, "StellurgySpaceElevatorCapsule"), EntityElevatorCapsule.class, "StellurgySpaceElevatorCapsule", this, 64, 20, true);
         EntityNetworkIds.register(new ResourceLocation(Constants.modId, "StellurgyHoverCraft"), EntityHoverCraft.class, "hovercraft", this, 64, 1, true);
+        // A satellite never moves in its cell, so it sends no velocity; 20 is the cadence its attitude is recomputed at.
+        EntityNetworkIds.register(new ResourceLocation(Constants.modId, "satellite"), dev.stannismod.stellurgy.entity.EntitySatellite.class, "satellite", this, 256, 20, false);
 
         //TileEntity Registration ---------------------------------------------------------------------------------------------
         GameRegistry.registerTileEntity(TileBrokenPart.class, "ARbrokenPart");
@@ -1654,6 +1656,8 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.world.TimeCommandGuard());
         // Movable-ship space subsystem GC ticker (idle unless a server-start builds the controller).
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.space.SpaceSubsystemEvents());
+        // Satellites stand up in a live cell's chunks as they load; stateless, idle while no cell is live.
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.satellite.SatelliteMaterializer.class);
         // Login restore (a returning player goes back to his ship, not to a stale pool slot) and the
         // cell-divergence hook. Independent of the controller so it stays quiet while it is down.
         // The two binding owners are KEPT, not just registered: returning a player to the plain

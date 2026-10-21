@@ -2607,9 +2607,45 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             else
                 world2 = destinationId;
 
+            if (!world.isRemote) {
+                dev.stannismod.stellurgy.satellite.SatellitePlacement.Answer<dev.stannismod.stellurgy.api.satellite.SatelliteOrbit> orbit =
+                        releaseOrbitAbout(properties);
+                if (!orbit.isPresent()) {
+                    // No orbit about this body at the altitude asked for: the satellite has no place to
+                    // go, so it stays in the hatch and the pilot is told, never released placeless.
+                    Stellurgy.logger.warn("Satellite in hatch at " + tile.getPos() + " was not released about world "
+                            + properties.getId() + ": " + orbit.refusal());
+                    for (Entity passenger : getPassengers()) {
+                        if (passenger instanceof EntityPlayer) {
+                            passenger.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
+                                    "msg.rocket.satelliteNoOrbit"));
+                        }
+                    }
+                    return;
+                }
+                satellite.setOrbit(orbit.get());
+            }
             properties.addSatellite(satellite, world2, world.isRemote);
             tile.setInventorySlotContents(0, ItemStack.EMPTY);
+            if (!world.isRemote) {
+                dev.stannismod.stellurgy.satellite.SatelliteMaterializer.materializeIfLive(world, satellite);
+            }
         }
+    }
+
+    /**
+     * The orbit a satellite released now about {@code body} is put on, from the altitude and inclination set
+     * on this rocket's guidance computer — with none, the body's orbit line, equatorial. Refused, with the
+     * reason, when the body admits no orbit there.
+     */
+    private dev.stannismod.stellurgy.satellite.SatellitePlacement.Answer<dev.stannismod.stellurgy.api.satellite.SatelliteOrbit>
+    releaseOrbitAbout(DimensionProperties body) {
+        TileGuidanceComputer computer = storage.getGuidanceComputer();
+        return dev.stannismod.stellurgy.satellite.SatellitePlacement.orbitAbout(
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(world), body,
+                computer == null ? java.util.OptionalDouble.empty() : computer.statedReleaseAltitudeM(),
+                computer == null ? 0d : computer.releaseInclinationRad(),
+                dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
     }
 
     /**
