@@ -405,6 +405,15 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   within 0.02, at the doses that stand for 5e14, 1e15 and 5e15 e/cm² of 1 MeV electrons on the
   geostationary design point (1e15 e/cm² for 15 years of our geostationary dose); electronics work below
   5 krad(Si) and stop at it. Pinned by `SatelliteLawsTest#theBudgetsAreTheMeasuredOnes`. FOR: maintainer 2026-10-21 on the figures, *"по рекомендациям"*.
+- **INV-SAT-34 [T][SYS] Each data satellite collects its one quantity.** The optical telescope collects
+  distance, the density scanner atmosphere density, the mass scanner mass and the composition scanner
+  composition (`satellite/SatelliteOptical.java:12`, and the same line of the other three); its buffer
+  refuses a point of any other quantity and takes one of its own. The ore scanner is no data satellite: its
+  payload is the base one, which collects nothing (`api/satellite/SatelliteBase.java:145`, read in code, not
+  pinned) — it scans when its player asks. REGIONS: `distance`, `atmosphere density`, `mass`, `composition`, `one quantity`. Pinned
+  by `SatelliteLawsTest#eachDataSatelliteCollectsItsOneQuantity`. FOR: a storage takes a point only of its
+  own quantity (`DataStorage#addData`), so a scanner that changed its quantity would hand every reader of
+  its data the wrong one.
 
 ## Failure modes & edge cases
 
@@ -467,7 +476,8 @@ panel's inventory on the server).
 INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
-`TerraformingTerminalSmokeTest`; scanning types → `ScanningSatelliteTickContractTest`,
+`TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
+`SatelliteLawsTest` (unit); scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
 `SatelliteLifecycleSmokeTest`, `SatelliteCoverageGapsTest`.
 

@@ -12,6 +12,8 @@ import dev.stannismod.stellurgy.satellite.RadiationWear;
 import dev.stannismod.stellurgy.satellite.SatelliteAccrual;
 import dev.stannismod.stellurgy.satellite.SatelliteAttitude;
 import dev.stannismod.stellurgy.satellite.SatelliteComposition;
+import dev.stannismod.stellurgy.satellite.SatelliteData;
+import dev.stannismod.stellurgy.satellite.SatelliteDensity;
 import dev.stannismod.stellurgy.satellite.SatelliteLife;
 import dev.stannismod.stellurgy.satellite.SatelliteMassScanner;
 import dev.stannismod.stellurgy.satellite.SatelliteOptical;
@@ -289,6 +291,56 @@ public class SatelliteLawsTest {
                 Optional.of(InstrumentSubject.BODY), new SatelliteComposition().instrumentSubject());
         assertEquals("INV-SAT-15: body survey — the mass scanner does not face the body",
                 Optional.of(InstrumentSubject.BODY), new SatelliteMassScanner().instrumentSubject());
+    }
+
+    /**
+     * INV-SAT-34: each data satellite's buffer holds the one quantity it collects, refuses a point of any
+     * other and takes one of its own. The buffer is given room first: with none, a refusal would be the
+     * capacity's, not the quantity's. Does not see how a point reaches the buffer — that is the accrual's.
+     */
+    @Pins("INV-SAT-34")
+    @Regions(of = "INV-SAT-34", value = {"distance", "atmosphere density", "mass", "composition", "one quantity"})
+    @RedWitness(verdict = "distance", member = "SatelliteOptical#SatelliteOptical",
+            at = "data.lockDataType(DataType.DISTANCE);", replacedBy = "data.lockDataType(DataType.MASS);",
+            fails = "INV-SAT-34: distance", on = "2026-10-21")
+    @RedWitness(verdict = "atmosphere density", member = "SatelliteDensity#SatelliteDensity",
+            at = "data.lockDataType(DataStorage.DataType.ATMOSPHEREDENSITY);",
+            replacedBy = "data.lockDataType(DataStorage.DataType.MASS);",
+            fails = "INV-SAT-34: atmosphere density", on = "2026-10-21")
+    @RedWitness(verdict = "mass", member = "SatelliteMassScanner#SatelliteMassScanner",
+            at = "data.lockDataType(DataStorage.DataType.MASS);",
+            replacedBy = "data.lockDataType(DataStorage.DataType.COMPOSITION);",
+            fails = "INV-SAT-34: mass", on = "2026-10-21")
+    @RedWitness(verdict = "composition", member = "SatelliteComposition#SatelliteComposition",
+            at = "data.lockDataType(DataStorage.DataType.COMPOSITION);",
+            replacedBy = "data.lockDataType(DataStorage.DataType.MASS);",
+            fails = "INV-SAT-34: composition", on = "2026-10-21")
+    @RedWitness(verdict = "one quantity", member = "SatelliteDensity#SatelliteDensity",
+            at = "data.lockDataType(DataStorage.DataType.ATMOSPHEREDENSITY);", replacedBy = "",
+            fails = "INV-SAT-34: one quantity", on = "2026-10-21")
+    @Test
+    public void eachDataSatelliteCollectsItsOneQuantity() {
+        Object[][] satellites = {
+                {"distance", new SatelliteOptical(), DataStorage.DataType.DISTANCE},
+                {"atmosphere density", new SatelliteDensity(), DataStorage.DataType.ATMOSPHEREDENSITY},
+                {"mass", new SatelliteMassScanner(), DataStorage.DataType.MASS},
+                {"composition", new SatelliteComposition(), DataStorage.DataType.COMPOSITION},
+        };
+        for (Object[] row : satellites) {
+            SatelliteData satellite = (SatelliteData) row[1];
+            assertEquals("INV-SAT-34: " + row[0] + " — " + satellite.getClass().getSimpleName()
+                    + " collects another quantity", row[2], satellite.data.getDataType());
+        }
+        for (Object[] row : satellites) {
+            SatelliteData satellite = (SatelliteData) row[1];
+            DataStorage.DataType own = (DataStorage.DataType) row[2];
+            satellite.data.setMaxData(10);
+            assertEquals("INV-SAT-34: one quantity — " + satellite.getClass().getSimpleName()
+                    + " refuses a point of its own quantity", 1, satellite.data.addData(1, own, false));
+            assertEquals("INV-SAT-34: one quantity — " + satellite.getClass().getSimpleName()
+                    + " takes a point of temperature", 0,
+                    satellite.data.addData(1, DataStorage.DataType.TEMPERATURE, false));
+        }
     }
 
     // ---- the dose on its parts: INV-SAT-21, -23..-25, -27..-30 -------------------------------------------
