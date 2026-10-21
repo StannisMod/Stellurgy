@@ -81,9 +81,18 @@ public class SatelliteWeatherController extends SatelliteBase {
     }
 
 
+    /** It drives its world's weather every tick. */
+    @Override
+    public boolean canTick() {
+        return true;
+    }
+
     @Override
     public void tickEntity() {
         super.tickEntity();
+        if (!SatelliteLife.functioning(this)) {
+            return;
+        }
 
         if (last_mode_id != mode_id) {
             last_mode_id = mode_id;
@@ -357,10 +366,6 @@ public class SatelliteWeatherController extends SatelliteBase {
     }
 
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
     public IUniversalEnergy getBattery() {
         return battery;

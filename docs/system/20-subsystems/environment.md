@@ -3,7 +3,7 @@ id: environment
 owns: [environment/]
 entrypoints: [PlanetEnvironment#sample, PlanetEnvironment#accruedDose, MagnetosphereDerivation#derive]
 depends-on: [util-core]
-depended-by: []
+depended-by: [satellite]
 contracts: [C24]
 confidence: high
 ---
@@ -29,7 +29,8 @@ vocabulary of `DataType`).
 | class | role |
 |---|---|
 | `PlanetEnvironment` | one body's environment: `sample(position, tick)` and `accruedDose(path, from, to)` |
-| `LocalEnvironment` | the bundle a sample returns: field (tesla) and trapped dose rate (Gy/s) |
+| `LocalEnvironment` | the bundle a sample returns: field (tesla) and trapped dose rate (Gy/s), whole and per belt |
+| `TrappedDose` | a trapped dose rate split by belt: inner-belt protons, outer-belt electrons |
 | `PlanetaryDipole` | a tilted, offset dipole fixed to the body; its field, its belts' dose, its magnetopause |
 | `RadiationBelts` | the belt profile over the shell parameter `L` and the fall toward the loss cone; Earth-calibrated |
 | `MagnetosphereDerivation` | a body's dipole from mass, radius, spin, kind, distance from its star and seed |
@@ -39,7 +40,8 @@ vocabulary of `DataType`).
 ## Mechanics
 
 - **MECH-ENV-01 [V][SYS] A sample is ONE bundle.** `sample` returns the field and the trapped dose
-  rate together, at a position in the body-centred frame whose axes do not turn with the body (z the
+  rate together — whole, and split into the inner belt's protons and the outer belt's electrons, which
+  matter shields thin differently and of which only the protons upset memory — at a position in the body-centred frame whose axes do not turn with the body (z the
   spin axis). The field is fixed to the body, so the body's rotation (its period and phase at tick
   zero, `BodyRotation`) carries it round. `PlanetEnvironment.java:48-56,79-81`, `BodyRotation.java:27-30`. FOR: maintainer 2026-09-02, on the local
   environment as one query or one call per family: *"один пакет."*
@@ -126,8 +128,11 @@ None. Every value is derived on demand from its inputs; nothing reaches NBT, the
 
 ## Integration seams
 
-None yet in production: the first consumers are a satellite's dose and a dosimeter's reading. The
-quantities are `C24`'s environment in the sense of BODY-14 — derived, never stored.
+The first consumer is `satellite`: `SatelliteLife` derives a body's environment from its world's
+properties and the universe's body (mass, radius, spin, kind, distance from its star, the world's seed),
+and `SatelliteAccrual` samples it at each segment of a satellite's orbit for the dose on its parts, the
+data it loses and what a dosimeter reads. The quantities are `C24`'s environment in the sense of BODY-14 —
+derived, never stored: a satellite persists the doses its parts took and its journal, never a sample.
 
 ## Config surface
 

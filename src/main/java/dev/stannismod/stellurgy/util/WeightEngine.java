@@ -66,6 +66,12 @@ public final class WeightEngine {
     private static final double GUIDANCE_COMPUTER_MASS = 9000;
     private static final double PRESSURE_TANK_MASS = 25000;
     private static final double SATELLITE_HATCH_MASS = 25000;
+    /**
+     * A satellite shield part: its areal density of aluminium (g/cm², converted to kg/m² by ×10) over the
+     * six square metres of a block-sized satellite's faces.
+     */
+    private static final double SATELLITE_SHIELD_MASS =
+            dev.stannismod.stellurgy.satellite.RadiationWear.SHIELD_AREAL_DENSITY_G_CM2 * 10d * 6d;
 
     /** The tables' file, or {@code null} for an engine that is backed by none. */
     private final String file;
@@ -164,6 +170,9 @@ public final class WeightEngine {
             if (materialMass != null) {
                 return materialMass.floatValue();
             }
+        }
+        if (key.equals("stellurgy:satelliteshield")) {
+            return (float) SATELLITE_SHIELD_MASS;
         }
         return (float) fallback;
     }

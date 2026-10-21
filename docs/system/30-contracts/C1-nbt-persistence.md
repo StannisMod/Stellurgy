@@ -190,7 +190,10 @@ family per propellant type. `SatelliteProperties`/`SatelliteRegistry`: `satId`, 
 `maxData`, `weight`, `powerGeneration`, `powerStorage`, `satelliteId`, `satelliteName`.
 `DataStorage`: `Data`, `maxData`, `DataType`, `locked`. `SatelliteBase`: `dataType`, `item`,
 `properties`, `dimId`, and `orbit` once released — `radius` (m), `inclination` (rad), `node` (rad), `mu`
-(m³/s²), `epoch` (tick); absent means no orbit. `TileGuidanceComputer`: `releaseAltitude` (m, only when
+(m³/s²), `epoch` (tick); absent means no orbit; and `life` — `segments`, `energyCarry`, `collectionCarry`,
+`journal` {`entries` [{`tick`, `phase`, `kind`, `count`, `slot`}], `dropped`}. `SatelliteDosimeter`:
+`readings` {`readings` [{`tick`, `phase`, `rate` — absent for "absent here"}], `dropped`}. A satellite part's
+item: `radiationDose` (Gy), once it has taken any. `TileGuidanceComputer`: `releaseAltitude` (m, only when
 set) and `releaseInclination` (degrees). `EntitySatellite` is never saved. `StellarBody`: `id`, `name`, `posX`/`Y`/`Z`, `size`, `temperature`,
 `seperation`, `diskAngle`, `isBlackHole`, `subStars`.
 

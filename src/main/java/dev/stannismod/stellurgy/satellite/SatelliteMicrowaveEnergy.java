@@ -42,10 +42,6 @@ public class SatelliteMicrowaveEnergy extends SatelliteBase implements IUniversa
         return false;
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
     @Override
     public void setDimensionId(World world) {
@@ -60,8 +56,12 @@ public class SatelliteMicrowaveEnergy extends SatelliteBase implements IUniversa
     @Override
     public int transmitEnergy(EnumFacing dir, boolean simulate) {
 
-        // cap by generation per tick (after upkeep)
-        int genPerTick = Math.max(0, getPowerPerTick() - 1);
+        bringUpToNow();
+        if (!SatelliteLife.functioning(this)) {
+            return 0;
+        }
+        // cap by generation per tick (after upkeep), as the panels give it now
+        int genPerTick = (int) Math.max(0L, Math.round(currentPowerPerTick() - SatelliteAccrual.UPKEEP_PER_TICK));
 
         int maxSend = (int)Math.round(
             StellurgyConfiguration.getCurrentConfig().microwaveRecieverMulitplier * genPerTick

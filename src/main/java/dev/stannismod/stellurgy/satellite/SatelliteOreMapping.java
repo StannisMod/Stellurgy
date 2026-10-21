@@ -71,7 +71,8 @@ public class SatelliteOreMapping extends SatelliteBase {
     }
 
     public boolean canBeginScan() {
-        return battery.extractEnergy(1000, true) == 1000;
+        bringUpToNow();
+        return SatelliteLife.functioning(this) && battery.extractEnergy(1000, true) == 1000;
     }
 
     public int[][] scanChunk(World world, int offsetX, int offsetZ, int radius, int blocksPerPixel, @Nonnull ItemStack block, int zoomLevel) {
@@ -207,10 +208,6 @@ public class SatelliteOreMapping extends SatelliteBase {
         return ret;
     }
 
-    @Override
-    public double failureChance() {
-        return 0D;
-    }
 
     @Override
     public String getName() {

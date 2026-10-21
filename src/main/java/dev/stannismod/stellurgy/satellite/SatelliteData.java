@@ -38,7 +38,10 @@ public abstract class SatelliteData extends SatelliteBase {
     @Override
     public String getInfo(World world) {
         //tiles dont update unless ppl reopen
-        return "Power: " + battery.getUniversalEnergyStored() + "/" + battery.getMaxEnergyStored() + "\nData Storage: " + ZUtils.formatNumber(data.getMaxData()) +
+        bringUpToNow();
+        return "Power: " + battery.getUniversalEnergyStored() + "/" + battery.getMaxEnergyStored()
+                + "\nGeneration: " + ZUtils.formatNumber((int) Math.round(currentPowerPerTick())) + "/" + getPowerPerTick()
+                + "\nData Storage: " + ZUtils.formatNumber(data.getMaxData()) +
                 "\nData: " + ZUtils.formatNumber(data.getData());
     }
 
@@ -64,8 +67,30 @@ public abstract class SatelliteData extends SatelliteBase {
     }
 
 
+    /** Collects one data point per {@link #collectionTime} ticks of full power; what power it lacks, it does not collect. */
+    @Override
+    public SatelliteAccrual.Payload payload() {
+        return new SatelliteAccrual.Payload(true, false, collectionTime);
+    }
+
+    @Override
+    public long bufferedData() {
+        return data.getData();
+    }
+
+    @Override
+    public void setBufferedData(long points) {
+        int now = data.getData();
+        if (points < now) {
+            data.removeData((int) (now - points), true);
+        } else if (points > now) {
+            data.addData((int) (points - now), data.getDataType(), true);
+        }
+    }
+
     @Override
     public boolean performAction(EntityPlayer player, World world, BlockPos pos) {
+        bringUpToNow();
         //Grab the tile to sync with
         TileEntity tile = world.getTileEntity(pos);
         //Remove data from the satellite and add it to the buffer of said tile, provided the tile can accept it
@@ -76,52 +101,6 @@ public abstract class SatelliteData extends SatelliteBase {
         }
 
         return false;
-    }
-
-    private int getDataCreated() {
-        //If collection time is somehow 0, fix it before it causes problems
-        if (collectionTime == 0)
-            collectionTime = 200;
-
-        int r=0;
-        if (data.getMaxData() >= data.getData()) {
-
-            // all this below is some grade-A bullshit because if you only have a small solar panel you will never get data
-
-                //Provided the satellite has enough power, produce some data every 200t (10 seconds), modified by the amount of power available to the satellite, but the power much be over or equal to 10
-                //Think of it like scanning takes < 5 FE/t, and base consumption is 5. So you need more than 10 FE/t, and with more power you can scan better
-                //Power consumption maxes out at 160 FE/t, or four large solar panels. This corresponds to a 4x reduction in data collection time
-
-
-            //battery.extractEnergy(powerConsumption - 5, false);
-            //Actually collect the unit of data
-            //if (Stellurgy.proxy.getWorldTimeUniversal(0) % collectionTime == 0 && satelliteProperties.getPowerGeneration() >= 10) {
-
-            //System.out.println(Stellurgy.proxy.getWorldTimeUniversal(0)+" - "+collectionTime);
-
-            battery.extractEnergy(powerConsumption, false);
-            if (Stellurgy.proxy.getWorldTimeUniversal(0) % collectionTime == 0) {
-                r++;
-                //System.out.println("add data. now there is "+data.getData());
-            }
-        }
-        return r;
-    }
-
-    @Override
-    public void tickEntity() {
-        //Standard power stuff
-        super.tickEntity();
-
-        // I think you did not think about the power generation system...
-        /*
-        //We have a special broadband high-capacity data link, so it needs an extra 4 FE/t to keep open - subtract these 4 here
-        battery.extractEnergy(4, false);
-         */
-
-        //Add data to the buffer, if the satellite has enough power
-        data.addData(getDataCreated(), data.getDataType(), true);
-        //System.out.println("data: "+data.getData()+":"+getDataCreated()+":"+collectionTime);
     }
 
     @Override

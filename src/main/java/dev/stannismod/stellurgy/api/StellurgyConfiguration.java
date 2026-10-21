@@ -52,6 +52,7 @@ public class StellurgyConfiguration {
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
     private final static String COMPAT = "Compatibility";
+    private final static String SATELLITE = "Satellites";
     /** OWNER: the LOADER — log4j hands out one object per name for the launch, and this class asks
      *  for it by name like every other class here does. Nothing releases it because nothing may.
      *  Not to be confused with the configuration below, which is the SERVER's while one is joined.
@@ -228,6 +229,12 @@ public class StellurgyConfiguration {
     public boolean terraformRequiresFluid;
     @ConfigProperty
     public float microwaveRecieverMulitplier;
+    /** Whether the trapped-particle dose wears a satellite's parts and destroys its buffered data. */
+    @ConfigProperty
+    public boolean satelliteRadiationWear;
+    /** How much faster than the physical rate the dose wears a satellite's parts; 1 is the physical rate. */
+    @ConfigProperty
+    public double satelliteRadiationWearScale;
     @ConfigProperty
     public boolean blackListAllVanillaBiomes;
     @ConfigProperty
@@ -923,6 +930,8 @@ public class StellurgyConfiguration {
         stellurgyConfig.shipHeatDumpTriggerKelvin = config.get(HEAT, "shipHeatDumpTriggerKelvin", 700, "How hot the loop must be before an emergency dump will run at all, in kelvin. Below this it does nothing and costs nothing - a ship that is coping does not throw its cargo overboard. 700 K is far past anything a working ship sits at and short of the temperature at which the drive refuses to fire.", 1, 5000).getInt();
         stellurgyConfig.solarGeneratorMult = config.get(ENERGY, "solarGeneratorMultiplier", 1, "Power produced per tick by the solar generator.").getInt();
         stellurgyConfig.microwaveRecieverMulitplier = (float) config.get(ENERGY, "MicrowaveRecieverMultiplier", 1f, "Multiplier for microwave receiver power output.").getDouble();
+        stellurgyConfig.satelliteRadiationWear = config.get(SATELLITE, "satelliteRadiationWear", true, "A satellite on its orbit takes the dose of the radiation belts it passes through: its electronics stop past their budget, its solar panels give less power, and memory upsets destroy buffered data points, each recorded in its failure journal. Off: no part wears, no data is lost and nothing of the kind is journalled. THIS ALSO REMOVES PART OF THE GAMEPLAY: a satellite that loses data in one part of its orbit, the failures that reveal the region, and the shield part, the detour and the expedition that answer it all exist only with this on. Power, eclipses and a dosimeter's readings are unaffected.").getBoolean();
+        stellurgyConfig.satelliteRadiationWearScale = config.get(SATELLITE, "satelliteRadiationWearScale", 1d, "How much faster than the physical rate the dose acts on a satellite's parts and data. 1 is the measured rate: on a low orbit nothing dies and only data is lost, in the part of the orbit where the inner belt dips lowest; in the belts unscreened electronics stop within hours of play. Has no effect while satelliteRadiationWear is off.", 0d, 1e6d).getDouble();
         stellurgyConfig.defaultItemTimeBlackHole = config.get(ENERGY, "defaultBurnTime", 500, "Burn time in ticks for items not listed in blackHoleTimings.").getInt();
         stellurgyConfig.blackHolePowerMultiplier = config.get(ENERGY, "blackHoleGeneratorMultiplier", 1, "Multiplier for black hole generator power output.").getInt();
         blackHoleGeneratorTiming = config.get(ENERGY, "blackHoleTimings", new String[]{"minecraft:stone;1", "minecraft:dirt;1", "minecraft:netherrack;1", "minecraft:cobblestone;1"}, "List of blocks and burn times for the black hole generator. Format: modid:block:meta;ticks where meta is optional").getStringList();

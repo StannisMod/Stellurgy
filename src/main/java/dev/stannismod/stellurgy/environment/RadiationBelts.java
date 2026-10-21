@@ -62,14 +62,14 @@ final class RadiationBelts {
      * The dose rate on field line {@code shell} at a point where the field is the fraction
      * {@code fieldOverCut} of the field at that line's absorbing foot; zero at or past the foot.
      */
-    static double doseRate(double shell, double fieldOverCut) {
+    static TrappedDose doseRate(double shell, double fieldOverCut) {
         if (fieldOverCut >= 1d) {
-            return 0d;
+            return TrappedDose.ZERO;
         }
         double inner = (shell - INNER_PEAK_L) / INNER_WIDTH_L;
         double outer = (shell - OUTER_PEAK_L) / OUTER_WIDTH_L;
-        double atShell = INNER_PEAK_GY_PER_S * Math.exp(-inner * inner)
-                + OUTER_PEAK_GY_PER_S * Math.exp(-outer * outer);
-        return atShell * Math.pow(1d - fieldOverCut, LOSS_CONE_EXPONENT);
+        double lossCone = Math.pow(1d - fieldOverCut, LOSS_CONE_EXPONENT);
+        return TrappedDose.of(INNER_PEAK_GY_PER_S * Math.exp(-inner * inner) * lossCone,
+                OUTER_PEAK_GY_PER_S * Math.exp(-outer * outer) * lossCone);
     }
 }

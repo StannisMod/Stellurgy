@@ -69,11 +69,6 @@ public class SatelliteSpyTelescope extends SatelliteBase {
         return false;
     }
 
-    @Override
-    public double failureChance() {
-        // TODO Auto-generated method stub
-        return 0;
-    }
 
     @Override
     public void writeToNBT(NBTTagCompound nbt) {

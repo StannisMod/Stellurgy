@@ -229,6 +229,8 @@ item.satellitePrimaryFunction.3.name=Microwave Transmitter
 item.satellitePrimaryFunction.4.name=Ore Mapper
 item.satellitePrimaryFunction.5.name=Biome Changer
 item.satellitePrimaryFunction.6.name=Weather Controller
+item.satellitePrimaryFunction.7.name=Dosimeter
+item.satelliteShield.0.name=Satellite Radiation Shield
 item.satelliteIdChip.name=Satellite ID Chip
 item.planetIdChip.name=Planet ID Chip
 item.asteroidChip.name=Asteroid Chip
@@ -266,6 +268,7 @@ item.satellite.solar=Solar
 item.satellite.oremapper=Ore Mapper
 item.satellite.biomechanger=Biome Changer
 item.satellite.weather=Weather Satellite
+item.satellite.dosimeter=Dosimeter Satellite
 
 
 item.jetPack.name=Suit Jetpack
@@ -292,6 +295,7 @@ data.temperature.name=Temperature
 data.composition.name=Composition
 data.atmospheredensity.name=Atmosphere Density
 data.mass.name=Mass
+data.radiation_dose_rate.name=Radiation Dose Rate
 data.label.type=Type:
 data.label.data=Data
 

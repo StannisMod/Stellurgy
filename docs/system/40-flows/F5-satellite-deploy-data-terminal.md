@@ -3,7 +3,7 @@ id: F5-satellite-deploy-data-terminal
 kind: flow
 scenario: Satellite deploy → data collection → terminal readout
 subsystems: [satellite, dimension-planets, api-public, items, wirelessdata, rocket-entity, infrastructure-tiles]
-anchors-referenced: [MECH-SAT-08, MECH-SAT-01, MECH-SAT-03, MECH-SAT-10, MECH-SAT-02, MECH-SAT-11, MECH-SAT-13, MECH-INFRA-22, MECH-DIM-12, MECH-API-13, MECH-API-14, MECH-ITM-04, MECH-WDT-02, MECH-WDT-04, MECH-WDT-05]
+anchors-referenced: [MECH-SAT-08, MECH-SAT-22, MECH-SAT-23, MECH-SAT-24, MECH-SAT-25, MECH-SAT-27, MECH-SAT-10, MECH-SAT-02, MECH-SAT-11, MECH-SAT-13, MECH-INFRA-22, MECH-DIM-12, MECH-API-13, MECH-API-14, MECH-ITM-04, MECH-WDT-02, MECH-WDT-04, MECH-WDT-05]
 confidence: high
 ---
 
@@ -40,10 +40,11 @@ server-authoritative.
    `canTick()`, and broadcasts `PacketSatellite` to all clients (MECH-DIM-12). The hatch slot is then
    emptied: the chassis item is consumed and only the **chip** (kept by the player) still references
    the id.
-5. **Collect data (satellite).** Each server tick `SatelliteData.tickEntity` drains `powerConsumption`
-   from the on-board battery and adds one data point every `collectionTime` ticks up to `maxData`
-   (MECH-SAT-01); `SatelliteBase.tickEntity` tops the battery up by `powerPerTick-1` (MECH-SAT-03). The
-   buffer lives in the satellite's nested `data` `DataStorage` NBT. [V]
+5. **Collect data (satellite).** Nothing ticks: when the terminal (or anything else) asks, the satellite's
+   life is brought up to the present on its orbit's grid (MECH-SAT-22) — its panels charge the battery in
+   the star's light (MECH-SAT-23), its instrument collects one point per `collectionTime` ticks of full
+   power up to its capacity (MECH-SAT-24), and the field's dose wears its parts and destroys buffered
+   points (MECH-SAT-25..27). The buffer lives in the satellite's nested `data` `DataStorage` NBT. [V]
 6. **Bring the chip to a Satellite Control Center (items → satellite).** Slot 0 accepts only an
    `ItemSatelliteIdentificationChip`. On connect (button 0 / packet id 100) `TileSatelliteTerminal`
    resolves the satellite: `getSatelliteId(chip)` reads the `satelliteId` key, then

@@ -16,19 +16,19 @@ import java.util.OptionalDouble;
 public final class LocalEnvironment {
 
     private final Vector3d magneticField;
-    private final double trappedDoseRate;
+    private final TrappedDose trappedDose;
 
-    private LocalEnvironment(Vector3d magneticField, double trappedDoseRate) {
+    private LocalEnvironment(Vector3d magneticField, TrappedDose trappedDose) {
         this.magneticField = magneticField;
-        this.trappedDoseRate = trappedDoseRate;
+        this.trappedDose = trappedDose;
     }
 
     static LocalEnvironment nothing() {
-        return new LocalEnvironment(null, Double.NaN);
+        return new LocalEnvironment(null, null);
     }
 
-    static LocalEnvironment of(Vector3dc magneticField, double trappedDoseRate) {
-        return new LocalEnvironment(new Vector3d(magneticField), trappedDoseRate);
+    static LocalEnvironment of(Vector3dc magneticField, TrappedDose trappedDose) {
+        return new LocalEnvironment(new Vector3d(magneticField), trappedDose);
     }
 
     /** The magnetic field here, tesla, in the frame the sample was asked in; empty where there is none. */
@@ -37,10 +37,15 @@ public final class LocalEnvironment {
     }
 
     /**
-     * The trapped-particle dose rate here, Gy/s in silicon behind the reference shield; empty where no
-     * field traps anything.
+     * The trapped-particle dose rate here, Gy/s in silicon behind the reference shield, both belts
+     * together; empty where no field traps anything.
      */
     public OptionalDouble trappedDoseRate() {
-        return Double.isNaN(trappedDoseRate) ? OptionalDouble.empty() : OptionalDouble.of(trappedDoseRate);
+        return trappedDose == null ? OptionalDouble.empty() : OptionalDouble.of(trappedDose.totalGyPerS());
+    }
+
+    /** The trapped-particle dose rate here, per belt; empty where no field traps anything. */
+    public Optional<TrappedDose> trappedDose() {
+        return Optional.ofNullable(trappedDose);
     }
 }

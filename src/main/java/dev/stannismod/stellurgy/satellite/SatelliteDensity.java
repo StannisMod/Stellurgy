@@ -15,9 +15,5 @@ public class SatelliteDensity extends SatelliteData {
         return "Density Scanner";
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
 }

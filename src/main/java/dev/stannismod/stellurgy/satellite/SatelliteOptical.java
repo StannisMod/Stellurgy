@@ -17,8 +17,4 @@ public class SatelliteOptical extends SatelliteData {
         return LibVulpes.proxy.getLocalizedString("item.satellite.opticaltelescope");
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 }

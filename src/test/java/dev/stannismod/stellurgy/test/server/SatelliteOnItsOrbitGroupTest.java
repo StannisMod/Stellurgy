@@ -20,7 +20,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * A satellite on its orbit, as the server holds it: the orbit a release puts it on, its presence where its
- * cell is live, and its destruction (`satellite` MECH-SAT-16, -17, -21; INV-SAT-16, -18, -19).
+ * cell is live, its destruction, and the dose its body's field gives its parts (`satellite` MECH-SAT-16,
+ * -17, -21, -22, -25, -26; INV-SAT-16, -18, -19, -32, -33).
  *
  * <p>NEW-GROUP: the satellite as an object on its orbit. The other satellite classes hold the builder, the
  * terminal and a satellite's tick — none of them releases a satellite onto an orbit or stands one in a cell.</p>
@@ -28,8 +29,8 @@ import static org.junit.Assert.assertTrue;
  * <p>Every satellite here is released by the production per-hatch deploy a rocket's orbit reach runs
  * ({@code satellite deploy}), from a rocket whose guidance computer and hatch a probe arranged. What it does
  * NOT see: the rocket's flight to orbit (the deploy is called where the orbit reach would call it), the
- * client — the panel, the render and the attitude a client receives are the client group's — and the dose
- * a satellite takes, which is not built yet.</p>
+ * client — the panel, the render and the attitude a client receives are the client group's — and the laws
+ * of the dose, which are the fast tier's ({@code SatelliteLawsTest}, {@code SatelliteJointsTest}).</p>
  *
  * <p>What each scenario leaves: the rocket it arranged is removed by its id, a satellite that survives is
  * marked dead, a cell it held live is released and a chunk it forced is let go — each in its
@@ -434,5 +435,185 @@ public class SatelliteOnItsOrbitGroupTest extends AbstractSharedServerTest {
         Reply left = read("stellurgytest satellite leftovers " + standing.at());
         assertEquals("INV-SAT-18: a satellite still stands where it was destroyed: " + left, 0, left.integer("satellites"));
         assertEquals("INV-SAT-18: something lies where it was destroyed: " + left, 0, left.integer("items"));
+    }
+
+    // ---- the dose on its parts: INV-SAT-32, -33 -----------------------------------------------------------
+
+    /** {@code itemSatellitePrimaryFunction} metadata 5: a biome changer — a type the server ticks, so its life is taken as the server ticks. */
+    private static final int BIOME_CHANGER = 5;
+    /** {@code itemSatellitePrimaryFunction} metadata 3: a microwave transmitter — another type, for the refused renewal. */
+    private static final int MICROWAVE = 3;
+    /** {@code itemSatellitePowerSource} metadata 1: the large panel. */
+    private static final int LARGE_PANEL = 1;
+    /**
+     * Altitude of the release, km: 3000 km above an Earth-sized body is inside the inner belt all the way
+     * round (MECH-ENV-03's profile peaks at L = 1.5), so every segment of the orbit takes a dose.
+     */
+    private static final String INSIDE_THE_BELT_KM = "3000";
+    /**
+     * Server ticks a scenario lets pass: a 3000 km orbit's period is about 2 500 ticks, so a segment (a 64th)
+     * is about 39, and 200 ticks take five of them. The experiment's dose, derived from the orbit.
+     */
+    private static final int TICKS_OF_ORBIT = 200;
+    /** Server ticks the wear-off half of INV-SAT-32 lets pass: five more segments, derived as above. */
+    private static final int TICKS_WITH_THE_WEAR_OFF = 200;
+    /**
+     * The wear scale that kills electronics within one segment there: about 2 Gy a day at 3000 km, a
+     * segment is a 600th of a day, so ×1e5 gives some 300 Gy a segment against a 50 Gy budget.
+     */
+    private static final String KILLING_SCALE = "100000";
+
+    /** Release a ticked satellite — a biome changer with a large panel — at {@link #INSIDE_THE_BELT_KM}, equatorial. */
+    private Released releaseTickedInsideTheBelt(FixtureSite site) throws Exception {
+        Reply rocket = arrange("stellurgytest satellite rocket-with " + site.dim + " " + site.x + " " + site.y + " "
+                + site.z + " " + INSIDE_THE_BELT_KM + " 0 " + BIOME_CHANGER + " " + LARGE_PANEL)
+                .requireOk("arranging a rocket holding one biome changer");
+        Released released = new Released(rocket.integer("rocketId"), rocket.longInteger("satId"));
+        act("stellurgytest satellite deploy " + released.rocketId).requireOk("deploying the rocket's hatch");
+        ArrangementFailure.requireArranged("the biome changer must be on its orbit",
+                read("stellurgytest satellite place " + released.satId).bool("hasOrbit"));
+        return released;
+    }
+
+    private Reply lifeOf(long satId) throws Exception {
+        return read("stellurgytest satellite life " + satId).requireOk("reading the satellite's life");
+    }
+
+    /** The part in chassis slot {@code slot} of a {@code satellite life} reply. */
+    private static Reply partIn(Reply life, int slot) {
+        for (Reply part : life.elements("parts")) {
+            if (part.integer("slot") == slot) {
+                return part;
+            }
+        }
+        throw new AssertionError("no part in slot " + slot + ": " + life);
+    }
+
+    /** Set a configuration value for one scenario; answers what it was, to put back. */
+    private String setConfig(String key, String value) throws Exception {
+        String was = read("stellurgytest config get " + key).requireOk("reading " + key).text("value");
+        arrange("stellurgytest config set " + key + " " + value).requireOk("setting " + key);
+        return was;
+    }
+
+    /**
+     * INV-SAT-32: a biome changer is released into the inner belt and the server ticks for five of its
+     * orbit's segments; its large panel then carries, on the chassis item the record holds, the dose the
+     * environment the game derives for the home body gives along that orbit over exactly the segments its
+     * life has taken ({@code satellite env-dose}, production's {@code PlanetEnvironment#accruedDose}) — the
+     * two meet on one grid, so to the rounding of a sum. With the wear switched off, five more segments
+     * pass and the panel's dose does not move.
+     *
+     * <p>What this does NOT see: whether the environment was derived from the right body's inputs — both
+     * sides read the one environment the game derived; the field's own laws are `environment`'s.</p>
+     */
+    @Pins("INV-SAT-32")
+    @RedWitness(verdict = "handoff", member = "SatelliteLife#bringUpTo", at = "if (doseOf(stack) != part.doseGy) {",
+            replacedBy = "if (false) {", fails = "INV-SAT-32: the panel's dose is not the field's", on = "2026-10-21")
+    @RedWitness(verdict = "switched off", member = "SatelliteLife#rules",
+            at = "return new SatelliteAccrual.Rules(config.satelliteRadiationWear, config.satelliteRadiationWearScale);",
+            replacedBy = "return new SatelliteAccrual.Rules(true, config.satelliteRadiationWearScale);",
+            fails = "INV-SAT-32: with the wear off", on = "2026-10-21")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_OF_ORBIT);",
+            why = "the ticks are the dose: the verdict is about what five segments of orbit gave the panel, and no"
+                    + " record says how much dose a span holds — the field's own integral over the same segments does")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_WITH_THE_WEAR_OFF);",
+            why = "the ticks are the dose: the verdict is that five more segments with the wear off gave the panel"
+                    + " nothing; the segments taken are read and required, so the span is not assumed")
+    @Test
+    public void onItsOrbitItsPartsTakeItsBodysField() throws Exception {
+        String wear = setConfig("satelliteRadiationWear", "true");
+        String scale = setConfig("satelliteRadiationWearScale", "1");
+        FixtureSite site = clearedSite(1, 3, "a rocket holding a guidance computer and one satellite hatch");
+        Released released = releaseTickedInsideTheBelt(site);
+        try {
+            GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_OF_ORBIT);
+            Reply life = lifeOf(released.satId);
+            long segments = life.longInteger("segments");
+            ArrangementFailure.requireArranged("the server's ticks took three segments or more: " + life, segments >= 3L);
+            double panel = partIn(life, 1).number("dose");
+            Reply field = read("stellurgytest satellite env-dose " + released.satId + " "
+                    + segments * life.longInteger("segmentTicks")).requireOk("reading the field's dose");
+            ArrangementFailure.requireArranged("the home body has a field and its belt gave a dose: " + field,
+                    field.bool("environment") && field.number("dose") > 0d);
+            assertEquals("INV-SAT-32: the panel's dose is not the field's (" + life + ")", field.number("dose"), panel,
+                    field.number("dose") * 1e-9d);
+
+            arrange("stellurgytest config set satelliteRadiationWear false").requireOk("switching the wear off");
+            GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_WITH_THE_WEAR_OFF);
+            Reply later = lifeOf(released.satId);
+            ArrangementFailure.requireArranged("more segments were taken with the wear off: " + later,
+                    later.longInteger("segments") >= segments + 3L);
+            assertEquals("INV-SAT-32: with the wear off the panel took dose (" + later + ")", panel,
+                    partIn(later, 1).number("dose"), 0d);
+        } finally {
+            arrange("stellurgytest config set satelliteRadiationWear " + wear).requireOk("putting the wear back");
+            arrange("stellurgytest config set satelliteRadiationWearScale " + scale).requireOk("putting the scale back");
+            dispose(released);
+        }
+    }
+
+    /**
+     * INV-SAT-33: with the wear scaled so its electronics die within a segment, a biome changer released into
+     * the inner belt is dead once the server has ticked — that is the arrangement; the verdicts are that it
+     * is still recorded on its orbit with the stop journalled at slot 0, that its panel refuses a primary
+     * function of another type, and that once its own type's is put in, at the physical rate again, it works.
+     *
+     * <p>The renewal goes through the panel's inventory on the server (`satellite repair`), not through a
+     * window click: the click path to that inventory is INV-SAT-17's, held by the client group.</p>
+     */
+    @Pins("INV-SAT-33")
+    @RedWitness(verdict = "stays", member = "SatelliteLife#bringUpTo", at = "if (partStopped) {",
+            replacedBy = "if (partStopped) { satellite.setDead();",
+            fails = "INV-SAT-33: the dead satellite left its orbit", on = "2026-10-21")
+    @RedWitness(verdict = "refused", member = "OrbitalPartsInventory#sameTypePrimary",
+            at = "&& part.getSatelliteType().equals(satellite.getProperties().getSatelliteType());", replacedBy = ";",
+            fails = "INV-SAT-33: a primary function of another type was taken", on = "2026-10-21")
+    @RedWitness(verdict = "renewed", member = "OrbitalPartsInventory#setInventorySlotContents",
+            at = "if (index == PRIMARY_SLOT && server && !stack.isEmpty() && !sameTypePrimary(stack)) {",
+            replacedBy = "if (index == PRIMARY_SLOT && server && !stack.isEmpty()) {",
+            fails = "INV-SAT-33: the renewed satellite does not work", on = "2026-10-21")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_OF_ORBIT);",
+            why = "the ticks are the dose that kills the primary function; that it did is read back and required as"
+                    + " the arrangement, so a span that gave too little reads as an arrangement failure, not a verdict")
+    @Test
+    public void aDeadSatelliteStaysOnItsOrbitAndARenewedPartRevivesIt() throws Exception {
+        String wear = setConfig("satelliteRadiationWear", "true");
+        String scale = setConfig("satelliteRadiationWearScale", KILLING_SCALE);
+        FixtureSite site = clearedSite(1, 3, "a rocket holding a guidance computer and one satellite hatch");
+        Released released = releaseTickedInsideTheBelt(site);
+        try {
+            GameTicks.advanceObserved(client(), GameTicks.server(), TICKS_OF_ORBIT);
+            // Whether it is still there is asked first: a satellite that left its orbit has no life to read,
+            // and the arrangement below could not tell that from a dose that did not stop it.
+            Reply place = read("stellurgytest satellite place " + released.satId);
+            assertTrue("INV-SAT-33: the dead satellite left its orbit: " + place, place.bool("present") && place.bool("hasOrbit"));
+            Reply dead = lifeOf(released.satId);
+            ArrangementFailure.requireArranged("the dose stopped the primary function: " + dead,
+                    dead.bool("present") && !dead.bool("functioning"));
+            int stops = 0;
+            for (Reply entry : dead.elements("journal")) {
+                if ("PART_FAILED".equals(entry.text("kind"))) {
+                    stops++;
+                    assertEquals("INV-SAT-33: the stop is journalled at the wrong slot: " + entry, 0, entry.integer("slot"));
+                }
+            }
+            assertTrue("INV-SAT-33: the stop is not journalled: " + dead, stops > 0);
+
+            arrange("stellurgytest config set satelliteRadiationWearScale 1").requireOk("the physical rate again");
+            Reply other = act("stellurgytest satellite repair " + released.satId + " 0 primary:" + MICROWAVE)
+                    .requireOk("offering a primary function of another type");
+            assertEquals("INV-SAT-33: a primary function of another type was taken: " + other, BIOME_CHANGER,
+                    other.integer("meta"));
+            act("stellurgytest satellite repair " + released.satId + " 0 empty").requireOk("taking the dead part out");
+            act("stellurgytest satellite repair " + released.satId + " 0 primary:" + BIOME_CHANGER)
+                    .requireOk("putting a new one in");
+            Reply renewed = lifeOf(released.satId);
+            assertTrue("INV-SAT-33: the renewed satellite does not work: " + renewed, renewed.bool("functioning"));
+        } finally {
+            arrange("stellurgytest config set satelliteRadiationWear " + wear).requireOk("putting the wear back");
+            arrange("stellurgytest config set satelliteRadiationWearScale " + scale).requireOk("putting the scale back");
+            dispose(released);
+        }
     }
 }

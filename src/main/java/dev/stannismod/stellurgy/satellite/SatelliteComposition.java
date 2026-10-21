@@ -16,8 +16,4 @@ public class SatelliteComposition extends SatelliteData {
         return LibVulpes.proxy.getLocalizedString("item.satellite.composition");
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 }

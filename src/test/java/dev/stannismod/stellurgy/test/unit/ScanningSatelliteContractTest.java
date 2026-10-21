@@ -22,9 +22,6 @@ import static org.junit.Assert.*;
  *   <li><b>Display name</b> — what the player sees on the satellite
  *       chip ItemStack tooltip and satellite-builder GUI. A regression
  *       that swaps names between types is a player-visible UX bug.</li>
- *   <li><b>Failure chance ≥ 0</b> — sanity invariant; a negative
- *       failure chance would break {@code SatelliteWeatherController}'s
- *       random-failure logic.</li>
  *   <li><b>OreMapping ore-filter gate</b> — {@code canFilterOre()}
  *       requires {@code maxDataStorage == 3000}. Default-constructed
  *       satellite has 0 &rarr; can't filter. {@code setSelectedSlot} is
@@ -43,28 +40,6 @@ public class ScanningSatelliteContractTest {
     // (ScanningSatelliteNameContractTest): SatelliteBase.getName() now resolves
     // through LibVulpes.proxy.getLocalizedString(), which requires the proxy to
     // be bootstrapped — not available in the pure-unit layer.
-
-    @Test
-    public void allScanningSatellitesHaveNonNegativeFailureChance() {
-        SatelliteBase[] scanners = new SatelliteBase[] {
-                new SatelliteOreMapping(),
-                new SatelliteDensity(),
-                new SatelliteComposition(),
-                new SatelliteMassScanner(),
-                new SatelliteOptical(),
-                new SatelliteSpyTelescope(),
-        };
-        for (SatelliteBase sat : scanners) {
-            double fc = sat.failureChance();
-            assertTrue(sat.getClass().getSimpleName() + ".failureChance() must be "
-                            + ">= 0 (got " + fc + ")",
-                    fc >= 0);
-            // Failure chance is a probability — must be sane.
-            assertTrue(sat.getClass().getSimpleName() + ".failureChance() must be "
-                            + "<= 1 (got " + fc + ")",
-                    fc <= 1);
-        }
-    }
 
     @Test
     public void oreMappingCanFilterOreRequires3000MaxDataStorage() {

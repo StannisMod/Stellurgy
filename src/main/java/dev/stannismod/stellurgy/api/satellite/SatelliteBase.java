@@ -28,6 +28,7 @@ public abstract class SatelliteBase {
     private boolean isDead;
     /** The orbit it was released onto, or {@code null} while it has no place: not yet released, or a mission. */
     private SatelliteOrbit orbit;
+    private final dev.stannismod.stellurgy.satellite.SatelliteLife.Progress life = new dev.stannismod.stellurgy.satellite.SatelliteLife.Progress();
 
     public SatelliteBase() {
         satelliteProperties = new SatelliteProperties();
@@ -41,7 +42,8 @@ public abstract class SatelliteBase {
 
     public boolean acceptsItemInConstruction(@Nonnull ItemStack item) {
         int flag = SatelliteRegistry.getSatelliteProperty(item).getPropertyFlag();
-        return SatelliteProperties.Property.MAIN.isOfType(flag) || SatelliteProperties.Property.POWER_GEN.isOfType(flag) || SatelliteProperties.Property.BATTERY.isOfType(flag);
+        return SatelliteProperties.Property.MAIN.isOfType(flag) || SatelliteProperties.Property.POWER_GEN.isOfType(flag)
+                || SatelliteProperties.Property.BATTERY.isOfType(flag) || SatelliteProperties.Property.SHIELD.isOfType(flag);
     }
 
     /**
@@ -67,13 +69,6 @@ public abstract class SatelliteBase {
      * @return whether the player has successfully interacted with the satellite
      */
     public abstract boolean performAction(EntityPlayer player, World world, BlockPos pos);
-
-    /**
-     * Note: this is not currently used
-     *
-     * @return chance from 0 to 1 of failing this tick
-     */
-    public abstract double failureChance();
 
     /**
      * What this satellite's primary function looks at, which decides the way its instruments face. A
@@ -120,18 +115,73 @@ public abstract class SatelliteBase {
     }
 
     /**
-     * @return true if the satellite can tick
+     * Whether this satellite must be ticked: only a type that acts on its world every tick. Power, data and
+     * wear are not ticked — they are brought up to date when asked for ({@link #bringUpToNow()}).
      */
     public boolean canTick() {
-        return true;
+        return false;
+    }
+
+    /** Called every tick for a type that {@link #canTick() acts on its world}; brings its life up to date first. */
+    public void tickEntity() {
+        bringUpToNow();
     }
 
     /**
-     * called every tick if satellite can tick
+     * Bring this satellite's power, data, wear and journal up to the space clock's present. Server only;
+     * call it before reading or spending any of them.
      */
-    public void tickEntity() {
-        //Base power consumption is 1 energy per tick. Think of it like a communications & positioning upkeep amount. Some satellites may end up overriding this
-        battery.acceptEnergy(getPowerPerTick() - 1, false);
+    public void bringUpToNow() {
+        dev.stannismod.stellurgy.satellite.SatelliteLife.bringUpTo(this, dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
+    }
+
+    /** How far this satellite's life has been brought, and its failure journal. */
+    public dev.stannismod.stellurgy.satellite.SatelliteLife.Progress lifeProgress() {
+        return life;
+    }
+
+    /** What its primary function does with power: by default nothing that collects or reads. */
+    public dev.stannismod.stellurgy.satellite.SatelliteAccrual.Payload payload() {
+        return new dev.stannismod.stellurgy.satellite.SatelliteAccrual.Payload(false, false, 0d);
+    }
+
+    /** Its dosimeter's readings; {@code null} for a satellite that carries none. */
+    public dev.stannismod.stellurgy.satellite.DoseReadings doseReadings() {
+        return null;
+    }
+
+    /** Data points held in its buffer; zero for a type with none. */
+    public long bufferedData() {
+        return 0L;
+    }
+
+    /** Set the data points held in its buffer; ignored by a type with none. */
+    public void setBufferedData(long points) {
+    }
+
+    public int storedEnergy() {
+        return battery.getUniversalEnergyStored();
+    }
+
+    public int energyCapacity() {
+        return battery.getMaxEnergyStored();
+    }
+
+    public void setStoredEnergy(int energy) {
+        battery.setEnergyStored(energy);
+    }
+
+    /**
+     * The power its panels give in full light now, per tick: what they were built for, faded by the dose
+     * they have taken. Lower than {@link #getPowerPerTick()} once the field has worn them.
+     */
+    public double currentPowerPerTick() {
+        dev.stannismod.stellurgy.satellite.SatelliteAccrual.Rules rules = dev.stannismod.stellurgy.satellite.SatelliteLife.rules();
+        double sum = 0d;
+        for (dev.stannismod.stellurgy.satellite.SatelliteAccrual.Part part : dev.stannismod.stellurgy.satellite.SatelliteLife.partsOf(this)) {
+            sum += part.powerPerTick(rules);
+        }
+        return sum;
     }
 
     /**
@@ -220,6 +270,9 @@ public abstract class SatelliteBase {
             orbit.writeToNBT(orbitNBT);
             nbt.setTag("orbit", orbitNBT);
         }
+        NBTTagCompound lifeNBT = new NBTTagCompound();
+        life.writeToNBT(lifeNBT);
+        nbt.setTag("life", lifeNBT);
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
@@ -228,6 +281,7 @@ public abstract class SatelliteBase {
         satellite = new ItemStack(nbt.getCompoundTag("item"));
         battery.readFromNBT(nbt);
         orbit = nbt.hasKey("orbit") ? SatelliteOrbit.readFromNBT(nbt.getCompoundTag("orbit")) : null;
+        life.readFromNBT(nbt.getCompoundTag("life"));
         if (satelliteProperties.getPowerStorage() == 0) {
             satelliteProperties.setPowerStorage(720);
             battery = new UniversalBattery(720);

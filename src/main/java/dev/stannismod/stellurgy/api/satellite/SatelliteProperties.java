@@ -7,6 +7,8 @@ import net.minecraft.nbt.NBTTagCompound;
 public class SatelliteProperties implements IWeighted {
 
     private int powerGeneration, powerStorage, maxData;
+    /** Whether this is a shield part: it thins the dose reaching what is inside the chassis. */
+    private boolean shield;
     private long id;
     private String satType;
     private float weight;
@@ -39,8 +41,19 @@ public class SatelliteProperties implements IWeighted {
             flag |= Property.BATTERY.getFlag();
         if (this.maxData != 0)
             flag |= Property.DATA.getFlag();
+        if (this.shield)
+            flag |= Property.SHIELD.getFlag();
 
         return flag;
+    }
+
+    /**
+     * @param shield whether this part is a shield
+     * @return this
+     */
+    public SatelliteProperties setShield(boolean shield) {
+        this.shield = shield;
+        return this;
     }
 
     /**
@@ -155,7 +168,8 @@ public class SatelliteProperties implements IWeighted {
         MAIN,
         DATA,
         POWER_GEN,
-        BATTERY;
+        BATTERY,
+        SHIELD;
 
         public int getFlag() {
             return 1 << ordinal();

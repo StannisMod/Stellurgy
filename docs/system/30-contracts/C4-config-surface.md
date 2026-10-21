@@ -258,6 +258,13 @@ would silently redefine what every magnitude-stated threshold means.
 | blackHoleGeneratorBlocks | Map<ItemStack,Integer> | blackHoleTimings | per-item burn times (postInit) | map content | |
 | electricPlantsSpawnLightning | boolean | electricPlantsSpawnLightning (CLIENT) | electric-mushroom lightning | `false` = no lightning | |
 
+## Satellites (`SATELLITE`; owned by satellite MECH-SAT-25..30)
+
+| Flag | Type | Disk key | Gates | Disable path | FLAG |
+|---|---|---|---|---|---|
+| satelliteRadiationWear | boolean | satelliteRadiationWear | the dose's wear on a satellite's parts, its memory upsets and their journal entries (MECH-SAT-30) | `false` ⇒ no part takes dose, no point is lost, nothing of the kind is journalled; power, eclipses and dosimeter readings unaffected. Its description says this also removes part of the gameplay | |
+| satelliteRadiationWearScale | double | satelliteRadiationWearScale | multiplier on the dose a satellite's parts and memory take | identity `1.0` (the measured rate); tunable `0`–`1e6` | |
+
 ## Missions (`MISSION`; owned by mission MECH-MSN-*)
 
 | Flag | Type | Disk key | Gates | Disable path | FLAG |

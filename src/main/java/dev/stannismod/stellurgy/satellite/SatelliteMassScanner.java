@@ -16,9 +16,5 @@ public class SatelliteMassScanner extends SatelliteData {
         return LibVulpes.proxy.getLocalizedString("item.satellite.massscanner");
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
 }

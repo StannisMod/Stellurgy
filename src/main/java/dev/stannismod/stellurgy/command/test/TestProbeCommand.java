@@ -11938,6 +11938,63 @@ public class TestProbeCommand extends CommandBase {
             handleSatellitePlace(server, sender, parseLongOr(args[1], Long.MIN_VALUE));
             return;
         }
+        if (args.length >= 2 && "life".equalsIgnoreCase(args[0])) {
+            handleSatelliteLife(sender, parseLongOr(args[1], Long.MIN_VALUE));
+            return;
+        }
+        if (args.length >= 3 && ("accrue".equalsIgnoreCase(args[0]) || "env-dose".equalsIgnoreCase(args[0]))) {
+            // satellite accrue <satId> <ticksAfterEpoch>: TRIGGERS production's catch-up of that satellite to its
+            // orbit's epoch plus that many ticks (SatelliteLife#bringUpTo) — the space clock is not moved, so
+            // the satellite alone is taken into its future. satellite env-dose <satId> <ticksAfterEpoch>: READS
+            // the dose the environment production derives for its body gives along its orbit from the epoch to
+            // that tick (PlanetEnvironment#accruedDose), and whether there is an environment at all.
+            SatelliteBase sat = DimensionManager.getInstance().getSatellite(parseLongOr(args[1], Long.MIN_VALUE));
+            if (sat == null || !sat.getOrbit().isPresent()) {
+                send(sender, "{\"error\":\"no satellite on an orbit with that id\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.api.satellite.SatelliteOrbit orbit = sat.getOrbit().get();
+            long to = orbit.epochTick() + parseLongOr(args[2], 0L);
+            if ("accrue".equalsIgnoreCase(args[0])) {
+                dev.stannismod.stellurgy.satellite.SatelliteLife.bringUpTo(sat, to);
+                send(sender, "{\"ok\":true,\"segments\":" + sat.lifeProgress().segmentsDone()
+                        + ",\"segmentTicks\":" + dev.stannismod.stellurgy.satellite.SatelliteAccrual.segmentTicks(orbit) + "}");
+                return;
+            }
+            java.util.Optional<dev.stannismod.stellurgy.environment.PlanetEnvironment> env =
+                    dev.stannismod.stellurgy.satellite.SatelliteLife.environmentAbout(sat);
+            send(sender, "{\"ok\":true,\"environment\":" + env.isPresent() + ",\"dose\":"
+                    + (env.isPresent() ? String.valueOf(env.get().accruedDose(orbit, orbit.epochTick(), to)) : "null") + "}");
+            return;
+        }
+        if (args.length >= 4 && "repair".equalsIgnoreCase(args[0])) {
+            // satellite repair <satId> <slot> <part|empty>: TRIGGERS a repair in orbit through the panel's own
+            // inventory (OrbitalPartsInventory, server side): the part is put into the slot, or the slot is
+            // emptied. Answers what the slot holds afterwards.
+            SatelliteBase sat = DimensionManager.getInstance().getSatellite(parseLongOr(args[1], Long.MIN_VALUE));
+            if (sat == null) {
+                send(sender, "{\"error\":\"no satellite with that id\"}");
+                return;
+            }
+            int slot = parseIntOr(args[2], -1);
+            dev.stannismod.stellurgy.satellite.OrbitalPartsInventory panel =
+                    new dev.stannismod.stellurgy.satellite.OrbitalPartsInventory(sat, true);
+            if ("empty".equalsIgnoreCase(args[3])) {
+                panel.removeStackFromSlot(slot);
+            } else {
+                net.minecraft.item.ItemStack part = satellitePart(args[3]);
+                if (part.isEmpty()) {
+                    send(sender, "{\"error\":\"unknown part\",\"part\":\"" + escapeJson(args[3]) + "\"}");
+                    return;
+                }
+                panel.setInventorySlotContents(slot, part);
+            }
+            net.minecraft.item.ItemStack now = panel.getStackInSlot(slot);
+            send(sender, "{\"ok\":true,\"slot\":" + slot + ",\"item\":"
+                    + (now.isEmpty() ? "null" : "\"" + escapeJson(String.valueOf(now.getItem().getRegistryName())) + "\"")
+                    + ",\"meta\":" + now.getMetadata() + "}");
+            return;
+        }
         if (args.length >= 5 && "leftovers".equalsIgnoreCase(args[0])) {
             // satellite leftovers <dim> <x> <y> <z>: what stands or lies within four blocks of that place —
             // satellite entities of any id, and loose items. A world that is not loaded answers an error.
@@ -12067,6 +12124,38 @@ public class TestProbeCommand extends CommandBase {
                     ctf.setInt(sd, collectionTime);
                 } catch (ReflectiveOperationException e) {
                     send(sender, "{\"error\":\"failed to init SatelliteData fields\",\"msg\":\""
+                            + escapeJson(e.getMessage()) + "\"}");
+                    return;
+                }
+            }
+            // A satellite is built on a chassis that holds its primary function, as the builder makes it: the
+            // primary function is what decides whether it works. A type with no registered primary function
+            // (a mission, the spy telescope) gets no chassis, as nothing can build one.
+            net.minecraft.item.ItemStack primaryPart = net.minecraft.item.ItemStack.EMPTY;
+            for (int meta = 0; meta < 16 && primaryPart.isEmpty(); meta++) {
+                net.minecraft.item.ItemStack candidate = new net.minecraft.item.ItemStack(
+                        dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePrimaryFunction, 1, meta);
+                dev.stannismod.stellurgy.api.satellite.SatelliteProperties p =
+                        dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(candidate);
+                if (p != null && typeId.equals(p.getSatelliteType())) {
+                    primaryPart = candidate;
+                }
+            }
+            if (!primaryPart.isEmpty()) {
+                net.minecraft.item.ItemStack chassis = new net.minecraft.item.ItemStack(
+                        dev.stannismod.stellurgy.api.StellurgyItems.itemSatellite);
+                dev.stannismod.stellurgy.item.ItemSatellite chassisItem =
+                        (dev.stannismod.stellurgy.item.ItemSatellite) chassis.getItem();
+                dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory inv = chassisItem.readInvFromNBT(chassis);
+                inv.setInventorySlotContents(0, primaryPart);
+                chassisItem.writeInvToNBT(chassis, inv);
+                chassisItem.setSatellite(chassis, sp);
+                try {
+                    java.lang.reflect.Field cf = SatelliteBase.class.getDeclaredField("satellite");
+                    cf.setAccessible(true);
+                    cf.set(sat, chassis);
+                } catch (ReflectiveOperationException e) {
+                    send(sender, "{\"error\":\"failed to put the satellite on its chassis\",\"msg\":\""
                             + escapeJson(e.getMessage()) + "\"}");
                     return;
                 }
@@ -12967,7 +13056,6 @@ public class TestProbeCommand extends CommandBase {
                 @Override public String getName() { return "repro"; }
                 @Override public boolean performAction(net.minecraft.entity.player.EntityPlayer player,
                         net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos) { return false; }
-                @Override public double failureChance() { return 0d; }
                 @Override public void writeToNBT(net.minecraft.nbt.NBTTagCompound out) {
                     out.setString("dataType", bogusType);
                 }
@@ -13124,6 +13212,15 @@ public class TestProbeCommand extends CommandBase {
             parts.setInventorySlotContents(1, new net.minecraft.item.ItemStack(
                     dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePowerSource, 1, parseIntOr(args[8], 0)));
         }
+        // Further parts, each into the next free slot from 2: `shield`, `data`, `battery`.
+        for (int i = 9, slot = 2; i < args.length; i++, slot++) {
+            net.minecraft.item.ItemStack part = satellitePart(args[i]);
+            if (part.isEmpty()) {
+                send(sender, "{\"error\":\"unknown part\",\"part\":\"" + escapeJson(args[i]) + "\"}");
+                return;
+            }
+            parts.setInventorySlotContents(slot, part);
+        }
         item.writeInvToNBT(chassis, parts);
         dev.stannismod.stellurgy.api.satellite.SatelliteProperties primaryProps =
                 dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(primary);
@@ -13142,6 +13239,98 @@ public class TestProbeCommand extends CommandBase {
         boolean spawned = world.spawnEntity(rocket);
         send(sender, "{\"ok\":" + spawned + ",\"rocketId\":" + rocket.getEntityId() + ",\"satId\":" + props.getId()
                 + ",\"powerGeneration\":" + props.getPowerGeneration() + "}");
+    }
+
+    /**
+     * A satellite part named by a word a scenario can write: {@code shield}, {@code data} (a data unit),
+     * {@code battery}, {@code primary:<meta>}, {@code power:<meta>}; empty for any other word.
+     */
+    private static net.minecraft.item.ItemStack satellitePart(String token) {
+        if ("shield".equalsIgnoreCase(token)) {
+            return new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.api.StellurgyItems.itemSatelliteShield);
+        }
+        if ("data".equalsIgnoreCase(token)) {
+            return new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.api.StellurgyItems.itemDataUnit);
+        }
+        if ("battery".equalsIgnoreCase(token)) {
+            return new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems.itemBattery);
+        }
+        if (token.startsWith("primary:")) {
+            return new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePrimaryFunction,
+                    1, parseIntOr(token.substring(8), 0));
+        }
+        if (token.startsWith("power:")) {
+            return new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePowerSource,
+                    1, parseIntOr(token.substring(6), 0));
+        }
+        return net.minecraft.item.ItemStack.EMPTY;
+    }
+
+    /**
+     * satellite life &lt;satId&gt;: READS a satellite's life as production keeps it, without bringing it up
+     * to date: how far its grid has been taken, its energy and data, its generation now against what it
+     * was built for, whether it works, its mass, each part in its chassis with the dose it carries and
+     * whether it still works, its journal, and a dosimeter's readings. No record is a value.
+     */
+    private void handleSatelliteLife(ICommandSender sender, long satId) {
+        SatelliteBase sat = DimensionManager.getInstance().getSatellite(satId);
+        if (sat == null) {
+            send(sender, "{\"ok\":true,\"present\":false}");
+            return;
+        }
+        StringBuilder out = new StringBuilder("{\"ok\":true,\"present\":true")
+                .append(",\"segments\":").append(sat.lifeProgress().segmentsDone())
+                .append(",\"segmentTicks\":").append(sat.getOrbit().isPresent()
+                        ? String.valueOf(dev.stannismod.stellurgy.satellite.SatelliteAccrual.segmentTicks(sat.getOrbit().get())) : "null")
+                .append(",\"energy\":").append(sat.storedEnergy())
+                .append(",\"data\":").append(sat.bufferedData())
+                .append(",\"maxData\":").append(sat.getProperties().getMaxDataStorage())
+                .append(",\"builtPower\":").append(sat.getPowerPerTick())
+                .append(",\"currentPower\":").append(sat.currentPowerPerTick())
+                .append(",\"functioning\":").append(dev.stannismod.stellurgy.satellite.SatelliteLife.functioning(sat))
+                .append(",\"weight\":").append(sat.getProperties().getWeight());
+        net.minecraft.item.ItemStack chassis = sat.getItemStackFromSatellite();
+        out.append(",\"parts\":[");
+        if (chassis.getItem() instanceof dev.stannismod.stellurgy.item.ItemSatellite) {
+            dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory inv =
+                    ((dev.stannismod.stellurgy.item.ItemSatellite) chassis.getItem()).readInvFromNBT(chassis);
+            boolean first = true;
+            for (int slot = 0; slot < inv.getSizeInventory(); slot++) {
+                net.minecraft.item.ItemStack part = inv.getStackInSlot(slot);
+                if (part.isEmpty()) {
+                    continue;
+                }
+                out.append(first ? "" : ",").append("{\"slot\":").append(slot)
+                        .append(",\"item\":\"").append(escapeJson(String.valueOf(part.getItem().getRegistryName())))
+                        .append("\",\"meta\":").append(part.getMetadata())
+                        .append(",\"dose\":").append(dev.stannismod.stellurgy.satellite.SatelliteLife.doseOf(part))
+                        .append(",\"works\":").append(dev.stannismod.stellurgy.satellite.SatelliteLife.works(part)).append('}');
+                first = false;
+            }
+        }
+        out.append("],\"journal\":[");
+        dev.stannismod.stellurgy.satellite.FailureJournal journal = sat.lifeProgress().journal();
+        boolean first = true;
+        for (dev.stannismod.stellurgy.satellite.FailureJournal.Entry e : journal.entries()) {
+            out.append(first ? "" : ",").append("{\"tick\":").append(e.tick).append(",\"phase\":").append(e.phaseRad)
+                    .append(",\"kind\":\"").append(e.kind.name()).append("\",\"count\":").append(e.count)
+                    .append(",\"slot\":").append(e.slot).append('}');
+            first = false;
+        }
+        out.append("],\"journalDropped\":").append(journal.dropped());
+        dev.stannismod.stellurgy.satellite.DoseReadings readings = sat.doseReadings();
+        if (readings != null) {
+            out.append(",\"readings\":[");
+            first = true;
+            for (dev.stannismod.stellurgy.satellite.DoseReadings.Reading r : readings.readings()) {
+                out.append(first ? "" : ",").append("{\"tick\":").append(r.tick).append(",\"phase\":").append(r.phaseRad)
+                        .append(",\"rate\":").append(r.gyPerS().isPresent() ? String.valueOf(r.gyPerS().getAsDouble()) : "null")
+                        .append('}');
+                first = false;
+            }
+            out.append(']');
+        }
+        send(sender, out.append('}').toString());
     }
 
     /**
@@ -15193,6 +15382,10 @@ public class TestProbeCommand extends CommandBase {
                     // systems do not.
                     "breathingRequiresO2",
                     "enableToxicity",
+                    // The dose's wear on a satellite's parts: a test turns it off to pin that nothing of
+                    // it remains, and puts back what it found.
+                    "satelliteRadiationWear",
+                    "satelliteRadiationWearScale",
                     // Disableability-contract tests: toggle each opt-in
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",

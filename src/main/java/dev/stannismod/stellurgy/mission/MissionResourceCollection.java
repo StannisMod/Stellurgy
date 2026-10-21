@@ -106,10 +106,6 @@ public abstract class MissionResourceCollection extends SatelliteBase implements
         return false;
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
     @Override
     public boolean canTick() {

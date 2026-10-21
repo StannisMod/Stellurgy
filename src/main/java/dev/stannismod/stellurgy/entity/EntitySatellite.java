@@ -112,6 +112,8 @@ public class EntitySatellite extends Entity implements IModularInventory, IEntit
             setDead();
             return;
         }
+        // Its life is brought up to date while someone is near enough to see it.
+        satellite.get().bringUpToNow();
         Optional<SatelliteAttitude> attitude = SatelliteAttitude.of(UniverseRegistry.get(world), satellite.get(),
                 SpaceSubsystem.spaceClock());
         if (attitude.isPresent()) {

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.satellite;
 
+import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.item.ItemSatellite;
@@ -16,10 +17,10 @@ import javax.annotation.Nonnull;
 
 /**
  * A satellite's parts as an inventory, for a repair in orbit: the seven slots of the builder's panel,
- * read from and written back to the satellite's own item. The primary function (slot 0) is shown and
- * never moves — swapping it would turn the satellite into another type with another controller.
- * Every change to the other six re-sums the satellite's properties the way assembly does, and the
- * satellite keeps its id.
+ * read from and written back to the satellite's own item. The primary function (slot 0) may be taken out
+ * and replaced only by a primary function of the satellite's own type — another type would turn it into
+ * another satellite with another controller — so a primary function the dose has stopped can be renewed.
+ * Every change re-sums the satellite's properties the way assembly does, and the satellite keeps its id.
  */
 public final class OrbitalPartsInventory implements IInventory {
 
@@ -44,6 +45,14 @@ public final class OrbitalPartsInventory implements IInventory {
 
     private EmbeddedInventory parts() {
         return ((ItemSatellite) chassis().getItem()).readInvFromNBT(chassis());
+    }
+
+    /** The parts about to change: the time already passed is taken with the parts it passed with. */
+    private EmbeddedInventory partsBeforeChange() {
+        if (server) {
+            satellite.bringUpToNow();
+        }
+        return parts();
     }
 
     private void store(EmbeddedInventory parts) {
@@ -76,13 +85,17 @@ public final class OrbitalPartsInventory implements IInventory {
         return parts().getStackInSlot(index);
     }
 
+    /** Whether {@code stack} is a primary function of this satellite's own type. */
+    private boolean sameTypePrimary(ItemStack stack) {
+        SatelliteProperties part = SatelliteRegistry.getSatelliteProperty(stack);
+        return part != null && SatelliteProperties.Property.MAIN.isOfType(part.getPropertyFlag())
+                && part.getSatelliteType().equals(satellite.getProperties().getSatelliteType());
+    }
+
     @Override
     @Nonnull
     public ItemStack decrStackSize(int index, int count) {
-        if (index == PRIMARY_SLOT) {
-            return ItemStack.EMPTY;
-        }
-        EmbeddedInventory parts = parts();
+        EmbeddedInventory parts = partsBeforeChange();
         ItemStack taken = parts.decrStackSize(index, count);
         store(parts);
         return taken;
@@ -91,10 +104,7 @@ public final class OrbitalPartsInventory implements IInventory {
     @Override
     @Nonnull
     public ItemStack removeStackFromSlot(int index) {
-        if (index == PRIMARY_SLOT) {
-            return ItemStack.EMPTY;
-        }
-        EmbeddedInventory parts = parts();
+        EmbeddedInventory parts = partsBeforeChange();
         ItemStack taken = parts.removeStackFromSlot(index);
         store(parts);
         return taken;
@@ -102,10 +112,10 @@ public final class OrbitalPartsInventory implements IInventory {
 
     @Override
     public void setInventorySlotContents(int index, @Nonnull ItemStack stack) {
-        if (index == PRIMARY_SLOT && server) {
+        if (index == PRIMARY_SLOT && server && !stack.isEmpty() && !sameTypePrimary(stack)) {
             return;
         }
-        EmbeddedInventory parts = parts();
+        EmbeddedInventory parts = partsBeforeChange();
         parts.setInventorySlotContents(index, stack);
         store(parts);
     }
@@ -134,7 +144,7 @@ public final class OrbitalPartsInventory implements IInventory {
 
     @Override
     public boolean isItemValidForSlot(int index, @Nonnull ItemStack stack) {
-        return index != PRIMARY_SLOT && parts().isItemValidForSlot(index, stack);
+        return (index != PRIMARY_SLOT || sameTypePrimary(stack)) && parts().isItemValidForSlot(index, stack);
     }
 
     @Override

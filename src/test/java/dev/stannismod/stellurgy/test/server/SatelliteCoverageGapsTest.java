@@ -281,7 +281,9 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
      *  in-mod consumer would use). */
     @Test
     public void deadSatelliteIsRemovedFromSatelliteQueries() throws Exception {
-        long satId = createSat("oreScanner", 100, 1000, 1000);
+        // A type the server ticks: the tick's removal branch decides only for those. A satellite that is not
+        // ticked becomes dead in production only through removeSatellite, which has already removed it.
+        long satId = createSat("biomeChanger", 100, 1000, 1000);
 
         // Sanity: freshly-created satellite is queryable.
         String pre = String.join("\n", client().read(

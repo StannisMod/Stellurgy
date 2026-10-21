@@ -150,6 +150,8 @@ item.satellitePrimaryFunction.2.name=Детектор масс
 item.satellitePrimaryFunction.3.name=Микроволновый передатчик
 item.satellitePrimaryFunction.4.name=Сканер руд
 item.satellitePrimaryFunction.5.name=Модификатор биома
+item.satellitePrimaryFunction.7.name=Дозиметр
+item.satelliteShield.0.name=Радиационный экран спутника
 item.satelliteIdChip.name=Чип адреса спутника
 item.planetIdChip.name=Чип адреса планеты
 item.asteroidChip.name=Чип адреса астероида
@@ -209,6 +211,7 @@ data.temperature.name=Температура
 data.composition.name=Состав
 data.atmospheredensity.name=Плотность атмосферы
 data.mass.name=Масса
+data.radiation_dose_rate.name=Мощность дозы излучения
 
 fluid.oxygen=Кислород
 fluid.hydrogen=Водород

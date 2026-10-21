@@ -71,7 +71,7 @@ public final class PlanetEnvironment {
             long span = Math.min(step, toTick - t);
             long mid = t + span / 2L;
             Vector3d bodyFixed = new Vector3d(path.positionAt(mid)).rotateZ(-rotationAngle(mid));
-            dose += dipole.trappedDoseRate(bodyFixed) * span * AstronomicalBodyHelper.SECONDS_PER_TICK;
+            dose += dipole.trappedDoseRate(bodyFixed).totalGyPerS() * span * AstronomicalBodyHelper.SECONDS_PER_TICK;
         }
         return dose;
     }

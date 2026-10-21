@@ -175,7 +175,12 @@ public class DataStorage {
         TEMPERATURE(3),
         COMPOSITION(4),
         ATMOSPHEREDENSITY(5),
-        MASS(6);
+        MASS(6),
+        /**
+         * The absorbed dose rate at a point, Gy/s in silicon behind the reference shield — what a dosimeter
+         * reads. A place may have none of it (a body with no field), which a reading records as absent.
+         */
+        RADIATION_DOSE_RATE(7);
 
         /** Effectively final, process lifetime: set once when the object is built. */
         public final int id;
@@ -203,6 +208,7 @@ public class DataStorage {
                 case COMPOSITION:
                 case ATMOSPHEREDENSITY:
                 case MASS:
+                case RADIATION_DOSE_RATE:
                     return java.util.Optional.of(dev.stannismod.stellurgy.api.satellite.InstrumentSubject.BODY);
             }
             throw new AssertionError("no subject decided for " + this);

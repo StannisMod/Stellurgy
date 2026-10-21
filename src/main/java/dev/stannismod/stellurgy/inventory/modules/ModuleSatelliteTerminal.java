@@ -175,7 +175,8 @@ public class ModuleSatelliteTerminal extends ModuleBase {
             status = 3; // OK and connected
 
             SatelliteData s = (SatelliteData) sat;
-            ppt  = s.getPowerPerTick();      // Power generation rate
+            s.bringUpToNow();
+            ppt  = (int) Math.round(s.currentPowerPerTick()); // Power generation rate, as worn as the panels are
             data = s.data.getData();         // Current data amount
             max  = s.data.getMaxData();      // Maximum storage
         }

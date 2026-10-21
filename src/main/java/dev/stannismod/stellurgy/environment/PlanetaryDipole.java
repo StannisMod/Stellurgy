@@ -94,24 +94,24 @@ public final class PlanetaryDipole {
     }
 
     /**
-     * The trapped-particle dose rate at a body-fixed point, Gy/s in silicon behind the reference shield,
-     * or zero where no particle can be trapped.
+     * The trapped-particle dose rate at a body-fixed point, per belt, Gy/s in silicon behind the reference
+     * shield, or zero where no particle can be trapped.
      */
-    double trappedDoseRate(Vector3dc bodyFixed) {
+    TrappedDose trappedDoseRate(Vector3dc bodyFixed) {
         if (bodyFixed.length() <= absorbingRadiusM) {
-            return 0d;
+            return TrappedDose.ZERO;
         }
         Vector3d r = new Vector3d(bodyFixed).sub(offset);
         double d = r.length();
         double sinLat = axis.dot(r) / d;
         double cos2Lat = 1d - sinLat * sinLat;
         if (cos2Lat <= 0d) {
-            return 0d;
+            return TrappedDose.ZERO;
         }
         double shell = d / (bodyRadiusM * cos2Lat);
         double cut = cutoffOnShell(shell);
         if (!(cut > 0d)) {
-            return 0d;
+            return TrappedDose.ZERO;
         }
         return RadiationBelts.doseRate(shell, fieldMagnitude(d, sinLat) / cut);
     }

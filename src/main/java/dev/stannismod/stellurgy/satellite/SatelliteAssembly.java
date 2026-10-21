@@ -7,8 +7,9 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 
 /**
- * What a satellite's parts add up to. The one sum, read by the builder when it assembles a satellite and
- * by a repair in orbit when a part is swapped, so the two can never disagree about what a part is worth.
+ * What a satellite's parts add up to. The one sum, read by the builder when it assembles a satellite, by a
+ * repair in orbit when a part is swapped, and when the dose stops a part, so none of them can disagree
+ * about what a part is worth.
  */
 public final class SatelliteAssembly {
 
@@ -33,7 +34,8 @@ public final class SatelliteAssembly {
         for (int slot = FIRST_PART_SLOT; slot <= LAST_PART_SLOT; slot++) {
             ItemStack stack = parts.getStackInSlot(slot);
             SatelliteProperties part = SatelliteRegistry.getSatelliteProperty(stack);
-            if (part != null) {
+            // A part the dose has stopped adds nothing but its mass.
+            if (part != null && SatelliteLife.works(stack)) {
                 int flag = part.getPropertyFlag();
                 if (flag == SatelliteProperties.Property.BATTERY.getFlag())
                     powerStorage += part.getPowerStorage();

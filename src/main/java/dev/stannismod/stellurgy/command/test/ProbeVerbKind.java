@@ -336,7 +336,9 @@ enum ProbeVerbKind {
             case "satellite info":
             case "satellite list":
             case "satellite markers":
+            case "satellite env-dose":
             case "satellite leftovers":
+            case "satellite life":
             case "satellite place":
             case "satellite poslist-size":
             case "satellite rocket-hatches":
@@ -776,8 +778,10 @@ enum ProbeVerbKind {
             case "rocket tick":
             case "rocket toggle-rcs":
             case "satellite announce-unknown":
+            case "satellite accrue":
             case "satellite blow":
             case "satellite deploy":
+            case "satellite repair":
             case "satellite deploy-unresolved":
             case "satellite force-tick-dim":
             case "satellite tick":

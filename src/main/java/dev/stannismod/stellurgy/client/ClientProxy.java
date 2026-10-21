@@ -179,6 +179,8 @@ public class ClientProxy extends CommonProxy {
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSatellitePrimaryFunction, 4, new ModelResourceLocation("stellurgy:oreMapper", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSatellitePrimaryFunction, 5, new ModelResourceLocation("stellurgy:biomeChangerSat", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSatellitePrimaryFunction, 6, new ModelResourceLocation("stellurgy:weatherControllerSat", "inventory"));
+        ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSatellitePrimaryFunction, 7, new ModelResourceLocation("stellurgy:dosimeter", "inventory"));
+        ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSatelliteShield, 0, new ModelResourceLocation("stellurgy:satelliteShield", "inventory"));
 
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemIC, 0, new ModelResourceLocation("stellurgy:basicCircuit", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemIC, 1, new ModelResourceLocation("stellurgy:trackingCircuit", "inventory"));

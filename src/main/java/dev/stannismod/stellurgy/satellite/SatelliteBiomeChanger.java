@@ -83,8 +83,18 @@ private int noise_val;
     }
 
 
+    /** It rewrites its world's biomes every tick. */
+    @Override
+    public boolean canTick() {
+        return true;
+    }
+
     @Override
     public void tickEntity() {
+        super.tickEntity();
+        if (!SatelliteLife.functioning(this)) {
+            return;
+        }
         //This is hacky..
         World world = net.minecraftforge.common.DimensionManager.getWorld(getDimensionId());
         int powerrequired = 120;
@@ -107,7 +117,6 @@ private int noise_val;
                     break;
             }
         }
-        super.tickEntity();
     }
 
     public void addBlockToList(HashedBlockPosition pos) {
@@ -157,10 +166,6 @@ private int noise_val;
         } else return true;
     }
 
-    @Override
-    public double failureChance() {
-        return 0;
-    }
 
     public IUniversalEnergy getBattery() {
         return battery;

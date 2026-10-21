@@ -1,7 +1,7 @@
 ---
 id: satellite
 owns: [satellite/, tile/satellite/, api/satellite/, entity/EntitySatellite, client/render/entity/RenderSatellite]
-entrypoints: [SatelliteData#tickEntity, SatelliteWeatherController#tickEntity, TileSatelliteBuilder#assembleSatellite, TileSatelliteTerminal#performFunction, TileTerraformingTerminal#update, EntityRocket#deploySatelliteFromHatch, SatelliteMaterializer#onChunkLoad, EntitySatellite#onUpdate]
+entrypoints: [SatelliteBase#bringUpToNow, SatelliteLife#bringUpTo, SatelliteWeatherController#tickEntity, TileSatelliteBuilder#assembleSatellite, TileSatelliteTerminal#performFunction, TileTerraformingTerminal#update, EntityRocket#deploySatelliteFromHatch, SatelliteMaterializer#onChunkLoad, EntitySatellite#onUpdate]
 depends-on: [api-public, dimension-planets, network-wire, items, util-core, world-gen, wirelessdata, space, universe, environment]
 depended-by: [misc-oddities, blocks, items, commands-gameplay]
 contracts: [C1, C2, C3, C4, C19]
@@ -39,7 +39,7 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
 
 | class | role |
 |-------|------|
-| `SatelliteData` (abstract) | data-collecting satellite: buffers `DataStorage`, drains battery, ticks up data; base for the four scanners `satellite/SatelliteData.java:23` |
+| `SatelliteData` (abstract) | data-collecting satellite: buffers `DataStorage`; collects with power on its orbit's grid (MECH-SAT-24); base for the four scanners `satellite/SatelliteData.java:23` |
 | `SatelliteComposition` / `SatelliteDensity` / `SatelliteMassScanner` / `SatelliteOptical` | `SatelliteData` subclasses locked to one `DataType` (COMPOSITION / ATMOSPHEREDENSITY / MASS / DISTANCE) `SatelliteComposition.java:10`. ⚠️ `SatelliteDensity` is registered but **UNREACHABLE** — bound to no `itemSatellitePrimaryFunction` metadata (0-4 = optical/composition/mass/microwave/oreMapping) and no recipe ships |
 | `SatelliteOreMapping` | on-demand chunk ore scanner; opens GUI 100, no data buffer `SatelliteOreMapping.java:68` |
 | `SatelliteMicrowaveEnergy` | `IUniversalEnergyTransmitter`; beams stored power down, scaled by config `SatelliteMicrowaveEnergy.java:16` |
@@ -59,18 +59,18 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
 | `OrbitalPartsInventory` | a satellite's parts as the builder panel's seven slots, for a repair in orbit `satellite/OrbitalPartsInventory.java:24` |
 | `EntitySatellite` | the satellite's presence in a live cell: kinematic, never saved, clickable, destructible `entity/EntitySatellite.java:47` |
 | `RenderSatellite` | draws the chassis, its dish and antennas, and each part facing by rule `client/render/entity/RenderSatellite.java:34` |
+| `SatelliteAccrual` | a satellite's power, data, part wear, data losses and readings over whole segments of its orbit — pure, never ticked `satellite/SatelliteAccrual.java` |
+| `SatelliteLife` | brings a satellite up to a tick: its body, field, star and chassis parts into the accrual, the doses back onto the parts `satellite/SatelliteLife.java` |
+| `RadiationWear` | the measured laws: shield factors, electronics budget, panel curve, memory upsets `satellite/RadiationWear.java` |
+| `FailureJournal` | a satellite's dated record of what failed aboard, bounded `satellite/FailureJournal.java` |
+| `DoseReadings` / `SatelliteDosimeter` | a dosimeter's dated readings, "absent here" over a fieldless body; the satellite type that takes them `satellite/DoseReadings.java`, `satellite/SatelliteDosimeter.java` |
 
 ## Mechanics
 
-- **MECH-SAT-01 Data accrual.** `SatelliteData.tickEntity` calls `getDataCreated()`: if the
-  buffer is not full it extracts `powerConsumption` from the battery every tick and adds one
-  data point when `worldTime % collectionTime == 0`; `collectionTime =
-  200/sqrt(0.1·powerPerTick)`. [V] `SatelliteData.java:75,96,106` [T] `SatelliteTickBehaviourTest.java:112`
+- **MECH-SAT-01** — retired.
 - **MECH-SAT-02 Data offload.** `SatelliteData.performAction` pushes the whole buffer into an
   adjacent `IDataHandler` tile via `addData` and removes what was accepted. [V] `SatelliteData.java:62`
-- **MECH-SAT-03 Base power upkeep.** `SatelliteBase.tickEntity` accepts `powerPerTick-1`
-  into the battery each tick, clamped at `powerStorage`. [V] `api/satellite/SatelliteBase.java:111`
-  [T] `SatelliteTickBehaviourTest.java:63,88`
+- **MECH-SAT-03** — retired.
 - **MECH-SAT-04 Ore scan.** `SatelliteOreMapping.scanChunk` charges 1000 RF base + `zoom·(250|375)`
   RF, columns the world, and returns an ore-vs-other density grid; filtered scan requires
   `maxDataStorage==3000`. [V] `SatelliteOreMapping.java:77,142,221`
@@ -167,18 +167,92 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   *"всякие измерительные приборы, если он исследует космос - от планеты, если исследует планету - к
   планете"*.
 - **MECH-SAT-20 [V][BEH] Repair in orbit.** Right-click opens the builder's part panel on the satellite's
-  own chassis: its seven slots at the builder's places. The primary function (slot 0) is shown and never
-  moves — swapping it would make another type with another controller. A change to slots 1–6 re-sums the
-  properties through the one sum assembly uses, keeps the satellite's id and type, and is sent to every
-  client. `OrbitalPartsInventory.java:49-62`, `SatelliteAssembly.java:28-48`, `EntitySatellite.java`
-  (`processInitialInteract`, `getModules`). FOR: maintainer 2026-10-20: *"По клику открывается... ну пока
-  что пусть такая же панель, что и в сборнике. Это интерактивный ремонт"*; 2026-10-21 on slot 0: *"ок"*.
+  own chassis: its seven slots at the builder's places. The primary function (slot 0) may be taken out and
+  takes only a primary function of the satellite's own type — another type would make another satellite
+  with another controller — so one the dose has stopped can be renewed. Before any change the satellite's
+  life is brought to the present with the parts it had; every change re-sums the properties through the
+  one sum assembly uses, keeps the satellite's id and type, and is sent to every client.
+  `OrbitalPartsInventory.java` (`sameTypePrimary`, `partsBeforeChange`, `store`), `SatelliteAssembly.java`,
+  `EntitySatellite.java` (`processInitialInteract`, `getModules`). FOR: maintainer 2026-10-20: *"По клику
+  открывается... ну пока что пусть такая же панель, что и в сборнике. Это интерактивный ремонт"*; on a dead
+  satellite being repairable this way; 2026-10-21 on slot 0 never changing the type: *"ок"*.
 - **MECH-SAT-21 [V][BEH] Destruction leaves nothing.** An explosion or a projectile destroys a satellite,
   and so do two blows from a player within 5 ticks — the first is taken for a missed click. Its record
   leaves its body's list, a zero-strength explosion plays (sound and particles, no damage), and nothing
   drops. `EntitySatellite.java` (`attackEntityFrom`, `destroy`). FOR: maintainer 2026-10-20: *"При
   разрушении, по сути взрыве, спутника ничего не остаётся. Только анимашка взрыва"*; 2026-10-21 on the
   two blows: *"ок"*.
+
+### The dose on its parts
+
+- **MECH-SAT-22 [V][SYS] Its life is computed when asked, on a fixed grid.** A released satellite's power,
+  data, wear and failure journal are not ticked: they are brought up to the space clock's present when
+  something reads or spends them — a terminal's download, its own status, a repair, a microwave receiver's
+  pull, an ore scan, and every 20 ticks while its entity stands in a live cell. Time is cut into segments
+  of a 64th of its orbital period counted from the orbit's epoch; only whole segments are taken, each is
+  evaluated at its middle, and its chance is drawn from a generator seeded by the satellite and the
+  segment's index. A type that acts on its world every tick (the biome changer, the weather controller,
+  missions) is still ticked, and brings its life up to date first. A satellite with no orbit is not in
+  space and accrues nothing. `SatelliteAccrual.java` (`advance`), `SatelliteLife.java` (`bringUpTo`),
+  `SatelliteBase.java` (`canTick`, `bringUpToNow`). FOR: maintainer 2026-10-21, on making the per-tick
+  accrual lazy: *"ок"*; and on the grid, taken *"по рекомендациям"*.
+- **MECH-SAT-23 [V][SYS] Power comes from the star, and the body hides it.** Its panels give power only
+  while the point on its orbit is outside the body's cylindrical shadow along the direction to the nearest
+  star; the star's direction is read on a fixed grid of a tenth of a day. Every satellite spends 1 power
+  unit per tick on upkeep; the battery holds between empty and its capacity. `SatelliteAccrual.java`
+  (`sunlit`, `advance`), `SatelliteLife.java` (`starDirection`). FOR: maintainer 2026-10-21, on the
+  body's shadow belonging to the dose's computation: *"согласен"*, and including it, *"по
+  рекомендациям"*.
+- **MECH-SAT-24 [V][SYS] Data is collected with power.** A data satellite's instrument draws half of what
+  its working panels were built to give while it collects, and collects one point per `200/√(0.1·P)`
+  ticks of full power, `P` its built generation. Short of that power it collects for the share of the
+  segment the energy covers; with its buffer full it does not collect. So worn panels and eclipses mean
+  fewer points, with nothing lost. `SatelliteAccrual.java` (`advance`), `SatelliteData.java` (`payload`).
+  FOR: maintainer 2026-10-20, on the next contact window showing *"that less arrived than the power
+  allowed"*.
+- **MECH-SAT-25 [V][SYS] The dose reaches each part as it is placed.** From the body's field along its
+  orbit, each segment gives a dose per belt (inner-belt protons, outer-belt electrons, Gy(Si) behind the
+  reference shield, times the configured scale). The panels take the whole of it. What sits inside the
+  chassis — the primary function and the data units — takes it thinned by a shield part if one is
+  installed: protons by 117/64.7, electrons by 1266/1.5 (Shields-1, SHIELDOSE-2 for an aluminium sphere,
+  0.535 → 3.00 g/cm²); the shield part weighs that step of aluminium over a block-sized satellite's six
+  square metres, 148 kg (`WeightEngine`). The battery and the shield take none. The dose is held on each part's own item, so
+  a part carries its wear wherever it goes. `SatelliteAccrual.java` (`advance`), `RadiationWear.java`,
+  `SatelliteLife.java` (`partOf`, `DOSE_KEY`). FOR: maintainer 2026-10-20, *"и то и другое в зависимости
+  от дозы"* and the per-part rule, *"да"*; 2026-10-21, the shield covers what is inside
+  the chassis and thins each belt by its own factor, *"по рекомендациям"*.
+- **MECH-SAT-26 [V][SYS] Each part has a budget.** Electronics stop at 50 Gy (5 krad — NASA's SmallSat note:
+  most commercial components tolerate 5 krad). A panel gives `1 − 0.2·log10(1 + D/316 Gy)` of its power —
+  the triple-junction datasheet curve, carried onto our dose by the 15-year geostationary design point —
+  and nothing once that reaches zero. A part that stops is journalled with its slot; it adds nothing to
+  the satellite's sum but its mass. A stopped primary function is a dead satellite: it collects, reads,
+  transmits and scans nothing, and stays in its body's list and in orbit. A stopped data unit takes its
+  capacity with it, and the points over the new capacity are lost and journalled.
+  `RadiationWear.java`, `SatelliteAccrual.java`, `SatelliteAssembly.java`, `SatelliteLife.java`
+  (`functioning`). FOR: maintainer 2026-10-20, a part past its budget stops; 2026-10-21 on the
+  figures, *"по рекомендациям"*.
+- **MECH-SAT-27 [V][SYS] Memory upsets destroy data.** Each buffered point is lost in a segment with
+  probability `1 − exp(−k·D_p)`, `D_p` the protons reaching the memory and `k` = 1.5e-14 cm²/bit (a
+  commercial 65 nm SRAM) × 1.08e9 protons/cm² per Gy × 8·2²⁰ bits (a 1 MB point — a choice). Each
+  segment's losses are one journal entry with their count. `RadiationWear.java`
+  (`pointLossProbability`), `SatelliteAccrual.java` (`binomial`). FOR: maintainer 2026-10-20, data points
+  dropped with a probability proportional to the dose rate, each loss journalled.
+- **MECH-SAT-28 [V][BEH] The failure journal.** A satellite keeps its own dated record: data lost, a part
+  stopped, data that no longer fit — each with its tick and its phase on the orbit. It holds 256 entries;
+  older ones are dropped and counted. It is evidence about the device, never a measurement of the place.
+  `FailureJournal.java`. FOR: maintainer 2026-10-20, the device's own dated journal, *"да"*.
+- **MECH-SAT-29 [V][BEH] The dosimeter.** A primary function (`satellitePrimaryFunction` metadata 7, type
+  `dosimeter`) that reads the trapped dose rate at the satellite's point once per segment, while its
+  electronics work, with the tick and the phase; over a body with no field the reading is "absent here".
+  1024 readings are held, older ones dropped and counted. The quantity is `DataType.RADIATION_DOSE_RATE`,
+  Gy/s. `SatelliteDosimeter.java`, `DoseReadings.java`. FOR: maintainer 2026-10-20 on the quantity,
+  *"Я бы взял то, что по си"*; 2026-10-21 on the dosimeter, *"по рекомендациям"*.
+- **MECH-SAT-30 [V][BEH] The wear can be switched off.** With `satelliteRadiationWear` off no part takes
+  dose, no point is lost, no part is stopped by its dose and nothing of that kind is journalled; power,
+  eclipses and a dosimeter's readings go on. `satelliteRadiationWearScale` multiplies the dose the parts
+  and the memory take. `SatelliteAccrual.java` (`Part#works`, `advance`), `SatelliteLife.java` (`rules`).
+  FOR: maintainer 2026-10-21: *"Износ можно отключить, да. Но рядом с флагом надо написать, что это
+  отключает и часть геймплея."*
 
 ## State & persistence
 
@@ -190,17 +264,19 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
 `SatelliteSpyTelescope` NBT bodies are empty. [V] `TileTerraformingTerminal.java:298,346`
 
 A released satellite writes `orbit` {`radius`, `inclination`, `node`, `mu`, `epoch`} beside its other keys;
-absent means no orbit (not yet released, or a mission). Its parts are the chassis item's `inv`, inside `item`.
+absent means no orbit (not yet released, or a mission). Its parts are the chassis item's `inv`, inside `item`;
+each part that has taken dose carries `radiationDose` (Gy) on its own item. Every satellite writes `life`
+{`segments`, `energyCarry`, `collectionCarry`, `journal` {`entries` [{`tick`, `phase`, `kind`, `count`,
+`slot`}], `dropped`}}; a dosimeter adds `readings` {`readings` [{`tick`, `phase`, `rate`?}], `dropped`}, a
+missing `rate` being "absent here". Nothing records where it has been: only the parts' doses and the journal.
 The guidance computer writes `releaseAltitude` (metres, only when one is set) and `releaseInclination`
 (degrees). `EntitySatellite` writes nothing: it is never saved. Its attitude rides two synced data
 parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 
 ## Invariants
 
-- **INV-SAT-01** [T][BEH] Base battery never exceeds `powerStorage`; accrual is ≈`powerPerTick`/tick.
-  `SatelliteTickBehaviourTest.java:63,88` Pinned by `SatelliteTickBehaviourTest#baseSatelliteTickAccruesAtApproximatelyPowerGenRate`, `SatelliteTickBehaviourTest#baseSatelliteBatteryCapsAtPowerStorage`.
-- **INV-SAT-02** [T][BEH] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
-  data gate ~`ticks/collectionTime` times. `SatelliteTickBehaviourTest.java:112,134` Pinned by `SatelliteTickBehaviourTest#dataSatelliteAccumulatesDataOverTime`, `SatelliteTickBehaviourTest#dataSatelliteRespectsMaxDataCap`.
+- **INV-SAT-01** — retired.
+- **INV-SAT-02** — retired.
 - **INV-SAT-03** [V][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
   `floodlevel==-1` sentinel must survive so the lazy sea-level fallback fires.
   `SatelliteWeatherController.java:372-374` write, `:379-381` read; the fallback `:52-53`. FOR: save format: satellite survives reload.
@@ -267,6 +343,68 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   inclination its rocket's guidance computer sets; with no altitude set, to the body's orbit line; where the
   body admits no orbit at the altitude set, the satellite stays in the hatch and nothing is released. Pinned
   by `SatelliteOnItsOrbitGroupTest#aSatelliteGoesToTheOrbitItsGuidanceComputerSets`.
+- **INV-SAT-21 [T][SYS] Asking does not change the answer.** A satellite's state at a tick is the same
+  whether it was brought there in one catch-up or in any number of pieces, irregular ones included: its
+  data, its journal and the ticks of its readings exactly; its energy, the dose on every part and the
+  rates it read to within the rounding of the arithmetic — the platform's transcendental functions may
+  differ in their last bit between an interpreted and a compiled call, and nothing else may differ. REGIONS: `one catch-up`, `per segment`,
+  `irregular pieces`. Pinned by `SatelliteLawsTest#askingDoesNotChangeTheAnswer`. FOR: maintainer 2026-10-20, *"an unloaded orbit costs nothing per tick … and on load
+  the wear equals what was accrued over the interval"*, and making the per-tick accrual lazy, *"ок"*.
+- **INV-SAT-22 [T][SYS] Failures follow the place.** Of two identical satellites on one low orbit at
+  different phases, over a window in which only one of them crosses the high-dose segment, that one
+  journals data lost and the other journals none; and over a whole day the losses, weighted by their
+  count, sit at the dose rate that losses in proportion to the dose predict — `Σr²/Σr` over the day's
+  segments, within a quarter — so the journal, correlated with phase, reproduces the region. Pinned by `SatelliteJointsTest#failuresFollowThePlace`. FOR: maintainer 2026-10-20 — *"Сбой зависит от поля в точке, где спутник
+  сейчас"* — so that two satellites on one orbit at different phases tell the region apart by their journals.
+- **INV-SAT-23 [T][SYS] Each part answers to its own dose.** An unscreened satellite crossing the inner
+  belt's low segment loses data while its generation stays within a thousandth of what it was built for; a
+  shielded satellite in the outer belt loses generation while no point is lost.
+  REGIONS: `electronics exposed`, `panels exposed`. Pinned by `SatelliteLawsTest#eachPartAnswersToItsOwnDose`. FOR: maintainer 2026-10-20, the per-part rule, *"да"*, which is what tells data loss from a power fault, and
+  acceptance 3.
+- **INV-SAT-24 [T][SYS] A shield thins what is inside, not the panels.** The same satellite on the same
+  orbit over the same interval takes less dose on its primary function and data units with a shield part
+  than without, by each belt's factor, and the same dose on its panels.
+  REGIONS: `inner belt`, `outer belt`. Pinned by `SatelliteLawsTest#aShieldThinsWhatIsInsideNotThePanels`. FOR: maintainer 2026-10-21, a shield covering what is inside the chassis, thinning each belt by its own factor, *"по рекомендациям"*.
+- **INV-SAT-25 [T][SYS] Past its budget a part stops, and the satellite with it.** Electronics work below
+  their budget and stop at it, and the stop is journalled once with the slot; a stopped primary function
+  collects and reads nothing more; the same satellite with that part renewed works again; a stopped data
+  unit's capacity is gone and the points over it are journalled as overflowed. REGIONS: `below budget`,
+  `at budget`, `renewed`, `data unit`. Pinned by `SatelliteLawsTest#pastItsBudgetAPartStops`. FOR: maintainer 2026-10-20, a part past its budget stops, and dead electronics make a dead satellite.
+- **INV-SAT-26 [T][SYS] The dosimeter reads the place.** Each reading equals the trapped dose rate the body's
+  environment gives at the satellite's point at that reading's tick; over a body with no field every
+  reading is "absent here". REGIONS: `field`, `no field`. Pinned by `SatelliteJointsTest#theDosimeterReadsThePlace`. FOR: maintainer 2026-10-20 on the dose quantity,
+  *"Я бы взял то, что по си"*, and a body with no field read as "absent here", never as zero.
+- **INV-SAT-27 [T][SYS] Power bounds what is collected.** The battery holds between empty and its capacity;
+  in the body's shadow nothing is generated; in full light with energy to spare one point arrives per
+  collection time, never more and never past the buffer's capacity; and a satellite whose panels give less
+  collects fewer points than one whose panels give what they were built to, with nothing lost. REGIONS:
+  `light`, `shadow`, `full buffer`, `worn panels`. Pinned by `SatelliteLawsTest#powerBoundsWhatIsCollected`. FOR: maintainer 2026-10-20, a contact window showing *"that less arrived than the power allowed"*.
+- **INV-SAT-28 [T][SYS] Nothing records where it has been.** What a satellite persists of its life is its
+  progress along the grid, the carries below one unit, its journal, its readings and its parts' doses — no
+  region, no flag of having been somewhere. Pinned by `SatelliteLawsTest#nothingRecordsWhereItHasBeen`. FOR: the design of the satellite on its orbit, *"Nothing stores 'was in the
+  region'"*.
+- **INV-SAT-29 [T][SYS] Switched off, the dose does nothing.** With the wear off the same satellite on the same
+  orbit takes no dose on any part, loses no point and journals nothing, its panels give what they were
+  built to, and its dosimeter reads what it reads with the wear on. REGIONS: `wear on`, `wear off`. Pinned by `SatelliteLawsTest#switchedOffTheDoseDoesNothing`. FOR:
+  maintainer 2026-10-21, *"Износ можно отключить, да"*.
+- **INV-SAT-31 [A][SYS] A shield part weighs its aluminium.** The shield part's mass is its areal density,
+  2.465 g/cm² of aluminium, over the six square metres of a block-sized satellite's faces, so a
+  satellite built with it is that much heavier. FOR: maintainer 2026-10-20, a shield part that *"adds
+  mass (a heavier payload)"*.
+- **INV-SAT-32 [A][BEH] On its orbit, its parts take its body's field.** While the server ticks, a satellite
+  released onto an orbit inside its body's belts carries on its panel the dose the environment the game
+  derives for that body gives along that orbit over the segments taken; with the wear switched off, its
+  parts take no more. FOR: maintainer 2026-10-20, the dose acts on the satellite's parts, part by part,
+  and 2026-10-21, *"Износ можно отключить, да"*.
+- **INV-SAT-33 [A][BEH] A dead satellite stays on its orbit, and a renewed part revives it.** A satellite whose
+  primary function the dose has stopped is still recorded on its orbit, journalled with the slot that
+  stopped; its panel takes a primary function of its own type, which makes it work again, and refuses one
+  of another type. FOR: maintainer 2026-10-20, *"dead electronics make a dead satellite, which stays in
+  orbit as an object (and can be repaired in orbit)"*.
+- **INV-SAT-30 [T][SYS] The budgets are the measured ones.** A panel keeps 0.91, 0.87 and 0.73 of its power,
+  within 0.02, at the doses that stand for 5e14, 1e15 and 5e15 e/cm² of 1 MeV electrons on the
+  geostationary design point (1e15 e/cm² for 15 years of our geostationary dose); electronics work below
+  5 krad(Si) and stop at it. Pinned by `SatelliteLawsTest#theBudgetsAreTheMeasuredOnes`. FOR: maintainer 2026-10-21 on the figures, *"по рекомендациям"*.
 
 ## Failure modes & edge cases
 
@@ -278,8 +416,9 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 - `TileTerraformingTerminal.update` performs up to 1000 terraform iterations per tick and lazily
   loads/creates the `TerraformingHelper` (chunk-scoped work) inside the tick; it catches
   `NoClassDefFoundError` and prints stacktrace. `TileTerraformingTerminal.java:178,208`
-- `SatelliteData.getDataCreated` extracts power even when the buffer is full (guard is
-  `maxData >= data`, i.e. also true at exact cap). `SatelliteData.java:81,96`
+- A satellite's life is taken only when something reads or spends it; a satellite nobody asks about for
+  a long time is brought up in one catch-up, whose cost grows with the segments missed (a low orbit has
+  64 of them in about 1 540 ticks) and never with the tick rate.
 
 ## Integration seams
 
@@ -292,8 +431,9 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 - **Registry (C3):** satellite *types* keyed via `SatelliteRegistry.getKey(class)` in
   `SatelliteBase` ctor (`dataType` NBT); blocks/items `satelliteBuilder`,
   `satelliteControlCenter`, `weatherController`, `biomeChanger`, `satelliteIdChip`,
-  `satellitePowerSource`, `satellitePrimaryFunction` registered from `Stellurgy.java`
-  (misc-oddities), referenced here.
+  `satellitePowerSource`, `satellitePrimaryFunction` (metadata 7 the dosimeter), `satelliteShield`
+  registered from `Stellurgy.java` (misc-oddities), referenced here; satellite type `dosimeter`.
+  `satelliteShield` and the dosimeter have no recipe.
 - **Entity (C3):** `stellurgy:satellite` (`EntitySatellite`), declared last in `EntityNetworkIds`; tracking
   range 256, update every 20 ticks, no velocity. Its attitude rides the entity's own synced data
   parameters, its satellite id the spawn data — no packet of its own.
@@ -319,7 +459,12 @@ INV-SAT-11..15 → `SatelliteLawsTest` (unit); INV-SAT-16, -18, -19, -20 → `Sa
 INV-SAT-17 → `SatelliteClientGroupTest` (client). Not pinned: the render's appearance (how the parts look),
 and the guidance computer's screen fields. "Never a physics ship" holds by construction — the materializer
 spawns a plain entity and nothing on its path reaches the physics substrate.
-INV-SAT-01/02 → `SatelliteTickBehaviourTest`; INV-SAT-03/04 are storage round trips, read in code, not tested;
+The dose on its parts: INV-SAT-21, -23..-25, -27..-31 → `SatelliteLawsTest` (unit); INV-SAT-22, -26 →
+`SatelliteJointsTest` (integration, the joint with `environment`); INV-SAT-32, -33 → `SatelliteOnItsOrbitGroupTest`
+(server). Not pinned: a player's path to seeing a failure — the journal's and the dosimeter's readout is
+the terminal's downlink, not built yet; and the renewal through a window click (INV-SAT-33 enters the
+panel's inventory on the server).
+INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; scanning types → `ScanningSatelliteTickContractTest`,

@@ -637,6 +637,7 @@ public class Stellurgy {
         SatelliteRegistry.registerSatellite("oreScanner", SatelliteOreMapping.class);
         SatelliteRegistry.registerSatellite("biomeChanger", SatelliteBiomeChanger.class);
         SatelliteRegistry.registerSatellite("weatherController", SatelliteWeatherController.class);
+        SatelliteRegistry.registerSatellite("dosimeter", SatelliteDosimeter.class);
 
 
         //Entity Registration ---------------------------------------------------------------------------------------------
@@ -843,7 +844,8 @@ public class Stellurgy {
         StellurgyItems.itemCarbonDust = new Item().setUnlocalizedName("carbonDust").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemLens = new ItemIngredient(1).setUnlocalizedName("stellurgy:lens").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellitePowerSource = new ItemIngredient(2).setUnlocalizedName("stellurgy:satellitePowerSource").setCreativeTab(tabAdvRocketry);
-        StellurgyItems.itemSatellitePrimaryFunction = new ItemIngredient(7).setUnlocalizedName("stellurgy:satellitePrimaryFunction").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemSatellitePrimaryFunction = new ItemIngredient(8).setUnlocalizedName("stellurgy:satellitePrimaryFunction").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemSatelliteShield = new ItemIngredient(1).setUnlocalizedName("stellurgy:satelliteShield").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemThermite = new ItemThermite().setUnlocalizedName("thermite").setCreativeTab(tabAdvRocketry);
 
         //TODO: move registration in the case we have more than one chip type
@@ -887,6 +889,8 @@ public class Stellurgy {
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePrimaryFunction, 1, 4), new SatelliteProperties().setSatelliteType(SatelliteRegistry.getKey(SatelliteOreMapping.class)));
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePrimaryFunction, 1, 5), new SatelliteProperties().setSatelliteType(SatelliteRegistry.getKey(SatelliteBiomeChanger.class)));
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePrimaryFunction, 1, 6), new SatelliteProperties().setSatelliteType(SatelliteRegistry.getKey(SatelliteWeatherController.class)));
+        SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePrimaryFunction, 1, 7), new SatelliteProperties().setSatelliteType(SatelliteRegistry.getKey(SatelliteDosimeter.class)));
+        SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatelliteShield, 1, 0), new SatelliteProperties().setShield(true));
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePowerSource, 1, 0), new SatelliteProperties().setPowerGeneration(4));
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(StellurgyItems.itemSatellitePowerSource, 1, 1), new SatelliteProperties().setPowerGeneration(40));
         SatelliteRegistry.registerSatelliteProperty(new ItemStack(LibVulpesItems.itemBattery, 1, 0), new SatelliteProperties().setPowerStorage(10000));
@@ -912,6 +916,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatellite.setRegistryName("satellite"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatellitePowerSource.setRegistryName("satellitePowerSource"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatellitePrimaryFunction.setRegistryName("satellitePrimaryFunction"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemSatelliteShield.setRegistryName("satelliteShield"));
         //Spacesuit
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceSuit_Helmet.setRegistryName("spaceHelmet"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceSuit_Chest.setRegistryName("spaceChestplate"));

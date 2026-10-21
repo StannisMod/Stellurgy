@@ -75,7 +75,8 @@ public class ItemSatellite extends ItemIdWithName {
             if (slot >= FIRST_MOD_SLOT && slot <= LAST_MOD_SLOT) {
                 return  SatelliteProperties.Property.POWER_GEN.isOfType(f) ||
                         SatelliteProperties.Property.BATTERY.isOfType(f)   ||
-                        SatelliteProperties.Property.DATA.isOfType(f);
+                        SatelliteProperties.Property.DATA.isOfType(f)      ||
+                        SatelliteProperties.Property.SHIELD.isOfType(f);
             }
             return false;
         }

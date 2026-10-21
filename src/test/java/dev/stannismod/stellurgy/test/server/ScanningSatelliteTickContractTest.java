@@ -8,11 +8,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * per-type tick-emits-data contracts for the four scanning
- * satellites that extend {@link dev.stannismod.stellurgy.satellite.SatelliteData}
- * (optical / density / mass / composition), plus the non-{@code SatelliteData}
- * oreScanner (player-driven, tick is battery-accrual only) and the
- * non-tickable spyTelescope.
+ * per-type data contracts for the four scanning satellites that extend
+ * {@link dev.stannismod.stellurgy.satellite.SatelliteData} (optical / density / mass / composition),
+ * plus the non-{@code SatelliteData} oreScanner (player-driven) and the non-tickable spyTelescope.
+ * How much data a satellite collects, with what power, is no longer a tick's: it is the lazy accrual's
+ * (`satellite` MECH-SAT-24, pinned in the fast tier).
  *
  * <p>The contract pinned here is per-type, not generic: each scanner is
  * <em>the</em> producer of one specific {@link
@@ -23,32 +23,22 @@ import static org.junit.Assert.assertTrue;
  * silently break mission completion paths that demand a specific
  * data-type input — caught only by per-type pins.</p>
  *
- * <p>Generic {@code SatelliteData} accumulation (delta sanity, maxData
- * cap) is already pinned by {@link SatelliteTickBehaviourTest}; this
- * suite focuses on the per-type identity that suite intentionally
- * doesn't assert.</p>
- *
- * <p>Pyramid layer: testServer (needs the {@code /stellurgytest satellite tick}
- * probe path which advances worldTime to fire the {@code SatelliteData}
- * collection-time gate deterministically).</p>
  */
 public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest {
 
     private static final String ID = "id";
     private static final String PRE_STORED = "preStored";
     private static final String POST_STORED = "postStored";
-    private static final String PRE_DATA = "preData";
-    private static final String POST_DATA = "postData";
     private static final String DATA_TYPE = "dataType";
     private static final String IS_SAT_DATA = "isSatelliteData";
     private static final String CAN_TICK = "canTick";
 
     /**
-     * Pin: optical scanner emits DISTANCE-type data on powered tick.
+     * Pin: optical scanner emits DISTANCE-type data.
      *
      * <p>Contract litmus: "fails if production breaks the contract that
      * the {@code optical} satellite is the producer of DISTANCE-type
-     * data and accumulates that data over time when powered". The
+     * data". The
      * dataType identity is what the optical-scanner item-tool and
      * companion-mod subscribers branch on; swapping it would break
      * downstream consumers silently.</p>
@@ -56,16 +46,6 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     @Test
     public void opticalPoweredTickEmitsDistanceTypeData() throws Exception {
         long satId = createSat("optical", 1000, 100_000, 1000);
-
-        String tickResp = String.join("\n", client().act(
-                "stellurgytest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
-        long preData = longField(PRE_DATA, tickResp, "preData");
-        long postData = longField(POST_DATA, tickResp, "postData");
-        assertTrue("optical with powerGen=1000 must accumulate ≥1 data point "
-                        + "over 100 ticks (collectionTime≈20); preData=" + preData
-                        + " postData=" + postData,
-                postData - preData >= 1);
 
         String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
@@ -76,7 +56,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     }
 
     /**
-     * Pin: density scanner emits ATMOSPHEREDENSITY-type data on powered tick.
+     * Pin: density scanner emits ATMOSPHEREDENSITY-type data.
      *
      * <p>Contract litmus: "fails if production breaks the contract that
      * the {@code density} satellite is the producer of ATMOSPHEREDENSITY
@@ -87,16 +67,6 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void densityPoweredTickEmitsAtmosphereDensityTypeData() throws Exception {
         long satId = createSat("density", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().act(
-                "stellurgytest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
-        long preData = longField(PRE_DATA, tickResp, "preData");
-        long postData = longField(POST_DATA, tickResp, "postData");
-        assertTrue("density with powerGen=1000 must accumulate ≥1 data point "
-                        + "over 100 ticks; preData=" + preData
-                        + " postData=" + postData,
-                postData - preData >= 1);
-
         String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("density satellite MUST emit ATMOSPHEREDENSITY-typed data; "
@@ -105,7 +75,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     }
 
     /**
-     * Pin: mass scanner emits MASS-type data on powered tick.
+     * Pin: mass scanner emits MASS-type data.
      *
      * <p>Contract litmus: "fails if production breaks the contract that
      * the {@code mass} satellite is the producer of MASS data". MASS
@@ -116,16 +86,6 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void massScannerPoweredTickEmitsMassTypeData() throws Exception {
         long satId = createSat("mass", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().act(
-                "stellurgytest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
-        long preData = longField(PRE_DATA, tickResp, "preData");
-        long postData = longField(POST_DATA, tickResp, "postData");
-        assertTrue("mass with powerGen=1000 must accumulate ≥1 data point "
-                        + "over 100 ticks; preData=" + preData
-                        + " postData=" + postData,
-                postData - preData >= 1);
-
         String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("mass satellite MUST emit MASS-typed data; " + dataResp,
@@ -133,30 +93,12 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     }
 
     /**
-     * Pin: composition scanner emits COMPOSITION-type data on powered tick.
+     * Pin: composition scanner emits COMPOSITION-type data.
      *
-     * <p>Overlaps the generic {@link SatelliteTickBehaviourTest#dataSatelliteAccumulatesDataOverTime}
-     * (which already uses {@code composition} as its sample
-     * {@link dev.stannismod.stellurgy.satellite.SatelliteData}
-     * subclass) — but the existing test pins the
-     * <em>generic SatelliteData</em> contract; this pin asserts the
-     * <em>per-type identity</em> contract (dataType==COMPOSITION).
-     * Together they would catch the case where a refactor moves the
-     * dataType lock without breaking accumulation.</p>
      */
     @Test
     public void compositionPoweredTickEmitsCompositionTypeData() throws Exception {
         long satId = createSat("composition", 1000, 100_000, 1000);
-
-        String tickResp = String.join("\n", client().act(
-                "stellurgytest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
-        long preData = longField(PRE_DATA, tickResp, "preData");
-        long postData = longField(POST_DATA, tickResp, "postData");
-        assertTrue("composition with powerGen=1000 must accumulate ≥1 data point "
-                        + "over 100 ticks; preData=" + preData
-                        + " postData=" + postData,
-                postData - preData >= 1);
 
         String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
@@ -167,7 +109,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
     /**
      * Pin: oreScanner is a non-{@code SatelliteData} satellite — its
-     * tick accrues only battery and does not produce a
+     * it does not produce a
      * {@link dev.stannismod.stellurgy.api.DataStorage} stream.
      *
      * <p>Contract: oreScanner is player-driven (the player right-clicks
@@ -183,10 +125,6 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
      *   <li>{@code satellite data} returns the "not a SatelliteData
      *       subclass" error — confirming there is no data-stream surface
      *       to query.</li>
-     *   <li>Battery accrues over ticks (delta &gt; 0) — confirms the
-     *       inherited {@link
-     *       dev.stannismod.stellurgy.api.satellite.SatelliteBase#tickEntity}
-     *       still runs.</li>
      * </ol>
      */
     @Test
@@ -209,17 +147,6 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + "probe must report it is not a SatelliteData subclass; "
                         + dataResp,
                 "not a SatelliteData subclass".equals(Reply.of(dataResp).textOr("error", null)));
-
-        String tickResp = String.join("\n", client().act(
-                "stellurgytest satellite tick 0 " + satId + " 10"));
-        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
-        long preStored = longField(PRE_STORED, tickResp, "preStored");
-        long postStored = longField(POST_STORED, tickResp, "postStored");
-        assertTrue("oreScanner tick must still accrue battery (inherited "
-                        + "SatelliteBase.tickEntity) — without this, the chip "
-                        + "would never charge; preStored=" + preStored
-                        + " postStored=" + postStored,
-                postStored - preStored > 0);
     }
 
     /**
