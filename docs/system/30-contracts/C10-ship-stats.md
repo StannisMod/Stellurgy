@@ -104,9 +104,14 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
 - **STAT-7b** `[A][SYS]` Realising pilot intent is a **PER-AXIS AUTHORITY** model, signed, inertia-aware and
   solved under constraints (STAT-15..18), not a coupled wrench solve: for each of 6 axes the hull
   exposes a max CLEAN force/torque from geometry + the LIVE working-thruster state (fuel/power this
-  tick); input is a signed % per axis; the system delivers that % of the axis authority. A degenerate
-  build is WEAK on an axis it cannot cleanly deliver, **never forced-spinny**. FA / X / manual are
-  one unified % producer; external ship-on-ship push is a VS-level interaction OUTSIDE this model.
+  tick). Every producer of intent — manual input, Flight Assist's cruise, the unmanned hold, the
+  auto-takeoff climb, an autopilot — publishes ONE kind of value, a `FlightCommand` (world-frame
+  velocity, angular-velocity feed-forward, attitude; each part optional); the flight law turns it into
+  wanted accelerations, and the scheme delivers each axis's share as a fraction of that axis's
+  authority, clipped at one (`ship/control/CleanAxisScheme.java:40-65`) `[V]`. No producer addresses
+  the per-axis fraction directly. A degenerate
+  build is WEAK on an axis it cannot cleanly deliver, **never forced-spinny**. External ship-on-ship
+  push is a VS-level interaction OUTSIDE this model.
   Boost is a drive's low-exhaust-velocity REGIME — a different authority table, not a multiplier over
   one; STAT-7a still binds whatever regime is live. The intent→per-thruster mapping is a swappable
   `ControlScheme` seam: the clean per-axis force above is the DEFAULT implementation; alternative
