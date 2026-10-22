@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.satellite.IDataHandler;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleData;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSatellite;
@@ -170,8 +171,8 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         if (sat == null) {
             return Outcome.NO_SATELLITE;
         }
-        int hereDim = DimensionManager.getEffectiveDimId(world, pos).getId();
-        if (!PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem(sat.getDimensionId(), hereDim)) {
+        DimensionProperties here = DimensionManager.getEffectiveBodyOrNull(world, pos);
+        if (here == null || !PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem(sat.getDimensionId(), here.getId())) {
             return Outcome.OUT_OF_RANGE;
         }
         long now = SpaceSubsystem.spaceClock();

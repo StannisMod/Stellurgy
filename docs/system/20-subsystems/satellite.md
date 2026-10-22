@@ -336,7 +336,7 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   `SatelliteTerminalChipRecognitionTest#aTerminalWhoseChipNamesNoSatelliteSaysSo`,
   `SatelliteTerminalChipRecognitionTest#aTerminalWithoutPowerSaysSo`,
   `SatelliteTerminalChipRecognitionTest#aSatelliteStillOnTheGroundIsNotInOrbit`,
-  `SatelliteTerminalChipRecognitionTest#aTerminalInAWorldWithNoBodyHasNoPlaceToSeeFrom`,
+  `SatelliteTerminalChipRecognitionTest#aTerminalOnAStationHasNoPlaceToSeeFrom`,
   `SatelliteTerminalChipRecognitionTest#aDeadSatelliteIsSilentInItsWindow`,
   `SatelliteTerminalChipRecognitionTest#pressEraseRemovesSatelliteFromDimAndBlanksChip`. FOR: maintainer
   2026-10-20 — "data lost because out of contact" is an honest false hypothesis beside the dose,
@@ -499,12 +499,17 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   `nothing while hidden`, `regains sight`. Pinned by
   `SatelliteTerminalChipRecognitionTest#aTerminalReceivesOnlyWhileTheDishSeesIt`. FOR: maintainer
   2026-10-20 — the terminal receives only while the dish can see it, *"угу"*.
-- **INV-SAT-39 [A][BEH] A satellite outside the terminal's planetary system is out of range.** A try for a
+- **INV-SAT-39 [T][BEH] A satellite outside the terminal's planetary system is out of range.** A try for a
   satellite of a body that is neither the terminal's world's planet nor one of its moons comes to "out of
   range" before anything is asked of the satellite's orbit (`TileSatelliteTerminal.java`, `tryContact`).
-  Unpinned: the shared test server registers one planetary system only (Earth and Luna), so no satellite
-  outside it can be staged; the instrument that stages a second one is owed. FOR: maintainer 2026-10-20 —
-  the terminal's screen tells out of contact apart from loss, and out of range is a reason no window cures.
+  A terminal on a station stands in the system of the planet the station orbits; a terminal in a world
+  that is no registered body (the Nether, another mod's world) stands in no system at all, so every
+  satellite is out of range of it (`DimensionManager.java`, `getEffectiveBodyOrNull`). Pinned by
+  `SatelliteTerminalChipRecognitionTest#aTerminalInAWorldOutsideEverySystemIsOutOfRange`; a satellite of a
+  second registered system is not staged — the shared test server registers one (Earth and Luna). FOR:
+  maintainer 2026-10-20 — the terminal's screen tells out of contact apart from loss, and out of range is a
+  reason no window cures; maintainer 2026-10-22 — a world with no body answers "out of system", *"Будем
+  отдавать такому "вне системы""*.
 
 ## Failure modes & edge cases
 
@@ -568,8 +573,8 @@ INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `Sate
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
 `SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), INV-SAT-07, -38 →
-`SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 is owed an instrument that stages a second
-planetary system. Not pinned: the readout's pages on the client (drawn from the terminal's copy, which the
+`SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
+(server, a terminal in a world with no body). Not pinned: the readout's pages on the client (drawn from the terminal's copy, which the
 update packet carries), and a player's path to seeing a failure — the client harness has no reader of a
 screen's text or of a tile's client copy yet; scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →

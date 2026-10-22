@@ -83,7 +83,11 @@ implementations (→ satellite); space-station objects (→ space-stations); the
 - **MECH-DIM-07 — Effective-dim resolution.** `getEffectiveDimId(world/id, pos)` maps the space
   dim id to the station's parent body (via `SpaceObjectManager`) or the default-space props,
   else the normal props. Star ids (`≥STAR_ID_OFFSET`) yield a throwaway props naming the star.
-  `DimensionManager.java:116`, `:527`.
+  `DimensionManager.java:116`, `:527`. A world that is no registered body (the Nether) resolves to the
+  OVERWORLD's props on this path; `getEffectiveBodyOrNull(world, pos)` resolves it the same way except
+  that such a world answers `null` — the reader for a check that must say "this place is in no planetary
+  system" (the satellite terminal's range gate, `satellite` INV-SAT-39). `DimensionManager.java`,
+  `getEffectiveBodyOrNull`. [T]
 - **MECH-DIM-08 — Planet hierarchy.** `setParentPlanet`/`addChildPlanet`/`removeChild` maintain
   a bidirectional parent↔`childPlanets` graph and inherit the star; `isMoon` = has a valid
   non-warp parent; moons recurse to a parent's solar distance/theta. `DimensionProperties.java:756`,

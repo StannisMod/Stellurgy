@@ -18,19 +18,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The Satellite Control Center as the server decides it: what each try comes to (`satellite` INV-SAT-07)
- * and when a terminal receives (INV-SAT-38).
+ * The Satellite Control Center as the server decides it: what each try comes to (`satellite` INV-SAT-07),
+ * when a terminal receives (INV-SAT-38) and when it is out of range (INV-SAT-39).
  *
  * <p>Every verdict is read off {@code terminal_try}, the record the terminal's own settle writes
  * ({@code MixinTileSatelliteTerminalEvents}), named by the terminal's place; the terminal tries by its own
  * tick, a probe never makes it try. A released satellite is released by the production per-hatch deploy
  * from a rocket a probe arranged. What it does NOT see: the client's screen — the readout's pages are drawn
- * from the terminal's copy, which this class never reads — the player's Download button (a try the poll
- * makes is the same try), and a terminal on a station, which is one more world with no body.</p>
+ * from the terminal's copy, which this class never reads — and the player's Download button (a try the poll
+ * makes is the same try).</p>
  *
  * <p>What each scenario leaves: the rocket it arranged is removed by its id, a released satellite is marked
  * dead and the chunks it forced are let go — each in its {@code finally}; a terminal block stays in its
- * plot, which is never reused.</p>
+ * plot, which is never reused, and a station stays registered on its own grid cell, which no other
+ * station is given.</p>
  */
 public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTest {
 
@@ -119,18 +120,17 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     }
 
     /**
-     * A terminal in the Nether — a world the universe names no body for — with a released satellite on its
-     * chip has no place to see from (INV-SAT-07, `no place`). The Nether reads as inside Earth's planetary
-     * system, because an unregistered world's properties are the overworld's; that is what lets the try
-     * reach the question of place at all.
+     * A terminal in the Nether — a world Stellurgy registers no body for, so it lies in no planetary system —
+     * with an Earth satellite released on its chip is out of range (INV-SAT-39). The satellite is on an
+     * orbit, so a gate that read the Nether as Earth would carry the try on to the question of place.
      */
-    @Pins("INV-SAT-07")
-    @Regions(of = "INV-SAT-07", value = {"no place"})
-    @RedWitness(verdict = "no place", member = "TileSatelliteTerminal#tryContact",
-            at = "return Outcome.NO_PLACE;", replacedBy = "return Outcome.OUT_OF_SIGHT;",
-            fails = "INV-SAT-07: no place", on = "2026-10-21")
+    @Pins("INV-SAT-39")
+    @RedWitness(member = "TileSatelliteTerminal#tryContact",
+            at = "DimensionProperties here = DimensionManager.getEffectiveBodyOrNull(world, pos);",
+            replacedBy = "DimensionProperties here = DimensionManager.getEffectiveDimId(world, pos);",
+            fails = "INV-SAT-39: out of range", on = "2026-10-22")
     @Test
-    public void aTerminalInAWorldWithNoBodyHasNoPlaceToSeeFrom() throws Exception {
+    public void aTerminalInAWorldOutsideEverySystemIsOutOfRange() throws Exception {
         FixtureSite site = site();
         Events events = events();
         int[] nether = {site.x, site.y, site.z};
@@ -141,12 +141,48 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
             sat = release(pad);
             long mark = events.markInstrumented();
             loadChip(-1, nether, sat.id);
-            List<String> tries = awaitTries(events, mark, -1, nether, 2, "INV-SAT-07: no place — the Nether terminal's tries");
-            assertEquals("INV-SAT-07: no place — a terminal in the Nether: " + tries, "NO_PLACE",
-                    Events.text(tries.get(tries.size() - 1), "outcome"));
+            List<String> tries = awaitTries(events, mark, -1, nether, 2, "INV-SAT-39: out of range — the Nether terminal's tries");
+            for (String one : tries) {
+                assertEquals("INV-SAT-39: out of range — a try of a terminal in the Nether: " + one, "OUT_OF_RANGE",
+                        Events.text(one, "outcome"));
+            }
         } finally {
             dispose(sat);
             letGo(-1, nether);
+        }
+    }
+
+    /**
+     * A terminal on a station orbiting Earth, with an Earth satellite released on its chip, has no place to
+     * see from (INV-SAT-07, `no place`): the station puts it inside Earth's planetary system, so the range
+     * gate lets the try through, and the station's world is no body's surface.
+     */
+    @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"no place"})
+    @RedWitness(verdict = "no place", member = "TileSatelliteTerminal#tryContact",
+            at = "return Outcome.NO_PLACE;", replacedBy = "return Outcome.OUT_OF_SIGHT;",
+            fails = "INV-SAT-07: no place", on = "2026-10-22")
+    @Test
+    public void aTerminalOnAStationHasNoPlaceToSeeFrom() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] pad = {site.x, site.y, site.z};
+        int spaceDim = stationWorld();
+        int[] aboard = stationOverEarth();
+        Released sat = null;
+        try {
+            placeTerminal(spaceDim, aboard, true);
+            sat = release(pad);
+            long mark = events.markInstrumented();
+            loadChip(spaceDim, aboard, sat.id);
+            List<String> tries = awaitTries(events, mark, spaceDim, aboard, 2, "INV-SAT-07: no place — the station terminal's tries");
+            for (String one : tries) {
+                assertEquals("INV-SAT-07: no place — a try of a terminal on a station: " + one, "NO_PLACE",
+                        Events.text(one, "outcome"));
+            }
+        } finally {
+            dispose(sat);
+            letGo(spaceDim, aboard);
         }
     }
 
@@ -358,6 +394,20 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
             arrange("stellurgytest energy inject " + dim + " " + at[0] + " " + at[1] + " " + at[2] + " " + TERMINAL_POWER)
                     .requireOk("power");
         }
+    }
+
+    /** The world stations stand in, as the server's configuration names it. */
+    private int stationWorld() throws Exception {
+        return read("stellurgytest client space-dim").requireOk("space dim").integer("spaceDimId");
+    }
+
+    /** A new station orbiting Earth; the place in its world the station's spawn names, which the station's own lookup maps back to it. */
+    private int[] stationOverEarth() throws Exception {
+        long id = arrange("stellurgytest station create 0").requireOk("station create").longInteger("id");
+        Reply info = read("stellurgytest station info " + id);
+        requireArranged("the station must orbit Earth and have a place: " + info.raw(),
+                info.integer("orbitingPlanetId") == 0 && info.has("spawnX"));
+        return new int[]{info.integer("spawnX"), info.integer("spawnY"), info.integer("spawnZ")};
     }
 
     private void loadChip(int dim, int[] at, long satId) throws Exception {

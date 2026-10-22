@@ -298,6 +298,21 @@ public class DimensionManager implements IGalaxy {
     }
 
     /**
+     * The body {@code pos} belongs to, as {@link #getEffectiveDimId(World, BlockPos)} reads it, or
+     * {@code null} when its world is no body this manager registers (the Nether, another mod's world).
+     *
+     * <p>{@link #getEffectiveDimId(World, BlockPos)} answers such a world with the OVERWORLD's
+     * properties, so a range check fed its id reads the Nether as Earth and finds an Earth satellite
+     * "inside" the system. A world with no body is outside every planetary system; a check that has to
+     * say so asks this one.</p>
+     */
+    public static DimensionProperties getEffectiveBodyOrNull(World world, BlockPos pos) {
+        int dimId = world.provider.getDimension();
+        if (dimId == StellurgyConfiguration.getCurrentConfig().spaceDimId) return getEffectiveDimId(dimId, pos);
+        return getInstance().getDimensionPropertiesOrNull(dimId);
+    }
+
+    /**
      * @return an Integer array of dimensions registered with this DimensionManager
      */
     public Integer[] getRegisteredDimensions() {
