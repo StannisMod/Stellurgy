@@ -889,6 +889,39 @@ final class VSBridge {
         return new double[] {p.x, p.y, p.z};
     }
 
+    /**
+     * How far the REGISTERED ship {@code uuid}'s hull reaches from its transform position, read off its
+     * registry record (loaded or not): {@code {radius, depthBelow}} — the radius of the smallest sphere
+     * about the position that holds the hull's whole block box, and how far the box's lowest corner lies
+     * below the position in the world at the ship's present attitude. {@code null} when this world
+     * registers no such ship or its record holds no blocks.
+     */
+    static double[] hullAboutPosition(World world, UUID uuid) {
+        ShipData ship = world == null ? null : shipByUuid(world, uuid);
+        if (ship == null || ship.getBlockPositions() == null) {
+            return null;
+        }
+        AxisAlignedBB blocks = ship.getBlockPositions().makeAABB();
+        if (blocks == null) {
+            return null;
+        }
+        // A block at b fills [b, b+1]: the box's far faces are one past its largest block.
+        blocks = blocks.expand(1, 1, 1);
+        ShipTransform transform = ship.getShipTransform();
+        Vec3d pose = transform.getShipPositionVec3d();
+        Vec3d centre = transform.transform(pose, TransformType.GLOBAL_TO_SUBSPACE);
+        double radiusSq = 0.0D;
+        double lowest = Double.POSITIVE_INFINITY;
+        for (int corner = 0; corner < 8; corner++) {
+            Vec3d c = new Vec3d((corner & 1) == 0 ? blocks.minX : blocks.maxX,
+                    (corner & 2) == 0 ? blocks.minY : blocks.maxY,
+                    (corner & 4) == 0 ? blocks.minZ : blocks.maxZ);
+            radiusSq = Math.max(radiusSq, c.squareDistanceTo(centre));
+            lowest = Math.min(lowest, transform.transform(c, TransformType.SUBSPACE_TO_GLOBAL).y);
+        }
+        return new double[] {Math.sqrt(radiusSq), pose.y - lowest};
+    }
+
 
     /**
      * The ship in {@code world}'s QUERYABLE registry (loaded OR not) whose transform position is nearest

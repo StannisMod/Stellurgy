@@ -382,6 +382,7 @@ enum ProbeVerbKind {
             case "vs flight-model":
             case "vs flight-model-by-id":
             case "vs managed-by":
+            case "vs motion-read-by-id":
             case "vs mount-tracking":
             case "vs phys-diag":
             case "vs player-ship-data":
@@ -644,6 +645,9 @@ enum ProbeVerbKind {
             case "vs force-vel-at":
             case "vs force-vel-by-id":
             case "vs load-ship":
+            case "vs motion-go-to-ship-by-id":
+            case "vs motion-go-to-surface-by-id":
+            case "vs motion-hold-ship-by-id":
             case "vs permaload":
             case "vs point-at":
             case "vs point-by-id":

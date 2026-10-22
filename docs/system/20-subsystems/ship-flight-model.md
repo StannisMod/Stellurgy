@@ -20,7 +20,9 @@ abstraction and the two devices that implement it; the clean-authority solve, re
 composition; the derived flight model on the flight computer, its rebuild triggers and readout
 channels; the controller's allocation step. Does NOT own: the flight LAW (velocity/attitude targets —
 `FreeFlightPhysics`, rocket-entity), pilot input and seat binding (C9), the assembler's scan walk
-(rocket-assembly), the drive/shield readouts (hyperdrive, shields), crossing (C18/C22).
+(rocket-assembly), the drive/shield readouts (hyperdrive, shields), crossing (C18/C22), and flying an
+order with nobody at the stick (`ship/guidance/`, ship-guidance), which publishes the same
+`FlightCommand` the pilot's input does and reads the live capability to plan a stop.
 
 ## Key types
 

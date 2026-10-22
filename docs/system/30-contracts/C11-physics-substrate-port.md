@@ -59,7 +59,7 @@ may be loaded and ticking (PORT-16).
   |---|---|
   | frame conversion, entity-keyed | `toShipFrame`, `toWorldFrame`, `rotateToShipFrame`, `rotateToWorldFrame` |
   | frame conversion, **id-keyed** | `toShipFrameFor`, `toWorldFrameFor`, `rotateToShipFrameFor`, `rotateToWorldFrameFor`, **`renderToWorldFrameFor`** |
-  | attitude / transform reads | `getShipAttitude`, `shipAttitudeAt`, `shipAttitudeForId`, `shipWorldPosition`, `seatWorldPosition`, `shipDownDirection` |
+  | attitude / transform reads | `getShipAttitude`, `shipAttitudeAt`, `shipAttitudeForId`, `shipWorldPosition`, `seatWorldPosition`, `shipDownDirection`, `hullAboutPosition` (registry-read reach of a named hull about its position: bounding radius and depth of its lowest point) |
   | velocity reads | `shipLinearVelocity` (blocks/second), `shipVelocityAtPointFor` (blocks/**tick** — converted in the port; there is no per-second variant), `shipAngularVelocityById` |
   | ownership / identity | `shipIdOfBlock` (THE block→ship entry point, PORT-16), `isBlockInShipyard`, `isShipyardRemnant`, `shipIdsAt`, `shipyardBoundsAt`, `subspaceStayRegion`, `shipBlockCount` |
   | kinematic transform-set | `teleportShipToByUuid` (guard-flag recipe — see PORT-9) |

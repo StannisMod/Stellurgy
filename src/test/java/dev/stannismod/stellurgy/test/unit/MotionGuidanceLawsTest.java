@@ -1,0 +1,711 @@
+package dev.stannismod.stellurgy.test.unit;
+
+import dev.stannismod.stellurgy.api.FreeFlightInput;
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
+import dev.stannismod.stellurgy.ship.control.ControlDirection;
+import dev.stannismod.stellurgy.ship.control.Endurance;
+import dev.stannismod.stellurgy.ship.control.FlightCommand;
+import dev.stannismod.stellurgy.ship.control.ShipCapability;
+import dev.stannismod.stellurgy.ship.guidance.GuidanceTarget;
+import dev.stannismod.stellurgy.ship.guidance.MotionIntent;
+import dev.stannismod.stellurgy.ship.guidance.MotionSlot;
+import dev.stannismod.stellurgy.ship.guidance.Surroundings;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.ShipMotionCases;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import org.joml.Vector3dc;
+import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Random;
+import java.util.UUID;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * The LAWS of ship-guidance, one class for the owner: what a motion slot commands from where the craft
+ * is (INV-GDN-04), when an intent it cannot fly is refused and what a refused craft is commanded
+ * (INV-GDN-05), where a target puts the aim (INV-GDN-11), and the flight computer's own decision that a
+ * pilot's input takes the craft back (C9 SHIPCTL-21).
+ *
+ * <p>Every hull here is built from production's own devices through {@link ShipMotionCases}, and
+ * solved by production's capability solve — the hull is the experiment's input, guidance's choice is
+ * the subject. The expected values come from the hulls' authorities, the declared masses, the inputs
+ * and the clauses, never from guidance's own arithmetic. The world around the craft is a
+ * {@link Surroundings} the test builds: a ship at a stated place with a stated hull radius, ground at a
+ * stated height — the inputs the clauses are written over.</p>
+ *
+ * <p>What this class does NOT see: the flight computer's tick (which slot runs before which branch),
+ * the physics thread flying the command, the world reading a ship or the ground ({@code
+ * WorldSurroundings}), a crossing carrying the slot, and the events and messages a refusal sends. Those
+ * are the mechanics tests' (ship-guidance INV-GDN-01, -03, -07..10).</p>
+ */
+public class MotionGuidanceLawsTest {
+
+    /** A constant: the seed of the INV-GDN-04 sweep, so a red reproduces. An input, not a fact. */
+    private static final long SEED = 402L;
+
+    /** A constant: cases in the INV-GDN-04 sweep. An input; the region minimum below is derived from it. */
+    private static final int CASES = 4000;
+
+    /**
+     * A constant: the fewest cases each region of INV-GDN-04 must be visited by. The rarest region is
+     * drawn with a probability of about a fortieth (the no-reverse hull, two sevenths of the hulls, closing
+     * fast — a third of its cases — and so turned over to brake, or nearly at rest with the turn
+     * binding), so 4000 cases give some 100; forty is that with room for the draw.
+     */
+    private static final int REGION_MINIMUM = 40;
+
+    /** A constant: the fastest a craft may be flown in the sweep's inputs, blocks per engine second. */
+    private static final double TOP_SPEED_MAX = 400.0D;
+
+    /** A constant: how far an aim may be put, blocks; an input of the sweep. */
+    private static final double DISTANCE_MAX = 5000.0D;
+
+    /**
+     * A constant: the radius inside which a craft counts as arrived and guidance asks no turn — the
+     * arrival the maintainer stated (2026-10-21), "within 2 blocks". Every sweep aim lies beyond it, and
+     * a ship target's standoff is the two hulls plus it (ruled the same day).
+     */
+    private static final double ARRIVAL_RADIUS = 2.0D;
+
+    /** A constant: relative slack on a comparison of two doubles each built by a few products. */
+    private static final double RELATIVE = 1.0e-9D;
+
+    /** A constant: the world the targets of this class are in; an input. */
+    private static final int PLANET_DIM = 0;
+
+    /** A constant: the flight law's attitude gain the crafts here are handed, 1/s; an input. */
+    private static final double ATTITUDE_GAIN = 2.0D;
+
+    /** A constant: the flight law's slew cap the crafts here are handed, rad/s; an input. */
+    private static final double SLEW_CAP = 2.0D;
+
+    /** A constant: every craft's hull radius in this class, and the sweep's target's, blocks; an input. */
+    private static final double HULL = 0.5D;
+
+    /** A constant: the craft's own name. Immutable. */
+    private static final UUID SELF = new UUID(402L, 1L);
+
+    /** A constant: the target ship's name. Immutable. */
+    private static final UUID OTHER = new UUID(402L, 2L);
+
+    @Test
+    @Pins("INV-GDN-04")
+    @Regions(of = "INV-GDN-04", value = {"closing", "braking after a turnover", "the turn binds",
+            "no thrust", "in a field"})
+    @RedWitness(verdict = "commands the craft", member = "MotionSlot#fly",
+            at = "return new Step(command, Event.NONE);", replacedBy = "return new Step(null, Event.NONE);",
+            fails = "INV-GDN-04: a fresh GO_TO", on = "2026-10-21")
+    @RedWitness(verdict = "top speed", member = "Plan#command",
+            at = "speed = Math.min(craft.topSpeed, Math.min(turned, POSITION_GAIN * d));",
+            replacedBy = "speed = Math.min(2.0D * craft.topSpeed, Math.min(turned, POSITION_GAIN * d));",
+            fails = "INV-GDN-04 top speed", on = "2026-10-21")
+    @RedWitness(verdict = "direction", member = "Plan#command",
+            at = "u[1] * speed, u[2] * speed}", replacedBy = "u[2] * speed, u[1] * speed}",
+            fails = "INV-GDN-04 direction", on = "2026-10-21")
+    @RedWitness(verdict = "level", member = "Heading#best",
+            at = "candidates.add(turnOnto(level, axis, h, up));",
+            replacedBy = "candidates.add(turnOnto(craft.attitude, axis, h, up));",
+            fails = "INV-GDN-04 level", on = "2026-10-21")
+    @RedWitness(verdict = "no thrust", member = "MotionSlot#fly",
+            at = "return new Step(hover(craft.attitude), Event.NONE);",
+            replacedBy = "return new Step(hover(FreeFlightPhysics.Quat.IDENTITY), Event.NONE);",
+            fails = "INV-GDN-04 no thrust", on = "2026-10-21")
+    @RedWitness(verdict = "stopping speed", member = "Plan#command",
+            at = "double a = STOP_MARGIN * brake.reach;", replacedBy = "double a = 8.0D * brake.reach;",
+            fails = "INV-GDN-04 stopping speed", on = "2026-10-21")
+    @RedWitness(verdict = "strong axis", member = "Heading#best",
+            at = "r > best.reach * (1.0D + TIE) + TIE", replacedBy = "r < best.reach * (1.0D + TIE) + TIE",
+            fails = "INV-GDN-04 strong axis", on = "2026-10-21")
+    @RedWitness(verdict = "flown", member = "Plan#command",
+            at = "speed = Math.min(craft.topSpeed, Math.min(turned, POSITION_GAIN * d));",
+            replacedBy = "speed = 0.0D;", fails = "INV-GDN-04 flown", on = "2026-10-21")
+    @RedWitness(verdict = "turnover", member = "Plan#of",
+            at = "turnTime(craft, close.attitude, brake.attitude)", replacedBy = "0.0D",
+            fails = "INV-GDN-04 turnover", on = "2026-10-21")
+    public void theApproachIsOneTheHullCanStopFromOnItsStrongAxis() {
+        Random rng = new Random(SEED);
+        ShipMotionCases.Hull symmetric = ShipMotionCases.symmetricHull();
+        ShipCapability symmetricLive = solve(symmetric);
+        ShipMotionCases.Hull noReverse = ShipMotionCases.noReverseHull();
+        ShipCapability noReverseLive = solve(noReverse);
+        ShipMotionCases.Hull bare = ShipMotionCases.bareHull();
+        ShipCapability bareLive = solve(bare);
+        int closing = 0;
+        int turnedOver = 0;
+        int turnBinds = 0;
+        int noThrust = 0;
+        int inField = 0;
+        for (int i = 0; i < CASES; i++) {
+            int pick = rng.nextInt(7);
+            ShipMotionCases.Hull hull;
+            ShipCapability live;
+            if (pick < 2) {
+                hull = symmetric;
+                live = symmetricLive;
+            } else if (pick < 4) {
+                hull = noReverse;
+                live = noReverseLive;
+            } else if (pick == 4) {
+                hull = bare;
+                live = bareLive;
+            } else {
+                hull = ShipMotionCases.randomHull(rng, "random hull " + i);
+                live = solve(hull);
+            }
+            boolean field = (pick == 0 || pick > 4) && rng.nextBoolean();
+            double[] gravity = field ? new double[]{0.0D, -PhysicsUnits.ENGINE_GRAVITY, 0.0D}
+                    : new double[]{0.0D, 0.0D, 0.0D};
+            FreeFlightPhysics.Quat attitude = randomAttitude(rng);
+            double[] position = {1000.0D * (rng.nextDouble() - 0.5D), 1000.0D * (rng.nextDouble() - 0.5D),
+                    1000.0D * (rng.nextDouble() - 0.5D)};
+            double[] u = randomUnit(rng);
+            double d = (ARRIVAL_RADIUS + 0.5D) * Math.pow(DISTANCE_MAX / (ARRIVAL_RADIUS + 0.5D),
+                    rng.nextDouble());
+            double standoff = 2.0D * HULL + ARRIVAL_RADIUS;
+            double[] target = {position[0] + u[0] * (d + standoff), position[1] + u[1] * (d + standoff),
+                    position[2] + u[2] * (d + standoff)};
+            double topSpeed = 10.0D + (TOP_SPEED_MAX - 10.0D) * rng.nextDouble();
+            boolean fast = rng.nextInt(3) == 0;
+            double[] velocity = fast ? new double[]{u[0] * topSpeed, u[1] * topSpeed, u[2] * topSpeed}
+                    : new double[]{rng.nextGaussian(), rng.nextGaussian(), rng.nextGaussian()};
+            String input = hull.name + (field ? " in a field" : " in space") + ", aim " + d + " blocks off"
+                    + ", top speed " + topSpeed + (fast ? ", closing at top speed" : ", nearly at rest")
+                    + ", attitude " + attitude.w + "," + attitude.x + "," + attitude.y + "," + attitude.z;
+
+            MotionSlot slot = new MotionSlot();
+            slot.issue(MotionIntent.goTo(GuidanceTarget.ship(OTHER)));
+            FlightCommand command = slot.fly(craft(live, position, velocity, attitude, gravity, topSpeed),
+                    new Fixed(target, HULL, Double.NaN)).command();
+            assertNotNull("INV-GDN-04: a fresh GO_TO beyond the arrival radius commands the craft: " + input,
+                    command);
+            double[] v = command.velocity();
+            double speed = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            double[] q = command.attitude();
+            double strongestForce = strongestTranslation(live);
+            if (!field && strongestForce == 0.0D) {
+                noThrust++;
+                assertTrue("INV-GDN-04 no thrust: a hull with no translational authority was not told to hold still"
+                        + " in the attitude it has: commanded " + Arrays.toString(v) + " at " + Arrays.toString(q)
+                        + " — " + input, speed == 0.0D
+                        && Arrays.equals(q, new double[]{attitude.w, attitude.x, attitude.y, attitude.z}));
+                continue;
+            }
+            assertTrue("INV-GDN-04 top speed: commanded " + speed + " above the craft's " + topSpeed
+                    + " — " + input, speed <= topSpeed * (1.0D + RELATIVE));
+            if (speed > 0.0D) {
+                double cos = (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / speed;
+                assertTrue("INV-GDN-04 direction: the commanded velocity is " + Math.acos(Math.min(1.0D, cos))
+                        + " rad off the way to the aim — " + input, cos >= 1.0D - RELATIVE);
+            }
+            FreeFlightPhysics.Quat commanded = new FreeFlightPhysics.Quat(q[0], q[1], q[2], q[3]).normalized();
+            double mass = hull.declaredMass();
+
+            if (field) {
+                boolean canStandUp = strongestForce / mass * PhysicsUnits.ACCELERATION > PhysicsUnits.ENGINE_GRAVITY
+                        && turnsAboutEveryAxis(live);
+                boolean heldWhereItIs = speed == 0.0D
+                        && Arrays.equals(q, new double[]{attitude.w, attitude.x, attitude.y, attitude.z});
+                if (!canStandUp || heldWhereItIs) {
+                    continue;
+                }
+                inField++;
+                assertTrue("INV-GDN-04 level: in a field the commanded attitude keeps one of the hull's axes"
+                        + " straight up — " + input, keepsAnAxisUp(live, commanded));
+                continue;
+            }
+            double combined = combinedTranslation(live) / mass * PhysicsUnits.ACCELERATION;
+            assertTrue("INV-GDN-04 stopping speed: commanded " + speed + ", but all the hull's axes together"
+                    + " brake at no more than " + combined + ", which stops from at most "
+                    + Math.sqrt(2.0D * combined * d) + " in " + d + " blocks — " + input,
+                    speed <= Math.sqrt(2.0D * combined * d) * (1.0D + RELATIVE));
+            if (!turnsAboutEveryAxis(live)) {
+                continue;
+            }
+            double alongAim = authorityAlong(live, commanded, u);
+            double againstAim = authorityAlong(live, commanded, negate(u));
+            boolean closes = alongAim >= strongestForce * (1.0D - RELATIVE);
+            boolean brakes = againstAim >= strongestForce * (1.0D - RELATIVE);
+            assertTrue("INV-GDN-04 strong axis: the commanded attitude lays none of the hull's strongest axes"
+                    + " (" + strongestForce + " N) along the way, toward the aim (" + alongAim + " N) or away"
+                    + " from it (" + againstAim + " N) — " + input, closes || brakes);
+            if (closes) {
+                closing++;
+                assertTrue("INV-GDN-04 flown: a hull that can push toward the aim and stop was commanded to"
+                        + " stand still while closing — " + input, speed > 0.0D);
+            }
+            if (live == noReverseLive) {
+                double forward = live.authority(ControlDirection.SURGE_POSITIVE, Endurance.SUSTAINED) / mass
+                        * PhysicsUnits.ACCELERATION;
+                // Braking needs the nose turned round, through at least a right angle at no more than
+                // the slew cap — the least a turnover can take, whatever else the law does.
+                double turn = (Math.PI / 2.0D) / SLEW_CAP;
+                double canTurnAndStop = Math.sqrt(forward * turn * forward * turn + 2.0D * forward * d)
+                        - forward * turn;
+                if (closes && !brakes) {
+                    if (canTurnAndStop < Math.min(topSpeed, 2.0D * d)) {
+                        turnBinds++;
+                    }
+                    assertTrue("INV-GDN-04 turnover: commanded " + speed + " nose-first, but a hull that must"
+                            + " turn round before it brakes at " + forward + " can stop from at most "
+                            + canTurnAndStop + " in " + d + " blocks — " + input,
+                            speed <= canTurnAndStop * (1.0D + RELATIVE));
+                } else if (brakes && !closes) {
+                    turnedOver++;
+                }
+            }
+        }
+        requireArranged("the sweep must visit `closing` at least " + REGION_MINIMUM + " times; it did " + closing,
+                closing >= REGION_MINIMUM);
+        requireArranged("the sweep must visit `braking after a turnover` at least " + REGION_MINIMUM
+                + " times; it did " + turnedOver, turnedOver >= REGION_MINIMUM);
+        requireArranged("the sweep must visit `the turn binds` at least " + REGION_MINIMUM + " times; it did "
+                + turnBinds, turnBinds >= REGION_MINIMUM);
+        requireArranged("the sweep must visit `no thrust` at least " + REGION_MINIMUM + " times; it did "
+                + noThrust, noThrust >= REGION_MINIMUM);
+        requireArranged("the sweep must visit `in a field` at least " + REGION_MINIMUM + " times; it did "
+                + inField, inField >= REGION_MINIMUM);
+    }
+
+    @Test
+    @Pins("INV-GDN-05")
+    @RedWitness(verdict = "never sooner", member = "MotionSlot#fly",
+            at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks >= 1",
+            fails = "INV-GDN-05 never sooner", on = "2026-10-21")
+    @RedWitness(verdict = "hovers while short", member = "MotionSlot#fly",
+            at = "return new Step(hover(craft.attitude), Event.NONE);", replacedBy = "return new Step(null, Event.NONE);",
+            fails = "INV-GDN-05 hovers while short", on = "2026-10-21")
+    @RedWitness(verdict = "restarts", member = "MotionSlot#fly",
+            at = "shortTicks = 0;", replacedBy = "", fails = "INV-GDN-05 restarts", on = "2026-10-21")
+    @RedWitness(verdict = "exactly", member = "MotionSlot#fly",
+            at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks > REFUSAL_WINDOW_TICKS",
+            fails = "INV-GDN-05 exactly", on = "2026-10-21")
+    @RedWitness(verdict = "the refusing tick hovers", member = "MotionSlot#fly",
+            at = "return new Step(hover(held), Event.REFUSED);", replacedBy = "return new Step(null, Event.REFUSED);",
+            fails = "INV-GDN-05 exactly: the refusing tick hovers", on = "2026-10-21")
+    @RedWitness(verdict = "reads refused", member = "MotionSlot#fly",
+            at = "state = State.REFUSED;", replacedBy = "state = State.ACTIVE;",
+            fails = "INV-GDN-05 exactly: the slot reads refused", on = "2026-10-21")
+    @RedWitness(verdict = "reason", member = "Plan#of",
+            at = "if (!(close.reach > 0.0D)) {", replacedBy = "if (false) {",
+            fails = "INV-GDN-05 exactly: for want of thrust", on = "2026-10-21")
+    @RedWitness(verdict = "still holds its intent", member = "MotionSlot#fly",
+            at = "refusal = shortBy;", replacedBy = "refusal = shortBy; intent = null;",
+            fails = "INV-GDN-05 exactly: the refused slot still holds its intent", on = "2026-10-21")
+    @RedWitness(verdict = "hovers when refused", member = "MotionSlot#fly",
+            at = "if (state == State.REFUSED) {", replacedBy = "if (state == State.EMPTY) {",
+            fails = "INV-GDN-05 hovers when refused", on = "2026-10-21")
+    public void aRefusalTakesASustainedWindowAndTheRefusedCraftHovers() {
+        ShipCapability flyable = solve(ShipMotionCases.symmetricHull());
+        ShipCapability unflyable = solve(ShipMotionCases.bareHull());
+        Fixed around = new Fixed(new double[]{100.0D, 0.0D, 0.0D}, HULL, Double.NaN);
+        MotionSlot slot = new MotionSlot();
+        slot.issue(MotionIntent.goTo(GuidanceTarget.ship(OTHER)));
+        int window = MotionSlot.REFUSAL_WINDOW_TICKS;
+        FreeFlightPhysics.Quat tilted = new FreeFlightPhysics.Quat(0.9D, 0.1D, 0.3D, -0.2D).normalized();
+
+        for (int tick = 1; tick < window; tick++) {
+            MotionSlot.Step step = slot.fly(atRest(unflyable, tilted), around);
+            assertEquals("INV-GDN-05 never sooner: short tick " + tick + " of a " + window + "-tick window",
+                    MotionSlot.Event.NONE, step.event());
+            assertHover("INV-GDN-05 hovers while short: tick " + tick, step.command(), tilted);
+        }
+        MotionSlot.Step flown = slot.fly(atRest(flyable, FreeFlightPhysics.Quat.IDENTITY), around);
+        requireArranged("the arrangement: the flyable tick between two short runs is flown, not refused",
+                flown.event() == MotionSlot.Event.NONE);
+        for (int tick = 1; tick < window; tick++) {
+            MotionSlot.Step step = slot.fly(atRest(unflyable, tilted), around);
+            assertEquals("INV-GDN-05 restarts: short tick " + tick + " after a flyable one refused the intent"
+                    + " although the window started over", MotionSlot.Event.NONE, step.event());
+        }
+        MotionSlot.Step refusing = slot.fly(atRest(unflyable, tilted), around);
+        assertEquals("INV-GDN-05 exactly: the " + window + "th short tick in a row refuses",
+                MotionSlot.Event.REFUSED, refusing.event());
+        assertHover("INV-GDN-05 exactly: the refusing tick hovers", refusing.command(), tilted);
+        MotionSlot.Reading held = slot.reading();
+        assertEquals("INV-GDN-05 exactly: the slot reads refused", MotionSlot.State.REFUSED, held.state());
+        assertEquals("INV-GDN-05 exactly: for want of thrust toward the aim",
+                MotionSlot.Refusal.NO_APPROACH_AUTHORITY, held.refusal());
+        assertNotNull("INV-GDN-05 exactly: the refused slot still holds its intent", held.intent());
+
+        // The refused craft is turned and set moving by something else, on a hull that could fly the
+        // order: it is still told to hover, in the attitude it was refused in — not flown at the target.
+        MotionSlot.Step after = slot.fly(craft(flyable, new double[]{0.0D, 0.0D, 0.0D},
+                new double[]{3.0D, 0.0D, 0.0D}, FreeFlightPhysics.Quat.IDENTITY, new double[]{0.0D, 0.0D, 0.0D},
+                40.0D), around);
+        assertHover("INV-GDN-05 hovers when refused: the tick after the refusal", after.command(), tilted);
+    }
+
+    @Test
+    @Pins("INV-GDN-11")
+    @RedWitness(verdict = "arrived on the standoff", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut() + 3.0D * clearance",
+            fails = "INV-GDN-11 standoff: at rest on", on = "2026-10-21")
+    @RedWitness(verdict = "inside it", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut()",
+            fails = "INV-GDN-11 standoff: half a block inside", on = "2026-10-21")
+    @RedWitness(verdict = "outside it", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut() + 2.0D * clearance",
+            fails = "INV-GDN-11 standoff: half a block outside", on = "2026-10-21")
+    public void aGoToAShipAimsAtTheStandoffOutsideBothHulls() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        double[] target = {200.0D, 30.0D, -40.0D};
+        double targetHull = 3.25D;
+        double standoff = HULL + targetHull + ARRIVAL_RADIUS;
+        double[] u = {0.6D, 0.0D, 0.8D};
+        Fixed around = new Fixed(target, targetHull, Double.NaN);
+
+        // At rest exactly on the standoff the GO_TO has arrived; half a block nearer it is sent out,
+        // half a block farther it is sent in.
+        MotionSlot onIt = goToShip();
+        MotionSlot.Step there = onIt.fly(atRestAt(live, back(target, u, standoff)), around);
+        assertEquals("INV-GDN-11 standoff: at rest on the two hulls plus the arrival radius, the GO_TO arrived",
+                MotionSlot.Event.ARRIVED, there.event());
+        assertPointsAlong("INV-GDN-11 standoff: half a block inside it", goToShip().fly(
+                atRestAt(live, back(target, u, standoff - 0.5D)), around).command(), negate(u));
+        assertPointsAlong("INV-GDN-11 standoff: half a block outside it", goToShip().fly(
+                atRestAt(live, back(target, u, standoff + 0.5D)), around).command(), u);
+    }
+
+    @Test
+    @Pins("INV-GDN-11")
+    @RedWitness(verdict = "arrived in the shell", member = "MotionIntent#aimFrom",
+            at = "double outer = kind == Kind.GO_TO ? inner : Math.max(inner, range);",
+            replacedBy = "double outer = inner;", fails = "INV-GDN-11 hold: inside the shell the craft has arrived",
+            on = "2026-10-21")
+    @RedWitness(verdict = "not moved", member = "MotionIntent#aimFrom",
+            at = "return position.clone();", replacedBy = "return new double[]{position[0] + 1.0D, position[1], position[2]};",
+            fails = "INV-GDN-11 hold: inside the shell the craft is not moved", on = "2026-10-21")
+    @RedWitness(verdict = "inside the standoff", member = "MotionIntent#aimFrom",
+            at = "if (d >= inner && d <= outer) {", replacedBy = "if (d <= outer) {",
+            fails = "INV-GDN-11 hold: a block and a half inside", on = "2026-10-21")
+    @RedWitness(verdict = "past the range", member = "MotionIntent#aimFrom",
+            at = "if (d >= inner && d <= outer) {", replacedBy = "if (d >= inner) {",
+            fails = "INV-GDN-11 hold: a block and a half past", on = "2026-10-21")
+    public void aHoldKeepsTheCraftInItsShell() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        double[] target = {200.0D, 30.0D, -40.0D};
+        double targetHull = 3.25D;
+        double standoff = HULL + targetHull + ARRIVAL_RADIUS;
+        double[] u = {0.6D, 0.0D, 0.8D};
+        Fixed around = new Fixed(target, targetHull, Double.NaN);
+
+        // A HOLD leaves the craft anywhere in the shell between the standoff and its range, and pushes a
+        // craft inside the standoff back out and one past the range back in.
+        MotionSlot hold = holdShip(standoff + 20.0D);
+        MotionSlot.Step shell = hold.fly(atRestAt(live, back(target, u, standoff + 10.0D)), around);
+        assertEquals("INV-GDN-11 hold: inside the shell the craft has arrived", MotionSlot.Event.ARRIVED,
+                shell.event());
+        assertArrayEquals("INV-GDN-11 hold: inside the shell the craft is not moved",
+                new double[]{0.0D, 0.0D, 0.0D}, shell.command().velocity(), 0.0D);
+        assertPointsAlong("INV-GDN-11 hold: a block and a half inside the standoff", holdShip(standoff + 20.0D)
+                .fly(atRestAt(live, back(target, u, standoff - 1.5D)), around).command(), negate(u));
+        assertPointsAlong("INV-GDN-11 hold: a block and a half past the range", holdShip(standoff + 20.0D)
+                .fly(atRestAt(live, back(target, u, standoff + 21.5D)), around).command(), u);
+    }
+
+    @Test
+    @Pins("INV-GDN-11")
+    @RedWitness(verdict = "landed", member = "GuidanceTarget#placeIn",
+            at = "ground + craft.hullDepthBelow - MotionSlot.TOUCHDOWN", replacedBy = "ground - MotionSlot.TOUCHDOWN",
+            fails = "INV-GDN-11 surface: at rest with its lowest point", on = "2026-10-21")
+    @RedWitness(verdict = "released", member = "MotionSlot#fly",
+            at = "return new Step(rest(held), Event.ARRIVED);", replacedBy = "return new Step(command, Event.ARRIVED);",
+            fails = "INV-GDN-11 surface: a landed craft is released", on = "2026-10-21")
+    @RedWitness(verdict = "stays released", member = "MotionSlot#fly",
+            at = "if (arrived && intent.isLanding()) {", replacedBy = "if (false) {",
+            fails = "INV-GDN-11 surface: and stays released", on = "2026-10-21")
+    public void aGoToASurfacePointAimsAtTheGroundAndLetsTheCraftDown() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        // A surface point: the craft's pose where its lowest point rests on the ground there.
+        double ground = 71.0D;
+        double depth = 2.75D;
+        double[] landed = {12.5D, ground + depth, -7.5D};
+        Fixed overGround = new Fixed(new double[]{200.0D, 30.0D, -40.0D}, HULL, ground);
+        MotionSlot land = landAt(landed);
+        MotionSlot.Step down = land.fly(onSurface(live, landed, depth, PLANET_DIM, null), overGround);
+        assertEquals("INV-GDN-11 surface: at rest with its lowest point on the ground there, it has landed",
+                MotionSlot.Event.ARRIVED, down.event());
+        assertNull("INV-GDN-11 surface: a landed craft is released onto the ground, not held up",
+                down.command().velocity());
+        assertNull("INV-GDN-11 surface: and stays released on the next tick",
+                land.fly(onSurface(live, landed, depth, PLANET_DIM, null), overGround).command().velocity());
+    }
+
+    @Test
+    @Pins("INV-GDN-11")
+    @RedWitness(verdict = "a ship across a crossing", member = "MotionSlot#refusalFor",
+            at = "return Refusal.NEEDS_A_CROSSING;", replacedBy = "return Refusal.TARGET_NOT_FOUND;",
+            fails = "INV-GDN-11 another world: a ship", on = "2026-10-21")
+    @RedWitness(verdict = "another planet", member = "GuidanceTarget#placeIn",
+            at = "craft.cell != null || craft.dimension != dimension", replacedBy = "craft.cell != null",
+            fails = "INV-GDN-11 another world: a surface point of another planet", on = "2026-10-21")
+    @RedWitness(verdict = "from space", member = "GuidanceTarget#placeIn",
+            at = "craft.cell != null || craft.dimension != dimension", replacedBy = "craft.dimension != dimension",
+            fails = "INV-GDN-11 another world: a surface point from space", on = "2026-10-21")
+    @RedWitness(verdict = "itself", member = "GuidanceTarget#placeIn",
+            at = "if (ship.equals(craft.id)) {", replacedBy = "if (false) {",
+            fails = "INV-GDN-11 itself", on = "2026-10-21")
+    public void aTargetInAnotherWorldOrTheCraftItselfIsRefusedForWhatItIs() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        double[] target = {200.0D, 30.0D, -40.0D};
+        double[] u = {0.6D, 0.0D, 0.8D};
+        Fixed around = new Fixed(target, HULL, Double.NaN);
+        double[] away = back(target, u, 60.0D);
+        double depth = 2.75D;
+        double[] landed = {12.5D, 71.0D + depth, -7.5D};
+        Fixed overGround = new Fixed(target, HULL, 71.0D);
+
+        // Refused, for the reason that names it, once the window is out.
+        assertRefusedFor("INV-GDN-11 another world: a ship the world says is across a crossing",
+                GuidanceTarget.ship(OTHER), atRestAt(live, away),
+                new Fixed(GuidanceTarget.Unplaced.NEEDS_A_CROSSING), MotionSlot.Refusal.NEEDS_A_CROSSING);
+        assertRefusedFor("INV-GDN-11 another world: a surface point of another planet",
+                GuidanceTarget.surface(PLANET_DIM + 1, landed[0], landed[2]),
+                onSurface(live, landed, depth, PLANET_DIM, null), overGround, MotionSlot.Refusal.NEEDS_A_CROSSING);
+        assertRefusedFor("INV-GDN-11 another world: a surface point from space",
+                GuidanceTarget.surface(PLANET_DIM, landed[0], landed[2]),
+                onSurface(live, landed, depth, PLANET_DIM, GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L)),
+                overGround, MotionSlot.Refusal.NEEDS_A_CROSSING);
+        assertRefusedFor("INV-GDN-11 itself: the craft named as its own target", GuidanceTarget.ship(SELF),
+                atRestAt(live, away), around, MotionSlot.Refusal.TARGET_IS_THIS_CRAFT);
+    }
+
+    @Test
+    @Pins("SHIPCTL-21")
+    @RedWitness(verdict = "leaving", member = "TileAdvancedFlightComputer#setPilotInput",
+            at = "input != null && motion.reclaim()", replacedBy = "input == null && motion.reclaim()",
+            fails = "SHIPCTL-21 leaving", on = "2026-10-21")
+    @RedWitness(verdict = "arriving", member = "TileAdvancedFlightComputer#setPilotInput",
+            at = "input != null && motion.reclaim()", replacedBy = "input != null && motion.isFlying()",
+            fails = "SHIPCTL-21 arriving", on = "2026-10-21")
+    @RedWitness(verdict = "nothing to resume", member = "MotionSlot#reclaim",
+            at = "intent = null;", replacedBy = "",
+            fails = "SHIPCTL-21 nothing to resume", on = "2026-10-21")
+    public void aPilotsInputTakesTheCraftBackAndNothingResumes() {
+        MinecraftBootstrap.ensure();
+        TileAdvancedFlightComputer computer = new TileAdvancedFlightComputer();
+        computer.issueMotion(MotionIntent.goTo(GuidanceTarget.ship(OTHER)));
+        requireArranged("the arrangement: the slot flies the order it was given",
+                computer.motionReading().state() == MotionSlot.State.ACTIVE);
+
+        computer.setPilotInput(null);
+        assertEquals("SHIPCTL-21 leaving: a pilot leaving the seat took the craft back",
+                MotionSlot.State.ACTIVE, computer.motionReading().state());
+
+        computer.setPilotInput(FreeFlightInput.zero());
+        assertEquals("SHIPCTL-21 arriving: a pilot's input reached the computer and the slot still flies",
+                MotionSlot.State.EMPTY, computer.motionReading().state());
+        assertNull("SHIPCTL-21 nothing to resume: the emptied slot still holds an order",
+                computer.motionReading().intent());
+    }
+
+    /** The world as these laws are written over: one ship at a stated place, and ground at a stated height. */
+    private static final class Fixed implements Surroundings {
+
+        private final double[] ship;
+        private final double shipHull;
+        private final double ground;
+        private final GuidanceTarget.Unplaced unplaced;
+
+        Fixed(double[] ship, double shipHull, double ground) {
+            this.ship = ship;
+            this.shipHull = shipHull;
+            this.ground = ground;
+            this.unplaced = null;
+        }
+
+        Fixed(GuidanceTarget.Unplaced unplaced) {
+            this.ship = null;
+            this.shipHull = HULL;
+            this.ground = Double.NaN;
+            this.unplaced = unplaced;
+        }
+
+        @Override
+        public Sighting ship(UUID shipId) {
+            if (unplaced != null) {
+                return Sighting.unplaced(unplaced);
+            }
+            return OTHER.equals(shipId) ? Sighting.at(ship, shipHull)
+                    : Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
+        }
+
+        @Override
+        public double groundTop(double x, double z, double radius) {
+            return ground;
+        }
+    }
+
+    private static MotionSlot goToShip() {
+        MotionSlot slot = new MotionSlot();
+        slot.issue(MotionIntent.goTo(GuidanceTarget.ship(OTHER)));
+        return slot;
+    }
+
+    private static MotionSlot holdShip(double range) {
+        MotionSlot slot = new MotionSlot();
+        slot.issue(MotionIntent.hold(GuidanceTarget.ship(OTHER), range));
+        return slot;
+    }
+
+    private static MotionSlot landAt(double[] point) {
+        MotionSlot slot = new MotionSlot();
+        slot.issue(MotionIntent.goTo(GuidanceTarget.surface(PLANET_DIM, point[0], point[2])));
+        return slot;
+    }
+
+    /** The point {@code distance} back from {@code target} along {@code -u}. */
+    private static double[] back(double[] target, double[] u, double distance) {
+        return new double[]{target[0] - u[0] * distance, target[1] - u[1] * distance, target[2] - u[2] * distance};
+    }
+
+    private static void assertRefusedFor(String what, GuidanceTarget target, MotionSlot.Craft craft,
+                                         Surroundings around, MotionSlot.Refusal expected) {
+        MotionSlot slot = new MotionSlot();
+        slot.issue(MotionIntent.goTo(target));
+        MotionSlot.Step step = null;
+        for (int tick = 0; tick < MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
+            step = slot.fly(craft, around);
+        }
+        assertEquals(what + ": refused when the window ran out", MotionSlot.Event.REFUSED, step.event());
+        assertEquals(what + ": for the reason the clause names", expected, slot.reading().refusal());
+    }
+
+    private static void assertPointsAlong(String what, FlightCommand command, double[] way) {
+        double[] v = command.velocity();
+        double vn = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        double cos = vn == 0.0D ? 0.0D : (v[0] * way[0] + v[1] * way[1] + v[2] * way[2]) / vn;
+        assertTrue(what + ": the craft is sent along " + Arrays.toString(v) + ", not along "
+                + Arrays.toString(way) + " (cosine " + cos + ")", cos >= 1.0D - RELATIVE);
+    }
+
+    private static void assertHover(String what, FlightCommand command, FreeFlightPhysics.Quat attitude) {
+        assertNotNull(what + ": a command", command);
+        assertArrayEquals(what + ": zero velocity", new double[]{0.0D, 0.0D, 0.0D}, command.velocity(), 0.0D);
+        assertArrayEquals(what + ": in the attitude it was refused in",
+                new double[]{attitude.w, attitude.x, attitude.y, attitude.z}, command.attitude(), 0.0D);
+    }
+
+    private static ShipCapability solve(ShipMotionCases.Hull hull) {
+        return ShipCapability.solve(hull.actuators, hull.mass, ShipMotionCases.HELM);
+    }
+
+    /** The most force any one signed translation of the hull delivers, N. */
+    private static double strongestTranslation(ShipCapability live) {
+        double most = 0.0D;
+        for (ControlDirection d : ControlDirection.values()) {
+            if (!d.axis().isRotation()) {
+                most = Math.max(most, live.authority(d, Endurance.SUSTAINED));
+            }
+        }
+        return most;
+    }
+
+    /**
+     * The most force the hull's translations deliver together, N: each axis at the larger of its two
+     * senses, summed as orthogonal components — no direction gets more out of them.
+     */
+    private static double combinedTranslation(ShipCapability live) {
+        double sum = 0.0D;
+        for (ControlDirection d : ControlDirection.values()) {
+            if (!d.axis().isRotation() && d.isPositive()) {
+                double most = Math.max(live.authority(d, Endurance.SUSTAINED),
+                        live.authority(ControlDirection.of(d.axis(), false), Endurance.SUSTAINED));
+                sum += most * most;
+            }
+        }
+        return Math.sqrt(sum);
+    }
+
+    /** Whether the hull has angular authority both ways about each of its axes. */
+    private static boolean turnsAboutEveryAxis(ShipCapability live) {
+        for (ControlDirection d : ControlDirection.values()) {
+            if (d.axis().isRotation() && !(live.authority(d, Endurance.BURST) > 0.0D)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The authority, N, of the signed axis the hull at {@code attitude} lays along {@code w}; 0 if none. */
+    private static double authorityAlong(ShipCapability live, FreeFlightPhysics.Quat attitude, double[] w) {
+        for (ControlDirection d : ControlDirection.values()) {
+            if (d.axis().isRotation()) {
+                continue;
+            }
+            double[] a = axisOf(live, attitude, d);
+            if (a[0] * w[0] + a[1] * w[1] + a[2] * w[2] >= 1.0D - 1.0e-6D) {
+                return live.authority(d, Endurance.SUSTAINED);
+            }
+        }
+        return 0.0D;
+    }
+
+    /** Whether the hull at {@code attitude} has one of its axes pointing straight up. */
+    private static boolean keepsAnAxisUp(ShipCapability live, FreeFlightPhysics.Quat attitude) {
+        for (ControlDirection d : ControlDirection.values()) {
+            if (!d.axis().isRotation() && axisOf(live, attitude, d)[1] >= 1.0D - 1.0e-6D) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static double[] axisOf(ShipCapability live, FreeFlightPhysics.Quat attitude, ControlDirection d) {
+        Vector3dc n = live.frame().axis(d.axis());
+        double sign = d.isPositive() ? 1.0D : -1.0D;
+        return attitude.rotate(n.x() * sign, n.y() * sign, n.z() * sign);
+    }
+
+    private static MotionSlot.Craft craft(ShipCapability live, double[] position, double[] velocity,
+                                          FreeFlightPhysics.Quat attitude, double[] gravity, double topSpeed) {
+        return new MotionSlot.Craft(SELF, PLANET_DIM, null, position, velocity, attitude, live, gravity, topSpeed,
+                HULL, HULL, ATTITUDE_GAIN, SLEW_CAP);
+    }
+
+    private static MotionSlot.Craft atRest(ShipCapability live, FreeFlightPhysics.Quat attitude) {
+        return craft(live, new double[]{0.0D, 0.0D, 0.0D}, new double[]{0.0D, 0.0D, 0.0D}, attitude,
+                new double[]{0.0D, 0.0D, 0.0D}, 40.0D);
+    }
+
+    private static MotionSlot.Craft atRestAt(ShipCapability live, double[] position) {
+        return craft(live, position, new double[]{0.0D, 0.0D, 0.0D}, FreeFlightPhysics.Quat.IDENTITY,
+                new double[]{0.0D, 0.0D, 0.0D}, 40.0D);
+    }
+
+    private static MotionSlot.Craft onSurface(ShipCapability live, double[] position, double depth, int dim,
+                                              GalacticCoord cell) {
+        return new MotionSlot.Craft(SELF, dim, cell, position, new double[]{0.0D, 0.0D, 0.0D},
+                FreeFlightPhysics.Quat.IDENTITY, live, new double[]{0.0D, -PhysicsUnits.ENGINE_GRAVITY, 0.0D},
+                40.0D, HULL, depth, ATTITUDE_GAIN, SLEW_CAP);
+    }
+
+    private static FreeFlightPhysics.Quat randomAttitude(Random rng) {
+        return new FreeFlightPhysics.Quat(rng.nextGaussian(), rng.nextGaussian(), rng.nextGaussian(),
+                rng.nextGaussian()).normalized();
+    }
+
+    private static double[] randomUnit(Random rng) {
+        double x = rng.nextGaussian();
+        double y = rng.nextGaussian();
+        double z = rng.nextGaussian();
+        double n = Math.sqrt(x * x + y * y + z * z);
+        return new double[]{x / n, y / n, z / n};
+    }
+
+    private static double[] negate(double[] v) {
+        return new double[]{-v[0], -v[1], -v[2]};
+    }
+}

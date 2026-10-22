@@ -2874,6 +2874,76 @@ public class TestProbeCommand extends CommandBase {
         // on an unpiloted craft keeps executing the setting its pilot left, with it off the craft is
         // released and falls. Addressed by identity, never by position, because a world under test
         // may hold a second craft and a positional answer there is plausible and wrong.
+        // motion-go-to-ship-by-id <dim> <shipId> <targetShipId> / motion-hold-ship-by-id <dim> <shipId>
+        // <targetShipId> <range> / motion-go-to-surface-by-id <dim> <shipId> <surfaceDim> <x> <z> — hand
+        // the motion slot of the flight computer of the ship NAMED by its physics id a GO_TO a ship, a
+        // HOLD within range of one, or a GO_TO a point of a planet's surface, through production's own
+        // entry. What the craft then does is its guidance's, on its own ticks; this verb flies nothing.
+        // `afcResolved:false` = no computer for that name here; a target id that is not a uuid is refused
+        // before anything is issued (`error`).
+        // motion-read-by-id <dim> <shipId> — what that slot holds: `state` (EMPTY / ACTIVE / REFUSED),
+        // `kind`, `refusal` and `arrived`, each `null` where it does not apply, and `target` as the
+        // intent names it. Every form answers `worldTick`, the craft's world clock at the moment of the
+        // reply — the clock the craft's own records are stamped on.
+        boolean motionGoToShip = args.length >= 4 && "motion-go-to-ship-by-id".equalsIgnoreCase(args[0]);
+        boolean motionHoldShip = args.length >= 5 && "motion-hold-ship-by-id".equalsIgnoreCase(args[0]);
+        boolean motionGoToSurface = args.length >= 6 && "motion-go-to-surface-by-id".equalsIgnoreCase(args[0]);
+        boolean motionRead = args.length >= 3 && "motion-read-by-id".equalsIgnoreCase(args[0]);
+        if (motionGoToShip || motionHoldShip || motionGoToSurface || motionRead) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID shipUuid;
+            try {
+                shipUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAnIdentity) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            BlockPos afcPos = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .flightComputerOf(world, shipUuid);
+            TileEntity te = afcPos == null ? null : world.getTileEntity(afcPos);
+            if (!(te instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false}");
+                return;
+            }
+            dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer afc =
+                    (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) te;
+            if (motionGoToSurface) {
+                afc.issueMotion(dev.stannismod.stellurgy.ship.guidance.MotionIntent.goTo(
+                        dev.stannismod.stellurgy.ship.guidance.GuidanceTarget.surface(
+                                parseIntOr(args[3], Integer.MIN_VALUE), parseDoubleOr(args[4], 0),
+                                parseDoubleOr(args[5], 0))));
+            } else if (!motionRead) {
+                java.util.UUID targetShip;
+                try {
+                    targetShip = java.util.UUID.fromString(args[3]);
+                } catch (IllegalArgumentException notAnIdentity) {
+                    send(sender, "{\"ok\":false,\"afcResolved\":true,\"error\":\"targetShipId is not a uuid\"}");
+                    return;
+                }
+                dev.stannismod.stellurgy.ship.guidance.GuidanceTarget target =
+                        dev.stannismod.stellurgy.ship.guidance.GuidanceTarget.ship(targetShip);
+                afc.issueMotion(motionGoToShip
+                        ? dev.stannismod.stellurgy.ship.guidance.MotionIntent.goTo(target)
+                        : dev.stannismod.stellurgy.ship.guidance.MotionIntent.hold(target,
+                                parseDoubleOr(args[4], 0)));
+            }
+            dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading held = afc.motionReading();
+            java.util.Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("ok", true);
+            info.put("afcResolved", true);
+            info.put("state", held.state().name());
+            info.put("kind", held.intent() == null ? null : held.intent().kind().name());
+            info.put("target", held.intent() == null ? null : held.intent().target().toString());
+            info.put("refusal", held.refusal() == null ? null : held.refusal().name());
+            info.put("arrived", held.intent() == null ? null : held.arrived());
+            info.put("worldTick", world.getTotalWorldTime());
+            send(sender, jsonMap(info));
+            return;
+        }
         if (args.length >= 4 && "fa-by-id".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -18298,9 +18368,14 @@ public class TestProbeCommand extends CommandBase {
             boolean poweredJumpDrive = "with-powered-jump-drive".equals(variant);
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
+            //   no-reverse-hull           — the with-pilot-seat hull without the pushers that drive it
+            //                               BACKWARD along its helm's forward axis: it can push forward,
+            //                               sideways, up and down and turn about every axis, and has
+            //                               nothing that slows it once it moves nose-first.
+            boolean noReverseHull = "no-reverse-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
             boolean includeDeckTank = "with-pilot-deck-and-tank".equals(variant);
-            boolean seatHullVariant = bareHull || wheelOnlyHull;
+            boolean seatHullVariant = bareHull || wheelOnlyHull || noReverseHull;
             boolean includeEngines = !"invalid-no-engine".equals(variant) && !bareHull && !wheelOnlyHull;
             boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
             boolean includeSeat = !"invalid-no-seat".equals(variant)
@@ -18748,6 +18823,15 @@ public class TestProbeCommand extends CommandBase {
                 // scenario turns it end over end about X, which it can only do if its SURGE pushers
                 // hold its weight when it stands on its nose — so they take the upper layer there.
                 wheel = placeTier2Actuators(world, rocketX, rocketY, rocketZ, includePilotDeck, includeRoofedDeck);
+                if (noReverseHull) {
+                    // The seat craft's Z pushers on the -Z side push the hull toward -Z, which is
+                    // backward for the helm (its forward is +Z, ControlFrame.HELM): take them away.
+                    for (int dx = -1; dx <= 1; dx += 2) {
+                        for (int dy = 1; dy <= 2; dy++) {
+                            world.setBlockToAir(new BlockPos(rocketX + dx, rocketY + dy, rocketZ - 1));
+                        }
+                    }
+                }
             }
             String holdFromComputer = "null";
             if (includeHold) {

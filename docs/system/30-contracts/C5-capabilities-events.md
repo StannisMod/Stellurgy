@@ -75,8 +75,8 @@ unloads), plus 3 `@Mod.EventBusSubscriber` classes.
 | who calls it | `RenderShots`/`RenderBeams` via `ClientWorldDrawings.of(mc.world)`; `PacketShotSpawn`/`PacketShotEnd`/`PacketBeamState` via `ClientWorldDrawings.apply`, from `executeClient` — already on the client thread, queued there by the channel (`BasePacket.BasePacketHandlerClient`); `apply` reads `mc.world` at that moment `[V]` |
 
 **Published events (server bus, not cancellable unless stated)**, all in
-`api/event/`: `ShipEvent.{FlightComputerLiveEvent, FlightModelChangedEvent}` (the flight computer's
-own edges — NOT the lifecycle, which is B.10),
+`api/event/`: `ShipEvent.{FlightComputerLiveEvent, FlightModelChangedEvent, MotionIntentArrivedEvent,
+MotionIntentRefusedEvent}` (the flight computer's own edges — NOT the lifecycle, which is B.10),
 `ShipCrossingEvent.{LeftCell, EnteredCell, TransitBegan, TransitEnded}`
 (extending `Departure`/`Arrival`) and `.{LeftPlanet, EnteredPlanet}` (extending `PlanetTrip`, NOT
 `Departure`/`Arrival`), `ShipCollisionEvent` (carries the two SUBSTRATE ids), and
@@ -392,3 +392,5 @@ FE source in the ecosystem can charge a gun without knowing what it is. `TileTur
 | event | posted by | side | meaning |
 |---|---|---|---|
 | `ShipEvent.FlightModelChangedEvent` | `TileAdvancedFlightComputer#rebuildFlightModel` | S | the ship's flight model was rebuilt (hull changed, or the load round); carries the flight computer's position and the new `ShipReadout`. The STAT-10 registration seam: a system with a characteristic of its own joins the readout by hearing this. May repeat identical figures on a load round; silence is not "unchanged" |
+| `ShipEvent.MotionIntentArrivedEvent` | `TileAdvancedFlightComputer#flyMotionIntent` | S | the motion intent the computer flies has got the craft where it wants it, at rest (ship-guidance MECH-GDN-06); once per intent; carries the computer's position and the `MotionIntent` |
+| `ShipEvent.MotionIntentRefusedEvent` | `TileAdvancedFlightComputer#flyMotionIntent` | S | the motion intent was refused after a sustained window in which it could not be flown (MECH-GDN-05); carries the intent and the `MotionSlot.Refusal`. The slot still holds the intent, marked refused |

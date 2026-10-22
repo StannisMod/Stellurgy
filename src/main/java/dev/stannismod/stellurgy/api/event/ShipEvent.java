@@ -5,8 +5,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.common.eventhandler.Event;
 
 /**
- * Events about what a tier-2 SHIP's own machinery did — its flight computer coming live, its flight
- * model being rebuilt.
+ * Events about what a tier-2 SHIP's own machinery did — its flight computer, posting from its own tick.
  *
  * <p><b>Not the ship's lifecycle.</b> Whether a craft exists, has become usable, has left for another
  * cell or is gone is {@link ShipLifecycleEvent}, which the ship manager posts at the place each
@@ -98,6 +97,57 @@ public class ShipEvent extends Event {
             super(world, shipId);
             this.pos = pos;
             this.readout = readout;
+        }
+    }
+
+    /**
+     * The motion intent a ship's flight computer is flying has got the craft where it wants it, at
+     * rest — a GO_TO alongside its ship or landed on its surface point, a HOLD inside its shell. Posted
+     * once per intent, server side, from the flight computer; the intent stays in the slot and goes on
+     * holding the craft there.
+     *
+     * <p>An event a decision process waits on (an order fulfilled is when it decides what next), and
+     * the record an observer links on instead of watching the craft converge.</p>
+     */
+    public static class MotionIntentArrivedEvent extends ShipEvent {
+
+        /** Where the flight computer sits. */
+        public final net.minecraft.util.math.BlockPos pos;
+        /** The intent that arrived. */
+        public final dev.stannismod.stellurgy.ship.guidance.MotionIntent intent;
+
+        public MotionIntentArrivedEvent(World world, String shipId, BlockPos pos,
+                                        dev.stannismod.stellurgy.ship.guidance.MotionIntent intent) {
+            super(world, shipId);
+            this.pos = pos;
+            this.intent = intent;
+        }
+    }
+
+    /**
+     * The motion intent a ship's flight computer was flying has been REFUSED: for a sustained window it
+     * could not be flown, and the slot now holds it marked refused, with the reason. Posted once per
+     * refusal, server side, from the flight computer, which has also told a seated pilot why.
+     *
+     * <p>What happens next — wait, retry, give up — is a decision, so the refusal is an event rather
+     * than the slot quietly emptying.</p>
+     */
+    public static class MotionIntentRefusedEvent extends ShipEvent {
+
+        /** Where the flight computer sits. */
+        public final net.minecraft.util.math.BlockPos pos;
+        /** The intent that was refused; it is still in the slot. */
+        public final dev.stannismod.stellurgy.ship.guidance.MotionIntent intent;
+        /** Why. */
+        public final dev.stannismod.stellurgy.ship.guidance.MotionSlot.Refusal reason;
+
+        public MotionIntentRefusedEvent(World world, String shipId, BlockPos pos,
+                                        dev.stannismod.stellurgy.ship.guidance.MotionIntent intent,
+                                        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Refusal reason) {
+            super(world, shipId);
+            this.pos = pos;
+            this.intent = intent;
+            this.reason = reason;
         }
     }
 }

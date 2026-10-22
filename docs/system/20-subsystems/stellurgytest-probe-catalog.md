@@ -323,6 +323,12 @@ on the seed, and what that body IS depends on a derivation nobody has run yet.
 |---|---|---|
 | `vs flight-model` | `<dim> <afcX> <afcY> <afcZ>` | READS the flight model the flight computer at that block address holds: `found` (a computer is there), `model` (`null` before its first survey or off a ship) with `mass{structuralKg,contentKg,crewKg,totalKg}`, `gravity` m/s², `twrLIVE`/`twrDESIGN` (+ `…Infinite`), `canHoverLIVE/DESIGN`, and `directions.<DIR>.{design,live}.{sustained,burst,sustainedAccel,burstAccel,burstSeconds(+Infinite)}`; plus the live `saturated` and `wheelFill`. An infinite figure is `null` with its flag, because JSON has no infinity. Keyed on an address, which names one tile. |
 
+| `vs motion-go-to-ship-by-id` / `vs motion-hold-ship-by-id` / `vs motion-go-to-surface-by-id` | *(ARRANGE)* `<dim> <shipId> <targetShipId>` / `… <targetShipId> <range>` / `<dim> <shipId> <surfaceDim> <x> <z>` | hand the motion slot of the flight computer of the ship NAMED by its physics id a `GO_TO` a ship (by its durable id), a `HOLD` within range of one, or a `GO_TO` a point of a planet's surface, through the computer's own `issueMotion` (ship-guidance MECH-GDN-01). Flies nothing itself: the craft's guidance does, on its own ticks. Answers as `motion-read-by-id`. `afcResolved:false` = no computer for that name here; a target id that is not a uuid answers `error` and issues nothing |
+| `vs motion-read-by-id` | *(READ)* `<dim> <shipId>` | what that slot holds: `state` (`EMPTY`/`ACTIVE`/`REFUSED`), `kind`, `target` (`ship <id>` or `surface <dim> (<x>,<z>)`), `refusal`, `arrived` — each `null` where it does not apply — and `worldTick`, the craft's world clock at the reply, the clock its `motion_arrived` / `motion_refused` records are stamped on |
+
+The `fixture rocket` variant **`no-reverse-hull`** is the `with-pilot-seat` hull without the pushers that
+drive it backward along its helm's forward axis — forward, sideways, up, down and every turn kept.
+
 **Stale by construction**: the rates quoted in the `vs` row above (the slew at "the
 observed 2 rad/s", 21 blocks flown aboard) were measured under the flat 40 blocks/s² / 4 rad/s²
 authority of the old model; a craft gets what its actuators give.

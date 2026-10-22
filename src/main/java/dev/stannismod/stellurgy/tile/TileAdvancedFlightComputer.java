@@ -59,6 +59,16 @@ public class TileAdvancedFlightComputer extends TileEntity
     private static final String NBT_SHIP_ID = "shipId";
     private static final String NBT_ENTRY_LATCHED = "entryLatched";
     private static final String NBT_CRUISE = "cruiseSetpoint";
+    private static final String NBT_MOTION = "motionSlot";
+
+    /**
+     * The craft's MOTION slot: the one motion intent this computer flies when it is given one, its
+     * state, and the guidance that turns it into {@link #flightCommand}. PERSISTED, with the reasoning
+     * of {@link #velocitySetpoint}: crossings carry tile NBT verbatim, so an order outlives the craft
+     * being cut out of one world and pasted into the next, and a chunk cycle under a parked craft.
+     */
+    private final dev.stannismod.stellurgy.ship.guidance.MotionSlot motion =
+            new dev.stannismod.stellurgy.ship.guidance.MotionSlot();
 
     /**
      * The CRAFT's durable identity: a UUID minted once (at tier-2 assembly, or lazily on first
@@ -392,9 +402,16 @@ public class TileAdvancedFlightComputer extends TileEntity
      * leaves. A {@code null} pilotInput lets {@link #update()} fall back to the static bring-up
      * channel and, absent that, leaves the last command in place (the ship coasts). A pilot
      * wanting to stop sends an idle input, which {@link #update()} turns into a hover.
+     *
+     * <p>An input that ARRIVES is the pilot at the controls, and it takes the craft back: the motion
+     * slot empties, whatever it held, and does not resume when he lets go. A {@code null} — the pilot
+     * leaving — takes nothing back.</p>
      */
     public void setPilotInput(FreeFlightInput input) {
         this.pilotInput = input;
+        if (input != null && motion.reclaim()) {
+            markDirty();
+        }
     }
 
     /**
@@ -683,6 +700,11 @@ public class TileAdvancedFlightComputer extends TileEntity
                 // else: corridor blocked — disengaged inside driveAutoTakeoff; fall through to
                 // station-keeping so the ship holds instead of coasting.
             }
+        }
+        // A motion intent outranks the pilot's latched input and the unmanned hold: it was issued after
+        // the last input reached this computer, since a later one would have emptied the slot.
+        if (motion.isFlying() && flyMotionIntent(attitude)) {
+            return;
         }
         // Playtest trace ([FF-TRACE/AFC], -Dstellurgy.tests=true): log each null<->set flip of
         // the seated pilot's input. If it flips to null while the pilot holds a key, the ship falls into
@@ -1055,6 +1077,88 @@ public class TileAdvancedFlightComputer extends TileEntity
             stationKeeping = true;
             markDirty();
         }
+        return true;
+    }
+
+    /** Hand the craft's motion to {@code intent}, replacing whatever the slot held. Server side. */
+    public void issueMotion(dev.stannismod.stellurgy.ship.guidance.MotionIntent intent) {
+        motion.issue(intent);
+        markDirty();
+    }
+
+    /** What the craft's motion slot holds right now. */
+    public dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading motionReading() {
+        return motion.reading();
+    }
+
+    /** The space cell this computer's world realizes, or {@code null} for a world that is none. */
+    private dev.stannismod.stellurgy.space.GalacticCoord spaceCellOfThisWorld() {
+        return world.provider instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot
+                ? dev.stannismod.stellurgy.space.SpaceSlotPool.cellCoordFor(world.provider.getDimension())
+                : null;
+    }
+
+    /**
+     * Fly one tick of the motion intent: hand guidance the craft as this computer reads it, publish
+     * what guidance commands, and tell whoever must hear it when the intent arrives or is refused.
+     * Returns whether a command was published — always, while guidance has the craft, unless the craft
+     * cannot be read this tick; a refused intent is flown too, as a hover.
+     */
+    private boolean flyMotionIntent(FreeFlightPhysics.Quat attitude) {
+        double[] pose = VSIntegration.getShipWorldPosition(world, getPos());
+        double[] velocity = VSIntegration.getShipVelocity(world, getPos());
+        if (pose == null || velocity == null) {
+            return false;
+        }
+        double[] gravity = new double[]{0.0, 0.0, 0.0};
+        if (VSConfig.doGravity) {
+            // The field the law's feed-forward cancels, through the same function: guidance plans the
+            // stop on the authority left after holding the craft's weight in it.
+            Vector3dc g = dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(world);
+            gravity = new double[]{g.x(), g.y(), g.z()};
+        }
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        java.util.UUID self = getOrCreateShipId();
+        // The hull as the substrate's registry holds it: how far it reaches from the pose, so a target
+        // ship is kept outside it and a landing puts its lowest point on the ground.
+        double[] hull = VSIntegration.hullAboutPosition(world, self);
+        dev.stannismod.stellurgy.space.GalacticCoord cell = spaceCellOfThisWorld();
+        // The turn guidance plans is the one onPhysicsTick's attitude law will fly: its gain and slew cap.
+        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Step step = motion.fly(
+                new dev.stannismod.stellurgy.ship.guidance.MotionSlot.Craft(self, world.provider.getDimension(),
+                        cell, pose, velocity, attitude, model == null ? null : model.live(), gravity,
+                        SHIP_MAX_SPEED, hull == null ? Double.NaN : hull[0], hull == null ? Double.NaN : hull[1],
+                        AR_ATTITUDE_GAIN, AR_MAX_ANGULAR_SPEED),
+                new dev.stannismod.stellurgy.ship.guidance.WorldSurroundings((net.minecraft.world.WorldServer) world,
+                        cell));
+        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading held = motion.reading();
+        String durable = shipId == null ? null : shipId.toString();
+        if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.ARRIVED) {
+            markDirty();
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                    new dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentArrivedEvent(world, durable,
+                            getPos(), held.intent()));
+        } else if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.REFUSED) {
+            markDirty();
+            messageSeatedPilot("msg.guidance.refused."
+                    + held.refusal().name().toLowerCase(java.util.Locale.ROOT));
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                    new dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentRefusedEvent(world, durable,
+                            getPos(), held.intent(), held.refusal()));
+        }
+        dev.stannismod.stellurgy.ship.control.FlightCommand command = step.command();
+        if (command == null) {
+            return false;
+        }
+        VSIntegration.ensureShipPhysicsEnabled(world, getPos());
+        // Whoever takes the craft next holds the attitude guidance left it in, not one from before.
+        double[] held4 = command.attitude();
+        attitudeReference = new FreeFlightPhysics.Quat(held4[0], held4[1], held4[2], held4[3]);
+        if (!stationKeeping) {
+            stationKeeping = true;
+            markDirty();
+        }
+        flightCommand = command;
         return true;
     }
 
@@ -1618,6 +1722,9 @@ public class TileAdvancedFlightComputer extends TileEntity
         if (hullExtent != null) {
             nbt.setIntArray(NBT_HULL, hullExtent);
         }
+        NBTTagCompound slot = new NBTTagCompound();
+        motion.writeToNBT(slot);
+        nbt.setTag(NBT_MOTION, slot);
         return nbt;
     }
 
@@ -1649,6 +1756,12 @@ public class TileAdvancedFlightComputer extends TileEntity
             } catch (IllegalArgumentException ignored) {
                 // corrupt id: treat as unminted rather than crash the tile load
             }
+        }
+        // Absent key -> an empty slot: nobody has given this craft an order.
+        if (!motion.readFromNBT(nbt.getCompoundTag(NBT_MOTION))) {
+            dev.stannismod.stellurgy.Stellurgy.logger.warn("[GUIDANCE] the flight computer at {} carried a "
+                    + "motion order that could not be read back ({}); the slot is EMPTY, so the craft is "
+                    + "not flying it — it was not carried out, it was lost", getPos(), nbt.getTag(NBT_MOTION));
         }
     }
 

@@ -1471,6 +1471,17 @@ public final class VSIntegration {
     }
 
     /**
+     * How far the REGISTERED ship {@code shipUuid}'s hull reaches from the position
+     * {@link #registeredShipPosition} answers, loaded or not: {@code {radius, depthBelow}} — the radius
+     * of the smallest sphere about that position holding the hull's whole block box (attitude-free),
+     * and how far below the position the box's lowest corner lies in the world right now. {@code null}
+     * when this world registers no such ship or its record holds no blocks.
+     */
+    public static double[] hullAboutPosition(World world, java.util.UUID shipUuid) {
+        return shipUuid == null ? null : VSBridge.hullAboutPosition(world, shipUuid);
+    }
+
+    /**
      * Whether {@code world}'s ship registry holds the ship {@code shipUuid}, loaded or not. A lookup by
      * identity: it says nothing about any other ship the registry holds.
      */

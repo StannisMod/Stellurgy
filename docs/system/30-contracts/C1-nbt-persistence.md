@@ -417,6 +417,7 @@ same writer and reader, which is how a transponder put in before assembly is abo
 | Key | Where | What |
 |---|---|---|
 | `storedMomentumX`, `storedMomentumY`, `storedMomentumZ` | `TileReactionWheel` | N·m·s the wheel has given the hull about each ship axis (`tile/TileReactionWheel.java:37-49`) `[V]`. Durable (C10 STAT-3): a full wheel stays full across a save, an unload and a crossing, or a relog would be a free desaturation. Absent reads as 0. The flight model, recipes and readout are derived and have NO key. |
+| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship` (durable id), or `surface` + `dim`, `x`, `z`}}} | `TileAdvancedFlightComputer` | the craft's motion slot (ship-guidance MECH-GDN-01): the one intent it flies, its state and refusal. Rides tile NBT through every crossing, so an order outlives the cut and paste; a target is a THING named by identity (a ship) or by its world and column (a surface point), so the crossing does not change what it names. Absent = an empty slot; a slot that does not read back loads EMPTY and is logged `[V]`. |
 
 ## Weapon-order keys
 

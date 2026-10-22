@@ -281,6 +281,27 @@ public final class ShipMotionCases {
         return new Hull("symmetric hull", a, deckUnder(a));
     }
 
+    /**
+     * The symmetric hull with a main engine and no reverse: the two motors pushing it forward along surge
+     * are three motors' worth each, so surge forward outpushes every other axis, and the two that push it
+     * backward are gone, so it has no clean reverse surge at all. Sway, heave and the rotations are the
+     * symmetric hull's layout.
+     */
+    public static Hull noReverseHull() {
+        List<Actuator> a = new ArrayList<>();
+        for (int s = -1; s <= 1; s += 2) {
+            a.add(motor(s, 0, -2, 0, 0, 1, 3.0D * THRUST));
+            a.add(motor(-2, 0, s, 1, 0, 0, THRUST));
+            a.add(motor(2, 0, s, -1, 0, 0, THRUST));
+            a.add(motor(s, -1, s, 0, 1, 0, THRUST));
+            a.add(motor(-s, -1, s, 0, 1, 0, THRUST));
+            a.add(motor(s, 1, s, 0, -1, 0, THRUST));
+            a.add(motor(-s, 1, s, 0, -1, 0, THRUST));
+        }
+        a.addAll(ReactionWheel.at(0, 0, 0));
+        return new Hull("no-reverse hull", a, deckUnder(a));
+    }
+
     public static Hull wheelOnlyHull() {
         List<Actuator> a = new ArrayList<>(ReactionWheel.at(0, 1, 0));
         return new Hull("wheel-only hull", a, deckUnder(a));

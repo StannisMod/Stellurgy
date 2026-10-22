@@ -546,6 +546,52 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A craft's motion intent got it where it wants it, at rest — {@code motion_arrived}, off
+     * production's own {@code ShipEvent.MotionIntentArrivedEvent}.
+     *
+     * <p>{@code ship} is the craft's durable name, {@code dim} the world it arrived in (a crossing
+     * changes it), {@code afcX/Y/Z} the computer's own address and {@code kind} the intent's verb. The
+     * record says only that production DECLARED arrival; where the craft is, a scenario reads itself.</p>
+     */
+    @SubscribeEvent
+    public static void onMotionIntentArrived(
+            dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentArrivedEvent event) {
+        World world = event.world;
+        instrument(world, "server_bus_motion_arrived");
+        if (world == null || event.intent == null) {
+            return;
+        }
+        BlockPos p = event.pos;
+        record(world, "motion_arrived",
+                "\"ship\":\"" + str(event.shipId) + "\""
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
+                        + ",\"kind\":\"" + event.intent.kind().name() + "\"");
+    }
+
+    /**
+     * A craft's motion intent was REFUSED — {@code motion_refused}, off production's own
+     * {@code ShipEvent.MotionIntentRefusedEvent}: the fields of {@code motion_arrived} and
+     * {@code reason}, the refusal's own name.
+     */
+    @SubscribeEvent
+    public static void onMotionIntentRefused(
+            dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentRefusedEvent event) {
+        World world = event.world;
+        instrument(world, "server_bus_motion_refused");
+        if (world == null || event.intent == null || event.reason == null) {
+            return;
+        }
+        BlockPos p = event.pos;
+        record(world, "motion_refused",
+                "\"ship\":\"" + str(event.shipId) + "\""
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
+                        + ",\"kind\":\"" + event.intent.kind().name() + "\""
+                        + ",\"reason\":\"" + event.reason.name() + "\"");
+    }
+
+    /**
      * A player's break of a block, as it STANDS — {@code block_broken}.
      *
      * <p>{@code LOWEST} and not receiving cancelled events, so a record is written only for a

@@ -6,7 +6,7 @@ owner-subsystem: none — tier-2 VS integration; code in block/BlockPilotSeat, t
 see-also: [C8 (crew any-attitude — boarding/aboard-ness; cross-referenced, never restated)]
 ---
 
-# C9 — Ship control contract (tier-2 ships), clauses SHIPCTL-1..19
+# C9 — Ship control contract (tier-2 ships)
 
 **RATIFIED by the maintainer 2026-07-20** after a clause-by-clause review (rulings R1-R22 are all
 the maintainer's). `SHIPCTL-n` are permanent anchors: never renumber, never reuse. **Every fix to
@@ -166,6 +166,15 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   рядом с игроком можно оставить как требование, но чистить надо как-то автоматически"* (the dummy near
   the player may stay a requirement, but it must be cleaned up automatically), and the choice of the
   dummy-side check the same day (*"1"*).
+- **SHIPCTL-21** `[T][SYS]` A pilot input that ARRIVES at the flight computer takes the craft back
+  from its motion slot (ship-guidance MECH-GDN-01): the slot empties, whatever it held — an active or a
+  refused intent — and nothing in it resumes when he lets go; a pilot LEAVING (the null input of the
+  one-shot release) takes nothing back (`TileAdvancedFlightComputer#setPilotInput`). FOR: maintainer
+  2026-09-04, *"если пилот и ИИ пытаются писать в одну систему, значит ранее пилот отдал ИИ эту систему.
+  теперь он вернулся и управление снова его, ИИ больше не должен пытаться управлять этой системой."*
+  (if the pilot and the AI both try to write one system, the pilot handed it over earlier; now he is back
+  and control is his again, and the AI must stop trying to control it). Pinned by
+  `test/unit/MotionGuidanceLawsTest#aPilotsInputTakesTheCraftBackAndNothingResumes`.
 
 ## Rulings index (R1-R22, all maintainer, 2026-07-19 / 2026-07-20)
 
