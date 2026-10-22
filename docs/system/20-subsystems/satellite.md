@@ -64,6 +64,10 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
 | `RadiationWear` | the measured laws: shield factors, electronics budget, panel curve, memory upsets `satellite/RadiationWear.java` |
 | `FailureJournal` | a satellite's dated record of what failed aboard, bounded `satellite/FailureJournal.java` |
 | `DoseReadings` / `SatelliteDosimeter` | a dosimeter's dated readings, "absent here" over a fieldless body; the satellite type that takes them `satellite/DoseReadings.java`, `satellite/SatelliteDosimeter.java` |
+| `Downlink` | the terminal's place on its turning body and the line of sight from it — pure `satellite/Downlink.java` |
+| `GroundContact` | hands a terminal, a satellite and the bodies between them to `Downlink` at a tick `satellite/GroundContact.java` |
+| `TerminalReadout` | what a terminal has downloaded: rows by entry number since its last contact, and that contact's summary `tile/satellite/TerminalReadout.java` |
+| `ModuleSatelliteTerminal` / `ModuleSatelliteReadout` | the terminal's two pages, drawn from its client copy `inventory/modules/` |
 
 ## Mechanics
 
@@ -94,16 +98,18 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   and an acceptable controller chip). [V] `TileSatelliteBuilder.java:98,69` [T] `SatelliteBuilderPressBuildContractTest.java:76,133`
 - **MECH-SAT-09 Chip copy.** Button 1 copies a satellite/planet/station/ore-scanner chip into
   a blank second chip (holding slot), decrementing the source. [V] `TileSatelliteBuilder.java:144,160`
-- **MECH-SAT-10 Terminal link + download.** `TileSatelliteTerminal` resolves the satellite from
-  the slot-0 id chip, requires it be a `SatelliteData`, in-range
-  (`PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem`) and powered (≥1 RF), then pulls
-  data via `performAction`. Button 0 = manual connect (packet id 100); button 1 = erase (id
-  101) which removes the satellite from its dim and blanks the chip. [V] `TileSatelliteTerminal.java:207,283`
-  [T] `SatelliteTerminalChipRecognitionTest.java:87,133`
-- **MECH-SAT-11 Auto-download backoff.** `performFunction` (every 16 ticks) polls
-  `maybeAutoDownloadFromSatellite`: needs an adjacent enabled+extract `TileWirelessTransceiver`,
-  a resolvable satellite, link and power; interval doubles on each failed poll (64→512 ticks),
-  resets to 64 on success or on chip insertion / `extractData`. [V] `TileSatelliteTerminal.java:101,185`
+- **MECH-SAT-10 [V][BEH] Terminal link + download.** The terminal tries the satellite on its slot-0 chip
+  every 16 ticks, each terminal on a phase of its own taken from its place, when a chip naming a satellite
+  is put in, and whenever its player presses Download; a try costs 1 power. A try that reaches the satellite (MECH-SAT-31) takes the
+  satellite's whole data buffer into the terminal's, as much as that holds, and the journal entries and
+  dosimeter readings the satellite recorded since this terminal last read it (MECH-SAT-32). Data comes
+  only from a data satellite; a satellite of any type sends its journal and readings. Button 1 erases:
+  the satellite leaves its world's list and the chip is blanked. A wireless transceiver in extract mode
+  drains the terminal's buffer. `TileSatelliteTerminal.java` (`canPerformFunction`, `tryContact`,
+  `erase`, `extractData`). FOR: maintainer 2026-10-20 — the terminal receives only while the dish
+  can see it: *"угу"*.
+- **MECH-SAT-11** — retired (the auto-download's backoff: an interval doubling to 512 ticks misses a low
+  orbit's window, so the terminal tries on a fixed period).
 - **MECH-SAT-12 Terraforming terminal.** `TileTerraformingTerminal.update`: if a valid
   biome-changer chip is present and the block is redstone-powered, sets the visual `STATE`,
   syncs power/rate to nearby clients (packet id 22), and — when `enableTerraforming` — runs up
@@ -203,13 +209,18 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   (`sunlit`, `advance`), `SatelliteLife.java` (`starDirection`). FOR: maintainer 2026-10-21, on the
   body's shadow belonging to the dose's computation: *"согласен"*, and including it, *"по
   рекомендациям"*.
-- **MECH-SAT-24 [V][SYS] Data is collected with power.** A data satellite's instrument draws half of what
-  its working panels were built to give while it collects, and collects one point per `200/√(0.1·P)`
-  ticks of full power, `P` its built generation. Short of that power it collects for the share of the
-  segment the energy covers; with its buffer full it does not collect. So worn panels and eclipses mean
-  fewer points, with nothing lost. `SatelliteAccrual.java` (`advance`), `SatelliteData.java` (`payload`).
-  FOR: maintainer 2026-10-20, on the next contact window showing *"that less arrived than the power
-  allowed"*.
+- **MECH-SAT-24 [V][SYS] An instrument works when its power is covered, and only then.** The draw of an
+  instrument and its ticks of work per data point are the instrument's own — its primary function's type
+  states them, however large the panels: a data instrument draws 2 per tick and takes 316 ticks per point,
+  the dosimeter draws 1 (the basic build's balance, a 4-unit panel, kept). Segment by segment, the
+  instrument runs the whole segment when what the battery holds plus what the panels give over it, after
+  upkeep, covers its draw; otherwise it does nothing that segment and spends nothing. A data instrument
+  with its buffer full does not run. So worn panels and long eclipses on a small battery mean fewer points,
+  with nothing lost. `SatelliteAccrual.java` (`advance`), `SatelliteData.java`, `SatelliteDosimeter.java`
+  (`payload`). FOR: maintainer 2026-10-20, on the next contact window showing *"that less arrived than the
+  power allowed"*; 2026-10-22 on the draw and the rate being the instrument's, *"да, оба на прибор"*, on an
+  instrument short of power stopping, *"прибор перестает производить то, что он производит, то есть
+  работать"*, and on the battery powering it and the figures, *"Да, норм"*.
 - **MECH-SAT-25 [V][SYS] The dose reaches each part as it is placed.** From the body's field along its
   orbit, each segment gives a dose per belt (inner-belt protons, outer-belt electrons, Gy(Si) behind the
   reference shield, times the configured scale). The panels take the whole of it. What sits inside the
@@ -243,7 +254,7 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   `FailureJournal.java`. FOR: maintainer 2026-10-20, the device's own dated journal, *"да"*.
 - **MECH-SAT-29 [V][BEH] The dosimeter.** A primary function (`satellitePrimaryFunction` metadata 7, type
   `dosimeter`) that reads the trapped dose rate at the satellite's point once per segment, while its
-  electronics work, with the tick and the phase; over a body with no field the reading is "absent here".
+  electronics work and its power is covered (MECH-SAT-24), with the tick and the phase; over a body with no field the reading is "absent here".
   1024 readings are held, older ones dropped and counted. The quantity is `DataType.RADIATION_DOSE_RATE`,
   Gy/s. `SatelliteDosimeter.java`, `DoseReadings.java`. FOR: maintainer 2026-10-20 on the quantity,
   *"Я бы взял то, что по си"*; 2026-10-21 on the dosimeter, *"по рекомендациям"*.
@@ -254,11 +265,36 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   FOR: maintainer 2026-10-21: *"Износ можно отключить, да. Но рядом с флагом надо написать, что это
   отключает и часть геймплея."*
 
+### The downlink
+
+- **MECH-SAT-31 [V][BEH] Contact windows.** A terminal stands on its body's turning surface where its block
+  falls: a world block is a metre on the sphere, world x running east along the equator from meridian 0
+  and z along the meridian, north being −z, from the world's origin. The dish sees the terminal while the
+  satellite is not below the terminal's horizon and the satellite's own body does not stand between them;
+  a satellite of another body of the system is placed by where the two bodies stand at that tick. Both
+  turn with the space clock. A satellite on no orbit is not reached; a terminal on no body's surface — the
+  universe names no body for its world, or the body has no size or does not turn — has no place to see
+  from, says so, and logs why once. `Downlink.java`, `GroundContact.java`, `TileSatelliteTerminal.java`
+  (`tryContact`). FOR: maintainer 2026-10-20 on a geometric downlink (*"угу"*); 2026-10-21 on the terminal's place, *"Блок
+  = метр на сфере"*, and on the line of sight, *"Прямая видимость"*.
+- **MECH-SAT-32 [V][BEH] The readout.** The terminal's first page says what its last try came to and what
+  its last contact brought — the satellite's power and the points still aboard as it sent them, the
+  points received, those lost aboard since the contact before, and the parts that failed. Its second
+  page, opened by Journal, holds the rows downloaded at each contact — a failure or a reading, each with
+  its tick, its phase on the orbit and its value — newest first, ten to a page; and says how many rows the
+  satellite no longer held when it was read. 256 rows are kept, older ones dropped. A chip of another
+  satellite starts the table afresh. Readings, never a conclusion. The client draws both pages from the
+  terminal's own copy, which the server sends whenever the outcome changes or a contact brings anything.
+  `TerminalReadout.java`, `ModuleSatelliteTerminal.java`, `ModuleSatelliteReadout.java`. FOR: maintainer
+  2026-10-20 — on the next contact the terminal shows the failures since the last one and that
+  less arrived than the power allowed; 2026-10-21 on where the table lives, *"Вторая страница
+  терминала"*.
+
 ## State & persistence
 
 NBT keys: see `C1-nbt-persistence` (satellite). Notes: `data` is a nested `DataStorage` in distinct scopes (the satellite
-object vs the terminal tile), so the two never collide (`SatelliteData.java:149`, `TileSatelliteTerminal.java:333`);
-`collectionMultiplier` is written, read, then discarded (`SatelliteData.java:136,152`); `lastActionTime` is also GUI-synced
+object vs the terminal tile), so the two never collide (`SatelliteData.java`, `TileSatelliteTerminal.java`);
+`lastActionTime` is also GUI-synced
 through `sendChanges` window props. `TileTerraformingTerminal.writeToNBT`/`readFromNBT` are **no-ops** — its state is
 re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist only as packet-22 wire fields (transient).
 `SatelliteSpyTelescope` NBT bodies are empty. [V] `TileTerraformingTerminal.java:298,346`
@@ -269,6 +305,9 @@ each part that has taken dose carries `radiationDose` (Gy) on its own item. Ever
 {`segments`, `energyCarry`, `collectionCarry`, `journal` {`entries` [{`tick`, `phase`, `kind`, `count`,
 `slot`}], `dropped`}}; a dosimeter adds `readings` {`readings` [{`tick`, `phase`, `rate`?}], `dropped`}, a
 missing `rate` being "absent here". Nothing records where it has been: only the parts' doses and the journal.
+The terminal writes `outcome` and `readout` beside its `data` (keys in `C1-nbt-persistence`): its last try,
+how far into its satellite's journal and readings it has read, by entry number, its rows and its last
+contact; the whole tag rides its update packet to the clients watching it.
 The guidance computer writes `releaseAltitude` (metres, only when one is set) and `releaseInclination`
 (degrees). `EntitySatellite` writes nothing: it is never saved. Its attitude rides two synced data
 parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
@@ -286,12 +325,25 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   `completionTime`. `SatelliteBuilderPressBuildContractTest.java:76` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildAssemblesOpticalSatellite`.
 - **INV-SAT-06** [T][BEH] A chip-overriding type (weatherController) rejects the default id chip in
   `canAssembleSatellite`. `SatelliteBuilderPressBuildContractTest.java:133` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildRejectsDefaultChipForChipOverridingType`.
-- **INV-SAT-07** [A][BEH] Terminal status ladder: no chip→0, chip+no power→1, out of range→2,
-  linked→3; erase removes the satellite from its dim and blanks the chip.
-  `SatelliteTerminalChipRecognitionTest.java:87,107,120,133` (the out-of-range rung, status 2, has no test here) Pinned by `SatelliteTerminalChipRecognitionTest#chippedTerminalWithPowerReachesStatus3`, `SatelliteTerminalChipRecognitionTest#unchippedTerminalReportsNoLink`, `SatelliteTerminalChipRecognitionTest#chippedTerminalWithoutPowerReportsNoPower`, `SatelliteTerminalChipRecognitionTest#pressEraseRemovesSatelliteFromDimAndBlanksChip`.
-- **INV-SAT-08** [V][BEH] Terminal download requires the resolved satellite be a `SatelliteData`
-  subclass, in the same planetary system, with ≥`getPowerPerOperation()` RF.
-  `TileSatelliteTerminal.java:83,228`
+- **INV-SAT-07** [T][BEH] What the terminal's screen says is why nothing came, or that something did. A
+  try comes to the first of these that holds: no satellite on the chip; no power; the satellite outside
+  the terminal's planetary system; the satellite on no orbit; the terminal with no place to see from; the
+  satellite out of sight; in sight but silent, its primary function stopped; in contact with nothing new;
+  received. "Out of sight" and "silent" are different outcomes, so out of contact is never read as loss.
+  A chip put in is tried at once. Erase removes the satellite from its world's list and blanks the chip.
+  REGIONS: `no satellite`, `no power`, `not in orbit`, `no place`, `silent`, `erase`. Out of sight and
+  received are pinned as INV-SAT-38, out of range is INV-SAT-39. Pinned by
+  `SatelliteTerminalChipRecognitionTest#aTerminalWhoseChipNamesNoSatelliteSaysSo`,
+  `SatelliteTerminalChipRecognitionTest#aTerminalWithoutPowerSaysSo`,
+  `SatelliteTerminalChipRecognitionTest#aSatelliteStillOnTheGroundIsNotInOrbit`,
+  `SatelliteTerminalChipRecognitionTest#aTerminalInAWorldWithNoBodyHasNoPlaceToSeeFrom`,
+  `SatelliteTerminalChipRecognitionTest#aDeadSatelliteIsSilentInItsWindow`,
+  `SatelliteTerminalChipRecognitionTest#pressEraseRemovesSatelliteFromDimAndBlanksChip`. FOR: maintainer
+  2026-10-20 — "data lost because out of contact" is an honest false hypothesis beside the dose,
+  so the terminal must tell the two apart.
+- **INV-SAT-08** [V][BEH] Data reaches the terminal only from a data satellite; a satellite of any type
+  sends its journal and readings. `TileSatelliteTerminal.java` (`tryContact`). FOR: MECH-SAT-28,
+  MECH-SAT-29 — the journal and the dosimeter's readings are read through the terminal.
 - **INV-SAT-09** [V][BEH] `TileTerraformingTerminal` hides its Forge-Energy / Tesla capability so
   probes/pipes see no energy handler. `TileTerraformingTerminal.java:327,337`
 - **INV-SAT-10** [V][BEH] `maxQueuedBlocks` bounds a biome changer's `toChangeList` PER SATELLITE: 1 024
@@ -374,11 +426,16 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   environment gives at the satellite's point at that reading's tick; over a body with no field every
   reading is "absent here". REGIONS: `field`, `no field`. Pinned by `SatelliteJointsTest#theDosimeterReadsThePlace`. FOR: maintainer 2026-10-20 on the dose quantity,
   *"Я бы взял то, что по си"*, and a body with no field read as "absent here", never as zero.
-- **INV-SAT-27 [T][SYS] Power bounds what is collected.** The battery holds between empty and its capacity;
-  in the body's shadow nothing is generated; in full light with energy to spare one point arrives per
-  collection time, never more and never past the buffer's capacity; and a satellite whose panels give less
-  collects fewer points than one whose panels give what they were built to, with nothing lost. REGIONS:
-  `light`, `shadow`, `full buffer`, `worn panels`. Pinned by `SatelliteLawsTest#powerBoundsWhatIsCollected`. FOR: maintainer 2026-10-20, a contact window showing *"that less arrived than the power allowed"*.
+- **INV-SAT-27 [T][SYS] Power decides whether the instrument works.** The battery holds between empty and its
+  capacity; in the body's shadow nothing is generated; a working data instrument brings one point per its
+  own time of work, never past the buffer's capacity, and a full buffer does not run it; two satellites
+  that differ only in panels both large enough collect the same points; and a segment whose battery and
+  panels after upkeep cannot cover the draw brings no point and costs the battery nothing — the
+  instrument stops rather than collect a share; a dosimeter so short of power records no reading. REGIONS:
+  `light`, `shadow`, `full buffer`, `larger panels`, `short of power`, `unpowered dosimeter`. Pinned by
+  `SatelliteLawsTest#powerBoundsWhatIsCollected`. FOR: maintainer 2026-10-20, a contact window
+  showing *"that less arrived than the power allowed"*; 2026-10-22, the instrument's own draw and rate and
+  its stopping when short of power.
 - **INV-SAT-28 [T][SYS] Nothing records where it has been.** What a satellite persists of its life is its
   progress along the grid, the carries below one unit, its journal, its readings and its parts' doses — no
   region, no flag of having been somewhere. Pinned by `SatelliteLawsTest#nothingRecordsWhereItHasBeen`. FOR: the design of the satellite on its orbit, *"Nothing stores 'was in the
@@ -414,6 +471,40 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   by `SatelliteLawsTest#eachDataSatelliteCollectsItsOneQuantity`. FOR: a storage takes a point only of its
   own quantity (`DataStorage#addData`), so a scanner that changed its quantity would hand every reader of
   its data the wrong one.
+- **INV-SAT-35 [T][SYS] A terminal stands where its block falls on its turning body.** At the world's origin
+  it stands on the equator under meridian 0; a block x metres east stands x/R further round the equator, R
+  the body's radius; z metres north (−z) stands z/R up the meridian, and a walk past the pole comes down
+  the far side; and the place turns with the body, a whole turn per rotational period. REGIONS: `origin`,
+  `east`, `north`, `over the pole`, `turning`. Pinned by
+  `SatelliteLawsTest#aTerminalStandsWhereItsBlockFallsOnItsTurningBody`. FOR: maintainer 2026-10-21, on the
+  terminal's place, *"Блок = метр на сфере"*.
+- **INV-SAT-36 [T][SYS] The dish sees the terminal only above its horizon and past every body between.** A
+  satellite overhead is seen, one on the terminal's horizon is seen, one below it is not; a satellite
+  behind another body is not seen, one beside that body is. REGIONS: `overhead`, `on the horizon`,
+  `below the horizon`, `behind a body`, `beside a body`. Pinned by
+  `SatelliteLawsTest#theDishSeesTheTerminalOnlyAboveItsHorizonAndPastEveryBody`. FOR: maintainer 2026-10-21,
+  on the line of sight, *"Прямая видимость"*.
+- **INV-SAT-37 [T][SYS] Each contact brings what was recorded since the one before, once.** The first
+  contact with a satellite brings its whole journal and every reading, in the order of their ticks; the next brings only what was
+  recorded since, counting the points lost aboard and the parts that failed; a contact with nothing
+  recorded since brings nothing; entries the satellite had already dropped are counted as missed, never
+  passed off as none; and another satellite's contact replaces the table. REGIONS: `first contact`,
+  `nothing new`, `new failures`, `journal overran`, `another satellite`. Pinned by
+  `SatelliteLawsTest#eachContactBringsWhatWasRecordedSinceTheOneBefore`. FOR: maintainer 2026-10-20 —
+  on the next contact the terminal shows the failures since the last one.
+- **INV-SAT-38 [T][BEH] A terminal receives only while the dish sees it.** A terminal beneath a satellite
+  released over it is in contact; it loses sight when the satellite drops below its horizon and regains it
+  when the satellite next rises, each at the first try after the moment the orbit's geometry gives, and
+  nothing reaches it in between while the satellite's buffer fills. REGIONS: `in sight`, `loses sight`,
+  `nothing while hidden`, `regains sight`. Pinned by
+  `SatelliteTerminalChipRecognitionTest#aTerminalReceivesOnlyWhileTheDishSeesIt`. FOR: maintainer
+  2026-10-20 — the terminal receives only while the dish can see it, *"угу"*.
+- **INV-SAT-39 [A][BEH] A satellite outside the terminal's planetary system is out of range.** A try for a
+  satellite of a body that is neither the terminal's world's planet nor one of its moons comes to "out of
+  range" before anything is asked of the satellite's orbit (`TileSatelliteTerminal.java`, `tryContact`).
+  Unpinned: the shared test server registers one planetary system only (Earth and Luna), so no satellite
+  outside it can be staged; the instrument that stages a second one is owed. FOR: maintainer 2026-10-20 —
+  the terminal's screen tells out of contact apart from loss, and out of range is a reason no window cures.
 
 ## Failure modes & edge cases
 
@@ -470,14 +561,17 @@ and the guidance computer's screen fields. "Never a physics ship" holds by const
 spawns a plain entity and nothing on its path reaches the physics substrate.
 The dose on its parts: INV-SAT-21, -23..-25, -27..-31 → `SatelliteLawsTest` (unit); INV-SAT-22, -26 →
 `SatelliteJointsTest` (integration, the joint with `environment`); INV-SAT-32, -33 → `SatelliteOnItsOrbitGroupTest`
-(server). Not pinned: a player's path to seeing a failure — the journal's and the dosimeter's readout is
-the terminal's downlink, not built yet; and the renewal through a window click (INV-SAT-33 enters the
+(server). Not pinned: a player's path to seeing a failure on the terminal's screen; and the renewal through a window click (INV-SAT-33 enters the
 panel's inventory on the server).
 INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
-`SatelliteLawsTest` (unit); scanning types → `ScanningSatelliteTickContractTest`,
+`SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), INV-SAT-07, -38 →
+`SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 is owed an instrument that stages a second
+planetary system. Not pinned: the readout's pages on the client (drawn from the terminal's copy, which the
+update packet carries), and a player's path to seeing a failure — the client harness has no reader of a
+screen's text or of a tile's client copy yet; scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
 `SatelliteLifecycleSmokeTest`, `SatelliteCoverageGapsTest`.
 

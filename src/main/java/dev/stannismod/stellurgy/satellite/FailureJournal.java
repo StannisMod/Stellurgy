@@ -73,6 +73,22 @@ public final class FailureJournal {
         return dropped;
     }
 
+    /** How many entries were ever recorded, the dropped ones included: the number the next one will have. */
+    public long recorded() {
+        return dropped + entries.size();
+    }
+
+    /**
+     * The entries held whose number — counting every entry ever recorded from zero — is {@code first} or
+     * later, oldest first. Numbered rather than dated because a failure is recorded when the satellite's
+     * life is brought past it, which may be well after its tick.
+     */
+    public List<Entry> since(long first) {
+        List<Entry> held = new ArrayList<>(entries);
+        int skip = (int) Math.max(0L, Math.min(held.size(), first - dropped));
+        return Collections.unmodifiableList(held.subList(skip, held.size()));
+    }
+
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagList list = new NBTTagList();
         for (Entry e : entries) {

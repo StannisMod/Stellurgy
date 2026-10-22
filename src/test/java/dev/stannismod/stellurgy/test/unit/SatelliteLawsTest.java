@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.environment.BodyRotation;
 import dev.stannismod.stellurgy.environment.MagnetosphereDerivation;
 import dev.stannismod.stellurgy.environment.PlanetEnvironment;
 import dev.stannismod.stellurgy.satellite.DoseReadings;
+import dev.stannismod.stellurgy.satellite.Downlink;
 import dev.stannismod.stellurgy.satellite.FailureJournal;
 import dev.stannismod.stellurgy.satellite.RadiationWear;
 import dev.stannismod.stellurgy.satellite.SatelliteAccrual;
@@ -23,6 +24,7 @@ import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Regions;
+import dev.stannismod.stellurgy.tile.satellite.TerminalReadout;
 import dev.stannismod.stellurgy.util.WeightEngine;
 import net.minecraft.nbt.NBTTagCompound;
 import org.joml.Vector3d;
@@ -43,8 +45,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The laws of a satellite on its orbit (`satellite`): INV-SAT-11..15, and of the dose on its parts:
- * INV-SAT-21, -23..-25, -27..-30.
+ * The laws of a satellite on its orbit (`satellite`): INV-SAT-11..15, of the dose on its parts:
+ * INV-SAT-21, -23..-25, -27..-31, of the quantity a data satellite collects, INV-SAT-34, and of the
+ * downlink: INV-SAT-35..37.
  *
  * <p>Every orbit here is released by production ({@link SatelliteOrbit#releasedAt}) about a body the test
  * states — a gravitational parameter, a radius, a rotation — and every expected value is the test's own
@@ -356,11 +359,12 @@ public class SatelliteLawsTest {
     private static final double BODY_RADIUS_M = 6.371e6d;
     /** A large solar panel's power per tick — an input of the experiment. */
     private static final double PANEL_POWER = 40d;
-    /**
-     * MECH-SAT-24's collection time for a satellite built for {@link #PANEL_POWER}: 200/√(0.1·P) ticks.
-     * A constant: a final double computed once from two literals.
-     */
-    private static final double COLLECTION_TICKS = 200d / Math.sqrt(0.1d * PANEL_POWER);
+    /** A data instrument's ticks of work per point — an input of the experiment. */
+    private static final double COLLECTION_TICKS = 100d;
+    /** A data instrument's draw per tick — an input of the experiment. */
+    private static final double INSTRUMENT_DRAW = 2d;
+    /** A dosimeter's draw per tick — an input of the experiment. */
+    private static final double DOSIMETER_DRAW = 1d;
     /** A data unit's capacity, points — an input of the experiment. */
     private static final int DATA_UNIT_POINTS = 1000;
     /** A battery's capacity — an input of the experiment, large enough that no eclipse empties it. */
@@ -412,11 +416,11 @@ public class SatelliteLawsTest {
     }
 
     private static SatelliteAccrual.Payload collector() {
-        return new SatelliteAccrual.Payload(true, false, COLLECTION_TICKS);
+        return new SatelliteAccrual.Payload(true, false, COLLECTION_TICKS, INSTRUMENT_DRAW);
     }
 
     private static SatelliteAccrual.Payload dosimeter() {
-        return new SatelliteAccrual.Payload(false, true, 0d);
+        return new SatelliteAccrual.Payload(false, true, 0d, DOSIMETER_DRAW);
     }
 
     private static SatelliteAccrual.State freshState(double energyCap, boolean withReadings) {
@@ -652,8 +656,8 @@ public class SatelliteLawsTest {
     @Pins("INV-SAT-25")
     @Regions(of = "INV-SAT-25", value = {"below budget", "at budget", "renewed", "data unit"})
     @RedWitness(verdict = "below budget", member = "SatelliteAccrual#advance",
-            at = "if (functioning && payload.readsDose && here.isPresent()) {", replacedBy = "if (false) {",
-            fails = "INV-SAT-25: below budget — a working dosimeter did not read", on = "2026-10-21")
+            at = "if (works && payload.readsDose && here.isPresent()) {", replacedBy = "if (false) {",
+            fails = "INV-SAT-25: below budget — a working dosimeter did not read", on = "2026-10-22")
     @RedWitness(verdict = "at budget", member = "RadiationWear#electronicsWork",
             at = "return doseGy < ELECTRONICS_BUDGET_GY;", replacedBy = "return true;",
             fails = "INV-SAT-25: at budget — the primary function works past its budget", on = "2026-10-21")
@@ -740,13 +744,16 @@ public class SatelliteLawsTest {
      * INV-SAT-27: a satellite without an instrument on an equatorial low orbit under a star along +x,
      * segment by segment — in the body's shadow (the test's own cylinder on the segment's middle) its
      * battery only pays the upkeep, in light it gains the panel's power less the upkeep, never past its
-     * capacity or below empty. A data satellite with its buffer full collects nothing; one in light with
-     * energy to spare collects a point per collection time; and of two about a body with no field (so no
-     * dose, no loss), the one whose panel was worn to 0.4 of its power collects fewer points than the new
-     * one, and neither journals anything.
+     * capacity or below empty. A data satellite with its buffer full does not run its instrument. Then, on a
+     * polar orbit square to the star, so always lit: two satellites whose panels give 4 and 40 — both over
+     * the draw — collect the same points; one with a 40 panel collects a point per its instrument's time; one
+     * whose panel only pays its upkeep and whose battery holds less than a segment's draw collects nothing
+     * and keeps its battery; and a dosimeter so powered records no reading where one with a 40 panel records
+     * one a segment.
      */
     @Pins("INV-SAT-27")
-    @Regions(of = "INV-SAT-27", value = {"light", "shadow", "full buffer", "worn panels"})
+    @Regions(of = "INV-SAT-27", value = {"light", "shadow", "full buffer", "larger panels", "short of power",
+            "unpowered dosimeter"})
     @RedWitness(verdict = "light", member = "SatelliteAccrual#advance",
             at = "double generation = sunlit(position, star, body.radiusM) ? generation(parts, rules) : 0d;",
             replacedBy = "double generation = sunlit(position, star, body.radiusM) ? generation(parts, rules) / 2d : 0d;",
@@ -757,16 +764,23 @@ public class SatelliteLawsTest {
             at = "state.data = Math.min(dataCap, state.data + points);", replacedBy = "state.data = state.data + points;",
             fails = "INV-SAT-27: full buffer — the buffer went past its capacity", on = "2026-10-21")
     @RedWitness(verdict = "full buffer idle", member = "SatelliteAccrual#advance",
-            at = "boolean collecting = functioning && payload.collectsData && state.data < dataCap;",
-            replacedBy = "boolean collecting = functioning && payload.collectsData;",
-            fails = "INV-SAT-27: full buffer — a full buffer still spent power collecting", on = "2026-10-21")
+            at = "boolean collecting = payload.collectsData && state.data < dataCap;",
+            replacedBy = "boolean collecting = payload.collectsData;",
+            fails = "INV-SAT-27: full buffer — a full buffer still spent power collecting", on = "2026-10-22")
+    @RedWitness(verdict = "larger panels", member = "SatelliteAccrual#advance",
+            at = "state.collectionCarry += step;", replacedBy = "state.collectionCarry += step * generation / 4d;",
+            fails = "INV-SAT-27: larger panels", on = "2026-10-22")
     @RedWitness(verdict = "collection time", member = "SatelliteAccrual#advance",
-            at = "state.collectionCarry += collectedTicks;", replacedBy = "state.collectionCarry += 2d * collectedTicks;",
-            fails = "INV-SAT-27: light — not one point per collection time", on = "2026-10-21")
-    @RedWitness(verdict = "worn panels", member = "SatelliteAccrual#advance",
-            at = "double need = INSTRUMENT_SHARE_OF_GENERATION * nominalGeneration(parts, rules) * step;",
-            replacedBy = "double need = 0d;",
-            fails = "INV-SAT-27: worn panels — the worn satellite did not collect fewer points", on = "2026-10-21")
+            at = "state.collectionCarry += step;", replacedBy = "state.collectionCarry += 2d * step;",
+            fails = "INV-SAT-27: light — not one point per collection time", on = "2026-10-22")
+    @RedWitness(verdict = "short of power", member = "SatelliteAccrual#advance",
+            at = "boolean works = functioning && (collecting || payload.readsDose) && available >= need;",
+            replacedBy = "boolean works = functioning && (collecting || payload.readsDose);",
+            fails = "INV-SAT-27: short of power", on = "2026-10-22")
+    @RedWitness(verdict = "unpowered dosimeter", member = "SatelliteAccrual#advance",
+            at = "if (works && payload.readsDose && here.isPresent()) {",
+            replacedBy = "if (functioning && payload.readsDose && here.isPresent()) {",
+            fails = "INV-SAT-27: unpowered dosimeter", on = "2026-10-22")
     @Test
     public void powerBoundsWhatIsCollected() {
         SatelliteOrbit orbit = orbitAt(LOW_ORBIT_RADIUS_M, 0d);
@@ -775,7 +789,7 @@ public class SatelliteLawsTest {
         double cap = 30_000d;
         List<SatelliteAccrual.Part> parts = dataSatellite(false, 0d);
         SatelliteAccrual.State bare = new SatelliteAccrual.State(0L, cap / 2d, cap, 0L, 0d, new FailureJournal(), null);
-        SatelliteAccrual.Payload none = new SatelliteAccrual.Payload(false, false, 0d);
+        SatelliteAccrual.Payload none = new SatelliteAccrual.Payload(false, false, 0d, 0d);
         int lit = 0;
         int dark = 0;
         for (int k = 1; k <= 3 * 64; k++) {
@@ -814,25 +828,40 @@ public class SatelliteLawsTest {
         // plane, so no point of it is ever in the shadow.
         SatelliteAccrual.Body litAlways = new SatelliteAccrual.Body(orbitAt(LOW_ORBIT_RADIUS_M, 90d), Optional.of(noField()),
                 tick -> Optional.of(new Vector3d(0d, 1d, 0d)), BODY_RADIUS_M);
-        SatelliteAccrual.State collecting = new SatelliteAccrual.State(0L, cap, cap, 0L, 0d, new FailureJournal(), null);
         long ticks = 200L * step;
-        SatelliteAccrual.advance(litAlways, dataSatellite(false, 0d), collector(), collecting, wearOn(), 8L, ticks);
+        assertTrue("arrangement: a 4-unit panel covers the instrument's draw after upkeep",
+                4d - 1d >= INSTRUMENT_DRAW);
+        SatelliteAccrual.State small = new SatelliteAccrual.State(0L, 0d, cap, 0L, 0d, new FailureJournal(), null);
+        SatelliteAccrual.State large = new SatelliteAccrual.State(0L, 0d, cap, 0L, 0d, new FailureJournal(), null);
+        SatelliteAccrual.advance(litAlways, withPanel(4d), collector(), small, wearOn(), 8L, ticks);
+        SatelliteAccrual.advance(litAlways, withPanel(PANEL_POWER), collector(), large, wearOn(), 8L, ticks);
+        assertEquals("INV-SAT-27: larger panels — a 40 panel's instrument collected unlike a 4 panel's",
+                small.data(), large.data());
         assertEquals("INV-SAT-27: light — not one point per collection time in full power",
-                Math.floor(ticks / COLLECTION_TICKS), collecting.data(), 1d);
+                Math.floor(ticks / COLLECTION_TICKS), large.data(), 1d);
 
-        List<SatelliteAccrual.Part> worn = dataSatellite(false, 0d);
-        worn.set(1, new SatelliteAccrual.Part(1, SatelliteAccrual.PartKind.POWER_GENERATION, false, PANEL_POWER, 0, 316e3d));
-        assertEquals("arrangement: the worn panel gives 0.4 of its power", 0.4d,
-                slot(worn, 1).powerPerTick(wearOn()) / PANEL_POWER, 0.01d);
-        SatelliteAccrual.State wornState = new SatelliteAccrual.State(0L, 0d, 720d, 0L, 0d, new FailureJournal(), null);
-        SatelliteAccrual.State newState = new SatelliteAccrual.State(0L, 0d, 720d, 0L, 0d, new FailureJournal(), null);
-        SatelliteAccrual.advance(body, worn, collector(), wornState, wearOn(), 9L, DAY_TICKS);
-        SatelliteAccrual.advance(body, dataSatellite(false, 0d), collector(), newState, wearOn(), 9L, DAY_TICKS);
-        assertTrue("INV-SAT-27: worn panels — the worn satellite did not collect fewer points ("
-                + wornState.data() + " against " + newState.data() + ")", wornState.data() < newState.data());
-        assertTrue("arrangement: worn panels — the worn satellite collected something", wornState.data() > 0L);
-        assertTrue("INV-SAT-27: worn panels — something was journalled with no field",
-                wornState.journal().entries().isEmpty() && newState.journal().entries().isEmpty());
+        double held = 10d;
+        assertTrue("arrangement: the battery holds less than one segment's draw", held < INSTRUMENT_DRAW * step);
+        SatelliteAccrual.State starved = new SatelliteAccrual.State(0L, held, cap, 0L, 0d, new FailureJournal(), null);
+        SatelliteAccrual.advance(litAlways, withPanel(1d), collector(), starved, wearOn(), 9L, ticks);
+        assertEquals("INV-SAT-27: short of power — an instrument its power cannot cover collected", 0L, starved.data());
+        assertEquals("INV-SAT-27: short of power — an idle instrument spent the battery", held, starved.energy(), 1e-9d);
+
+        SatelliteAccrual.State unpowered = new SatelliteAccrual.State(0L, 0d, cap, 0L, 0d, new FailureJournal(), new DoseReadings());
+        SatelliteAccrual.State powered = new SatelliteAccrual.State(0L, 0d, cap, 0L, 0d, new FailureJournal(), new DoseReadings());
+        SatelliteAccrual.advance(litAlways, withPanel(1d), dosimeter(), unpowered, wearOn(), 10L, ticks);
+        SatelliteAccrual.advance(litAlways, withPanel(PANEL_POWER), dosimeter(), powered, wearOn(), 10L, ticks);
+        assertEquals("arrangement: a powered dosimeter reads once a segment", ticks / step,
+                powered.readings().readings().size());
+        assertEquals("INV-SAT-27: unpowered dosimeter — a dosimeter its power cannot cover read", 0,
+                unpowered.readings().readings().size());
+    }
+
+    /** {@link #dataSatellite} with its one panel giving {@code power} per tick. */
+    private static List<SatelliteAccrual.Part> withPanel(double power) {
+        List<SatelliteAccrual.Part> parts = dataSatellite(false, 0d);
+        parts.set(1, new SatelliteAccrual.Part(1, SatelliteAccrual.PartKind.POWER_GENERATION, false, power, 0, 0d));
+        return parts;
     }
 
     /**
@@ -913,9 +942,9 @@ public class SatelliteLawsTest {
             replacedBy = "return nominalPowerPerTick * RadiationWear.panelPowerFraction(doseGy + 1e5d);",
             fails = "INV-SAT-29: wear off — the panel does not give its full power", on = "2026-10-21")
     @RedWitness(verdict = "off: readings", member = "SatelliteAccrual#advance",
-            at = "if (functioning && payload.readsDose && here.isPresent()) {",
-            replacedBy = "if (functioning && payload.readsDose && here.isPresent() && rules.wearEnabled) {",
-            fails = "INV-SAT-29: wear off — the dosimeter read differently", on = "2026-10-21")
+            at = "if (works && payload.readsDose && here.isPresent()) {",
+            replacedBy = "if (works && payload.readsDose && here.isPresent() && rules.wearEnabled) {",
+            fails = "INV-SAT-29: wear off — the dosimeter read differently", on = "2026-10-22")
     @Test
     public void switchedOffTheDoseDoesNothing() {
         SatelliteAccrual.Body body = about(orbitAt(LOW_ORBIT_RADIUS_M, 51.6d), earthLikeField());
@@ -986,5 +1015,215 @@ public class SatelliteLawsTest {
         double fiveKrad = 5_000d / 100d;
         assertTrue("INV-SAT-30: electronics stop below 5 krad", RadiationWear.electronicsWork(Math.nextDown(fiveKrad)));
         assertFalse("INV-SAT-30: electronics work at 5 krad", RadiationWear.electronicsWork(fiveKrad));
+    }
+
+    // ---- the downlink: INV-SAT-35..37 ---------------------------------------------------------------------
+    //
+    // The terminal's place and the line of sight are pure geometry, entered here with a body the test states;
+    // the readout is fed journals and readings read from the NBT production writes them as. What these laws
+    // do NOT see: where the terminal takes its body, its rotation and the satellite's orbit from, and the
+    // terminal's tries — the wiring, held in the harness (SatelliteTerminalChipRecognitionTest).
+
+    /** A body's radius for the downlink's geometry, m — an input of the experiment. */
+    private static final double DOWNLINK_BODY_RADIUS_M = 1.0e6d;
+    /** The geometry's tolerance, m: far below any distance the laws tell apart, far above double rounding of a megametre. */
+    private static final double PLACE_TOLERANCE_M = 1e-3d;
+
+    /**
+     * INV-SAT-35: the origin on the equator under meridian 0; a quarter of the circumference east, a quarter
+     * turn round; an eighth north, 45° up the meridian; past the pole by 0.3 rad, 0.3 rad down the far
+     * side; and a quarter of the rotational period later, the origin a quarter turn round. Each expected
+     * point is the test's own spherical arithmetic on a body of radius {@link #DOWNLINK_BODY_RADIUS_M} turning once
+     * in 400 ticks.
+     */
+    @Pins("INV-SAT-35")
+    @Regions(of = "INV-SAT-35", value = {"origin", "east", "north", "over the pole", "turning"})
+    @RedWitness(verdict = "origin", member = "Downlink#surfacePoint", at = "double cosNorth = Math.cos(north);",
+            replacedBy = "double cosNorth = Math.sin(north);", fails = "INV-SAT-35: origin", on = "2026-10-21")
+    @RedWitness(verdict = "east", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) + x / radiusM",
+            replacedBy = "rotation.angleAt(tick) - x / radiusM", fails = "INV-SAT-35: east", on = "2026-10-21")
+    @RedWitness(verdict = "north", member = "Downlink#surfacePoint", at = "double north = -z / radiusM;",
+            replacedBy = "double north = z / radiusM;", fails = "INV-SAT-35: north", on = "2026-10-21")
+    @RedWitness(verdict = "over the pole", member = "Downlink#surfacePoint", at = "double north = -z / radiusM;",
+            replacedBy = "double north = Math.max(-Math.PI / 2d, Math.min(Math.PI / 2d, -z / radiusM));",
+            fails = "INV-SAT-35: over the pole", on = "2026-10-21")
+    @RedWitness(verdict = "turning", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) + x / radiusM",
+            replacedBy = "x / radiusM", fails = "INV-SAT-35: turning", on = "2026-10-21")
+    @Test
+    public void aTerminalStandsWhereItsBlockFallsOnItsTurningBody() {
+        BodyRotation day = BodyRotation.of(400L, 0d);
+        double r = DOWNLINK_BODY_RADIUS_M;
+        assertPlace("origin", new Vector3d(r, 0d, 0d), Downlink.surfacePoint(0d, 0d, r, day, 0L));
+        assertPlace("east", new Vector3d(0d, r, 0d), Downlink.surfacePoint(r * Math.PI / 2d, 0d, r, day, 0L));
+        double half = Math.sqrt(0.5d) * r;
+        assertPlace("north", new Vector3d(half, 0d, half), Downlink.surfacePoint(0d, -r * Math.PI / 4d, r, day, 0L));
+        assertPlace("over the pole", new Vector3d(-r * Math.sin(0.3d), 0d, r * Math.cos(0.3d)),
+                Downlink.surfacePoint(0d, -r * (Math.PI / 2d + 0.3d), r, day, 0L));
+        assertPlace("turning", new Vector3d(0d, r, 0d), Downlink.surfacePoint(0d, 0d, r, day, 100L));
+    }
+
+    private static void assertPlace(String region, Vector3dc expected, Vector3dc actual) {
+        assertTrue("INV-SAT-35: " + region + " — the terminal stands at " + actual + ", not " + expected,
+                new Vector3d(expected).sub(actual).length() < PLACE_TOLERANCE_M);
+    }
+
+    /**
+     * INV-SAT-36: a terminal on the equator of a body of radius R at the origin, and satellites placed
+     * against it by the test: three R out overhead; on its horizon; a little below it; eight R out with a
+     * body of radius R standing at five R between them; and three R off that body's side, where the line
+     * passes it at 2.4 R.
+     */
+    @Pins("INV-SAT-36")
+    @Regions(of = "INV-SAT-36", value = {"overhead", "on the horizon", "below the horizon", "behind a body", "beside a body"})
+    @RedWitness(verdict = "overhead", member = "Downlink#sees",
+            at = "return hidingRadiusM <= 0d || !passesThrough(terminal, line, hidingCentre, hidingRadiusM);",
+            replacedBy = "return false;", fails = "INV-SAT-36: overhead", on = "2026-10-21")
+    @RedWitness(verdict = "on the horizon", member = "Downlink#sees", at = "line.dot(terminal) < 0d",
+            replacedBy = "line.dot(terminal) <= 0d", fails = "INV-SAT-36: on the horizon", on = "2026-10-21")
+    @RedWitness(verdict = "below the horizon", member = "Downlink#sees", at = "line.dot(terminal) < 0d",
+            replacedBy = "false", fails = "INV-SAT-36: below the horizon", on = "2026-10-21")
+    @RedWitness(verdict = "behind a body", member = "Downlink#sees",
+            at = "return hidingRadiusM <= 0d || !passesThrough(terminal, line, hidingCentre, hidingRadiusM);",
+            replacedBy = "return true;", fails = "INV-SAT-36: behind a body", on = "2026-10-21")
+    @RedWitness(verdict = "beside a body", member = "Downlink#passesThrough",
+            at = "return nearest.lengthSquared() < radiusM * radiusM;",
+            replacedBy = "return nearest.lengthSquared() < 9d * radiusM * radiusM;", fails = "INV-SAT-36: beside a body",
+            on = "2026-10-21")
+    @Test
+    public void theDishSeesTheTerminalOnlyAboveItsHorizonAndPastEveryBody() {
+        double r = DOWNLINK_BODY_RADIUS_M;
+        Vector3d terminal = new Vector3d(r, 0d, 0d);
+        Vector3d none = new Vector3d();
+        assertTrue("INV-SAT-36: overhead — a satellite straight above is not seen",
+                Downlink.sees(terminal, new Vector3d(3d * r, 0d, 0d), none, 0d));
+        assertTrue("INV-SAT-36: on the horizon — a satellite on the horizon is not seen",
+                Downlink.sees(terminal, new Vector3d(r, 2d * r, 0d), none, 0d));
+        assertFalse("INV-SAT-36: below the horizon — a satellite below the horizon is seen",
+                Downlink.sees(terminal, new Vector3d(0.5d * r, 2d * r, 0d), none, 0d));
+        Vector3d between = new Vector3d(5d * r, 0d, 0d);
+        assertFalse("INV-SAT-36: behind a body — a satellite behind a body is seen",
+                Downlink.sees(terminal, new Vector3d(8d * r, 0d, 0d), between, r));
+        assertTrue("INV-SAT-36: beside a body — a satellite whose line passes a body at 2.4 R is not seen",
+                Downlink.sees(terminal, new Vector3d(5d * r, 3d * r, 0d), between, r));
+    }
+
+    /**
+     * INV-SAT-37: one terminal's readout over five contacts — the first with one loss and two readings; the
+     * same again; then a part failure and an overflow added; then a journal that dropped its oldest seven
+     * while the terminal had read three; then another satellite. Every expected row and count is read off
+     * the journals the test wrote.
+     */
+    @Pins("INV-SAT-37")
+    @Regions(of = "INV-SAT-37", value = {"first contact", "nothing new", "new failures", "journal overran", "another satellite"})
+    @RedWitness(verdict = "first contact", member = "TerminalReadout#take",
+            at = "fresh.add(new Row(e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN));", replacedBy = "",
+            fails = "INV-SAT-37: first contact", on = "2026-10-21")
+    @RedWitness(verdict = "nothing new", member = "TerminalReadout#take", at = "journalNext = journal.recorded();",
+            replacedBy = "", fails = "INV-SAT-37: nothing new", on = "2026-10-21")
+    @RedWitness(verdict = "new failures", member = "TerminalReadout#take", at = "parts++;", replacedBy = "",
+            fails = "INV-SAT-37: new failures", on = "2026-10-21")
+    @RedWitness(verdict = "journal overran", member = "TerminalReadout#take",
+            at = "long missed = Math.max(0L, journal.dropped() - journalNext);", replacedBy = "long missed = 0L;",
+            fails = "INV-SAT-37: journal overran", on = "2026-10-21")
+    @RedWitness(verdict = "another satellite", member = "TerminalReadout#take", at = "rows.clear();", replacedBy = "",
+            fails = "INV-SAT-37: another satellite", on = "2026-10-21")
+    @Test
+    public void eachContactBringsWhatWasRecordedSinceTheOneBefore() {
+        TerminalReadout readout = new TerminalReadout();
+        long[][] lossAt10 = {{10L, FailureJournal.Kind.DATA_LOST.ordinal(), 3, -1}};
+        DoseReadings readings = readingsOf(new long[]{15L, 25L}, new double[]{1e-5d, Double.NaN});
+
+        TerminalReadout.Contact first = readout.take(7L, journalOf(0L, lossAt10), readings, 5, 0, 0, 0);
+        assertEquals("INV-SAT-37: first contact — the rows, by tick",
+                "10 DATA_LOST 3 | 15 DOSE_RATE 1.0E-5 | 25 DOSE_RATE absent", rowsOf(readout));
+        assertEquals("INV-SAT-37: first contact — received, lost aboard, parts, readings, missed",
+                "5 3 0 2 0", countsOf(first));
+
+        TerminalReadout.Contact again = readout.take(7L, journalOf(0L, lossAt10), readings, 0, 0, 0, 0);
+        assertEquals("INV-SAT-37: nothing new — the rows", "10 DATA_LOST 3 | 15 DOSE_RATE 1.0E-5 | 25 DOSE_RATE absent",
+                rowsOf(readout));
+        assertEquals("INV-SAT-37: nothing new — the counts", "0 0 0 0 0", countsOf(again));
+        assertFalse("INV-SAT-37: nothing new — a contact that brought nothing says it brought something",
+                again.broughtAnything());
+
+        long[][] withTwoMore = {lossAt10[0], {30L, FailureJournal.Kind.PART_FAILED.ordinal(), 1, 2},
+                {40L, FailureJournal.Kind.DATA_OVERFLOWED.ordinal(), 4, -1}};
+        TerminalReadout.Contact more = readout.take(7L, journalOf(0L, withTwoMore), readings, 0, 0, 0, 0);
+        assertEquals("INV-SAT-37: new failures — received, lost aboard, parts, readings, missed",
+                "0 4 1 0 0", countsOf(more));
+        assertEquals("INV-SAT-37: new failures — the rows",
+                "10 DATA_LOST 3 | 15 DOSE_RATE 1.0E-5 | 25 DOSE_RATE absent | 30 PART_FAILED slot 2 | 40 DATA_OVERFLOWED 4",
+                rowsOf(readout));
+
+        long[][] afterSevenDropped = {{90L, FailureJournal.Kind.DATA_LOST.ordinal(), 1, -1}};
+        TerminalReadout.Contact overran = readout.take(7L, journalOf(7L, afterSevenDropped), readings, 0, 0, 0, 0);
+        assertEquals("INV-SAT-37: journal overran — received, lost aboard, parts, readings, missed (entries 3..6 gone)",
+                "0 1 0 0 4", countsOf(overran));
+
+        long[][] otherPart = {{5L, FailureJournal.Kind.PART_FAILED.ordinal(), 1, 1}};
+        readout.take(8L, journalOf(0L, otherPart), null, 0, 0, 0, 0);
+        assertEquals("INV-SAT-37: another satellite — the rows", "5 PART_FAILED slot 1", rowsOf(readout));
+    }
+
+    /** A journal as production reads one back: {@code dropped} entries gone, then each {tick, kind, count, slot}. */
+    private static FailureJournal journalOf(long dropped, long[][] entries) {
+        NBTTagCompound nbt = new NBTTagCompound();
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (long[] e : entries) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setLong("tick", e[0]);
+            tag.setDouble("phase", 0d);
+            tag.setByte("kind", (byte) e[1]);
+            tag.setInteger("count", (int) e[2]);
+            tag.setByte("slot", (byte) e[3]);
+            list.appendTag(tag);
+        }
+        nbt.setTag("entries", list);
+        nbt.setLong("dropped", dropped);
+        FailureJournal journal = new FailureJournal();
+        journal.readFromNBT(nbt);
+        return journal;
+    }
+
+    /** A dosimeter's readings as production reads them back; a NaN rate is "absent here". */
+    private static DoseReadings readingsOf(long[] ticks, double[] rates) {
+        NBTTagCompound nbt = new NBTTagCompound();
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (int i = 0; i < ticks.length; i++) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setLong("tick", ticks[i]);
+            tag.setDouble("phase", 0d);
+            if (!Double.isNaN(rates[i])) {
+                tag.setDouble("rate", rates[i]);
+            }
+            list.appendTag(tag);
+        }
+        nbt.setTag("readings", list);
+        nbt.setLong("dropped", 0L);
+        DoseReadings readings = new DoseReadings();
+        readings.readFromNBT(nbt);
+        return readings;
+    }
+
+    private static String rowsOf(TerminalReadout readout) {
+        StringBuilder out = new StringBuilder();
+        for (TerminalReadout.Row row : readout.rows()) {
+            if (out.length() > 0) {
+                out.append(" | ");
+            }
+            out.append(row.tick).append(' ').append(row.kind.name()).append(' ');
+            if (row.kind == TerminalReadout.Kind.DOSE_RATE) {
+                out.append(row.gyPerS().isPresent() ? String.valueOf(row.gyPerS().getAsDouble()) : "absent");
+            } else if (row.kind == TerminalReadout.Kind.PART_FAILED) {
+                out.append("slot ").append(row.slot);
+            } else {
+                out.append(row.count);
+            }
+        }
+        return out.toString();
+    }
+
+    private static String countsOf(TerminalReadout.Contact c) {
+        return c.received + " " + c.lostAboard + " " + c.partsFailed + " " + c.readings + " " + c.missed;
     }
 }

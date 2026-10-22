@@ -1,204 +1,485 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.api.satellite.SatelliteOrbit;
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import java.util.List;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
- * TileSatelliteTerminal chip recognition + power gate +
- * destructive erase button.
+ * The Satellite Control Center as the server decides it: what each try comes to (`satellite` INV-SAT-07)
+ * and when a terminal receives (INV-SAT-38).
  *
- * <p>The Satellite Control Center (registry name
- * {@code stellurgy:satelliteControlCenter}) is the GUI a player uses
- * to query satellite state remotely. Its server-side
- * {@code writeDataToNetwork(packetId 22)} ladders four mutually-exclusive
- * status codes that the client GUI then displays as the player-visible
- * "satellite info" text (see {@link
- * dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal} lines
- * 84-104, 134-167):
+ * <p>Every verdict is read off {@code terminal_try}, the record the terminal's own settle writes
+ * ({@code MixinTileSatelliteTerminalEvents}), named by the terminal's place; the terminal tries by its own
+ * tick, a probe never makes it try. A released satellite is released by the production per-hatch deploy
+ * from a rocket a probe arranged. What it does NOT see: the client's screen — the readout's pages are drawn
+ * from the terminal's copy, which this class never reads — the player's Download button (a try the poll
+ * makes is the same try), and a terminal on a station, which is one more world with no body.</p>
  *
- * <ol>
- *   <li>{@code status=0} — no link. Slot 0 empty OR loaded chip's satellite
- *       isn't a SatelliteData subclass (the only kind with the
- *       data/powerPerTick fields the terminal surfaces).</li>
- *   <li>{@code status=1} — no power. Energy buffer below {@code
- *       getPowerPerOperation() = 1 RF}.</li>
- *   <li>{@code status=2} — out of range. Chip's satellite dim not in the
- *       same planetary system as the terminal's dim (per
- *       PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem).</li>
- *   <li>{@code status=3} — connected. Surfaces powerPerTick + data/maxData.</li>
- * </ol>
- *
- * <p>The {@code onInventoryButtonPressed(1)} branch wires the destructive
- * "kill satellite" button: it removes the linked satellite from its dim's
- * {@code DimensionProperties} AND erases the chip's NBT (chip stays in
- * slot 0, but is now blank — {@code getSatelliteFromSlot(0) == null}).
- *
- * <p>Contracts pinned:
- * <ul>
- *   <li><b>Chip + power &rarr; status 3.</b> A SatelliteOptical (a SatelliteData
- *       subclass) chip in slot 0 of a powered terminal on its dim reaches
- *       status 3 and surfaces non-negative powerPerTick + maxData fields.</li>
- *   <li><b>No chip &rarr; status 0.</b> Empty terminal reports no link even with
- *       power.</li>
- *   <li><b>Chip, no power &rarr; status 1.</b> Chip recognised but energy
- *       starvation gates the surface — pins that the GUI doesn't show
- *       stale data on an unpowered terminal.</li>
- *   <li><b>Erase button &rarr; satellite removed from dim + chip blank.</b>
- *       After pressing button 1, the linked satellite is no longer in
- *       {@code DimensionProperties.getSatellite(id)}, and the chip's NBT
- *       compound is cleared.</li>
- * </ul>
- *
- * <p>NOT pinned here, and pinned nowhere at this consumer: status 2 (out of range), and the
- * terminal's own use of the range decision ({@code TileSatelliteTerminal}'s link check before a
- * download and its "connect" button). The {@code satellite-terminal info} probe computes its status
- * ladder itself, so a status 2 read through it would be the probe's verdict, not the terminal's.
- * The range decision the terminal asks — whether two worlds share a planetary system — is pinned
- * where a player meets it at launch, by
- * {@link RocketLaunchDepthTest#aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon} and
- * {@link RocketLaunchDepthTest#aRocketOnAMoonMayGoToItsPlanetAndASiblingMoonButNotToAnotherPlanet};
- * that the terminal passes the satellite's world and its own to it the right way round is not seen
- * by any test.
+ * <p>What each scenario leaves: the rocket it arranged is removed by its id, a released satellite is marked
+ * dead and the chunks it forced are let go — each in its {@code finally}; a terminal block stays in its
+ * plot, which is never reused.</p>
  */
 public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTest {
 
-    private static final String STATUS = "status";
-    private static final String POWER_PER_TICK = "powerPerTick";
-    private static final String MAX_DATA = "maxData";
-    private static final String SAT_ID = "id";
-    private static final String PRE_REGISTERED = "preSatRegistered";
-    private static final String POST_REGISTERED = "postSatRegistered";
-    private static final String POST_NBT_NULL = "postNbtNull";
+    private static final String TRY = "terminal_try";
 
-    private static final int CY = FixtureSite.OPEN_AIR_Y;
-    private static final int CZ = 13000;
-    private static final int CX_STATUS3 = 13500;
-    private static final int CX_NO_CHIP = 14000;
-    private static final int CX_NO_POWER = 14500;
-    private static final int CX_ERASE = 15000;
+    /** The terminal's poll period, ticks — {@code TileSatelliteTerminal#POLL_PERIOD_TICKS}, the threshold a try's tick is placed against. */
+    private static final int POLL_TICKS = 16;
+    /** A link's deadline for a terminal's next tries: a few poll periods. Loosened only. */
+    private static final int TRIES_BUDGET = 200;
+    /** The power a terminal is given: far more tries than a scenario makes. */
+    private static final int TERMINAL_POWER = 5000;
 
     /**
-     * Happy path — chip in slot + energy injected &rarr; status 3.
-     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     * A chip whose satellite was erased names no satellite: every try after it says so (INV-SAT-07,
+     * `no satellite`). Read over the next two records, so a try that came to anything else is seen.
      */
     @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"no satellite"})
+    @RedWitness(verdict = "no satellite", member = "TileSatelliteTerminal#tryContact",
+            at = "return Outcome.NO_SATELLITE;", replacedBy = "return Outcome.OUT_OF_SIGHT;",
+            fails = "INV-SAT-07: no satellite", on = "2026-10-21")
     @Test
-    public void chippedTerminalWithPowerReachesStatus3() throws Exception {
-        int x = CX_STATUS3, y = CY, z = CZ;
-        long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ true);
-        assertNotEquals(-1L, satId);
+    public void aTerminalWhoseChipNamesNoSatelliteSaysSo() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] at = {site.x, site.y, site.z};
+        try {
+            placeTerminal(0, at, true);
+            loadChip(0, at, builtSatellite());
+            long mark = events.markInstrumented();
+            act("stellurgytest satellite-terminal press-erase 0 " + at[0] + " " + at[1] + " " + at[2]).requireOk("erase");
+            List<String> tries = awaitTries(events, mark, 0, at, 3, "INV-SAT-07: no satellite — the terminal's tries after the erase");
+            for (String one : tries) {
+                assertEquals("INV-SAT-07: no satellite — a try after the erase: " + one, "NO_SATELLITE",
+                        Events.text(one, "outcome"));
+            }
+        } finally {
+            letGo(0, at);
+        }
+    }
 
-        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
-        assertEquals("chip+power must reach status 3: " + info,
-                "3", extract(info, STATUS));
-        // PowerPerTick reflects the satellite's generator wattage — the
-        // satellite-builder fixture installs a non-trivial power source,
-        // so this is strictly > 0. The exact number is impl; we only
-        // assert positivity (the contract is "GUI shows generation, not
-        // zero").
-        int ppt = Integer.parseInt(extract(info, POWER_PER_TICK));
-        assertTrue("powerPerTick must be > 0 with installed power source: " + info,
-                ppt > 0);
+    /** A chip and no power: the terminal says no power (INV-SAT-07, `no power`). */
+    @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"no power"})
+    @RedWitness(verdict = "no power", member = "TileSatelliteTerminal#notEnoughEnergyForFunction",
+            at = "settle(Outcome.NO_POWER);", replacedBy = "settle(tryContact());",
+            fails = "INV-SAT-07: no power", on = "2026-10-21")
+    @Test
+    public void aTerminalWithoutPowerSaysSo() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] at = {site.x, site.y, site.z};
+        try {
+            placeTerminal(0, at, false);
+            long mark = events.markInstrumented();
+            loadChip(0, at, builtSatellite());
+            List<String> tries = awaitTries(events, mark, 0, at, 3, "INV-SAT-07: no power — the unpowered terminal's tries");
+            assertEquals("INV-SAT-07: no power — the last try of a terminal with no power: " + tries, "NO_POWER",
+                    Events.text(tries.get(tries.size() - 1), "outcome"));
+        } finally {
+            letGo(0, at);
+        }
+    }
+
+    /** A satellite built and never launched is on no orbit (INV-SAT-07, `not in orbit`). */
+    @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"not in orbit"})
+    @RedWitness(verdict = "not in orbit", member = "TileSatelliteTerminal#tryContact",
+            at = "return Outcome.NOT_IN_ORBIT;", replacedBy = "return Outcome.OUT_OF_SIGHT;",
+            fails = "INV-SAT-07: not in orbit", on = "2026-10-21")
+    @Test
+    public void aSatelliteStillOnTheGroundIsNotInOrbit() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] at = {site.x, site.y, site.z};
+        try {
+            placeTerminal(0, at, true);
+            long mark = events.markInstrumented();
+            loadChip(0, at, builtSatellite());
+            List<String> tries = awaitTries(events, mark, 0, at, 2, "INV-SAT-07: not in orbit — the terminal's tries");
+            assertEquals("INV-SAT-07: not in orbit — a satellite fresh from the builder: " + tries, "NOT_IN_ORBIT",
+                    Events.text(tries.get(tries.size() - 1), "outcome"));
+        } finally {
+            letGo(0, at);
+        }
     }
 
     /**
-     * Empty slot &rarr; status 0 even with power present.
-     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     * A terminal in the Nether — a world the universe names no body for — with a released satellite on its
+     * chip has no place to see from (INV-SAT-07, `no place`). The Nether reads as inside Earth's planetary
+     * system, because an unregistered world's properties are the overworld's; that is what lets the try
+     * reach the question of place at all.
      */
     @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"no place"})
+    @RedWitness(verdict = "no place", member = "TileSatelliteTerminal#tryContact",
+            at = "return Outcome.NO_PLACE;", replacedBy = "return Outcome.OUT_OF_SIGHT;",
+            fails = "INV-SAT-07: no place", on = "2026-10-21")
     @Test
-    public void unchippedTerminalReportsNoLink() throws Exception {
-        int x = CX_NO_CHIP, y = CY, z = CZ;
-        placeTerminal(x, y, z);
-        // Inject power so we PIN that the no-link branch wins over no-power.
-        injectPower(x, y, z, 1000);
-
-        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
-        assertEquals("empty slot must report status 0: " + info,
-                "0", extract(info, STATUS));
+    public void aTerminalInAWorldWithNoBodyHasNoPlaceToSeeFrom() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] nether = {site.x, site.y, site.z};
+        int[] pad = {site.x, site.y, site.z};
+        Released sat = null;
+        try {
+            placeTerminal(-1, nether, true);
+            sat = release(pad);
+            long mark = events.markInstrumented();
+            loadChip(-1, nether, sat.id);
+            List<String> tries = awaitTries(events, mark, -1, nether, 2, "INV-SAT-07: no place — the Nether terminal's tries");
+            assertEquals("INV-SAT-07: no place — a terminal in the Nether: " + tries, "NO_PLACE",
+                    Events.text(tries.get(tries.size() - 1), "outcome"));
+        } finally {
+            dispose(sat);
+            letGo(-1, nether);
+        }
     }
 
     /**
-     * Chip loaded but zero energy &rarr; status 1.
-     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     * A released satellite whose primary function was taken out is dead in orbit: in its window, beneath it
+     * right after its release, the terminal says silent — in sight, no answer — never out of sight
+     * (INV-SAT-07, `silent`).
      */
     @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"silent"})
+    @RedWitness(verdict = "silent", member = "TileSatelliteTerminal#tryContact",
+            at = "if (!SatelliteLife.functioning(sat)) {", replacedBy = "if (false) {",
+            fails = "INV-SAT-07: silent", on = "2026-10-21")
     @Test
-    public void chippedTerminalWithoutPowerReportsNoPower() throws Exception {
-        int x = CX_NO_POWER, y = CY, z = CZ;
-        long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ false);
-        assertNotEquals(-1L, satId);
-
-        String info = read("stellurgytest satellite-terminal info 0 " + x + " " + y + " " + z).raw();
-        assertEquals("chip without power must report status 1: " + info,
-                "1", extract(info, STATUS));
+    public void aDeadSatelliteIsSilentInItsWindow() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] at = {site.x + 3, site.y, site.z};
+        int[] pad = {site.x, site.y, site.z};
+        Released sat = null;
+        try {
+            placeTerminal(0, at, true);
+            sat = release(pad);
+            Reply emptied = act("stellurgytest satellite repair " + sat.id + " 0 empty").requireOk("take the primary out");
+            requireArranged("the primary function's slot must be empty: " + emptied.raw(), !emptied.has("item")
+                    || "null".equals(emptied.textOr("item", "null")));
+            long mark = events.markInstrumented();
+            loadChip(0, at, sat.id);
+            Geometry g = geometry(sat.id, at);
+            long loss = g.firstTick(false, g.epoch, g.epoch + 20_000L);
+            List<String> tries = awaitTries(events, mark, 0, at, 2, "INV-SAT-07: silent — the terminal's tries in the window");
+            String first = tries.get(0);
+            requireArranged("the first try must fall inside the window the geometry gives (before space tick " + loss
+                    + "): " + first, (long) Events.number(first, "spaceTick") < loss);
+            assertEquals("INV-SAT-07: silent — a dead satellite in sight: " + first, "SILENT", Events.text(first, "outcome"));
+        } finally {
+            dispose(sat);
+            letGo(0, at);
+        }
     }
 
-    /** Erase button — destructive contract: removes linked satellite from
-     *  its dim's DimensionProperties AND blanks the chip NBT.
-     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+    /**
+     * INV-SAT-38 over one pass and a half of a satellite released over its terminal: in sight first; out of
+     * sight at the first try after the tick the orbit's geometry first puts the satellite below the
+     * terminal's horizon; nothing reaching the terminal while hidden; and in sight again, with what its
+     * buffer gathered, at the first try after the tick it next rises. Every tick is the test's own spherical
+     * arithmetic on the orbit's elements as production keeps them, the body's radius, mass and rotation
+     * (MECH-SAT-14, MECH-SAT-31).
      */
+    @Pins("INV-SAT-38")
+    @Regions(of = "INV-SAT-38", value = {"in sight", "loses sight", "nothing while hidden", "regains sight"})
+    @RedWitness(verdict = "in sight", member = "GroundContact#sightOf",
+            at = "return answer(Downlink.sees(terminal, fromItsBody, new Vector3d(), 0d));",
+            replacedBy = "return answer(false);", fails = "INV-SAT-38: in sight", on = "2026-10-21")
+    @RedWitness(verdict = "loses sight", member = "GroundContact#sightOf",
+            at = "return answer(Downlink.sees(terminal, fromItsBody, new Vector3d(), 0d));",
+            replacedBy = "return answer(true);", fails = "INV-SAT-38: loses sight", on = "2026-10-21")
+    @RedWitness(verdict = "nothing while hidden", member = "TileSatelliteTerminal#tryContact",
+            at = "return Outcome.OUT_OF_SIGHT;",
+            replacedBy = "{ ((SatelliteData) sat).performAction(null, world, pos); return Outcome.OUT_OF_SIGHT; }",
+            fails = "INV-SAT-38: nothing while hidden", on = "2026-10-21")
+    @RedWitness(verdict = "regains sight", member = "GroundContact#sightOf",
+            at = "SatellitePlacement.rotationOf(here), tick);", replacedBy = "SatellitePlacement.rotationOf(here), 0L);",
+            fails = "INV-SAT-38: regains sight", on = "2026-10-21")
+    @Test
+    public void aTerminalReceivesOnlyWhileTheDishSeesIt() throws Exception {
+        FixtureSite site = site();
+        Events events = events();
+        int[] at = {site.x + 3, site.y, site.z};
+        int[] pad = {site.x, site.y, site.z};
+        Released sat = null;
+        try {
+            placeTerminal(0, at, true);
+            sat = release(pad);
+            long mark = events.markInstrumented();
+            loadChip(0, at, sat.id);
+            Geometry g = geometry(sat.id, at);
+            long loss = g.firstTick(false, g.epoch, g.epoch + 20_000L);
+            long gain = g.firstTick(true, loss, loss + 40_000L);
+            requireArranged("the geometry must give a window of several tries, a hidden spell and a return: epoch "
+                    + g.epoch + ", loss " + loss + ", gain " + gain, loss > g.epoch + POLL_TICKS && gain > loss);
+            int budget = (int) (gain - g.epoch) + 4 * TRIES_BUDGET;
+            String untilLost = events.awaitMatching(mark, TRY,
+                    r -> triesOf(r, 0, at).stream().anyMatch(one -> !inContact(one)), "a try out of contact",
+                    "INV-SAT-38: loses sight — no try went out of contact", budget);
+            String inSight = null;
+            String lost = null;
+            for (String one : triesOf(untilLost, 0, at)) {
+                if (inContact(one)) {
+                    inSight = one;
+                } else {
+                    lost = one;
+                    break;
+                }
+            }
+            assertTrue("INV-SAT-38: in sight — no try in contact before the satellite set (space tick " + loss + "): "
+                    + untilLost, inSight != null && (long) Events.number(inSight, "spaceTick") < loss);
+            assertTrue("INV-SAT-38: loses sight — the first try out of contact is not the first try after space tick "
+                    + loss + ": " + lost, "OUT_OF_SIGHT".equals(Events.text(lost, "outcome"))
+                    && within((long) Events.number(lost, "spaceTick"), loss));
+
+            String reply = events.awaitMatching(mark, TRY,
+                    r -> regained(r, at, loss), "a try in contact after one out of sight",
+                    "INV-SAT-38: regains sight — no try came back into contact", budget);
+            List<String> tries = triesOf(reply, 0, at);
+            String back = null;
+            for (String one : tries) {
+                if ((long) Events.number(one, "spaceTick") > (long) Events.number(lost, "spaceTick") && inContact(one)) {
+                    back = one;
+                    break;
+                }
+            }
+            int dataWhenLost = (int) Events.number(lost, "terminalData");
+            for (String one : tries) {
+                long tick = (long) Events.number(one, "spaceTick");
+                if (tick > (long) Events.number(lost, "spaceTick") && tick < (long) Events.number(back, "spaceTick")) {
+                    assertEquals("INV-SAT-38: nothing while hidden — a try out of sight: " + one, "OUT_OF_SIGHT",
+                            Events.text(one, "outcome"));
+                    assertEquals("INV-SAT-38: nothing while hidden — points reached the terminal while hidden: " + one,
+                            dataWhenLost, (int) Events.number(one, "terminalData"));
+                }
+            }
+            assertTrue("INV-SAT-38: regains sight — the first try back in contact is not the first try after space tick "
+                    + gain + ": " + back, within((long) Events.number(back, "spaceTick"), gain));
+            assertEquals("INV-SAT-38: regains sight — the return is a reception: " + back, "RECEIVED",
+                    Events.text(back, "outcome"));
+            assertTrue("INV-SAT-38: regains sight — the return brought none of what the buffer gathered while hidden: "
+                    + back, Events.number(back, "received") > 0d);
+        } finally {
+            dispose(sat);
+            letGo(0, at);
+        }
+    }
+
+    /** Erase removes the chip's satellite from its world's list and blanks the chip (INV-SAT-07, `erase`). */
     @Pins("INV-SAT-07")
+    @Regions(of = "INV-SAT-07", value = {"erase"})
+    @RedWitness(verdict = "erase", member = "TileSatelliteTerminal#erase", at = "idchip.erase(stack);",
+            replacedBy = "", fails = "INV-SAT-07: erase", on = "2026-10-21")
     @Test
     public void pressEraseRemovesSatelliteFromDimAndBlanksChip() throws Exception {
-        int x = CX_ERASE, y = CY, z = CZ;
-        long satId = placeTerminalAndLoadChip(x, y, z, /*injectPower*/ false);
-        assertNotEquals(-1L, satId);
-
-        String result = act("stellurgytest satellite-terminal press-erase 0 " + x + " " + y + " " + z).raw();
-        assertEquals("linked satellite must be registered on dim BEFORE erase: "
-                        + result, "true", extract(result, PRE_REGISTERED));
-        assertEquals("linked satellite must be GONE from dim AFTER erase: "
-                        + result, "false", extract(result, POST_REGISTERED));
-        assertEquals("chip NBT must be null AFTER erase: " + result,
-                "true", extract(result, POST_NBT_NULL));
+        FixtureSite site = site();
+        int[] at = {site.x, site.y, site.z};
+        try {
+            placeTerminal(0, at, false);
+            loadChip(0, at, builtSatellite());
+            Reply result = act("stellurgytest satellite-terminal press-erase 0 " + at[0] + " " + at[1] + " " + at[2]);
+            requireArranged("the chip's satellite must be registered before the erase: " + result.raw(),
+                    result.bool("preSatRegistered"));
+            assertEquals("INV-SAT-07: erase — the satellite is still in its world's list: " + result.raw(), false,
+                    result.bool("postSatRegistered"));
+            assertEquals("INV-SAT-07: erase — the chip is not blank: " + result.raw(), true, result.bool("postNbtNull"));
+        } finally {
+            letGo(0, at);
+        }
     }
 
-    // --- fixture helpers --------------------------------------------------
+    // --- instruments of this class ------------------------------------------------------------------
 
-    /** Place a satelliteControlCenter at the given position. */
-    private void placeTerminal(int x, int y, int z) throws Exception {
-        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
-                + " " + (x >> 4) + " " + (z >> 4));
-        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteControlCenter").raw();
-        assertTrue("satelliteControlCenter place failed: " + place,
-                Reply.of(place).bool("placed"));
+    /** A satellite released from a rocket a probe arranged; {@link #dispose} undoes it. */
+    private static final class Released {
+        final long id;
+
+        Released(long id) {
+            this.id = id;
+        }
     }
 
-    /** Place terminal, build optical satellite, load chip; optionally
-     *  inject 1000 RF for the powered-path tests. Returns the satellite id. */
-    private long placeTerminalAndLoadChip(int x, int y, int z, boolean injectPower) throws Exception {
-        placeTerminal(x, y, z);
-        String build = arrange("stellurgytest satellite-builder build 0 optical").raw();
-        assertTrue("optical satellite build failed: " + build,
-                Reply.of(build).ok());
-        Reply mReply = Reply.of(build);
-        if (!mReply.has(SAT_ID)) {
+    /**
+     * An optical satellite with a power source and a data unit — without one it holds no point to send — on
+     * the orbit line, equatorial, released over {@code pad} by the production deploy; the rocket is removed
+     * at once.
+     */
+    private Released release(int[] pad) throws Exception {
+        Reply rocket = arrange("stellurgytest satellite rocket-with 0 " + pad[0] + " " + pad[1] + " " + pad[2]
+                + " line 0 0 0 data").requireOk("rocket-with");
+        int rocketId = rocket.integer("rocketId");
+        long id = rocket.longInteger("satId");
+        try {
+            act("stellurgytest satellite deploy " + rocketId).requireOk("deploy");
+        } finally {
+            arrange("stellurgytest rocket remove " + rocketId);
+        }
+        Reply place = read("stellurgytest satellite place " + id);
+        requireArranged("the deploy must put the satellite on an orbit: " + place.raw(), place.bool("hasOrbit"));
+        Reply life = read("stellurgytest satellite life " + id);
+        requireArranged("the satellite must have room for data: " + life.raw(), life.integer("maxData") > 0);
+        return new Released(id);
+    }
+
+    private void dispose(Released sat) throws Exception {
+        if (sat != null) {
+            arrange("stellurgytest satellite set-dead 0 " + sat.id);
+        }
+    }
+
+    /** An optical satellite from the builder, never launched; its id. */
+    private long builtSatellite() throws Exception {
+        return arrange("stellurgytest satellite-builder build 0 optical").requireOk("build").longInteger("id");
+    }
+
+    /** A terminal at {@code at} of {@code dim}, its chunk forced so it ticks, optionally with power. */
+    private void placeTerminal(int dim, int[] at, boolean powered) throws Exception {
+        arrange("stellurgytest chunk forceload " + dim + " " + (at[0] >> 4) + " " + (at[2] >> 4)).requireOk("forceload");
+        Reply place = arrange("stellurgytest place " + dim + " " + at[0] + " " + at[1] + " " + at[2]
+                + " stellurgy:satelliteControlCenter");
+        requireArranged("the terminal must be placed: " + place.raw(), place.bool("placed"));
+        if (powered) {
+            arrange("stellurgytest energy inject " + dim + " " + at[0] + " " + at[1] + " " + at[2] + " " + TERMINAL_POWER)
+                    .requireOk("power");
+        }
+    }
+
+    private void loadChip(int dim, int[] at, long satId) throws Exception {
+        arrange("stellurgytest satellite-terminal load-chip " + dim + " " + at[0] + " " + at[1] + " " + at[2] + " " + satId)
+                .requireOk("load chip");
+    }
+
+    private void letGo(int dim, int[] at) throws Exception {
+        arrange("stellurgytest chunk release " + dim + " " + (at[0] >> 4) + " " + (at[2] >> 4));
+    }
+
+    private Events events() {
+        return new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks),
+                evictionReports());
+    }
+
+    /** The first {@code count} tries of the terminal at {@code at} since {@code mark}, waited for as a link. */
+    private List<String> awaitTries(Events events, long mark, int dim, int[] at, int count, String what) throws Exception {
+        String reply = events.awaitMatching(mark, TRY, r -> triesOf(r, dim, at).size() >= count,
+                count + " tries of this terminal", what, TRIES_BUDGET);
+        Events.assertInstrumentRan(reply, TRY, what);
+        return triesOf(reply, dim, at).subList(0, count);
+    }
+
+    private static List<String> triesOf(String reply, int dim, int[] at) {
+        return Events.recordsWhereAll(reply, "dim", String.valueOf(dim), "x", String.valueOf(at[0]),
+                "y", String.valueOf(at[1]), "z", String.valueOf(at[2]));
+    }
+
+    private static boolean inContact(String record) {
+        String outcome = Events.text(record, "outcome");
+        return "RECEIVED".equals(outcome) || "NOTHING_NEW".equals(outcome);
+    }
+
+    /** Whether, after a try out of contact past {@code loss}, a try came back into contact. */
+    private static boolean regained(String reply, int[] at, long loss) {
+        boolean hidden = false;
+        for (String one : triesOf(reply, 0, at)) {
+            long tick = (long) Events.number(one, "spaceTick");
+            if (!inContact(one) && tick >= loss) {
+                hidden = true;
+            } else if (hidden && inContact(one)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a try at {@code tick} is the first a terminal polling every {@link #POLL_TICKS} makes at or after {@code moment}. */
+    private static boolean within(long tick, long moment) {
+        return tick >= moment && tick < moment + POLL_TICKS;
+    }
+
+    /** The satellite's orbit and the terminal's body as production keeps them, read once. */
+    private Geometry geometry(long satId, int[] at) throws Exception {
+        Reply place = read("stellurgytest satellite place " + satId);
+        requireArranged("the satellite's body must be named with a size and a mass: " + place.raw(),
+                place.has("bodyRadiusEarths") && place.number("bodyRadiusEarths") > 0d && place.number("bodyMassEarths") > 0d);
+        int period = planetIntField(0, "rotationalPeriod");
+        requireArranged("the body must turn: rotational period " + period, period > 0);
+        return new Geometry(place.number("radiusM"), place.number("inclinationRad"), place.longInteger("epoch"),
+                SatelliteOrbit.EARTH_MU_M3_S2 * place.number("bodyMassEarths"),
+                place.number("bodyRadiusEarths") * AstronomicalBodyHelper.EARTH_RADIUS_METRES, period, at[0] + 0.5d,
+                at[2] + 0.5d);
+    }
+
+    /**
+     * The contract's geometry, computed here: a circular orbit whose node lies under meridian 0 at release
+     * and which starts at its node (MECH-SAT-14), a terminal where its block falls on the turning body and
+     * a satellite seen while not below its horizon (MECH-SAT-31).
+     */
+    private static final class Geometry {
+        final double radiusM;
+        final double inclination;
+        final long epoch;
+        final double mu;
+        final double bodyRadiusM;
+        final long rotation;
+        final double x;
+        final double z;
+
+        Geometry(double radiusM, double inclination, long epoch, double mu, double bodyRadiusM, long rotation,
+                 double x, double z) {
+            this.radiusM = radiusM;
+            this.inclination = inclination;
+            this.epoch = epoch;
+            this.mu = mu;
+            this.bodyRadiusM = bodyRadiusM;
+            this.rotation = rotation;
+            this.x = x;
+            this.z = z;
+        }
+
+        double turn(long tick) {
+            return 2d * Math.PI * Math.floorMod(tick, rotation) / rotation;
+        }
+
+        boolean seen(long tick) {
+            double u = Math.sqrt(mu / (radiusM * radiusM * radiusM)) * AstronomicalBodyHelper.SECONDS_PER_TICK
+                    * (tick - epoch);
+            double node = turn(epoch);
+            double sx = radiusM * (Math.cos(node) * Math.cos(u) - Math.sin(node) * Math.sin(u) * Math.cos(inclination));
+            double sy = radiusM * (Math.sin(node) * Math.cos(u) + Math.cos(node) * Math.sin(u) * Math.cos(inclination));
+            double sz = radiusM * Math.sin(u) * Math.sin(inclination);
+            double longitude = turn(tick) + x / bodyRadiusM;
+            double north = -z / bodyRadiusM;
+            double tx = bodyRadiusM * Math.cos(north) * Math.cos(longitude);
+            double ty = bodyRadiusM * Math.cos(north) * Math.sin(longitude);
+            double tz = bodyRadiusM * Math.sin(north);
+            return (sx - tx) * tx + (sy - ty) * ty + (sz - tz) * tz >= 0d;
+        }
+
+        /** The first tick from {@code from} at which the satellite is {@code wanted}; arrangement failure if none before {@code limit}. */
+        long firstTick(boolean wanted, long from, long limit) {
+            for (long t = from; t < limit; t++) {
+                if (seen(t) == wanted) {
+                    return t;
+                }
+            }
+            requireArranged("the orbit never becomes " + (wanted ? "seen" : "hidden") + " between " + from + " and " + limit,
+                    false);
             return -1L;
         }
-        long satId = Long.parseLong(mReply.text(SAT_ID));
-        String load = arrange("stellurgytest satellite-terminal load-chip 0 " + x + " " + y + " " + z
-                + " " + satId).raw();
-        assertTrue("chip load failed: " + load, Reply.of(load).ok());
-        if (injectPower) {
-            injectPower(x, y, z, 1000);
-        }
-        return satId;
-    }
-
-    private void injectPower(int x, int y, int z, int amount) throws Exception {
-        String result = arrange("stellurgytest energy inject 0 " + x + " " + y + " " + z
-                + " " + amount).raw();
-        assertTrue("energy inject must succeed: " + result, Reply.of(result).ok());
-    }
-
-    private static String extract(String src, String field) {
-        String value = Reply.of(src).text(field);
-        return value;
     }
 }

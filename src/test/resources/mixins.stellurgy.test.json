@@ -114,7 +114,8 @@
     "MixinArrivalSpawnMountRefusal",
     "MixinEntityRocketClientGateEvents",
     "MixinPacketSenderReachEvents",
-    "MixinTileOxygenVentScrubEvents"
+    "MixinTileOxygenVentScrubEvents",
+    "MixinTileSatelliteTerminalEvents"
   ],
   "client": [
     "MixinClientCursorActs",

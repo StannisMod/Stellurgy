@@ -35,12 +35,6 @@ public final class SatelliteAccrual {
     /** What every satellite spends on keeping itself alive, per tick, before any instrument: its upkeep. */
     public static final double UPKEEP_PER_TICK = 1d;
     /**
-     * The share of its arrays' power an instrument draws while it collects. A sizing rule, not a
-     * measurement: an array is sized so its orbit average covers the instrument through the longest
-     * eclipse of a low orbit (about 40 % of the period), which leaves the sunlit half to charge the battery.
-     */
-    public static final double INSTRUMENT_SHARE_OF_GENERATION = 0.5d;
-    /**
      * Ticks between the star directions an eclipse is judged against. The star moves about a degree a day
      * across a planet's sky, so a tenth of a day keeps it within a tenth of a degree; the grid is fixed,
      * so the answer does not depend on when it is asked. A bound on work.
@@ -144,17 +138,28 @@ public final class SatelliteAccrual {
         }
     }
 
-    /** What the primary function does with power. */
+    /** What the primary function does, and what it costs: the instrument's own figures, not its panels'. */
     public static final class Payload {
         final boolean collectsData;
         final boolean readsDose;
-        /** Ticks of full-power collection per data point. */
+        /** Ticks of work per data point. */
         final double collectionTicks;
+        /** Power the instrument draws per tick while it works. */
+        final double drawPerTick;
 
-        public Payload(boolean collectsData, boolean readsDose, double collectionTicks) {
+        public Payload(boolean collectsData, boolean readsDose, double collectionTicks, double drawPerTick) {
             this.collectsData = collectsData;
             this.readsDose = readsDose;
             this.collectionTicks = collectionTicks;
+            this.drawPerTick = drawPerTick;
+        }
+
+        public double collectionTicks() {
+            return collectionTicks;
+        }
+
+        public double drawPerTick() {
+            return drawPerTick;
         }
     }
 
@@ -264,27 +269,22 @@ public final class SatelliteAccrual {
             // Power and collection, from the parts as they stood when the segment began.
             double generation = sunlit(position, star, body.radiusM) ? generation(parts, rules) : 0d;
             double available = state.energy + (generation - UPKEEP_PER_TICK) * step;
-            boolean collecting = functioning && payload.collectsData && state.data < dataCap;
-            double collectedTicks = 0d;
-            if (collecting) {
-                double need = INSTRUMENT_SHARE_OF_GENERATION * nominalGeneration(parts, rules) * step;
-                if (available >= need) {
-                    collectedTicks = step;
-                    available -= need;
-                } else {
-                    collectedTicks = need > 0d ? step * Math.max(0d, available) / need : 0d;
-                    available = 0d;
-                }
+            boolean collecting = payload.collectsData && state.data < dataCap;
+            // The instrument runs the whole segment or not at all: short of power it stops, it does not do a share.
+            double need = payload.drawPerTick * step;
+            boolean works = functioning && (collecting || payload.readsDose) && available >= need;
+            if (works) {
+                available -= need;
             }
             state.energy = Math.min(state.energyCap, Math.max(0d, available));
-            if (collectedTicks > 0d && payload.collectionTicks > 0d) {
-                state.collectionCarry += collectedTicks;
+            if (works && collecting && payload.collectionTicks > 0d) {
+                state.collectionCarry += step;
                 long points = (long) Math.floor(state.collectionCarry / payload.collectionTicks);
                 state.collectionCarry -= points * payload.collectionTicks;
                 state.data = Math.min(dataCap, state.data + points);
             }
 
-            if (functioning && payload.readsDose && here.isPresent()) {
+            if (works && payload.readsDose && here.isPresent()) {
                 OptionalDouble rate = here.get().trappedDoseRate();
                 state.readings.record(mid, phase, rate);
             }
@@ -341,17 +341,6 @@ public final class SatelliteAccrual {
         double sum = 0d;
         for (Part part : parts) {
             sum += part.powerPerTick(rules);
-        }
-        return sum;
-    }
-
-    /** What the working panels were built to give: the instrument is sized against it, and their fading does not shrink it. */
-    private static double nominalGeneration(List<Part> parts, Rules rules) {
-        double sum = 0d;
-        for (Part part : parts) {
-            if (part.kind == PartKind.POWER_GENERATION && part.works(rules)) {
-                sum += part.nominalPowerPerTick;
-            }
         }
         return sum;
     }

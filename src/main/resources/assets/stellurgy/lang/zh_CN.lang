@@ -525,7 +525,6 @@ msg.satctrlcenter.destroysat=摧毁卫星
 msg.satctrlcenter.connect=下载
 msg.satctrlcenter.data=数据：
 msg.satctrlcenter.power=能量产出：
-msg.satctrlcenter.autodl_hint=无线收发器自动下载（提取）
 msg.satbuilder.writesecondchip=写入第二芯片
 msg.dockingport.target=目标ID
 msg.dockingport.me=本端ID

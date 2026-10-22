@@ -12105,28 +12105,6 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.satellite.SatelliteData sd =
                         (dev.stannismod.stellurgy.satellite.SatelliteData) sat;
                 sd.data.setMaxData(maxData);
-                // SatelliteData's constructor pre-computes powerConsumption +
-                // collectionTime off the empty satelliteProperties (powerGen=0
-                // -> collectionTime = 200/sqrt(0) = Integer.MAX_VALUE on int
-                // cast). Mirror what setProperties(ItemStack) does so the
-                // worldTime % collectionTime data gate fires within a
-                // reasonable tick budget.
-                try {
-                    java.lang.reflect.Field pcf = dev.stannismod.stellurgy.satellite.SatelliteData
-                            .class.getDeclaredField("powerConsumption");
-                    pcf.setAccessible(true);
-                    pcf.setInt(sd, powerGen);
-                    java.lang.reflect.Field ctf = dev.stannismod.stellurgy.satellite.SatelliteData
-                            .class.getDeclaredField("collectionTime");
-                    ctf.setAccessible(true);
-                    int collectionTime = (int) (200.0 / Math.sqrt(0.1 * powerGen));
-                    if (collectionTime <= 0) collectionTime = 200;
-                    ctf.setInt(sd, collectionTime);
-                } catch (ReflectiveOperationException e) {
-                    send(sender, "{\"error\":\"failed to init SatelliteData fields\",\"msg\":\""
-                            + escapeJson(e.getMessage()) + "\"}");
-                    return;
-                }
             }
             // A satellite is built on a chassis that holds its primary function, as the builder makes it: the
             // primary function is what decides whether it works. A type with no registered primary function
@@ -13355,6 +13333,15 @@ public class TestProbeCommand extends CommandBase {
                     .append(",\"inclinationRad\":").append(orbit.get().inclinationRad())
                     .append(",\"epoch\":").append(orbit.get().epochTick());
         }
+        java.util.Optional<dev.stannismod.stellurgy.universe.SystemBody> body =
+                dev.stannismod.stellurgy.satellite.SatellitePlacement.bodyOf(
+                        dev.stannismod.stellurgy.universe.UniverseRegistry.get(server), sat.getDimensionId());
+        if (body.isPresent()) {
+            out.append(",\"bodyRadiusEarths\":").append(body.get().radiusEarths())
+                    .append(",\"bodyMassEarths\":").append(body.get().massEarths());
+        } else {
+            out.append(",\"bodyRadiusEarths\":null,\"bodyMassEarths\":null");
+        }
         java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> point =
                 dev.stannismod.stellurgy.satellite.SatellitePlacement.standingPoint(
                         dev.stannismod.stellurgy.universe.UniverseRegistry.get(server),
@@ -13802,23 +13789,9 @@ public class TestProbeCommand extends CommandBase {
     /**
      * TileSatelliteTerminal probe.
      *
-     * <p>The Satellite Control Center reads the chip in slot 0 + the local
-     * energy buffer and surfaces a 4-tier status to the GUI on the client
-     * via {@code writeDataToNetwork(packetId 22)}:
-     * <ul>
-     *   <li>{@code status=0} — no link (slot empty or chip's satellite not
-     *       a {@link dev.stannismod.stellurgy.satellite.SatelliteData}).</li>
-     *   <li>{@code status=1} — no power (energy buffer below
-     *       {@code getPowerPerOperation() = 1 RF}).</li>
-     *   <li>{@code status=2} — out of range (chip's satellite dim is NOT in
-     *       the terminal's planetary system per {@link
-     *       dev.stannismod.stellurgy.util.PlanetaryTravelHelper}).</li>
-     *   <li>{@code status=3} — connected. Surfaces
-     *       {@code powerPerTick}, {@code data}, {@code maxData}.</li>
-     * </ul>
-     *
-     * <p>This probe mirrors the server-side branch logic 1:1 so tests can
-     * pin each branch without needing a real client + GUI round-trip.</p>
+     * <p>{@code info} READS what the terminal itself published: the outcome of its last try
+     * ({@code TileSatelliteTerminal.Outcome}, by name), what its last contact brought and the
+     * rows it has downloaded. It computes no status of its own.</p>
      *
      * <p>Subcommands:
      * <ul>
@@ -13865,44 +13838,36 @@ public class TestProbeCommand extends CommandBase {
                     ? tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)
                     : null;
             int energy = es != null ? es.getEnergyStored() : -1;
-            int powerPerOp = terminal.getPowerPerOperation();
-            int status;
-            int powerPerTick = -1, data = -1, maxData = -1;
-            String satName = "";
-            String satClass = "";
-            if (sat == null
-                    || !(sat instanceof dev.stannismod.stellurgy.satellite.SatelliteData)) {
-                status = 0;
-            } else {
-                satClass = sat.getClass().getName();
-                satName = sat.getName();
-                if (energy < powerPerOp) {
-                    status = 1;
-                } else if (!dev.stannismod.stellurgy.util.PlanetaryTravelHelper
-                        .isTravelAnywhereInPlanetarySystem(sat.getDimensionId(),
-                                dev.stannismod.stellurgy.dimension.DimensionManager
-                                        .getEffectiveDimId(world, new BlockPos(x, y, z)).getId())) {
-                    status = 2;
-                } else {
-                    status = 3;
-                    dev.stannismod.stellurgy.satellite.SatelliteData sd =
-                            (dev.stannismod.stellurgy.satellite.SatelliteData) sat;
-                    powerPerTick = sd.getPowerPerTick();
-                    data = sd.data.getData();
-                    maxData = sd.data.getMaxData();
-                }
+            dev.stannismod.stellurgy.tile.satellite.TerminalReadout readout = terminal.readout();
+            dev.stannismod.stellurgy.tile.satellite.TerminalReadout.Contact last = readout.last();
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (dev.stannismod.stellurgy.tile.satellite.TerminalReadout.Row row : readout.rows()) {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("tick", row.tick);
+                r.put("phase", row.phaseRad);
+                r.put("kind", row.kind.name());
+                r.put("count", row.count);
+                r.put("slot", row.slot);
+                r.put("rate", row.gyPerS().isPresent() ? (Object) row.gyPerS().getAsDouble() : null);
+                rows.add(r);
             }
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("ok", true);
-            info.put("status", status);
+            info.put("outcome", terminal.outcome().name());
             info.put("slotSatId", slotSatId);
+            info.put("satClass", sat == null ? "" : sat.getClass().getName());
             info.put("energy", energy);
-            info.put("powerPerOperation", powerPerOp);
-            info.put("satClass", satClass);
-            info.put("satName", satName);
-            info.put("powerPerTick", powerPerTick);
-            info.put("data", data);
-            info.put("maxData", maxData);
+            info.put("terminalData", terminal.getDataObject().getData());
+            info.put("received", last.received);
+            info.put("lostAboard", last.lostAboard);
+            info.put("partsFailed", last.partsFailed);
+            info.put("readings", last.readings);
+            info.put("missed", last.missed);
+            info.put("powerPerTick", last.powerPerTick);
+            info.put("aboard", last.aboard);
+            info.put("capacity", last.capacity);
+            info.put("rows", rows);
+            info.put("rowsDropped", readout.droppedRows());
             send(sender, jsonMap(info));
             return;
         }
@@ -21592,13 +21557,14 @@ public class TestProbeCommand extends CommandBase {
                     firstItem = false;
                     if (item == null) builder.append("null");
                     else if (item instanceof Number || item instanceof Boolean) builder.append(item);
+                    else if (item instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, ?> nested = (Map<String, ?>) item;
+                        builder.append(jsonMap(nested));
+                    }
                     else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');
-            } else if (v instanceof Map) {
-                // A nested object, so a caller reading a composition gets JSON rather than a Java
-                // map's toString wrapped in quotes.
-                builder.append(jsonMap((Map<String, ?>) v));
             } else {
                 builder.append('"').append(escapeJson(v.toString())).append('"');
             }

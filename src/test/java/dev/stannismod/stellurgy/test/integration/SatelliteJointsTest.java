@@ -137,7 +137,7 @@ public class SatelliteJointsTest {
             long skipped = (windowStart - orbits[i].epochTick()) / step;
             states[i] = new SatelliteAccrual.State(skipped, 0d, 0d, BUFFER_POINTS, 0d, new FailureJournal(), null);
             SatelliteAccrual.advance(about(orbits[i], environment), collector(),
-                    new SatelliteAccrual.Payload(true, false, 100d), states[i], new SatelliteAccrual.Rules(true, 1d),
+                    new SatelliteAccrual.Payload(true, false, 100d, 2d), states[i], new SatelliteAccrual.Rules(true, 1d),
                     100L + i, windowStart + WINDOW_SEGMENTS * step);
             assertEquals("arrangement: satellite " + i + " took exactly the window",
                     skipped + WINDOW_SEGMENTS, states[i].segmentsDone());
@@ -147,7 +147,7 @@ public class SatelliteJointsTest {
         assertEquals("INV-SAT-22: the satellite outside it journalled a loss", 0, lost(states[1].journal()));
 
         SatelliteAccrual.State day = new SatelliteAccrual.State(0L, 0d, 0d, BUFFER_POINTS, 0d, new FailureJournal(), null);
-        SatelliteAccrual.advance(about(first, environment), collector(), new SatelliteAccrual.Payload(true, false, 100d),
+        SatelliteAccrual.advance(about(first, environment), collector(), new SatelliteAccrual.Payload(true, false, 100d, 2d),
                 day, new SatelliteAccrual.Rules(true, 1d), 102L, DAY_TICKS);
         double sumRate = 0d;
         double sumSquare = 0d;
@@ -201,9 +201,10 @@ public class SatelliteJointsTest {
         PlanetEnvironment[] bodies = {field(), PlanetEnvironment.of(Optional.empty(), DAY_TICKS, 0d)};
         for (int i = 0; i < 2; i++) {
             String name = i == 0 ? "field" : "no field";
-            SatelliteAccrual.State state = new SatelliteAccrual.State(0L, 0d, 1000d, 0L, 0d, new FailureJournal(),
+            // A charged battery that carries the dosimeter through every eclipse, so each segment is read.
+            SatelliteAccrual.State state = new SatelliteAccrual.State(0L, 1e6d, 1e6d, 0L, 0d, new FailureJournal(),
                     new DoseReadings());
-            SatelliteAccrual.advance(about(orbit, bodies[i]), collector(), new SatelliteAccrual.Payload(false, true, 0d),
+            SatelliteAccrual.advance(about(orbit, bodies[i]), collector(), new SatelliteAccrual.Payload(false, true, 0d, 1d),
                     state, new SatelliteAccrual.Rules(true, 1d), 200L, DAY_TICKS);
             List<DoseReadings.Reading> readings = state.readings().readings();
             assertEquals("arrangement: " + name + " — one reading per segment", DAY_TICKS / step, readings.size());

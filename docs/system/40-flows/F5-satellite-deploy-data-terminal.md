@@ -3,7 +3,7 @@ id: F5-satellite-deploy-data-terminal
 kind: flow
 scenario: Satellite deploy → data collection → terminal readout
 subsystems: [satellite, dimension-planets, api-public, items, wirelessdata, rocket-entity, infrastructure-tiles]
-anchors-referenced: [MECH-SAT-08, MECH-SAT-22, MECH-SAT-23, MECH-SAT-24, MECH-SAT-25, MECH-SAT-27, MECH-SAT-10, MECH-SAT-02, MECH-SAT-11, MECH-SAT-13, MECH-INFRA-22, MECH-DIM-12, MECH-API-13, MECH-API-14, MECH-ITM-04, MECH-WDT-02, MECH-WDT-04, MECH-WDT-05]
+anchors-referenced: [MECH-SAT-08, MECH-SAT-22, MECH-SAT-23, MECH-SAT-24, MECH-SAT-25, MECH-SAT-27, MECH-SAT-10, MECH-SAT-31, MECH-SAT-32, MECH-SAT-02, MECH-SAT-13, MECH-INFRA-22, MECH-DIM-12, MECH-API-13, MECH-API-14, MECH-ITM-04, MECH-WDT-02, MECH-WDT-04, MECH-WDT-05]
 confidence: high
 ---
 
@@ -46,22 +46,18 @@ server-authoritative.
    power up to its capacity (MECH-SAT-24), and the field's dose wears its parts and destroys buffered
    points (MECH-SAT-25..27). The buffer lives in the satellite's nested `data` `DataStorage` NBT. [V]
 6. **Bring the chip to a Satellite Control Center (items → satellite).** Slot 0 accepts only an
-   `ItemSatelliteIdentificationChip`. On connect (button 0 / packet id 100) `TileSatelliteTerminal`
-   resolves the satellite: `getSatelliteId(chip)` reads the `satelliteId` key, then
-   `DimensionManager.getSatellite(id)` **scans every loaded dimension's** orbital list for that id
-   (MECH-SAT-10 / MECH-ITM-04 / MECH-API-14). [V]
-7. **Gate + offload (satellite).** The terminal requires the resolved object to be a `SatelliteData`,
-   in the same planetary system (`PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem(satDim,
-   hereDim)`), and `energyStored ≥ getPowerPerOperation()` (INV-SAT-08). If so it calls
-   `sat.performAction(player, world, pos)` and burns the power; `performAction` fetches the tile at
-   `pos` (the terminal itself, an `IDataHandler`) and moves the buffer into it via
-   `addData` / `removeData` (MECH-SAT-10 → MECH-SAT-02). [V]
-8. **Auto-poll variant (satellite).** Independently, `performFunction` (every 16 ticks) runs
-   `maybeAutoDownloadFromSatellite`: it needs an adjacent enabled + extract `TileWirelessTransceiver`
-   (`hasExtractPlugAdjacent`), a fresh chip re-resolve, link and power; the interval doubles 64→512 on
-   each miss and resets on success. The same `performAction` drain fills the terminal buffer
-   (MECH-SAT-11). [V]
-9. **Read out (satellite).** Terminal-buffer data goes one of two ways:
+   `ItemSatelliteIdentificationChip`. Each try `TileSatelliteTerminal` makes — every 16 ticks on its own
+   phase, when the chip is put in, or on Download — resolves the satellite: `getSatelliteId(chip)` reads
+   the `satelliteId` key, then `DimensionManager.getSatellite(id)` **scans every loaded dimension's**
+   orbital list for that id (MECH-SAT-10 / MECH-ITM-04 / MECH-API-14). [V]
+7. **Contact + offload (satellite).** A try reaches the satellite only if it is in the terminal's
+   planetary system, on an orbit, and its dish sees the terminal's place on its turning body
+   (MECH-SAT-31); a dead satellite in sight is silent. Each try costs 1 power. In contact, a data
+   satellite's `performAction` moves its whole buffer into the terminal via `addData` / `removeData`
+   (MECH-SAT-10 → MECH-SAT-02, INV-SAT-08), and the journal entries and readings recorded since the
+   terminal last read that satellite join its readout (MECH-SAT-32). What the try came to is the screen's
+   status (INV-SAT-07). [V]
+8. **Read out (satellite).** Terminal-buffer data goes one of two ways:
    - **To a data chip:** button −1 / −2 `storeData` / `loadData` move between the terminal buffer and an
      `IDataItem` in slot 1, only what the receiver accepts (MECH-SAT-13). [V]
    - **To a wireless network:** the adjacent extract `TileWirelessTransceiver` treats the terminal as the
@@ -77,7 +73,7 @@ server-authoritative.
   (`SatelliteBuilderPressBuildContractTest`) pins the equality at build time. A chip programmed by any
   path other than the builder yields a chip that cannot resolve its deployed satellite (INV-API-14).
 - **Non-defect seam note.** The terminal is *both* the offload sink (step 7, `addData` DOWN) and the
-  wireless source (step 9). The wireless transceiver must sit on the terminal such that the terminal is
+  wireless source (step 8). The wireless transceiver must sit on the terminal such that the terminal is
   the transceiver's resolved back-face `IDataHandler` (MECH-WDT-02 `resolveTransferFacing`);
   orientation, not a code disagreement, but the one placement constraint that silently yields "collects
   but never exports" if wrong.

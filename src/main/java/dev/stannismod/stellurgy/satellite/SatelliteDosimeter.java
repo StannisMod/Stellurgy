@@ -14,16 +14,19 @@ import java.util.Optional;
 
 /**
  * A satellite whose primary function is a dosimeter: it reads the dose rate at its point once per segment
- * of its orbit, with the tick and the place along the orbit, while its electronics work. Over a body with
- * no field it reads "absent here".
+ * of its orbit, with the tick and the place along the orbit, while its electronics work and its power is
+ * covered. Over a body with no field it reads "absent here".
  */
 public class SatelliteDosimeter extends SatelliteBase {
+
+    /** What the dosimeter draws per tick while it reads: half a data instrument's, being a single detector. */
+    public static final double DRAW_PER_TICK = 1d;
 
     private final DoseReadings readings = new DoseReadings();
 
     @Override
     public SatelliteAccrual.Payload payload() {
-        return new SatelliteAccrual.Payload(false, true, 0d);
+        return new SatelliteAccrual.Payload(false, true, 0d, DRAW_PER_TICK);
     }
 
     @Override

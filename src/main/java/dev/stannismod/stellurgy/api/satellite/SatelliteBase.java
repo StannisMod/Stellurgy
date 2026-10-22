@@ -142,7 +142,7 @@ public abstract class SatelliteBase {
 
     /** What its primary function does with power: by default nothing that collects or reads. */
     public dev.stannismod.stellurgy.satellite.SatelliteAccrual.Payload payload() {
-        return new dev.stannismod.stellurgy.satellite.SatelliteAccrual.Payload(false, false, 0d);
+        return new dev.stannismod.stellurgy.satellite.SatelliteAccrual.Payload(false, false, 0d, 0d);
     }
 
     /** Its dosimeter's readings; {@code null} for a satellite that carries none. */

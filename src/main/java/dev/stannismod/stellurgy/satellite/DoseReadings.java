@@ -63,6 +63,18 @@ public final class DoseReadings {
         return dropped;
     }
 
+    /** How many readings were ever recorded, the dropped ones included: the number the next one will have. */
+    public long recorded() {
+        return dropped + readings.size();
+    }
+
+    /** The readings held whose number — counting every reading ever recorded from zero — is {@code first} or later, oldest first. */
+    public List<Reading> since(long first) {
+        List<Reading> held = new ArrayList<>(readings);
+        int skip = (int) Math.max(0L, Math.min(held.size(), first - dropped));
+        return Collections.unmodifiableList(held.subList(skip, held.size()));
+    }
+
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagList list = new NBTTagList();
         for (Reading r : readings) {

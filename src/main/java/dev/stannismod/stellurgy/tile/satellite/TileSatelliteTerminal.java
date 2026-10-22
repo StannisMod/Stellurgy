@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.tile.satellite;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
@@ -9,25 +10,32 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleData;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSatellite;
+import dev.stannismod.stellurgy.inventory.modules.ModuleSatelliteReadout;
+import dev.stannismod.stellurgy.inventory.modules.ModuleSatelliteTerminal;
 import dev.stannismod.stellurgy.item.IDataItem;
 import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.satellite.GroundContact;
 import dev.stannismod.stellurgy.satellite.SatelliteData;
-import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
+import dev.stannismod.stellurgy.satellite.SatelliteLife;
+import dev.stannismod.stellurgy.space.SpaceSubsystem;
+import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.util.IDataInventory;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 import io.netty.buffer.ByteBuf;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.relauncher.Side;
 
 import javax.annotation.Nonnull;
@@ -35,17 +43,50 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The Satellite Control Center: a ground terminal that receives from the satellite on its chip while the
+ * satellite's dish can see it. It tries every {@link #POLL_PERIOD_TICKS} ticks, and when its player asks;
+ * in a window it takes the satellite's whole data buffer and the journal entries and readings recorded
+ * since its last contact, and outside one it says why nothing came.
+ */
 public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         implements INetworkMachine, IModularInventory, IButtonInventory, IDataInventory, IDataHandler {
 
-    private DataStorage data;
+    /**
+     * Ticks between two tries. A low orbit's window over one place lasts about a hundred ticks, so a try
+     * this often catches every window. Each terminal tries on its own phase, so N terminals spread N tries
+     * over the period instead of stacking them on one tick.
+     */
+    static final int POLL_PERIOD_TICKS = 16;
 
-    // Auto-download polling with exponential backoff
-    private static final int AUTO_DL_BASE_INTERVAL_TICKS = 64;   // min interval
-    private static final int AUTO_DL_MAX_INTERVAL_TICKS  = 512;  // cap
-    private int autoDlInterval = AUTO_DL_BASE_INTERVAL_TICKS;    // current interval
-    private long nextAutoDlTick = 0L;                             // worldTime gate
+    /** Button ids; each is sent to the server as packet id 100 + the button. */
+    private static final int BUTTON_CONNECT = 0;
+    private static final int BUTTON_ERASE = 1;
+    private static final int BUTTON_READOUT = 2;
+    private static final int BUTTON_BACK = 3;
 
+    /**
+     * What the terminal's last try came to — what its screen says. The order is the wire: the status a
+     * client is sent is the ordinal.
+     */
+    public enum Outcome {
+        NO_SATELLITE,
+        NO_POWER,
+        OUT_OF_RANGE,
+        NOT_IN_ORBIT,
+        NO_PLACE,
+        OUT_OF_SIGHT,
+        /** In sight, but the satellite's primary function has stopped: it sends nothing. */
+        SILENT,
+        NOTHING_NEW,
+        RECEIVED
+    }
+
+    private final DataStorage data;
+    private final TerminalReadout readout = new TerminalReadout();
+    private Outcome outcome = Outcome.NO_SATELLITE;
+    /** Whether the reason this terminal has no place to see from has been logged; not persisted. */
+    private boolean placeRefusalLogged;
 
     public TileSatelliteTerminal() {
         super(10000, 2);
@@ -53,100 +94,19 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         data.setMaxData(1000);
     }
 
-    private final BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
-
-    private boolean hasExtractPlugAdjacent() {
-        if (world == null) return false;
-        for (EnumFacing f : EnumFacing.values()) {
-            mpos.setPos(pos.getX() + f.getFrontOffsetX(),
-                        pos.getY() + f.getFrontOffsetY(),
-                        pos.getZ() + f.getFrontOffsetZ());
-            if (!world.isBlockLoaded(mpos)) continue;
-
-            TileEntity te = world.getTileEntity(mpos);
-            if (te instanceof TileWirelessTransceiver) {
-                TileWirelessTransceiver w =
-                    (TileWirelessTransceiver) te;
-                if (w.isEnabledWireless() && w.isExtractModeWireless()) return true;
-            }
-        }
-        return false;
-    }
-
     public final DataStorage getDataObject() {
         return data;
     }
 
-    // Link+power check using an already-looked-up satellite
-    private boolean hasLinkAndPower(@Nonnull SatelliteBase sat) {
-        // must be a data satellite
-        if (!(sat instanceof dev.stannismod.stellurgy.satellite.SatelliteData)) return false;
-
-        // check range
-        final int hereDim = dev.stannismod.stellurgy.dimension.DimensionManager
-                .getEffectiveDimId(world, pos).getId();
-        final int satDim  = sat.getDimensionId();
-
-        final boolean inRange = dev.stannismod.stellurgy.util.PlanetaryTravelHelper
-                .isTravelAnywhereInPlanetarySystem(satDim, hereDim);
-        if (!inRange) return false;
-
-        // check power
-        return getUniversalEnergyStored() >= getPowerPerOperation();
+    /** What the last try came to. */
+    public Outcome outcome() {
+        return outcome;
     }
 
-    // Keep convenience overload
-    private void maybeAutoDownloadFromSatellite() { 
-        maybeAutoDownloadFromSatellite(false); 
+    /** What has been downloaded, and what the last contact brought. */
+    public TerminalReadout readout() {
+        return readout;
     }
-
-    private void maybeAutoDownloadFromSatellite(boolean force) {
-        if (world == null || world.isRemote) return;
-
-        final long now = world.getTotalWorldTime();
-
-        if (force) {
-            autoDlInterval = AUTO_DL_BASE_INTERVAL_TICKS;
-            nextAutoDlTick = now + autoDlInterval;  // avoid same-tick multi-pulls
-        } else if (now < nextAutoDlTick) {
-            return;
-        }
-
-        // Buffer full -> just schedule next check
-        if (data.getData() >= data.getMaxData()) {
-            nextAutoDlTick = now + autoDlInterval;
-            return;
-        }
-
-        // No eligible plug -> back off (unless forced)
-        if (!hasExtractPlugAdjacent()) {
-            if (!force) autoDlInterval = Math.min(autoDlInterval << 1, AUTO_DL_MAX_INTERVAL_TICKS);
-            nextAutoDlTick = now + autoDlInterval;
-            return;
-        }
-
-        // Resolve satellite fresh from the chip each poll
-        SatelliteBase sat = resolveSatelliteFresh();
-        if (sat == null) {
-            if (!force) autoDlInterval = Math.min(autoDlInterval << 1, AUTO_DL_MAX_INTERVAL_TICKS);
-            nextAutoDlTick = now + autoDlInterval;
-            return;
-        }
-        if (!hasLinkAndPower(sat)) {
-            if (!force) autoDlInterval = Math.min(autoDlInterval << 1, AUTO_DL_MAX_INTERVAL_TICKS);
-            nextAutoDlTick = now + autoDlInterval;
-            return;
-        }
-
-        // Do the pull
-        sat.performAction(null, world, pos);
-        this.energy.extractEnergy(getPowerPerOperation(), false);
-
-        // Success -> reset interval
-        autoDlInterval = AUTO_DL_BASE_INTERVAL_TICKS;
-        nextAutoDlTick = now + autoDlInterval;
-    }
-
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int[] NO_SLOTS = new int[0];
@@ -168,107 +128,150 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         return false;
     }
 
-
-
     @Override
     public boolean canPerformFunction() {
-        if (world == null) return false;
-        final long now = world.getTotalWorldTime();
-        return (now % 16 == 0) && (now >= nextAutoDlTick);
+        if (world == null || world.isRemote || getStackInSlot(0).isEmpty()) return false;
+        return Math.floorMod(world.getTotalWorldTime() + phase(), POLL_PERIOD_TICKS) == 0;
+    }
+
+    /** This terminal's own phase on the poll period, from its place. */
+    private long phase() {
+        return Math.floorMod(pos.hashCode(), POLL_PERIOD_TICKS);
     }
 
     @Override
     public int getPowerPerOperation() { return 1; }
 
+    /** The poll, its power already spent by the caller. */
     @Override
     public void performFunction() {
         if (world == null || world.isRemote) return;
-        maybeAutoDownloadFromSatellite(false);
+        settle(tryContact());
     }
 
-
-
-    // Old custom packet not used anymore; keep empty to satisfy INetworkMachine
     @Override
-    public void writeDataToNetwork(ByteBuf out, byte packetId) { }
+    public void notEnoughEnergyForFunction() {
+        if (world != null && !world.isRemote) settle(Outcome.NO_POWER);
+    }
 
-    // Old custom packet not used anymore; keep empty to satisfy INetworkMachine
-    @Override
-    public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) { }
-
-    // Tick: nothing needed; the module polls the tile every 9 tick while GUI is open
-    //@Override
-    //public void update() {
-    //    super.update();
-        // no status pushing needed
-    //}
-
-    @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
-
-        if (id == -1) {
-            storeData(1);
+    /** A try a player asked for: it costs the same power as a poll. */
+    private void contactNow() {
+        if (getUniversalEnergyStored() < getPowerPerOperation()) {
+            settle(Outcome.NO_POWER);
             return;
-        } else if (id == -2) {
-            loadData(1);
-            return;
-        } else if (id == 100) {
-            // connect logic
-            if (!world.isRemote) {
-                SatelliteBase sat = getSatelliteFromSlot(0);
+        }
+        energy.extractEnergy(getPowerPerOperation(), false);
+        settle(tryContact());
+    }
 
-                boolean inRange = false;
-                if (sat != null) {
-                    int satDim = sat.getDimensionId();
-                    int hereDim = DimensionManager.getEffectiveDimId(world, pos).getId();
-                    inRange = PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem(satDim, hereDim);
+    /** Try the satellite on the chip: the first thing that stands in the way is what the screen says. */
+    private Outcome tryContact() {
+        SatelliteBase sat = getSatelliteFromSlot(0);
+        if (sat == null) {
+            return Outcome.NO_SATELLITE;
+        }
+        int hereDim = DimensionManager.getEffectiveDimId(world, pos).getId();
+        if (!PlanetaryTravelHelper.isTravelAnywhereInPlanetarySystem(sat.getDimensionId(), hereDim)) {
+            return Outcome.OUT_OF_RANGE;
+        }
+        long now = SpaceSubsystem.spaceClock();
+        UniverseRegistry reg = UniverseRegistry.get(world.getMinecraftServer());
+        GroundContact.Answer sight = GroundContact.sightOf(reg, world.provider.getDimension(), pos, sat, now);
+        switch (sight.sight) {
+            case NOT_IN_ORBIT:
+                return Outcome.NOT_IN_ORBIT;
+            case NO_PLACE:
+                if (!placeRefusalLogged) {
+                    placeRefusalLogged = true;
+                    Stellurgy.logger.warn("Satellite terminal at {} in world {} has no place to see from: {}",
+                            pos, world.provider.getDimension(), sight.reason);
                 }
+                return Outcome.NO_PLACE;
+            case HIDDEN:
+                return Outcome.OUT_OF_SIGHT;
+            default:
+                break;
+        }
+        sat.bringUpToNow();
+        if (!SatelliteLife.functioning(sat)) {
+            return Outcome.SILENT;
+        }
+        int received = 0;
+        int aboard = 0;
+        int capacity = 0;
+        if (sat instanceof SatelliteData) {
+            SatelliteData dataSat = (SatelliteData) sat;
+            int before = data.getData();
+            dataSat.performAction(null, world, pos);
+            received = data.getData() - before;
+            aboard = dataSat.data.getData();
+            capacity = dataSat.data.getMaxData();
+        }
+        TerminalReadout.Contact contact = readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(),
+                received, (int) Math.round(sat.currentPowerPerTick()), aboard, capacity);
+        return contact.broughtAnything() ? Outcome.RECEIVED : Outcome.NOTHING_NEW;
+    }
 
-                boolean hasLink  = (sat instanceof SatelliteData) && inRange;
-                boolean hasPower = getUniversalEnergyStored() >= getPowerPerOperation();
-
-                if (hasLink && hasPower) {
-                    sat.performAction(player, world, pos);
-                    this.energy.extractEnergy(getPowerPerOperation(), false);
-                }
-            }
-            return;
-
-        } else if (id == 101) {
-            if (!world.isRemote) {
-                ItemStack stack = getStackInSlot(0);
-                if (!stack.isEmpty() && stack.getItem() instanceof ItemSatelliteIdentificationChip) {
-                    ItemSatelliteIdentificationChip idchip = (ItemSatelliteIdentificationChip) stack.getItem();
-
-                    SatelliteBase sat = idchip.getSatellite(stack);
-                    if (sat != null) {
-                        DimensionManager.getInstance()
-                                .getDimensionProperties(sat.getDimensionId())
-                                .removeSatellite(sat.getId());
-                    }
-
-                    idchip.erase(stack);
-                    setInventorySlotContents(0, stack);
-                }
-            }
-            return;
+    /** Keep {@code next} and, when the screen or the rows changed, save and tell the clients watching. */
+    private void settle(Outcome next) {
+        boolean changed = next != outcome || next == Outcome.RECEIVED;
+        outcome = next;
+        if (changed) {
+            markDirty();
+            IBlockState state = world.getBlockState(pos);
+            world.notifyBlockUpdate(pos, state, state, 3);
         }
     }
 
-    
-    @Nullable
-    private SatelliteBase resolveSatelliteFresh() {
-        ItemStack s0 = getStackInSlot(0);
-        return (!s0.isEmpty() && s0.getItem() instanceof ItemSatelliteIdentificationChip)
-                ? ItemSatelliteIdentificationChip.getSatellite(s0)
-                : null;
+    @Override
+    public SPacketUpdateTileEntity getUpdatePacket() {
+        return new SPacketUpdateTileEntity(pos, 0, getUpdateTag());
     }
 
     @Override
-    public void setInventorySlotContents(int slot, @Nonnull ItemStack stack) {
-        super.setInventorySlotContents(slot, stack);
-        if (!world.isRemote && slot == 0) {
-            maybeAutoDownloadFromSatellite(true); // force reset to base
+    public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt) {
+        readFromNBT(pkt.getNbtCompound());
+    }
+
+    @Override
+    public void writeDataToNetwork(ByteBuf out, byte packetId) { }
+
+    @Override
+    public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) { }
+
+    @Override
+    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        if (id == -1) {
+            storeData(1);
+        } else if (id == -2) {
+            loadData(1);
+        } else if (id == 100 + BUTTON_CONNECT) {
+            if (!world.isRemote) contactNow();
+        } else if (id == 100 + BUTTON_ERASE) {
+            if (!world.isRemote) erase();
+        } else if (id == 100 + BUTTON_READOUT || id == 100 + BUTTON_BACK) {
+            if (!world.isRemote && player != null) {
+                GuiHandler.guiId page = id == 100 + BUTTON_READOUT ? GuiHandler.guiId.MODULARNOINV : GuiHandler.guiId.MODULAR;
+                player.openGui(Stellurgy.instance, page.ordinal(), world, pos.getX(), pos.getY(), pos.getZ());
+            }
+        }
+    }
+
+    /** Remove the chip's satellite from its world and blank the chip. */
+    private void erase() {
+        ItemStack stack = getStackInSlot(0);
+        if (!stack.isEmpty() && stack.getItem() instanceof ItemSatelliteIdentificationChip) {
+            ItemSatelliteIdentificationChip idchip = (ItemSatelliteIdentificationChip) stack.getItem();
+
+            SatelliteBase sat = idchip.getSatellite(stack);
+            if (sat != null) {
+                DimensionManager.getInstance()
+                        .getDimensionProperties(sat.getDimensionId())
+                        .removeSatellite(sat.getId());
+            }
+
+            idchip.erase(stack);
+            setInventorySlotContents(0, stack);
         }
     }
 
@@ -281,23 +284,53 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
     }
 
     @Override
+    public void setInventorySlotContents(int slot, @Nonnull ItemStack stack) {
+        super.setInventorySlotContents(slot, stack);
+        // A chip put in is tried at once, so the screen never shows the outcome of the chip before it.
+        if (slot == 0 && world != null && !world.isRemote) {
+            if (getSatelliteFromSlot(0) == null) {
+                settle(Outcome.NO_SATELLITE);
+            } else {
+                contactNow();
+            }
+        }
+    }
+
+    /**
+     * The screen: {@link GuiHandler.guiId#MODULAR} is the terminal with its slots, and
+     * {@link GuiHandler.guiId#MODULARNOINV} the downloaded rows. A page is the viewer's own, since it is
+     * the id his screen was opened with.
+     */
+    @Override
     public List<ModuleBase> getModules(int ID, EntityPlayer player) {
-        List<ModuleBase> modules = new ArrayList<>(6);
+        List<ModuleBase> modules = new ArrayList<>(8);
+        if (ID == GuiHandler.guiId.MODULARNOINV.ordinal()) {
+            modules.add(new ModuleSatelliteReadout(8, 22, 0x404040, this));
+            modules.add(new ModuleButton(8, 3, BUTTON_BACK,
+                    LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.back"), this,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 40, 16));
+            return modules;
+        }
 
         modules.add(new ModulePower(18, 20, this.energy) {
             @Override public int numberOfChangesToSend() { return 2; }
         });
 
-        modules.add(new ModuleButton(
-            116, 70, 0,
+        modules.add(new ModuleButton(116, 70, BUTTON_CONNECT,
             LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.connect"),
             this,
             dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
-            LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.autodl_hint") // tooltip
+            LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.connect_hint")
         ));
 
+        modules.add(new ModuleButton(60, 70, BUTTON_READOUT,
+            LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.readout"),
+            this,
+            dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
+            LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.readout_hint")
+        ));
 
-        modules.add(new ModuleButton(173, 3, 1, "",
+        modules.add(new ModuleButton(173, 3, BUTTON_ERASE, "",
             this, TextureResources.buttonKill,
             LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.destroysat"), 24, 24));
 
@@ -309,21 +342,14 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
             @Override public int numberOfChangesToSend() { return 0; }
         });
 
-        // Add status module last; no need to keep a field reference
-        modules.add(new dev.stannismod.stellurgy.inventory.modules.ModuleSatelliteTerminal(
-            60, 20, 0x404040, this, this));
+        modules.add(new ModuleSatelliteTerminal(60, 20, 0x404040, this, this));
 
         return modules;
     }
 
-
     @Override
     public void onInventoryButtonPressed(int buttonId) {
-        if (buttonId == 0) {
-            PacketHandler.sendToServer(new PacketMachine(this, (byte) (100 + buttonId))); // id 100
-        } else if (buttonId == 1) {
-            PacketHandler.sendToServer(new PacketMachine(this, (byte) (100 + buttonId))); // id 101
-        }
+        PacketHandler.sendToServer(new PacketMachine(this, (byte) (100 + buttonId)));
     }
 
     @Override
@@ -332,14 +358,20 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         NBTTagCompound dataTag = new NBTTagCompound();
         this.data.writeToNBT(dataTag);
         nbt.setTag("data", dataTag);
+        NBTTagCompound readoutTag = new NBTTagCompound();
+        readout.writeToNBT(readoutTag);
+        nbt.setTag("readout", readoutTag);
+        nbt.setByte("outcome", (byte) outcome.ordinal());
         return nbt;
     }
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
-        NBTTagCompound dataTag = nbt.getCompoundTag("data");
-        this.data.readFromNBT(dataTag);
+        this.data.readFromNBT(nbt.getCompoundTag("data"));
+        readout.readFromNBT(nbt.getCompoundTag("readout"));
+        int ordinal = nbt.getByte("outcome");
+        outcome = ordinal >= 0 && ordinal < Outcome.values().length ? Outcome.values()[ordinal] : Outcome.NO_SATELLITE;
     }
 
     @Override
@@ -406,60 +438,18 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         }
     }
 
-
-
     @Override
     public int extractData(int maxAmount, DataType type, EnumFacing dir, boolean commit) {
-        // 1) Type guard
         if (type != data.getDataType() && data.getDataType() != DataType.UNDEFINED) return 0;
-
-        // 2) Simulation
         if (!commit) return Math.min(maxAmount, data.getData());
-
-        // 3) Drain LOCAL once
         int toGive = Math.min(maxAmount, data.getData());
-        int removed = (toGive > 0) ? data.removeData(toGive, true) : 0;
-
-        // 4) Opportunistic refill (cheap guard inside function)
-        if (removed > 0) {
-            maybeAutoDownloadFromSatellite(true);
-        }
-        return removed;
+        return (toGive > 0) ? data.removeData(toGive, true) : 0;
     }
-
 
     @Override
     public int addData(int maxAmount, DataType type, EnumFacing dir, boolean commit) {
-        int added = data.addData(maxAmount, type, commit);
-
-        return added;
+        return data.addData(maxAmount, type, commit);
     }
-
-    @Override
-    public void onLoad() {
-        super.onLoad();
-        if (!world.isRemote) {
-            // Reset backoff scheduler to a sane base state
-            autoDlInterval = AUTO_DL_BASE_INTERVAL_TICKS;
-            long now = world.getTotalWorldTime();
-            // Warm-up so neighbors/registries settle (e.g. 80 ticks ~ 4s)
-            nextAutoDlTick = now + 80;
-        }
-    }
-
-    @Override
-    public void onChunkUnload() {
-        super.onChunkUnload();
-        // Hard-clear any references and scheduling
-        autoDlInterval = AUTO_DL_BASE_INTERVAL_TICKS;
-        nextAutoDlTick = 0L;
-    }
-
-    @Override
-    public void invalidate() {
-        super.invalidate();
-    }
-
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) { return true; }

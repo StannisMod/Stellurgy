@@ -21,18 +21,23 @@ import net.minecraft.world.World;
 import javax.annotation.Nonnull;
 
 public abstract class SatelliteData extends SatelliteBase {
+    /**
+     * What a data instrument draws per tick while it works. The basic build's figure kept as the
+     * instrument's own: a 4-unit panel's instrument drew half the panel, 2.
+     */
+    public static final double INSTRUMENT_DRAW_PER_TICK = 2d;
+    /**
+     * Ticks of work per data point. The basic build's figure kept as the instrument's own: 200/√(0.1·4),
+     * the rate a 4-unit panel's satellite collected at.
+     */
+    public static final double TICKS_PER_POINT = 316d;
+
     public DataStorage data;
     long lastActionTime, prevLastActionTime;
-    int collectionTime;
-    int powerConsumption;
     World world;
 
     public SatelliteData() {
         super();
-        //powerConsumption = Math.min(160, getPowerPerTick());
-        powerConsumption = getPowerPerTick();
-        collectionTime = (int) (200 / Math.sqrt(0.1 * powerConsumption));
-
     }
 
     @Override
@@ -62,15 +67,13 @@ public abstract class SatelliteData extends SatelliteBase {
     public void setProperties(@Nonnull ItemStack satelliteProperties) {
         super.setProperties(satelliteProperties);
         data.setMaxData(this.satelliteProperties.getMaxDataStorage());
-        powerConsumption = getPowerPerTick();
-        collectionTime = (int) (200 / Math.sqrt(0.1 * powerConsumption));
     }
 
 
-    /** Collects one data point per {@link #collectionTime} ticks of full power; what power it lacks, it does not collect. */
+    /** One data point per {@link #TICKS_PER_POINT} ticks of work, drawing {@link #INSTRUMENT_DRAW_PER_TICK}. */
     @Override
     public SatelliteAccrual.Payload payload() {
-        return new SatelliteAccrual.Payload(true, false, collectionTime);
+        return new SatelliteAccrual.Payload(true, false, TICKS_PER_POINT, INSTRUMENT_DRAW_PER_TICK);
     }
 
     @Override
@@ -118,11 +121,6 @@ public abstract class SatelliteData extends SatelliteBase {
 
         this.data.readFromNBT(nbt.getCompoundTag("data"));
         lastActionTime = nbt.getLong("lastActionTime");
-        collectionTime = nbt.getInteger("collectionMultiplier");
-
-
-        powerConsumption = getPowerPerTick();
-        collectionTime = (int) (200 / Math.sqrt(0.1 * powerConsumption));
     }
 
     @Override
@@ -134,7 +132,6 @@ public abstract class SatelliteData extends SatelliteBase {
         nbt.setTag("data", data);
 
         nbt.setLong("lastActionTime", lastActionTime);
-        nbt.setInteger("collectionMultiplier", collectionTime);
     }
 
     @Override

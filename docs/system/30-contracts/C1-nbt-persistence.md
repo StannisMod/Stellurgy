@@ -176,11 +176,15 @@ mass for may not be undone by a chunk reload).
 `TileGasSeparator`: `combining` (direction of the mode toggle), `opTicks`. `TileAtmosphereDetector`: `assertion` (the STATEMENT about the air it watches, by enum name so that inserting one in the middle cannot re-point every detector already placed; an unknown one reads as "is it breathable", the harmless default a fresh detector starts on); a statement rather than an atmosphere name, so a player's wiring is not a function of the mod's vocabulary. `ItemSpaceArmor`/`ItemSpaceChest`
 (stack, **CMP-1**): `display`, `color`, `air` (dead).
 
-**satellite** — `SatelliteData`: `data`, `maxData`, `collectionMultiplier`(dead), `lastActionTime`.
+**satellite** — `SatelliteData`: `data`, `maxData`, `lastActionTime`.
 `SatelliteBiomeChanger`: `biomeId`, `biomeList`, `posList`. `SatelliteWeatherController`/
 `ItemWeatherController` (**CMP-1** stack): `floodlevel`, `mode_id`, `last_mode_id`.
 `SatelliteMicrowaveEnergy`: `teir`. `TileTerraformingTerminal`: `blockpertick`, `powergen`,
-`sat_power_per_tick`, `randomblocks_per_tick`, `was_enabled_last_tick`.
+`sat_power_per_tick`, `randomblocks_per_tick`, `was_enabled_last_tick`. `TileSatelliteTerminal`: `data`,
+`outcome` (byte, the ordinal of its last try's outcome), `readout` {`satellite`, `journalNext`,
+`readingsNext`, `dropped`, `rows` [{`tick`, `phase`, `kind`, `count`, `slot`, `rate` — absent for a failure
+or "absent here"}], `last` {`received`, `lost`, `parts`, `readings`, `missed`, `power`, `aboard`,
+`capacity`}}; the same tag is its update packet.
 
 **api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons, a LONG — one nuclear core rates
 4.9e7 N, so an int saturated at a few dozen cores), `mass` (kg), `drillingPower`,
@@ -269,7 +273,6 @@ collides with a `DimensionProperties` key (`orbitalDistance`≠`orbitalDist`, `r
 | `target_sea_level` | `DimensionProperties` | both read and write fully commented — a dead key |
 | `seatShip` | `EntityDummy` | UUID of the ship a pilot-seat dummy was bound under; read back as saved, never re-derived — an orphan loaded with its old chunk must not claim the ship given that claim since |
 | `plannedHarvestMb` | `EntityStationDeployedRocket` | `readMissionPersistentNBT` never reads it (harmless — entity `setDead()`s) |
-| `collectionMultiplier` | `SatelliteData` | read value immediately overwritten by recompute |
 | `pitch`/`roll` | `SpacePosition` | `readFromNBT` writes them back into the tag it is reading (dead writes) |
 | `air` | `ItemSpaceChest` | all `air` int logic commented out; a test still pins an `air` key production never writes |
 

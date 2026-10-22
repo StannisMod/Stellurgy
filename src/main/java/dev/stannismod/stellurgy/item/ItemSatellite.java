@@ -23,23 +23,18 @@ public class ItemSatellite extends ItemIdWithName {
     private static final int FIRST_MOD_SLOT = 1;
     private static final int LAST_MOD_SLOT  = 6;
 
-    /**
-     * Math from SatelliteData:
-     *   collectionTime = (int) (200 / Math.sqrt(0.1 * powerConsumption));
-     * and fallback:
-     *   if (collectionTime == 0) collectionTime = 200;
-     */
-    private static int calcCollectionTimeTicks(int powerGeneration) {
-        if (powerGeneration <= 0) return 0;
-        int ct = (int) (200.0 / Math.sqrt(0.1 * (double) powerGeneration));
-        return (ct == 0) ? 200 : ct;
+    /** The instrument's own rate while it works: one point per its ticks of work, 20 ticks a second. */
+    private static double dataPerSecondWhileWorking() {
+        return 20.0 / SatelliteData.TICKS_PER_POINT;
     }
 
-    /** SatelliteData produces 1 data per collectionTime ticks; 20 ticks/sec. */
-    private static double calcDataPerSecond(int powerGeneration) {
-        int ct = calcCollectionTimeTicks(powerGeneration);
-        if (ct <= 0) return 0.0;
-        return 20.0 / (double) ct;
+    /** The instrument's draw beside the panels' output after upkeep, so a builder sees whether light alone runs it. */
+    private static String makeDrawLine(int powerGeneration) {
+        double draw = SatelliteData.INSTRUMENT_DRAW_PER_TICK;
+        double spare = powerGeneration - dev.stannismod.stellurgy.satellite.SatelliteAccrual.UPKEEP_PER_TICK;
+        String line = LibVulpes.proxy.getLocalizedString("msg.itemsatellite.draw")
+                + String.format(Locale.ROOT, " %.1f / %.1f", draw, spare);
+        return spare >= draw ? line : ChatFormatting.RED + line;
     }
 
     private static String makeDataGenLine(double dataPerSec) {
@@ -176,8 +171,9 @@ public class ItemSatellite extends ItemIdWithName {
             int pg = props.getPowerGeneration();
             int maxData = props.getMaxDataStorage();
 
-            if (base instanceof SatelliteData && pg > 0 && maxData > 0) {
-                list.add(makeDataGenLine(calcDataPerSecond(pg)));
+            if (base instanceof SatelliteData && maxData > 0) {
+                list.add(makeDataGenLine(dataPerSecondWhileWorking()));
+                list.add(makeDrawLine(pg));
             }
             weight = props.getWeight();
             list.add((weight > 0f)
@@ -262,10 +258,10 @@ public class ItemSatellite extends ItemIdWithName {
                 ? LibVulpes.proxy.getLocalizedString("msg.itemsatellite.data") + ZUtils.formatNumber(dataMax)
                 : ChatFormatting.YELLOW + LibVulpes.proxy.getLocalizedString("msg.itemsatellite.nodata"));
         }
-        // Preview data gen line (same semantics + same formula as runtime)
-        if (showDataGenPreview && powerGen > 0 && dataMax > 0) {
-            list.add(makeDataGenLine(calcDataPerSecond(powerGen)));
-        }       
+        if (showDataGenPreview && dataMax > 0) {
+            list.add(makeDataGenLine(dataPerSecondWhileWorking()));
+            list.add(makeDrawLine(powerGen));
+        }
         if (weight > 0f) {
             list.add(LibVulpes.proxy.getLocalizedString("msg.itemsatellite.weight") + weight);
         }
