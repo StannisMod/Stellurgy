@@ -174,6 +174,32 @@ public final class TerminalReadout {
         return Collections.unmodifiableList(new ArrayList<>(rows));
     }
 
+    /**
+     * Page {@code index} of the table, counted back from the newest, {@code rowsPerPage} rows to a page:
+     * newest first, so page 0 opens on the latest contact. Empty past the last page. How many rows fit is the
+     * screen's to say, so the caller passes it.
+     */
+    public List<Row> page(int index, int rowsPerPage) {
+        if (index < 0 || rowsPerPage < 1) {
+            throw new IllegalArgumentException("page " + index + " of " + rowsPerPage + " rows");
+        }
+        List<Row> held = new ArrayList<>(rows);
+        List<Row> out = new ArrayList<>(rowsPerPage);
+        int newest = held.size() - 1 - index * rowsPerPage;
+        for (int i = newest; i > newest - rowsPerPage && i >= 0; i--) {
+            out.add(held.get(i));
+        }
+        return out;
+    }
+
+    /** How many pages of {@code rowsPerPage} rows the table fills; an empty table is one empty page. */
+    public int pages(int rowsPerPage) {
+        if (rowsPerPage < 1) {
+            throw new IllegalArgumentException(rowsPerPage + " rows to a page");
+        }
+        return Math.max(1, (rows.size() + rowsPerPage - 1) / rowsPerPage);
+    }
+
     /** How many of the oldest rows were dropped to keep within the capacity. */
     public long droppedRows() {
         return droppedRows;

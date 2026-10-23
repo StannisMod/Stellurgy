@@ -56,7 +56,7 @@ public class ModuleSatelliteReadout extends ModuleBase implements IButtonInvento
 
     @Override
     public void onInventoryButtonPressed(int buttonId) {
-        int pages = Math.max(1, (tile.readout().rows().size() + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE);
+        int pages = tile.readout().pages(ROWS_PER_PAGE);
         page = Math.max(0, Math.min(pages - 1, page + (buttonId == BUTTON_OLDER ? 1 : -1)));
     }
 
@@ -116,15 +116,12 @@ public class ModuleSatelliteReadout extends ModuleBase implements IButtonInvento
                     .append("\n");
         }
         out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.columns")).append("\n");
-        List<TerminalReadout.Row> rows = readout.rows();
-        int newest = rows.size() - 1 - page * ROWS_PER_PAGE;
-        for (int i = newest; i > newest - ROWS_PER_PAGE && i >= 0; i--) {
-            TerminalReadout.Row row = rows.get(i);
+        for (TerminalReadout.Row row : readout.page(page, ROWS_PER_PAGE)) {
             out.append(row.tick).append("  ")
                     .append(Math.round(Math.toDegrees(row.phaseRad))).append("°  ")
                     .append(valueOf(row)).append("\n");
         }
-        if (rows.isEmpty()) {
+        if (readout.rows().isEmpty()) {
             out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.norows"));
         }
         return out.toString();

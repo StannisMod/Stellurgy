@@ -514,6 +514,13 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   maintainer 2026-10-20 — the terminal's screen tells out of contact apart from loss, and out of range is a
   reason no window cures; maintainer 2026-10-22 — a world with no body answers "out of system", *"Будем
   отдавать такому "вне системы""*.
+- **INV-SAT-40 [T][SYS] The readout's pages.** With N rows to a page, page 0 holds the newest N rows held,
+  newest first, and each next page the N before them; the pages together hold every row exactly once, in
+  newest-first order, and their number is the rows over N rounded up — one empty page for an empty table.
+  A page past the last is empty. How many rows fit is the screen's (`ModuleSatelliteReadout`), so N is the
+  caller's (`TerminalReadout.java`, `page` / `pages`). Pinned by
+  `SatelliteLawsTest#theReadoutsPagesHoldEveryRowOnceNewestFirst`. FOR: MECH-SAT-32 — the second page holds
+  the rows newest first, ten to a page.
 
 ## Failure modes & edge cases
 
@@ -576,7 +583,8 @@ INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
-`SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), INV-SAT-07, -38 →
+`SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), the readout's pages, INV-SAT-40 → `SatelliteLawsTest`
+(unit), INV-SAT-07, -38 →
 `SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
 (server, a terminal in a world with no body) and `SatelliteOutsideItsSystemTest` (server, a satellite of
 another system); the terminal's client copy, MECH-SAT-32 →

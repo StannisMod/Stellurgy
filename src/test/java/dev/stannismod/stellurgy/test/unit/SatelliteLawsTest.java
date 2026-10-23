@@ -46,8 +46,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * The laws of a satellite on its orbit (`satellite`): INV-SAT-11..15, of the dose on its parts:
- * INV-SAT-21, -23..-25, -27..-31, of the quantity a data satellite collects, INV-SAT-34, and of the
- * downlink: INV-SAT-35..37.
+ * INV-SAT-21, -23..-25, -27..-31, of the quantity a data satellite collects, INV-SAT-34, of the
+ * downlink: INV-SAT-35..37, and of the readout's pages: INV-SAT-40.
  *
  * <p>Every orbit here is released by production ({@link SatelliteOrbit#releasedAt}) about a body the test
  * states — a gravitational parameter, a radius, a rotation — and every expected value is the test's own
@@ -1221,6 +1221,92 @@ public class SatelliteLawsTest {
             }
         }
         return out.toString();
+    }
+
+    /**
+     * INV-SAT-40: with N rows to a page, page p holds the rows from the newest minus pN back N rows, newest
+     * first; the pages hold every row once; their number is the rows over N rounded up, at least one; a page
+     * past the last is empty. Swept over table sizes on every side of a page boundary — empty, one row, one
+     * short of a page, a page, one over, two pages and one over, the capacity — and page sizes from one row to
+     * more than the capacity. Each row's tick is its place in the table, so the expected page is the test's own
+     * arithmetic on that place.
+     *
+     * <p>The rows are put in through the terminal's own reader ({@code TerminalReadout#readFromNBT}); a
+     * contact's ordering of its rows by time is INV-SAT-37's, not this law's.</p>
+     */
+    @Pins("INV-SAT-40")
+    @RedWitness(verdict = "newest first", member = "TerminalReadout#page", at = "out.add(held.get(i));",
+            replacedBy = "out.add(0, held.get(i));", fails = "INV-SAT-40: page", on = "2026-10-23")
+    @RedWitness(verdict = "page size", member = "TerminalReadout#page",
+            at = "i > newest - rowsPerPage && i >= 0", replacedBy = "i > newest - rowsPerPage - 1 && i >= 0",
+            fails = "INV-SAT-40: page", on = "2026-10-23")
+    @RedWitness(verdict = "page count", member = "TerminalReadout#pages",
+            at = "return Math.max(1, (rows.size() + rowsPerPage - 1) / rowsPerPage);",
+            replacedBy = "return Math.max(1, rows.size() / rowsPerPage);", fails = "INV-SAT-40: pages", on = "2026-10-23")
+    @Test
+    public void theReadoutsPagesHoldEveryRowOnceNewestFirst() {
+        int cap = TerminalReadout.CAPACITY;
+        int[] perPages = {1, 3, 10, cap, cap + 44};
+        int empty = 0, partial = 0, exact = 0, multi = 0;
+        for (int perPage : perPages) {
+            int[] sizes = {0, 1, perPage - 1, perPage, perPage + 1, 2 * perPage + 1, cap};
+            for (int n : sizes) {
+                if (n < 0 || n > cap) {
+                    continue;
+                }
+                TerminalReadout readout = readoutOf(n);
+                int expectedPages = n == 0 ? 1 : (n + perPage - 1) / perPage;
+                assertEquals("INV-SAT-40: pages — " + n + " rows, " + perPage + " to a page", expectedPages,
+                        readout.pages(perPage));
+                for (int p = 0; p <= expectedPages; p++) {
+                    List<Long> expected = new ArrayList<>();
+                    for (int place = n - 1 - p * perPage; place > n - 1 - (p + 1) * perPage && place >= 0; place--) {
+                        expected.add((long) place);
+                    }
+                    List<Long> got = new ArrayList<>();
+                    for (TerminalReadout.Row row : readout.page(p, perPage)) {
+                        got.add(row.tick);
+                    }
+                    assertEquals("INV-SAT-40: page " + p + " — " + n + " rows, " + perPage + " to a page", expected, got);
+                }
+                if (n == 0) {
+                    empty++;
+                } else if (n % perPage == 0) {
+                    exact++;
+                } else {
+                    partial++;
+                }
+                if (expectedPages > 1) {
+                    multi++;
+                }
+            }
+        }
+        // Each region the law turns on was visited, counted over the sweep: an empty table (one per page size),
+        // a last page cut short, a last page exactly full, a table spread over several pages. The minimums are
+        // what the sizes above produce when every case is reached.
+        assertTrue("the sweep must visit the empty table: " + empty, empty >= perPages.length);
+        assertTrue("the sweep must visit a last page cut short: " + partial, partial >= perPages.length);
+        assertTrue("the sweep must visit a last page exactly full: " + exact, exact >= perPages.length - 1);
+        assertTrue("the sweep must visit tables of several pages: " + multi, multi >= perPages.length - 1);
+    }
+
+    /** A readout holding {@code n} rows whose ticks are their places in the table, oldest first. */
+    private static TerminalReadout readoutOf(int n) {
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (int place = 0; place < n; place++) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setLong("tick", place);
+            tag.setDouble("phase", 0d);
+            tag.setByte("kind", (byte) TerminalReadout.Kind.DOSE_RATE.ordinal());
+            tag.setInteger("count", 0);
+            tag.setByte("slot", (byte) -1);
+            list.appendTag(tag);
+        }
+        NBTTagCompound nbt = new NBTTagCompound();
+        nbt.setTag("rows", list);
+        TerminalReadout readout = new TerminalReadout();
+        readout.readFromNBT(nbt);
+        return readout;
     }
 
     private static String countsOf(TerminalReadout.Contact c) {
