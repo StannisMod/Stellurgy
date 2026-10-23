@@ -48,6 +48,17 @@ import java.util.UUID;
  * the field (the one up now, unless that one cannot hold the weight) and is turned about the vertical
  * only, so it flies level.</p>
  *
+ * <h2>Leaning: only when level cannot deliver</h2>
+ *
+ * <p>Level is the default in a field, because a level hull never comes down nose-first. But a hull whose
+ * only strong axis is the one holding it up (heave-only engines) delivers nothing level along a way
+ * across the vertical. Such a hull — and only such a hull: one for which no level attitude can close
+ * on the aim, or stop — LEANS: the axis holding it up is tilted toward the thrust the plan needs, so its
+ * one push both holds the weight and carries it along. The lean is chosen afresh on every tick from the
+ * acceleration the craft lacks, and is never steeper than the angle at which that axis, pushing its
+ * hardest, still holds the weight. Swinging the lean from closing to braking is a turn like a
+ * turnover's, and is planned the same way.</p>
+ *
  * <h2>Frames</h2>
  *
  * <p>Every position, velocity and acceleration here is in the WORLD frame of the world the craft flies
@@ -83,8 +94,8 @@ public final class MotionSlot {
         TARGET_IS_THIS_CRAFT,
         /** The craft is in space but the target cannot be placed against its cell's frame. */
         TARGET_HAS_NO_FRAME,
-        /** A hull could not be measured, so no distance outside it can be derived. */
-        TARGET_NOT_MEASURED
+        /** The craft's own hull could not be measured, so no distance outside it can be derived. */
+        CRAFT_NOT_MEASURED
     }
 
     /** What one tick of guidance did that somebody outside should hear about. */
@@ -120,10 +131,11 @@ public final class MotionSlot {
     static final double POSITION_GAIN = 2.0D;
 
     /**
-     * How near its aim a LANDING craft must be to count as down, blocks: the farthest from its aim a craft
-     * flying the close-in law can be while slower than {@link #ARRIVAL_SPEED} — the law commands
-     * {@code POSITION_GAIN} blocks/s per block left. A landing is released onto the ground when it
-     * arrives, so the arrival radius a hover is judged by would drop a craft from as high as that radius.
+     * How near the height of its aim a LANDING craft must be to count as down, blocks: the farthest from
+     * its aim a craft flying the close-in law can be while slower than {@link #ARRIVAL_SPEED} — the law
+     * commands {@code POSITION_GAIN} blocks/s per block left. A landing is released onto the ground when
+     * it arrives, so the arrival radius a hover is judged by would drop a craft from as high as that
+     * radius. Across, a landing is judged by the arrival radius like any arrival.
      */
     static final double TOUCHDOWN = ARRIVAL_SPEED / POSITION_GAIN;
 
@@ -219,7 +231,7 @@ public final class MotionSlot {
      * Whether guidance flies the craft: the slot holds an intent, being flown or refused — a refused
      * craft is flown too, in a hover, until its pilot takes it back.
      */
-    public boolean isFlying() {
+    public boolean holdsAnIntent() {
         return state != State.EMPTY;
     }
 
@@ -257,23 +269,39 @@ public final class MotionSlot {
         Refusal shortBy = null;
         FlightCommand command = null;
         double distance = Double.POSITIVE_INFINITY;
+        // A landing's arrival is judged on two distances, not one: how far the craft still is above its
+        // aim, and whether it is let down at all (see below). Infinite until a landing is placed.
+        double above = Double.POSITIVE_INFINITY;
+        boolean heldOver = false;
         if (placed.unplaced() != null) {
             shortBy = refusalFor(placed.unplaced());
         } else {
-            double[] aim = intent.aimFrom(craft.position, placed, ARRIVAL_RADIUS);
+            // With no hull measured there is no shell to aim at, for a GO_TO or a HOLD: the craft makes for
+            // the placed point itself, which is how it comes to share the target's world.
+            double[] aim = placed.provisional() ? placed.position()
+                    : intent.aimFrom(craft.position, placed, ARRIVAL_RADIUS);
+            double[] over = placed.over();
+            if (over != null) {
+                // A landing is let down only over its column — the column's own frame: X and Z across, Y
+                // up. Farther across than half the arrival radius the craft is held at the point over the
+                // column, clear of the ground; nearer, it is let down, with the other half of the radius
+                // for whatever it drifts while it comes down. A landing counts as there anywhere within
+                // the radius, as any arrival does, so its touchdown is judged on height alone.
+                above = Math.abs(craft.position[1] - aim[1]);
+                if (Math.hypot(craft.position[0] - aim[0], craft.position[2] - aim[2]) > ARRIVAL_RADIUS / 2.0D) {
+                    aim = over;
+                    heldOver = true;
+                }
+            }
             double ex = aim[0] - craft.position[0];
             double ey = aim[1] - craft.position[1];
             double ez = aim[2] - craft.position[2];
             distance = Math.sqrt(ex * ex + ey * ey + ez * ez);
             if (distance <= ARRIVAL_RADIUS) {
-                // Settling: no turn is asked for, so the attitude law only brakes whatever spin is left.
-                double speed = Math.min(craft.topSpeed, POSITION_GAIN * distance);
-                double s = distance > 0.0D ? speed / distance : 0.0D;
-                command = FlightCommand.of(new double[]{ex * s, ey * s, ez * s}, zeroRate(),
-                        quatArray(craft.attitude));
+                command = settle(craft, new double[]{ex, ey, ez}, distance);
             } else {
                 double[] u = {ex / distance, ey / distance, ez / distance};
-                Plan plan = Plan.of(craft, u);
+                Plan plan = Plan.approach(craft, u);
                 shortBy = plan.refusal;
                 if (shortBy == null) {
                     command = plan.command(craft, u, distance);
@@ -291,8 +319,10 @@ public final class MotionSlot {
             return new Step(hover(craft.attitude), Event.NONE);
         }
         shortTicks = 0;
-        double arrivedWithin = intent.isLanding() ? TOUCHDOWN : ARRIVAL_RADIUS;
-        if (!arrived && distance <= arrivedWithin && magnitude(craft.velocity) <= ARRIVAL_SPEED) {
+        boolean there = intent.isLanding() ? !heldOver && above <= TOUCHDOWN : distance <= ARRIVAL_RADIUS;
+        // Against a provisional placement no hull was measured, so nothing says where alongside it is:
+        // reaching the aim is not arriving.
+        if (!arrived && !placed.provisional() && there && magnitude(craft.velocity) <= ARRIVAL_SPEED) {
             arrived = true;
             if (intent.isLanding()) {
                 held = craft.attitude;
@@ -310,6 +340,26 @@ public final class MotionSlot {
         return held;
     }
 
+    /**
+     * The command inside the arrival radius, along {@code e} (craft to aim, {@code distance} long). No
+     * turn is asked for — the attitude law only brakes whatever spin is left — unless the attitude the
+     * craft has cannot push toward the aim at all and the hull can lean: then it leans, as on the
+     * approach.
+     */
+    private static FlightCommand settle(Craft craft, double[] e, double distance) {
+        Lean lean = distance > 0.0D ? Lean.of(craft) : null;
+        if (lean != null && !(reach(craft.live, craft.attitude,
+                new double[]{e[0] / distance, e[1] / distance, e[2] / distance}, craft.gravity) > 0.0D)) {
+            double[] u = {e[0] / distance, e[1] / distance, e[2] / distance};
+            double speed = Math.min(craft.topSpeed, lean.positionGain * distance);
+            double[] v = scaled(u, speed);
+            return FlightCommand.of(v, zeroRate(), quatArray(lean.toward(lean.wanted(craft, v))));
+        }
+        double speed = Math.min(craft.topSpeed, POSITION_GAIN * distance);
+        double s = distance > 0.0D ? speed / distance : 0.0D;
+        return FlightCommand.of(new double[]{e[0] * s, e[1] * s, e[2] * s}, zeroRate(), quatArray(craft.attitude));
+    }
+
     private static Refusal refusalFor(GuidanceTarget.Unplaced why) {
         switch (why) {
             case NEEDS_A_CROSSING:
@@ -321,7 +371,7 @@ public final class MotionSlot {
             case NO_FRAME:
                 return Refusal.TARGET_HAS_NO_FRAME;
             default:
-                return Refusal.TARGET_NOT_MEASURED;
+                return Refusal.CRAFT_NOT_MEASURED;
         }
     }
 
@@ -337,15 +387,30 @@ public final class MotionSlot {
         /** Engine seconds to turn from {@link #close} to {@link #brake}. */
         final double turn;
         final Refusal refusal;
+        /** How the hull leans on this approach; {@code null} for a level (or, in space, free) one. */
+        final Lean lean;
 
-        private Plan(Heading close, Heading brake, double turn, Refusal refusal) {
+        private Plan(Heading close, Heading brake, double turn, Refusal refusal, Lean lean) {
             this.close = close;
             this.brake = brake;
             this.turn = turn;
             this.refusal = refusal;
+            this.lean = lean;
         }
 
-        static Plan of(Craft craft, double[] u) {
+        /** The level approach when there is one; else a leaning one, when the hull can lean; else why not. */
+        static Plan approach(Craft craft, double[] u) {
+            Plan level = of(craft, u);
+            if (level.refusal == null || level.refusal == Refusal.CANNOT_HOLD_ITS_WEIGHT) {
+                return level;
+            }
+            Lean lean = Lean.of(craft);
+            Plan leaning = lean == null ? null : leaning(craft, u, lean);
+            return leaning != null ? leaning : level;
+        }
+
+        /** The approach in the candidates of {@link Heading#best}: free in space, level in a field. */
+        private static Plan of(Craft craft, double[] u) {
             if (craft.live == null || !(craft.live.mass().getTotalMass() > 0.0D)) {
                 return refused(Refusal.NO_APPROACH_AUTHORITY);
             }
@@ -369,11 +434,35 @@ public final class MotionSlot {
                 brake = new Heading(close.attitude, inPlace);
                 turn = 0.0D;
             }
-            return new Plan(close, brake, turn, null);
+            return new Plan(close, brake, turn, null, null);
+        }
+
+        /**
+         * The approach of a hull that leans: it closes leaned toward the aim at the most the lean gives,
+         * and brakes leaned away from it at the {@link #STOP_MARGIN} share the plan brakes on; the swing
+         * between the two is timed like a turnover. {@code null} when leaning cannot close, cannot stop,
+         * or is a turn the hull cannot make.
+         */
+        private static Plan leaning(Craft craft, double[] u, Lean lean) {
+            double closing = lean.reach(u);
+            double braking = lean.reach(negate(u));
+            if (!(closing > 0.0D) || !(braking > 0.0D)) {
+                return null;
+            }
+            FreeFlightPhysics.Quat closeIn = lean.toward(scaled(u, closing));
+            FreeFlightPhysics.Quat brakeIn = lean.toward(scaled(u, -STOP_MARGIN * braking));
+            if (Double.isInfinite(turnTime(craft, craft.attitude, closeIn))) {
+                return null;
+            }
+            double turn = turnTime(craft, closeIn, brakeIn);
+            if (Double.isInfinite(turn)) {
+                return null;
+            }
+            return new Plan(new Heading(closeIn, closing), new Heading(brakeIn, braking), turn, null, lean);
         }
 
         private static Plan refused(Refusal why) {
-            return new Plan(null, null, 0.0D, why);
+            return new Plan(null, null, 0.0D, why, null);
         }
 
         /**
@@ -387,23 +476,31 @@ public final class MotionSlot {
          * commanded the least of its top speed, {@code v_0(d)}, the close-in and the speed it already
          * has — so the turn is coasted, never thrust through, and the stop begins where the plan allowed
          * for it.
+         *
+         * <p>A leaning plan commands the same speeds, with the close-in gain its lean loop allows
+         * ({@link Lean#positionGain}), and in place of a fixed attitude the lean toward the acceleration
+         * the craft lacks for that speed ({@link Lean#wanted}).</p>
          */
         FlightCommand command(Craft craft, double[] u, double d) {
             double a = STOP_MARGIN * brake.reach;
             double turned = Math.sqrt(a * turn * a * turn + 2.0D * a * d) - a * turn;
             double direct = Math.sqrt(2.0D * a * d);
             double closing = dot(craft.velocity, u);
+            double closeIn = (lean == null ? POSITION_GAIN : lean.positionGain) * d;
             double speed;
             FreeFlightPhysics.Quat attitude;
             if (closing >= turned) {
-                speed = Math.min(Math.min(craft.topSpeed, direct), Math.min(POSITION_GAIN * d, closing));
+                speed = Math.min(Math.min(craft.topSpeed, direct), Math.min(closeIn, closing));
                 attitude = brake.attitude;
             } else {
-                speed = Math.min(craft.topSpeed, Math.min(turned, POSITION_GAIN * d));
+                speed = Math.min(craft.topSpeed, Math.min(turned, closeIn));
                 attitude = close.attitude;
             }
-            return FlightCommand.of(new double[]{u[0] * speed, u[1] * speed, u[2] * speed}, zeroRate(),
-                    quatArray(attitude));
+            double[] v = {u[0] * speed, u[1] * speed, u[2] * speed};
+            if (lean != null) {
+                attitude = lean.toward(lean.wanted(craft, v));
+            }
+            return FlightCommand.of(v, zeroRate(), quatArray(attitude));
         }
     }
 
@@ -482,6 +579,129 @@ public final class MotionSlot {
                 }
             }
             return best;
+        }
+    }
+
+    /**
+     * How a hull in a field leans: the level attitude ({@link #level}), the signed axis it holds up — the
+     * LIFTING axis — and what that axis can push, for a hull whose lifting axis can push harder than its
+     * weight (else it cannot lean at all and keep it).
+     *
+     * <p>Thrust per unit mass along the lifting axis, {@code f}, must equal the acceleration wanted plus
+     * the field's pull cancelled: {@code f = a + g·up}. So the lifting axis is laid along {@code f}, and
+     * never further from the vertical than {@code acos(g / lift)} — past that, even its hardest push no
+     * longer holds the weight.</p>
+     */
+    private static final class Lean {
+
+        final FreeFlightPhysics.Quat level;
+        final double[] up;
+        /** The field's strength, engine blocks/s². */
+        final double g;
+        /** The lifting axis's sustained authority, engine blocks/s². */
+        final double lift;
+        /**
+         * Acceleration asked per unit of velocity error, 1/s. The lean is an outer loop on the attitude
+         * law: an error {@code e} asks a lean of about {@code K·e/g}, the attitude law reaches it as a
+         * first-order lag of gain {@code k} (its attitude gain), and a lean of {@code θ} accelerates the
+         * craft at about {@code g·θ}. So {@code e'' + k·e' + k·K·e = 0}, critically damped at
+         * {@code K = k/4}.
+         */
+        final double velocityGain;
+        /**
+         * The close-in gain a leaning craft is flown with, 1/s. A position loop of gain {@code P} over that
+         * velocity loop gives {@code x''' + k·x'' + k·K·x' + k·K·P·x = 0}; with {@code K = k/4} and
+         * {@code s = k·σ} that is {@code σ(σ + 1/2)² + P/(4k) = 0}, whose roots are all real — no overshoot
+         * past the aim — only while {@code P/(4k)} is at most the largest value of {@code −σ(σ + 1/2)²}
+         * between its roots, {@code 1/54} at {@code σ = −1/6}. So {@code P = 2k/27}, the fastest close-in
+         * that does not overshoot. ({@link #POSITION_GAIN} is {@code k} itself, on the stability edge
+         * {@code P < k}; measured 2026-10-22 at {@code P = K}, a heave-only hull overshot its column by
+         * three blocks.) It is the gain along the vertical too, though the lift moves the craft up and
+         * down unleaned: how hard the lift pushes is what a lean turns into push across, so a fast vertical
+         * loop drives the one across — measured the same day with the vertical at {@code POSITION_GAIN}, the
+         * same hull cycled a block and a half either side of its column without settling.
+         */
+        final double positionGain;
+
+        private Lean(FreeFlightPhysics.Quat level, double[] up, double g, double lift, double attitudeGain) {
+            this.level = level;
+            this.up = up;
+            this.g = g;
+            this.lift = lift;
+            this.velocityGain = attitudeGain / 4.0D;
+            this.positionGain = 2.0D * attitudeGain / 27.0D;
+        }
+
+        /** How {@code craft} leans; {@code null} in space, or for a hull that cannot lean and hold its weight. */
+        static Lean of(Craft craft) {
+            double g = magnitude(craft.gravity);
+            if (g == 0.0D || craft.live == null || !(craft.attitudeGain > 0.0D)) {
+                return null;
+            }
+            double mass = craft.live.mass().getTotalMass();
+            if (!(mass > 0.0D)) {
+                return null;
+            }
+            double[] up = {-craft.gravity[0] / g, -craft.gravity[1] / g, -craft.gravity[2] / g};
+            FreeFlightPhysics.Quat level = level(craft, up);
+            if (level == null) {
+                return null;
+            }
+            ControlDirection lifting = null;
+            double mostUp = Double.NEGATIVE_INFINITY;
+            for (ControlDirection s : translations()) {
+                double along = dot(axisIn(craft.live, level, s), up);
+                if (along > mostUp) {
+                    mostUp = along;
+                    lifting = s;
+                }
+            }
+            double lift = authority(craft.live, lifting, mass);
+            return lift > g ? new Lean(level, up, g, lift, craft.attitudeGain) : null;
+        }
+
+        /**
+         * The largest acceleration, engine blocks/s², leaning lets the hull add along the unit direction
+         * {@code w} while holding its weight: the largest {@code a} with {@code |a·w + g·up| ≤ lift} whose
+         * lean is no steeper than {@code acos(g / lift)}.
+         */
+        double reach(double[] w) {
+            double wv = dot(w, up);
+            double wh = Math.sqrt(Math.max(0.0D, 1.0D - wv * wv));
+            double byLift = -g * wv + Math.sqrt(Math.max(0.0D, g * g * wv * wv - g * g + lift * lift));
+            double steepest = Math.sqrt(lift * lift - g * g) / g;
+            double slope = wh - wv * steepest;
+            double byLean = slope > 0.0D ? g * steepest / slope : Double.POSITIVE_INFINITY;
+            return Math.max(0.0D, Math.min(byLift, byLean));
+        }
+
+        /** The acceleration asked of a craft flying at its velocity now when {@code v} is wanted. */
+        double[] wanted(Craft craft, double[] v) {
+            return new double[]{(v[0] - craft.velocity[0]) * velocityGain, (v[1] - craft.velocity[1]) * velocityGain,
+                    (v[2] - craft.velocity[2]) * velocityGain};
+        }
+
+        /**
+         * The level attitude leaned so the lifting axis lies along the thrust that adds {@code want} while
+         * holding the weight — turned about the horizontal axis square to the lean, so its heading about
+         * the vertical is the level one's — no steeper than {@code acos(g / lift)}. Level itself when
+         * nothing is wanted across the vertical, or when what is wanted is a fall the lift cannot help.
+         */
+        FreeFlightPhysics.Quat toward(double[] want) {
+            double wantUp = dot(want, up);
+            double fv = wantUp + g;
+            double[] across = {want[0] - wantUp * up[0], want[1] - wantUp * up[1], want[2] - wantUp * up[2]};
+            double fh = magnitude(across);
+            if (!(fv > 0.0D) || fh < 1.0e-9D) {
+                return level;
+            }
+            double angle = Math.min(Math.atan2(fh, fv), Math.acos(g / lift));
+            double[] h = {across[0] / fh, across[1] / fh, across[2] / fh};
+            // Turning up toward h is a turn about up × h.
+            double[] axis = {up[1] * h[2] - up[2] * h[1], up[2] * h[0] - up[0] * h[2], up[0] * h[1] - up[1] * h[0]};
+            double s = Math.sin(angle / 2.0D);
+            return new FreeFlightPhysics.Quat(Math.cos(angle / 2.0D), axis[0] * s, axis[1] * s, axis[2] * s)
+                    .mul(level).normalized();
         }
     }
 
@@ -628,12 +848,18 @@ public final class MotionSlot {
             return false;
         }
         double[] gShip = conjugate(attitude).rotate(gravity[0], gravity[1], gravity[2]);
+        double field = magnitude(gravity);
         for (ControlAxis axis : ControlAxis.values()) {
             if (axis.isRotation()) {
                 continue;
             }
             Vector3dc n = live.frame().axis(axis);
             double g = gShip[0] * n.x() + gShip[1] * n.y() + gShip[2] * n.z();
+            // A share of the field this small is the rounding of the rotation into the hull's frame, not a
+            // pull: an axis with no authority at all must not read as failing to hold it.
+            if (Math.abs(g) <= AXIS_EPSILON * field) {
+                continue;
+            }
             // Holding the weight alone needs thrust -g on this axis.
             if (-g > authority(live, ControlDirection.of(axis, true), mass)
                     || g > authority(live, ControlDirection.of(axis, false), mass)) {
@@ -728,6 +954,10 @@ public final class MotionSlot {
 
     private static double[] negate(double[] v) {
         return new double[]{-v[0], -v[1], -v[2]};
+    }
+
+    private static double[] scaled(double[] v, double k) {
+        return new double[]{v[0] * k, v[1] * k, v[2] * k};
     }
 
     private static double dot(double[] a, double[] b) {

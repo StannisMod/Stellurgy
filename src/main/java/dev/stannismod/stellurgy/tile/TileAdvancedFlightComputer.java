@@ -703,7 +703,7 @@ public class TileAdvancedFlightComputer extends TileEntity
         }
         // A motion intent outranks the pilot's latched input and the unmanned hold: it was issued after
         // the last input reached this computer, since a later one would have emptied the slot.
-        if (motion.isFlying() && flyMotionIntent(attitude)) {
+        if (motion.holdsAnIntent() && flyMotionIntent(attitude)) {
             return;
         }
         // Playtest trace ([FF-TRACE/AFC], -Dstellurgy.tests=true): log each null<->set flip of

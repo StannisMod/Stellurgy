@@ -302,6 +302,42 @@ public final class ShipMotionCases {
         return new Hull("no-reverse hull", a, deckUnder(a));
     }
 
+    /**
+     * The symmetric hull's heave motors alone, four up and four down at the deck's corners, and a wheel:
+     * it pushes along heave only, and turns about roll and pitch by its corner couples (about yaw by the
+     * wheel alone). Level, it delivers nothing across the vertical.
+     */
+    public static Hull heaveOnlyHull() {
+        List<Actuator> a = heaveMotors();
+        a.addAll(ReactionWheel.at(0, 0, 0));
+        return new Hull("heave-only hull", a, deckUnder(a));
+    }
+
+    /**
+     * The heave-only hull with a WEAK sway pair each way, a tenth of a motor, in the deck's plane: level,
+     * it delivers something across the vertical, far less than leaning its heave would.
+     */
+    public static Hull weakSwayHull() {
+        List<Actuator> a = heaveMotors();
+        for (int s = -1; s <= 1; s += 2) {
+            a.add(motor(-2, 0, s, 1, 0, 0, THRUST / 10.0D));
+            a.add(motor(2, 0, s, -1, 0, 0, THRUST / 10.0D));
+        }
+        a.addAll(ReactionWheel.at(0, 0, 0));
+        return new Hull("weak-sway hull", a, deckUnder(a));
+    }
+
+    private static List<Actuator> heaveMotors() {
+        List<Actuator> a = new ArrayList<>();
+        for (int s = -1; s <= 1; s += 2) {
+            a.add(motor(s, -1, s, 0, 1, 0, THRUST));
+            a.add(motor(-s, -1, s, 0, 1, 0, THRUST));
+            a.add(motor(s, 1, s, 0, -1, 0, THRUST));
+            a.add(motor(-s, 1, s, 0, -1, 0, THRUST));
+        }
+        return a;
+    }
+
     public static Hull wheelOnlyHull() {
         List<Actuator> a = new ArrayList<>(ReactionWheel.at(0, 1, 0));
         return new Hull("wheel-only hull", a, deckUnder(a));

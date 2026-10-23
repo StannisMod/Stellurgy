@@ -145,7 +145,9 @@ each step reads the immutable list the manager built at the end of its last tick
 `WorldServerShipManager.java:179`. Ships step only after 20 existing ticks, with physics enabled and a surrounding chunk cache [V]
 `VSWorldPhysicsLoop.java:133-137`, `PhysicsObject.java:51`, `:441-443`. Step order [V] `VSWorldPhysicsLoop.java:124-157`, `:162-206`: recurring and queued tasks;
 per ship, `rawPhysTickPreCol` (forces), water and terrain collision caches; the collision and water tasks fan out on the pool
-(`threadCount` threads, built in pre-init); results are applied sequentially; `rawPhysTickPostCol` integrates. A step that produces
+(`threadCount` threads, built in pre-init); results are applied sequentially; `rawPhysTickPostCol` integrates. Any non-zero angular
+velocity turns the ship, however slow; only an exactly zero one is skipped, because its axis cannot be made unit
+[V] `VS/mod/common/physics/PhysicsCalculations.java:356-376`. A step that produces
 velocity² > 50 000 or a non-finite value freezes the ship and clears its velocities [V] `VS/mod/common/physics/PhysicsCalculations.java:99-109`, `:131-137`.
 Per-ship exceptions are caught and printed, never rethrown [V] `VSWorldPhysicsLoop.java:177-179`, `:202-204`.
 
@@ -156,7 +158,7 @@ the seam Stellurgy's flight computer uses (the Stellurgy side is `integration-vs
 its stale predecessor instead of joining it [V] `PhysicsObject.java:209-214`, `VS/mixin/world/chunk/MixinChunk.java:45-56`. Gravity, force- and
 torque-providing blocks follow [V] `PhysicsCalculations.java:175-238`. Two Stellurgy hooks sit inside the integrator: drag is
 `FreeFlightPhysics.ambientDragFactor(AtmosphereDensity.inAtmospheres(world), dt)` — exactly 1.0 (no damping) in vacuum — and position Y is clamped to a
-per-world band `[min(configLower, declaredFloor), max(configUpper, declaredCeiling)]` that Stellurgy may only widen [V] `:294-304`, `:364-372`,
+per-world band `[min(configLower, declaredFloor), max(configUpper, declaredCeiling)]` that Stellurgy may only widen [V] `:305-317`, `:381-389`,
 `VS/mod/common/physics/ShipAltitudeBand.java:21-47`. Block mass/inertia are updated by every block change on a shipyard chunk
 (MECH-VSK-11).
 
@@ -246,8 +248,8 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
   substrate will leave alone (`ShipChunkAllocator.java:58-60`). Stellurgy's cell geometry is built around this (its javadoc `:26-46`).
 - **INV-VSK-08** [V] A claim is 15×15 chunks everywhere it is asked (`WorldServerShipManager.java:210`, `VSChunkClaim.java:67`, `ClaimedChunkCacheController.java:46`);
   changing one literal alone desynchronises assembly, containment and the cache.
-- **INV-VSK-09** [V] Vacuum does not damp: air drag retention is exactly 1.0 at zero atmospheric density (`PhysicsCalculations.java:299-301`).
-- **INV-VSK-10** [V] A ship's Y never leaves the world's altitude band, which can only be widened (`ShipAltitudeBand.java:31-45`, `PhysicsCalculations.java:370-371`).
+- **INV-VSK-09** [V] Vacuum does not damp: air drag retention is exactly 1.0 at zero atmospheric density (`PhysicsCalculations.java:310-312`).
+- **INV-VSK-10** [V] A ship's Y never leaves the world's altitude band, which can only be widened (`ShipAltitudeBand.java:31-45`, `PhysicsCalculations.java:387-388`).
 - **INV-VSK-11** [V] A body is carried only by a hull it is within 1 block of and that has not just been teleported
   (`EntityDraggable.java:73-77`, `:118-122`); a ship that jumps does not fling its passengers.
 - **INV-VSK-12** [V] Block damage records travel with their blocks through assembly and copy-back (`WorldServerShipManager.java:272`, `:308-314`; `MoveBlocks.java:54`).

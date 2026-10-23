@@ -18373,9 +18373,16 @@ public class TestProbeCommand extends CommandBase {
             //                               sideways, up and down and turn about every axis, and has
             //                               nothing that slows it once it moves nose-first.
             boolean noReverseHull = "no-reverse-hull".equals(variant);
+            //   heave-only-hull           — the with-pilot-seat hull without any pusher that drives it
+            //                               along its helm's forward or sideways axis: its main engines
+            //                               and four corner lifters lift it, the pushers under the
+            //                               column's ends press it down, and it turns about roll and pitch
+            //                               by their differential and about yaw by its wheel. Level, it
+            //                               can push nowhere across the vertical.
+            boolean heaveOnlyHull = "heave-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
             boolean includeDeckTank = "with-pilot-deck-and-tank".equals(variant);
-            boolean seatHullVariant = bareHull || wheelOnlyHull || noReverseHull;
+            boolean seatHullVariant = bareHull || wheelOnlyHull || noReverseHull || heaveOnlyHull;
             boolean includeEngines = !"invalid-no-engine".equals(variant) && !bareHull && !wheelOnlyHull;
             boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
             boolean includeSeat = !"invalid-no-seat".equals(variant)
@@ -18831,6 +18838,44 @@ public class TestProbeCommand extends CommandBase {
                             world.setBlockToAir(new BlockPos(rocketX + dx, rocketY + dy, rocketZ - 1));
                         }
                     }
+                }
+                if (heaveOnlyHull) {
+                    // Every horizontal pusher of the seat craft: the X pushers against the column's ends
+                    // and the Z pushers against its sides. The down-pushers under the X pushers stay,
+                    // welded to the main engines beside them.
+                    for (int sx = -1; sx <= 1; sx += 2) {
+                        for (int dy = 1; dy <= 2; dy++) {
+                            world.setBlockToAir(new BlockPos(rocketX + 2 * sx, rocketY + dy, rocketZ));
+                            world.setBlockToAir(new BlockPos(rocketX + sx, rocketY + dy, rocketZ - 1));
+                            world.setBlockToAir(new BlockPos(rocketX + sx, rocketY + dy, rocketZ + 1));
+                        }
+                    }
+                    // Lifters at the four corners beside the main engines, welded to them, beside no tank:
+                    // nozzle down, push up. With every lift at the column's centre line alone, nothing
+                    // holds the hull's pitch while it lifts, so its lift is no sustained authority at all
+                    // (measured on this fixture without them: heave 0 sustained, 4.9 MN burst); a pair
+                    // either side of that line holds pitch by throttle, and the pairs either side in X
+                    // hold roll — the turn a lean along the helm's sway axis is.
+                    for (int sx = -1; sx <= 1; sx += 2) {
+                        for (int sz = -1; sz <= 1; sz += 2) {
+                            placeMotor(world, dev.stannismod.stellurgy.api.StellurgyBlocks.blockAdvEngine,
+                                    new BlockPos(rocketX + sx, rocketY, rocketZ + sz),
+                                    net.minecraft.util.EnumFacing.DOWN);
+                        }
+                    }
+                    // A second wheel mirroring the first across the column, against the upper centre
+                    // tank's -Z face. A clean roll must turn the hull about roll alone, which takes a yaw
+                    // share wherever the mass is lopsided between up-and-forward and up-and-aft; with
+                    // the one wheel forward it was (measured on this fixture: roll 0 sustained, the
+                    // wheel's burst alone), and nothing aboard pushes about yaw for long.
+                    world.setBlockState(new BlockPos(rocketX, rocketY + 2, rocketZ - 1),
+                            dev.stannismod.stellurgy.api.StellurgyBlocks.blockReactionWheel.getDefaultState());
+                    // And an iron block mirroring the flight computer across the column, for pitch: the
+                    // computer alone on the -X side, up high, couples pitch to yaw the same way (measured:
+                    // pitch 0 sustained, and a craft that drifted along Z for want of it). Both weigh as
+                    // iron in the hull's mass table.
+                    world.setBlockState(new BlockPos(rocketX + 1, rocketY + 3, rocketZ),
+                            net.minecraft.init.Blocks.IRON_BLOCK.getDefaultState());
                 }
             }
             String holdFromComputer = "null";

@@ -30,8 +30,8 @@ import static org.junit.Assert.assertTrue;
  * alongside the ship it was sent to and stops, outside both hulls; a hull with no reverse thrust turns
  * over and arrives too; a hull with no thrust at all is refused; a target in another world is refused as
  * needing a crossing and the craft hovers; an order whose course crosses a cell face survives the
- * crossing; and on a planet a craft sent to a point of the surface lands there (ship-guidance INV-GDN-01,
- * -03, -07..10).
+ * crossing; and on a planet a craft sent to a point of the surface lands there, a hull that pushes along
+ * heave alone by leaning into its thrust (ship-guidance INV-GDN-01, -03, -07..10, -14).
  *
  * <p>NEW-GROUP: guidance — the flight computer flying an ORDER with nobody at the stick. No existing
  * group holds it: the flight-model group measures what a hull can do under a command a probe writes
@@ -100,6 +100,14 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
      */
     private static final int HOVER_WINDOW_TICKS = 40;
 
+    /**
+     * The window "at rest" is judged over, server ticks: one second of the game's clock. The physics
+     * substrate steps several times per game tick, so a rocking on a contact or on the actuators — a few
+     * steps per swing — averages over many of its own periods; and a craft really moving at the arrival
+     * speed covers a fifth of a block in it, far above what a pose read resolves.
+     */
+    private static final int AT_REST_WINDOW_TICKS = 20;
+
     /** The forward cruise, blocks per second, the craft's pilot is arranged to have left it; an input. */
     private static final double LEFT_CRUISE = 10.0D;
 
@@ -120,6 +128,38 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     private static final int PLATFORM_OUT = 30;
     private static final int START_BACK = 16;
     private static final int START_ABOVE = 30;
+
+    /**
+     * The heave-only landing, its inputs. Sideways: how far off along X the platform's column stands from
+     * the craft's site — several hull lengths, all of it only a lean can cover, and inside the plot (whose
+     * fixture stands {@code Plot.FIXTURE_INSET} in from one edge of {@code Plot.SIZE}). Below: how far
+     * under the site the platform lies, so the last of the way is down onto it. Half: the platform's
+     * half-width — the arrival radius plus the half-width of the hull's footprint, so a craft landing
+     * anywhere it may count as there stands on stone. Park above: where the craft is lifted to before the
+     * order, clear of its own pad and tower (six courses) by ten blocks.
+     */
+    private static final int LEAN_SIDEWAYS = 24;
+    private static final int LEAN_PLATFORM_BELOW = 8;
+    private static final int LEAN_PLATFORM_HALF = 5;
+    private static final int LEAN_PARK_ABOVE = 16;
+
+    /**
+     * The deadline of the heave-only landing's link, server ticks; expiry means the record never came.
+     * Measured 2026-10-22 (logs/t402b-server16-trace.txt, the craft's pose read every 40 ticks): it overshot its
+     * column by six blocks, crept back, and was over the column letting down 1 320 ticks after the order.
+     * At 6 000 the link expired once in seven runs (logs/t402b-server-witness-replay.log, under an inversion
+     * that cannot act before the arrival); loosened to twice that — and expired once more at 12 000
+     * (logs/t402b-inv-rest2.log, the same kind of inversion), so the expiry is not a slow box but a landing
+     * that sometimes does not come. Traced 2026-10-22 over six runs (logs/hv1-1..6-trace.txt): the physics
+     * substrate integrates no rotation slower than 0.0316 rad/s, so the hull's lean freezes wherever its
+     * last larger turn stopped, and the craft creeps across its column at the speed that frozen lean
+     * gives — 0.010 to 0.064 blocks/s in the runs that landed, 0.125 in the one that crossed the column
+     * before it was down and cycled about it. A defect of the substrate, not of this budget. Fixed in the
+     * substrate 2026-10-23 (it now turns a hull at any non-zero rate): twenty runs since, ten with guidance
+     * rounding its leans and ten without, every one landed (logs/t846a-summary.txt, logs/t846b-summary.txt).
+     * The number itself was not re-sized from those runs.
+     */
+    private static final int LEAN_LINK_TICKS = 12000;
 
     /**
      * The cells the space scenarios fly in, one each (the crossing scenario takes the next one too):
@@ -243,7 +283,7 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     @RedWitness(verdict = "within", member = "MotionSlot#fly",
             at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks >= 10 * REFUSAL_WINDOW_TICKS",
             fails = "INV-GDN-09 within", on = "2026-10-21")
-    @RedWitness(verdict = "hovers", member = "MotionSlot#isFlying",
+    @RedWitness(verdict = "hovers", member = "MotionSlot#holdsAnIntent",
             at = "return state != State.EMPTY;", replacedBy = "return state == State.ACTIVE;",
             fails = "INV-GDN-09 hovers", on = "2026-10-21")
     @Wait(shape = Wait.Shape.WINDOW, at = "Window.over(",
@@ -377,9 +417,10 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     @RedWitness(verdict = "arrival", member = "TileAdvancedFlightComputer#flyMotionIntent",
             at = "if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.ARRIVED) {",
             replacedBy = "if (step.event() == null) {", fails = "INV-GDN-10 arrival", on = "2026-10-21")
-    @RedWitness(verdict = "on the ground", member = "GuidanceTarget#placeIn",
-            at = "- MotionSlot.TOUCHDOWN / 2.0D", replacedBy = "+ 3.0D",
-            fails = "INV-GDN-10 on the ground", on = "2026-10-21")
+    @RedWitness(verdict = "on the ground", member = "MotionSlot#rest",
+            at = "return FlightCommand.of(null, zeroRate(), quatArray(attitude));",
+            replacedBy = "return FlightCommand.of(new double[]{0.0D, 10.0D, 0.0D}, zeroRate(), quatArray(attitude));",
+            fails = "INV-GDN-10 on the ground", on = "2026-10-22")
     @RedWitness(verdict = "there", member = "GuidanceTarget#placeIn",
             at = "new double[]{x, ground", replacedBy = "new double[]{x + 5.0D, ground",
             fails = "INV-GDN-10 there", on = "2026-10-21")
@@ -445,6 +486,94 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
         }
     }
 
+    @Test
+    @Pins("INV-GDN-14")
+    @RedWitness(verdict = "arrival", member = "Plan#approach",
+            at = "Lean lean = Lean.of(craft);", replacedBy = "Lean lean = null;",
+            fails = "INV-GDN-14 arrival", on = "2026-10-22")
+    @RedWitness(verdict = "on the ground", member = "MotionSlot#rest",
+            at = "return FlightCommand.of(null, zeroRate(), quatArray(attitude));",
+            replacedBy = "return FlightCommand.of(new double[]{0.0D, 10.0D, 0.0D}, zeroRate(), quatArray(attitude));",
+            fails = "INV-GDN-14 on the ground", on = "2026-10-22")
+    @RedWitness(verdict = "there", member = "GuidanceTarget#placeIn",
+            at = "new double[]{x, ground", replacedBy = "new double[]{x + 5.0D, ground",
+            fails = "INV-GDN-14 there", on = "2026-10-22")
+    @RedWitness(verdict = "at rest", member = "MotionSlot#fly",
+            at = "return new Step(rest(heldOr(craft.attitude)), Event.NONE);",
+            replacedBy = "return new Step(FlightCommand.of(new double[]{0.0D, 0.3D, 0.0D}, zeroRate(), quatArray(heldOr(craft.attitude))), Event.NONE);",
+            fails = "INV-GDN-14 at rest", on = "2026-10-22")
+    public void aHeaveOnlyHullLeansIntoItsThrustAndLandsAtAPointToItsSide() throws Exception {
+        Events events = events();
+        long buildMark = events.mark();
+        List<String> built = new ArrayList<>();
+        try {
+            FixtureSite site = site();
+            AssembledCraft craft = build(site, "heave-only-hull", "a hull that pushes along heave alone");
+            built.add(craft.durable);
+            // The precondition the whole scenario rests on: level, this hull can push nowhere across the
+            // vertical, so nothing but a lean carries it to the side — and its lift holds its weight with
+            // room to lean.
+            Reply model = Reply.of(read("stellurgytest vs flight-model-by-id " + site.dim + " " + craft.physicsId)
+                    .object("model"));
+            Reply directions = Reply.of(model.object("directions"));
+            for (String across : new String[]{"SURGE_POSITIVE", "SURGE_NEGATIVE", "SWAY_POSITIVE", "SWAY_NEGATIVE"}) {
+                Reply live = Reply.of(Reply.of(directions.object(across)).object("live"));
+                requireArranged("the hull must push nowhere across the vertical: " + across + " " + live,
+                        live.number("sustained") == 0.0D);
+            }
+            for (String turn : new String[]{"ROLL_POSITIVE", "ROLL_NEGATIVE", "PITCH_POSITIVE", "PITCH_NEGATIVE"}) {
+                Reply live = Reply.of(Reply.of(directions.object(turn)).object("live"));
+                requireArranged("the hull must hold a lean either way for as long as it leans: " + turn + " "
+                        + live, live.number("sustained") > 0.0D);
+            }
+            Reply lift = Reply.of(Reply.of(directions.object("HEAVE_POSITIVE")).object("live"));
+            double weight = Reply.of(model.object("mass")).number("totalKg") * model.number("gravity");
+            requireArranged("the hull must lift more than its weight, " + weight + " N, to have room to lean: " + lift,
+                    lift.number("sustained") > weight);
+
+            // Its platform off to the hull's side — along X, the helm's sway axis on an unrotated hull — and
+            // below its pad, laid by the test so the ground's height is known; the craft parked high above
+            // its pad first, so its way there crosses nothing.
+            int px = site.x + LEAN_SIDEWAYS;
+            int pz = site.z;
+            int py = site.y - LEAN_PLATFORM_BELOW;
+            int side = 2 * LEAN_PLATFORM_HALF + 1;
+            Reply platform = arrange("stellurgytest fill " + site.dim + " " + (px - LEAN_PLATFORM_HALF) + " " + py
+                    + " " + (pz - LEAN_PLATFORM_HALF) + " " + (px + LEAN_PLATFORM_HALF) + " " + py + " "
+                    + (pz + LEAN_PLATFORM_HALF) + " minecraft:stone");
+            requireArranged("the platform must be laid whole, in open air: " + platform,
+                    platform.ok() && platform.integer("placed") == side * side);
+            park(craft, site.x, site.y + LEAN_PARK_ABOVE, site.z);
+
+            long mark = events.mark();
+            double columnX = px + 0.5D;
+            double columnZ = pz + 0.5D;
+            Reply issued = arrange("stellurgytest vs motion-go-to-surface-by-id " + site.dim + " " + craft.physicsId
+                    + " " + site.dim + " " + columnX + " " + columnZ);
+            requireArranged("the order must be in the slot: " + issued,
+                    issued.bool("afcResolved") && "ACTIVE".equals(issued.text("state")));
+
+            String arrived = events.awaitRecordWithFields(mark, "motion_arrived",
+                    "INV-GDN-14 arrival — the heave-only craft must report it landed", LEAN_LINK_TICKS, "ship",
+                    craft.durable);
+            ShipInfo end = ShipInfo.byId(c -> read(c).raw(), site.dim, craft.physicsId);
+            Reply box = bounds(site.dim, craft.physicsId);
+            double gap = box.number("minY") - (py + 1.0D);
+            assertTrue("INV-GDN-14 on the ground: the hull's lowest point is " + gap + " blocks from the"
+                    + " platform's top, not within " + ON_THE_GROUND + ": " + box + " | " + arrived,
+                    Math.abs(gap) < ON_THE_GROUND);
+            double off = Math.hypot(end.x - columnX, end.z - columnZ);
+            assertTrue("INV-GDN-14 there: the craft landed " + off + " blocks from the column it was sent to,"
+                    + " beyond " + ARRIVED_WITHIN + ": " + end, off <= ARRIVED_WITHIN);
+            Window<ShipInfo> after = restWindow(site.dim, craft.physicsId);
+            double speed = restRate(after);
+            assertTrue("INV-GDN-14 at rest: the landed craft moved at " + speed + " blocks/s on average after it"
+                    + " landed: " + after, speed < ARRIVED_SLOWER_THAN);
+        } finally {
+            dispose(events, buildMark, built);
+        }
+    }
+
     /**
      * Build an ordinary target and a craft of {@code variant} in an empty cell, put the target 200 blocks
      * off, order the craft to it, and judge where it ends: {@link #assertAlongside}.
@@ -493,8 +622,8 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     /**
      * The verdict of an arrival alongside a ship: the craft's position at the standoff from the target's —
      * the two hulls' reaches plus the arrival radius — within the arrival radius, never nearer than the
-     * two reaches (the hulls apart), and slower than the arrival speed. The craft and the target are read
-     * once each.
+     * two reaches (the hulls apart), each hull read once; and at rest, judged as {@link #restRate} judges
+     * it.
      */
     private void assertAlongside(String anchor, int dim, String craftId, double craftReach, AssembledCraft target,
                                  double targetReach, String arrived) throws Exception {
@@ -508,9 +637,32 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
         assertTrue(anchor + " standoff: the craft ended " + apart + " blocks from the ship, not within "
                 + ARRIVED_WITHIN + " of the standoff " + standoff + ": " + end + " | " + them + " | " + arrived,
                 Math.abs(apart - standoff) <= ARRIVED_WITHIN);
-        double speed = Math.sqrt(end.velX * end.velX + end.velY * end.velY + end.velZ * end.velZ);
-        assertTrue(anchor + " rest: the craft is still moving at " + speed + " blocks/s, not below "
-                + ARRIVED_SLOWER_THAN + ": " + end, speed < ARRIVED_SLOWER_THAN);
+        Window<ShipInfo> after = restWindow(dim, craftId);
+        double speed = restRate(after);
+        assertTrue(anchor + " rest: the craft moved at " + speed + " blocks/s on average after it arrived, not"
+                + " below " + ARRIVED_SLOWER_THAN + ": " + after, speed < ARRIVED_SLOWER_THAN);
+    }
+
+    /**
+     * "At rest" is a statement about TIME: a craft held where it is rocks on its actuators, or on a contact,
+     * for a moment, and one velocity read can catch that moment. So the craft's position is read twice,
+     * {@link #AT_REST_WINDOW_TICKS} apart on the server's clock, and the verdict is how far it went
+     * per tick that actually passed.
+     */
+    @Wait(shape = Wait.Shape.WINDOW, at = "return Window.over(",
+            why = "rest is the absence of motion over time after the arrival; the arrival record says the craft"
+                    + " was at rest when it was posted, not that it stays so, and nothing is published per tick")
+    private Window<ShipInfo> restWindow(int dim, String craftId) throws Exception {
+        return Window.over(() -> ShipInfo.byId(c -> read(c).raw(), dim, craftId), client(), GameTicks.server(),
+                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), AT_REST_WINDOW_TICKS);
+    }
+
+    /** The mean speed over {@code window}, blocks per second of the game's clock. */
+    private static double restRate(Window<ShipInfo> window) {
+        double vx = window.rate(s -> s.x);
+        double vy = window.rate(s -> s.y);
+        double vz = window.rate(s -> s.z);
+        return Math.sqrt(vx * vx + vy * vy + vz * vz) * TICKS_PER_SECOND;
     }
 
     /**

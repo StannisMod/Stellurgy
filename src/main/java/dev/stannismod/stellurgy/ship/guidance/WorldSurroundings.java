@@ -5,10 +5,8 @@ import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.SpaceSlotPool;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.space.TerrainHeightFinder;
-import dev.stannismod.stellurgy.space.WorldProviderSpaceSlot;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
@@ -21,9 +19,10 @@ import java.util.UUID;
  * hull are read exactly. A craft in space then asks the ship ledger, which keeps every ship SETTLED in a
  * cell at its absolute address: that address is placed in the craft's world through both cells' frames
  * at the space clock's tick — the vector from the craft cell's centre (its world's origin) to the ship —
- * and the hull is measured in the world of the ship's own cell, if that world is loaded. A ship anywhere
- * else — mid-jump in hyperspace, on a planet seen from space, in another world seen from a planet — needs
- * a crossing; one found nowhere is not found.</p>
+ * and answered as a ship in ANOTHER cell's world, whose hull is not measured from here, whether or not
+ * that world is loaded: the hull the craft will meet is measured once the craft shares its world. A ship
+ * anywhere else — mid-jump in hyperspace, on a planet seen from space, in another world seen from a
+ * planet — needs a crossing; one found nowhere is not found.</p>
  *
  * <p><b>The ground</b> is the highest solid or liquid block top in the square asked, read through
  * {@link TerrainHeightFinder#terrainTopOfFootprint}, which loads the chunks it reads.</p>
@@ -48,7 +47,8 @@ public final class WorldSurroundings implements Surroundings {
     public Sighting ship(UUID shipId) {
         double[] here = VSIntegration.registeredShipPosition(world, shipId);
         if (here != null) {
-            return measured(here, VSIntegration.hullAboutPosition(world, shipId));
+            double[] hull = VSIntegration.hullAboutPosition(world, shipId);
+            return hull == null ? Sighting.withoutBlocks(here) : Sighting.at(here, hull[0]);
         }
         SpaceSubsystem space = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
         ShipLedger.Entry entry = space == null ? null : space.ledger.get(shipId);
@@ -68,8 +68,7 @@ public final class WorldSurroundings implements Surroundings {
             }
             double[] origin = CellWorldMapper.poseWorldOf(cell.cellCentre());
             double[] there = {origin[0] + fromHere.dx(), origin[1] + fromHere.dy(), origin[2] + fromHere.dz()};
-            WorldServer its = worldOfCell(entry.coord.cellKey());
-            return measured(there, its == null ? null : VSIntegration.hullAboutPosition(its, shipId));
+            return Sighting.inAnotherCell(there, entry.coord);
         }
         if (entry != null) {
             return Sighting.unplaced(GuidanceTarget.Unplaced.NEEDS_A_CROSSING);
@@ -89,23 +88,5 @@ public final class WorldSurroundings implements Surroundings {
         int width = (int) Math.floor(x + radius) - minX + 1;
         int depth = (int) Math.floor(z + radius) - minZ + 1;
         return TerrainHeightFinder.terrainTopOfFootprint(world, minX, minZ, width, depth);
-    }
-
-    private static Sighting measured(double[] position, double[] hull) {
-        if (hull == null) {
-            return Sighting.unplaced(GuidanceTarget.Unplaced.NOT_MEASURED);
-        }
-        return Sighting.at(position, hull[0]);
-    }
-
-    /** The loaded slot world bound to the cell named {@code cellKey}, or {@code null}. */
-    private static WorldServer worldOfCell(String cellKey) {
-        for (WorldServer w : DimensionManager.getWorlds()) {
-            if (w.provider instanceof WorldProviderSpaceSlot
-                    && cellKey.equals(SpaceSlotPool.cellKeyFor(w.provider.getDimension()))) {
-                return w;
-            }
-        }
-        return null;
     }
 }

@@ -356,8 +356,14 @@ public class PhysicsCalculations {
     private void integrateAngularVelocity() {
         // The body angular velocity vector, in World coordinates
         Vector3d angularVelocity = getAngularVelocity();
-        if (angularVelocity.lengthSquared() < 0.001) {
-            // Angular velocity is zero, so the rotation hasn't changed.
+        // The rotation axis below is the angular velocity itself, made unit by AxisAngle4d.normalize(),
+        // which multiplies by 1/sqrt(x*x + y*y + z*z): a squared length of exactly zero (or one that
+        // underflows to zero) turns the axis, and with it the whole attitude, into NaN. That is the only
+        // case to skip, and it is a true no-op: no rotation. Any other rate, however slow, is integrated.
+        // This guard used to be `lengthSquared() < 0.001`, which discarded every rotation slower than
+        // 0.0316 rad/s, so a ship told to turn by less than that never moved and its attitude hold had a
+        // dead band of that width.
+        if (angularVelocity.lengthSquared() == 0.0D) {
             return;
         }
         Vector3dc angularVelInBody = new Vector3d(angularVelocity);

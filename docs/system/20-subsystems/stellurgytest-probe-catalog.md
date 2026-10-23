@@ -327,7 +327,10 @@ on the seed, and what that body IS depends on a derivation nobody has run yet.
 | `vs motion-read-by-id` | *(READ)* `<dim> <shipId>` | what that slot holds: `state` (`EMPTY`/`ACTIVE`/`REFUSED`), `kind`, `target` (`ship <id>` or `surface <dim> (<x>,<z>)`), `refusal`, `arrived` — each `null` where it does not apply — and `worldTick`, the craft's world clock at the reply, the clock its `motion_arrived` / `motion_refused` records are stamped on |
 
 The `fixture rocket` variant **`no-reverse-hull`** is the `with-pilot-seat` hull without the pushers that
-drive it backward along its helm's forward axis — forward, sideways, up, down and every turn kept.
+drive it backward along its helm's forward axis — forward, sideways, up, down and every turn kept. The
+variant **`heave-only-hull`** is the same hull without any horizontal pusher: its main engines and four
+lifters at the corners beside them lift it, the pushers under the column's ends press it down, and nothing
+pushes it forward or sideways.
 
 **Stale by construction**: the rates quoted in the `vs` row above (the slew at "the
 observed 2 rad/s", 21 blocks flown aboard) were measured under the flat 40 blocks/s² / 4 rad/s²
