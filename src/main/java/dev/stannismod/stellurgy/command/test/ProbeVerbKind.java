@@ -385,6 +385,7 @@ enum ProbeVerbKind {
             case "vs motion-read-by-id":
             case "vs mount-tracking":
             case "vs phys-diag":
+            case "vs physics-steps-by-id":
             case "vs player-ship-data":
             case "vs seat-status":
             case "vs seat-yard":

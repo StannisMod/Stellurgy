@@ -30,9 +30,11 @@ import java.time.Duration;
  * budgets here used to be multiplied by the build's fork count: a number about the machine, standing
  * in for a number about the game. How OFTEN this polls is wall-clock and deliberately unimportant.</p>
  *
- * <h3>Two clocks, and the caller says which</h3>
+ * <h3>Two game clocks, and the caller says which</h3>
  *
- * <p>They are different numbers and the difference decides what a test measures:</p>
+ * <p>They are different numbers and the difference decides what a test measures. (A third kind,
+ * {@link #physicsSteps}, is not a game clock at all: it counts one ship's physics steps, which run on
+ * their own thread, and it is the clock a WINDOW over an integrated quantity stamps with.)</p>
  * <ul>
  *   <li>{@link #server()} — the server's own tick counter. It advances once per server tick whatever
  *       the worlds are doing, so it always makes progress while the server is alive. The right clock
@@ -118,6 +120,31 @@ public final class GameTicks {
             @Override
             public String describe() {
                 return "dim " + dim + "'s clock";
+            }
+        };
+    }
+
+    /**
+     * One SHIP's physics clock: {@code /stellurgytest vs physics-steps-by-id <dim> <shipId>}, the physics
+     * steps that have reached that ship's flight computer.
+     *
+     * <p>The physics loop runs on a thread of its own at a wall-clock rate, so how many of its steps fall
+     * in one game tick depends on how loaded each thread is. A quantity the physics INTEGRATES — how far
+     * a ship turned, how far it moved — is therefore measured per step of this clock, never per game
+     * tick. It moves only while that ship's physics runs: one that is off, or a ship with no flight
+     * computer, is a clock that stands still, and a window over it says so.</p>
+     */
+    public static Clock physicsSteps(final int dim, final String shipId) {
+        return new Clock() {
+            @Override
+            public long read(TestClient client) throws Exception {
+                return field(client, "stellurgytest vs physics-steps-by-id " + dim + " " + shipId,
+                        "ship " + shipId + "'s physics");
+            }
+
+            @Override
+            public String describe() {
+                return "the physics steps of ship " + shipId;
             }
         };
     }

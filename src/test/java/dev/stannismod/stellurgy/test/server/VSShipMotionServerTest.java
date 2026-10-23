@@ -349,6 +349,174 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     }
 
     /**
+     * The roll rate the slow-turn scenario commands, rad/s. Its one requirement is to be SLOW: well under
+     * 0.0316 rad/s, the fastest rate a "squared length below 1e-3" guard in the integrator throws away —
+     * the defect class this scenario exists for — and well over the flight computer's floor for a raw
+     * rate command ({@code AR_ANGULAR_CMD_EPSILON}, 1e-4), below which the command is not flown at all.
+     */
+    private static final double SLOW_ROLL = 0.01;
+
+    /** The fastest rate the region this scenario is about reaches, rad/s: {@code sqrt(1e-3)}. */
+    private static final double SLOW_BAND_TOP = 0.0316;
+
+    /**
+     * The lift off the pad, blocks/s along +Y, and the ticks it is held. A roll of a hull still resting
+     * on its pad presses one edge into the pad, and the collision answers with a turn of its own; four
+     * blocks a second for a second clears the pad by several blocks, which the scenario then measures.
+     */
+    private static final double LIFT_VY = 4.0;
+    private static final int LIFT_TICKS = 20;
+
+    /** How far the lift must have carried the hull, blocks, before the turn is measured. */
+    private static final double LIFTED_AT_LEAST = 2.0;
+
+    /**
+     * The settle after a command, in server ticks: the rate law deadbeats the hull's angular velocity
+     * onto its command in one physics step where its authority allows, and three of them run per tick.
+     * The window that follows re-reads the rate at both ends, so a settle that was too short is an
+     * arrangement failure saying so, never a verdict.
+     */
+    private static final int SETTLE_TICKS = 10;
+
+    /** The window over which the turn is measured, in server ticks: about three hundred physics steps. */
+    private static final int TURN_WINDOW_TICKS = 100;
+
+    /**
+     * How near its command the hull's angular velocity must be at both ends of the window for the window
+     * to be the one the contract speaks of: a fraction of {@link #SLOW_ROLL}.
+     */
+    private static final double RATE_HELD_WITHIN = 0.2;
+
+    /**
+     * The band, as a fraction of the turn the contract predicts, that the measured turn must fall in. Its
+     * lower edge separates the contract from a slow rate thrown away (no turn at all); its upper edge from
+     * a step integrated at the wrong time scale (a game tick taken for a physics step turns three times
+     * as far). Between them it carries the rate's own spread over the window ({@link #RATE_HELD_WITHIN})
+     * and the skew of each attitude read against its clock stamp — the pose is the one published at the
+     * last game tick, up to three physics steps behind the stamp, against some three hundred in the span.
+     */
+    private static final double TURN_BAND = 0.5;
+
+    /**
+     * A slow rotation turns the hull. The flight computer is told to roll the hovering hull at
+     * {@link #SLOW_ROLL} about world Z — a rate the integrator once discarded whole — and the hull's roll
+     * is read off two of its own poses, stamped with the hull's PHYSICS clock: the physics loop runs on a
+     * thread of its own, so how many of its steps fall in a game tick is a fact about the box, and the turn
+     * is measured per step. The prediction is the rate times the seconds a step simulates, published by
+     * the same reply as the clock.
+     *
+     * <p>The CONTROL is the same hull holding its attitude: it must not turn at the rate the verdict looks
+     * for, or a turn measured afterwards could be the hull's own drift.</p>
+     *
+     * <p>What it does not see: rates of other magnitudes and axes than this one (the law is one sentence
+     * for all of them, and a pure law is pinned where it is cheap once it lives in a pure function — it
+     * still sits inside the world-bound integrator, so this world scenario is its only pin until it moves);
+     * a hull touching anything; a ship with no flight computer, whose clock this cannot read.</p>
+     */
+    @RedWitness(member = "PhysicsCalculations#integrateAngularVelocity",
+            at = "angularVelocity.lengthSquared() == 0.0D",
+            replacedBy = "angularVelocity.lengthSquared() < 0.001",
+            fails = "a hull turning at 0.01 rad/s must roll by that rate times each physics step's",
+            on = "2026-10-23")
+    @Pins("INV-VSK-14")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), LIFT_TICKS);",
+            why = "the lift is a dose: held for LIFT_TICKS, after which the height it reached is read and"
+                    + " required, so a short dose fails as an arrangement saying how high the hull got.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SETTLE_TICKS);",
+            why = "a settle before a window whose two reads each require the rate the command asked for;"
+                    + " nothing records that a rate command has been reached.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<ShipInfo> held = Window.over(",
+            why = "the control: the roll is a value that changes continuously, judged by its change over the"
+                    + " physics steps stamped at both reads.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<ShipInfo> turned = Window.over(",
+            why = "the subject: the roll is a value that changes continuously, judged by its change over the"
+                    + " physics steps stamped at both reads.")
+    @Test
+    public void aSlowRotationTurnsTheHull() throws Exception {
+        FixtureSite site = site();
+        // HEIGHT 14: the fixture's tower reaches site.y+6, and the hull is lifted some four blocks above
+        // where it was built.
+        int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 14,
+                "the craft is built here, lifted off its pad and turned in place");
+        long loadMark = events.mark();
+        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
+        ShipBirth birth = ShipBirth.ofPress(events, loadMark, site.dim, builder, assemble, LOAD_TICKS,
+                "the craft that is turned slowly");
+        builtShip = birth.physicsId;
+        requireArranged("with VS, the AFC build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        String shipId = birth.awaitUsable(c -> read(c).raw(), events, LOAD_TICKS);
+        builtShip = shipId;
+
+        double builtY = ShipInfo.byId(c -> read(c).raw(), site.dim, shipId).y;
+        Reply lift = arrange("stellurgytest vs force-vel-by-id " + site.dim + " " + shipId + " 0 " + LIFT_VY + " 0");
+        requireArranged("the lift must reach THIS craft's own flight computer: " + lift, lift.bool("afcResolved"));
+        GameTicks.advance(client(), GameTicks.server(), LIFT_TICKS);
+        ShipInfo lifted = ShipInfo.byId(c -> read(c).raw(), site.dim, shipId);
+        requireArranged("the hull must be lifted clear of its pad before it is turned (built at y=" + builtY
+                + "): " + lifted, lifted.y - builtY >= LIFTED_AT_LEAST);
+
+        Reply hold = arrange("stellurgytest vs point-by-id " + site.dim + " " + shipId + " " + lifted.qw + " "
+                + lifted.qx + " " + lifted.qy + " " + lifted.qz);
+        requireArranged("the hold must reach THIS craft's own flight computer: " + hold, hold.bool("afcResolved"));
+        Reply steps = read("stellurgytest vs physics-steps-by-id " + site.dim + " " + shipId);
+        requireArranged("the craft's physics clock must be readable: " + steps, steps.bool("afcResolved"));
+        double stepSeconds = steps.number("stepSeconds");
+        double predicted = SLOW_ROLL * stepSeconds;
+        GameTicks.Clock physics = GameTicks.physicsSteps(site.dim, shipId);
+        Events.Step serverTicks = ticks -> GameTicks.advance(client(), GameTicks.server(), ticks);
+
+        Window<ShipInfo> held = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), site.dim, shipId),
+                client(), physics, serverTicks, TURN_WINDOW_TICKS);
+        double heldRate = held.rate(VSShipMotionServerTest::roll);
+        requireArranged("the hull holding its attitude must not roll at the rate the verdict looks for ("
+                        + heldRate + " rad/step against " + predicted + " predicted for the turn): " + held,
+                Math.abs(heldRate) < TURN_BAND * predicted);
+
+        Reply turn = arrange("stellurgytest vs force-rot-by-id " + site.dim + " " + shipId + " 0 0 " + SLOW_ROLL);
+        requireArranged("the turn must reach THIS craft's own flight computer: " + turn, turn.bool("afcResolved"));
+        GameTicks.advance(client(), GameTicks.server(), SETTLE_TICKS);
+        // The window is the one the contract speaks of only while the hull carries the slow rate it was
+        // commanded — the quantity a discarding guard compares — so that rate is read just before the
+        // window opens and just after it closes. A window offers no single read of its own; these two
+        // bracket it, and the rate law holds the rate continuously between them.
+        ShipInfo before = ShipInfo.byId(c -> read(c).raw(), site.dim, shipId);
+        requireArranged("the hull must carry the slow roll it was commanded when the window opens: " + before,
+                carriesTheSlowRoll(before));
+        Window<ShipInfo> turned = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), site.dim, shipId),
+                client(), physics, serverTicks, TURN_WINDOW_TICKS);
+        ShipInfo after = ShipInfo.byId(c -> read(c).raw(), site.dim, shipId);
+        requireArranged("the hull must still carry the slow roll it was commanded when the window closes: "
+                + after, carriesTheSlowRoll(after));
+
+        double rate = turned.rate(VSShipMotionServerTest::roll);
+        System.out.println("[slow-turn] predicted " + predicted + " rad/step, measured " + rate + ", held "
+                + heldRate + " :: " + turned + " :: before " + before + " :: after " + after);
+        assertTrue("a hull turning at " + SLOW_ROLL + " rad/s must roll by that rate times each physics step's "
+                        + stepSeconds + " s: predicted " + predicted + " rad/step, measured " + rate + ": "
+                        + turned,
+                rate > (1.0D - TURN_BAND) * predicted && rate < (1.0D + TURN_BAND) * predicted);
+    }
+
+    /**
+     * Whether {@code info}'s angular velocity is the slow roll commanded: about world Z within
+     * {@link #RATE_HELD_WITHIN} of {@link #SLOW_ROLL}, and as a whole inside the slow band.
+     */
+    private static boolean carriesTheSlowRoll(ShipInfo info) {
+        return Math.abs(info.omegaZ - SLOW_ROLL) <= RATE_HELD_WITHIN * SLOW_ROLL && info.omega < SLOW_BAND_TOP;
+    }
+
+    /**
+     * The hull's roll about world Z, radians: the angle its own up axis has been turned through about Z,
+     * from the body-to-world attitude of one read.
+     */
+    private static double roll(ShipInfo info) {
+        double upX = 2.0D * (info.qx * info.qy - info.qw * info.qz);
+        double upY = 1.0D - 2.0D * (info.qx * info.qx + info.qz * info.qz);
+        return Math.atan2(-upX, upY);
+    }
+
+    /**
      * Place the fixture on a pad and run scan+assemble; answers the ship the press made, read off its
      * records since {@code mark} (taken BEFORE this call).
      */

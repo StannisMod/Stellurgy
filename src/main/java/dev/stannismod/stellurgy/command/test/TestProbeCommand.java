@@ -2807,6 +2807,37 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
+        // physics-steps-by-id <dim> <shipId> — the PHYSICS clock of the ship named by shipId: how many
+        // physics steps have reached its flight computer's controller (`tick`), and the seconds each
+        // step simulates (`stepSeconds`). The physics loop runs on its own thread at its own rate, so a
+        // quantity it integrates is measured per step, never per game tick: how many steps fall in a
+        // game tick depends on how loaded each thread is. Reads only - it neither enables the ship's
+        // physics nor loads anything, so a ship whose physics is off answers a clock that stands still.
+        if (args.length >= 3 && "physics-steps-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID stepsOf;
+            try {
+                stepsOf = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"afcResolved\":false,\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            BlockPos stepsAt = dev.stannismod.stellurgy.integration.vs.VSIntegration.flightComputerOf(world, stepsOf);
+            TileEntity stepsTe = stepsAt == null ? null : world.getTileEntity(stepsAt);
+            if (!(stepsTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)) {
+                send(sender, "{\"afcResolved\":false}");
+                return;
+            }
+            send(sender, "{\"afcResolved\":true,\"tick\":"
+                    + ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) stepsTe).controllerTicks
+                    + ",\"stepSeconds\":" + org.valkyrienskies.mod.common.config.VSConfig.getTimeSimulatedPerTick()
+                    + "}");
+            return;
+        }
         // force-vel-at <dim> <x> <y> <z> <vx> <vy> <vz> — as `force-vel-by-id`, but addressing the
         // flight computer AT THAT EXACT BLOCK (the durable-id bridge `ff-cruise-at` documents).
         if (args.length >= 8 && "force-vel-at".equalsIgnoreCase(args[0])) {
@@ -3852,6 +3883,7 @@ public class TestProbeCommand extends CommandBase {
                 + "|ff-cruise-at|force-vel-at <dim> <x> <y> <z> <a> <b> <c>"
                 + "|point-at <dim> <x> <y> <z> <qw> <qx> <qy> <qz>"
                 + "|phys-diag <dim> <shipId> <afcX> <afcY> <afcZ>"
+                + "|physics-steps-by-id <dim> <shipId>"
                 + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
                 + "|unpark-by-id <dim> <shipId>|managed-by <dim> <x> <y> <z>"

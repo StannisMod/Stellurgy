@@ -255,6 +255,13 @@ would register an unspawned ship [V] `ShipData.java:189-192`. A uuid may be re-u
 - **INV-VSK-12** [V] Block damage records travel with their blocks through assembly and copy-back (`WorldServerShipManager.java:272`, `:308-314`; `MoveBlocks.java:54`).
 - **INV-VSK-13 [V]**  A VS ship is present and the registry answers on a loaded server (`src/test/java/dev/stannismod/stellurgy/test/server/VsVendorSmokeTest.java:42`) and
   a commanded ship translates under the physics loop (`src/test/java/dev/stannismod/stellurgy/test/server/VSShipMotionServerTest.java:94`).
+- **INV-VSK-14** `[T][SYS]` A ship turning at any non-zero angular velocity, however slow, turns: each physics
+  step advances its attitude by |ω| times the step's simulated seconds about ω; only an exactly zero ω leaves
+  it as it was (`VS/mod/common/physics/PhysicsCalculations.java:356-376`). FOR: INV-GDN-14 — a hull that
+  steers by leaning is flown by attitude corrections of a few milliradians, which the flight law asks for as
+  rates of a few hundredths of a radian a second. Pinned by
+  `VSShipMotionServerTest#aSlowRotationTurnsTheHull`, at 0.01 rad/s about one axis; the law sits inside the
+  world-bound integrator, so no fast test reaches it yet.
 
 ## Failure modes & edge cases
 
@@ -304,6 +311,7 @@ Tunable; values are not pinned here.
 | MECH-VSK-13 | `test/unit/StandingOnAHullCountsAsBeingAtItTest.java:47` |
 | MECH-VSK-15 | `test/server/SpaceSlotVsShipPersistTest.java:65` |
 | INV-VSK-13 | `test/server/VsVendorSmokeTest.java:42`, `test/server/VSShipMotionServerTest.java:94` |
+| INV-VSK-14 | `test/server/VSShipMotionServerTest#aSlowRotationTurnsTheHull` |
 
 (All under `src/test/java/dev/stannismod/stellurgy/`.) **No test found** for: the pose-send watchdog, the claim allocator, a failed capability read, the client index handler, the deconstruct states, or the
 terrain collider — a grep of `src/test` and `testframework` for `poseSendIsOverdue`, `allocateNextChunkClaim`, `VSDefaultCapability`, `ShipIndexDataMessage`, `DeconstructState`,

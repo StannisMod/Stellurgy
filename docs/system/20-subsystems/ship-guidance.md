@@ -296,8 +296,8 @@ None.
 `test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, SHIPCTL-21);
 `test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14). Not seen
 in a running game: a ship parked inside the carry band past a face, and a ship record with no blocks
-(INV-GDN-13 and -15 are pinned on the law alone). INV-GDN-14 is pinned and not reliable while the
-substrate's rotation threshold stands (Failure modes): one red in six cache-busted runs, 2026-10-22.
+(INV-GDN-13 and -15 are pinned on the law alone). That the substrate turns a hull at a slow rate,
+which INV-GDN-14 rests on, is pinned on the substrate's side (valkyrienskies INV-VSK-14).
 
 ## Open questions
 
@@ -307,11 +307,5 @@ substrate's rotation threshold stands (Failure modes): one red in six cache-bust
 - A lean is planned on the hull's BURST angular authority, as a turnover is, but held for as long as
   the craft leans: a hull that can turn about an axis only for its wheel's seconds leans along it and
   then drifts, rather than being refused for want of a sustained turn. Unruled.
-- The flight law leaves the attitude alone while the error is under a milliradian and the spin under a
-  milliradian a second, and guidance rounds its leans past that (MECH-GDN-10); but the binding dead
-  band is the substrate's, ~16 mrad at the law's gain (Failure modes), which no rounding in guidance
-  fixes. Whether the substrate integrates every non-zero rotation is the physics substrate's to settle;
-  until then a heave-only hull lands in most runs and cycles about its column in some (INV-GDN-14 is
-  pinned, and is not yet reliable), and the 2 mrad rounding should be re-measured once it is settled.
 - How "another system" is told apart from a far cell of the same lattice: today any ship SETTLED in
   space is flown to, however far.
