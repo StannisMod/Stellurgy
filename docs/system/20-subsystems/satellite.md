@@ -284,7 +284,10 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   its tick, its phase on the orbit and its value — newest first, ten to a page; and says how many rows the
   satellite no longer held when it was read. 256 rows are kept, older ones dropped. A chip of another
   satellite starts the table afresh. Readings, never a conclusion. The client draws both pages from the
-  terminal's own copy, which the server sends whenever the outcome changes or a contact brings anything.
+  terminal's own copy, which the server sends whenever the outcome changes or a contact brings anything;
+  after each update the copy holds the outcome, the last contact and the rows the server's terminal held
+  when it sent it (`TileSatelliteTerminal.java`, `getUpdatePacket` / `onDataPacket`; [T], pinned by
+  `SatelliteClientGroupTest#theTerminalsCopyOnTheClientIsWhatTheServerSentForIt`).
   `TerminalReadout.java`, `ModuleSatelliteTerminal.java`, `ModuleSatelliteReadout.java`. FOR: maintainer
   2026-10-20 — on the next contact the terminal shows the failures since the last one and that
   less arrived than the power allowed; 2026-10-21 on where the table lives, *"Вторая страница
@@ -574,9 +577,9 @@ terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
 `SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), INV-SAT-07, -38 →
 `SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
-(server, a terminal in a world with no body). Not pinned: the readout's pages on the client (drawn from the terminal's copy, which the
-update packet carries), and a player's path to seeing a failure — the client harness has no reader of a
-screen's text or of a tile's client copy yet; scanning types → `ScanningSatelliteTickContractTest`,
+(server, a terminal in a world with no body); the terminal's client copy, MECH-SAT-32 →
+`SatelliteClientGroupTest` (client, the update packet's hand-off). Not pinned: the text the pages draw from
+that copy, and a player's path to seeing a failure — the client harness has no reader of a screen's text; scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
 `SatelliteLifecycleSmokeTest`, `SatelliteCoverageGapsTest`.
 

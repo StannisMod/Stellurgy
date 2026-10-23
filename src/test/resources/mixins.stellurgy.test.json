@@ -150,6 +150,7 @@
     "MixinKeyBindingsEvents",
     "MixinClientProxyEvents",
     "MixinPacketShipReadoutEvents",
+    "MixinTileSatelliteTerminalCopyEvents",
     "MixinClientBeamTrackerEvents",
     "MixinClientShotTrackerEvents",
     "MixinTileWeaponConsoleReadoutEvents",

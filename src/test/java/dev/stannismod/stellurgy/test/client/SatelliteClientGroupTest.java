@@ -9,6 +9,8 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
+import java.util.List;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -351,5 +353,111 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
         } finally {
             arrange("stellurgytest player dismount");
         }
+    }
+
+    /**
+     * The copy of a satellite terminal the client draws both pages from holds, after the server's update for
+     * a contact, what the server's terminal held when it sent that update (`satellite` MECH-SAT-32, the
+     * client half).
+     *
+     * <p>Contract: this fails if the update the server sends for a terminal stops carrying the terminal's
+     * outcome, its last contact or its rows to the client watching it.</p>
+     *
+     * <p>Joint, read at both ends: {@code terminal_update_sent} is the server's terminal as vanilla builds
+     * its update packet ({@code PlayerChunkMapEntry#sendBlockEntity}), read off the terminal and not the
+     * packet; {@code terminal_copy_applied} is the client's copy as {@code onDataPacket} returns. The two are
+     * paired by order: both marks are taken before the terminal exists, its plot is this scenario's own, and
+     * one connection carries one watcher's updates in the order they were sent — so the n-th update sent
+     * for this place is the n-th applied. A production chip insertion makes the contact; the satellite is
+     * released over the terminal by the production deploy from a rocket a probe arranged.</p>
+     *
+     * <p>What it does not see: the text the two pages draw from the copy; the copy a client takes from a
+     * whole chunk (the update TAG); a contact that brought rows, unless the first one did — a satellite
+     * released a moment ago has gathered little.</p>
+     *
+     * <p>Leaves: the terminal block in its plot; the rocket, disposed of by its id when the scenario ends;
+     * the satellite, marked dead in the {@code finally}.</p>
+     */
+    @Pins("MECH-SAT-32")
+    @RedWitness(member = "TileSatelliteTerminal#getUpdatePacket",
+            at = "return new SPacketUpdateTileEntity(pos, 0, getUpdateTag());",
+            replacedBy = "return new SPacketUpdateTileEntity(pos, 0, new NBTTagCompound());",
+            fails = "MECH-SAT-32: the client's copy", on = "2026-10-22")
+    @Test
+    public void theTerminalsCopyOnTheClientIsWhatTheServerSentForIt() throws Exception {
+        // Deadline of the first contact's update being sent: the chip is tried as it goes in, and the update
+        // leaves with the next pass of the chunk map. Expiry means no contact was made — the arrangement's
+        // failure, said so below; it is no verdict.
+        final int contactSentBudgetTicks = 200;
+        // Deadline of the sent updates being applied on the client: one server-to-client packet each.
+        final int appliedBudgetTicks = 200;
+        final int dim = plot().dim;
+        scenario().requireArranged("the plot must be on Earth, the world the satellite is released over: dim "
+                + dim, dim == 0);
+        final int[] pad = {site().x, site().y, site().z};
+        final int[] at = {site().x + 3, site().y, site().z};
+        final String x = String.valueOf(at[0]), y = String.valueOf(at[1]), z = String.valueOf(at[2]);
+        final String place = dim + " " + at[0] + " " + at[1] + " " + at[2];
+
+        Events server = serverEvents();
+        Events client = clientEvents();
+        long serverMark = server.markInstrumented();
+        long clientMark = client.mark();
+        long satId = -1L;
+        try {
+            scenario().arranging("a powered terminal beside the player, and a satellite released over it");
+            Reply placed = arrange("stellurgytest place " + place + " stellurgy:satelliteControlCenter");
+            scenario().requireArranged("the terminal must be placed: " + placed.raw(), placed.bool("placed"));
+            arrange("stellurgytest energy inject " + place + " 5000").requireOk("power");
+            Reply rocket = arrange("stellurgytest satellite rocket-with 0 " + pad[0] + " " + pad[1] + " " + pad[2]
+                    + " line 0 0 0 data").requireOk("rocket-with");
+            disposeOfRocketAtEnd(rocket.integer("rocketId"));
+            satId = rocket.longInteger("satId");
+            act("stellurgytest satellite deploy " + rocket.integer("rocketId")).requireOk("deploy");
+            Reply orbit = read("stellurgytest satellite place " + satId);
+            scenario().requireArranged("the deploy must put the satellite on an orbit: " + orbit.raw(),
+                    orbit.bool("hasOrbit"));
+
+            scenario().arranging("the chip goes into the terminal, which tries the satellite at once");
+            arrange("stellurgytest satellite-terminal load-chip " + place + " " + satId).requireOk("load chip");
+
+            scenario().measuring("the update the server sent for the contact, and the copy the client applied");
+            String sentReply = server.awaitMatching(serverMark, "terminal_update_sent",
+                    r -> firstContact(Events.recordsWhereAll(r, "dim", String.valueOf(dim), "x", x, "y", y, "z", z)) >= 0,
+                    "an update for this terminal carrying a contact", "the update sent for the chip's first contact",
+                    contactSentBudgetTicks);
+            List<String> sent = Events.recordsWhereAll(sentReply, "dim", String.valueOf(dim), "x", x, "y", y, "z", z);
+            int n = firstContact(sent);
+            String appliedReply = client.awaitMatching(clientMark, "terminal_copy_applied",
+                    r -> Events.recordsWhereAll(r, "x", x, "y", y, "z", z).size() > n,
+                    "the " + (n + 1) + " updates sent for this terminal applied",
+                    "the client applying the updates the server sent for this terminal", appliedBudgetTicks);
+            Events.assertInstrumentRan(appliedReply, "terminal_copy_applied", "the client's copy must be observed");
+            String copy = Events.recordsWhereAll(appliedReply, "x", x, "y", y, "z", z).get(n);
+            String from = sent.get(n);
+
+            assertEquals("MECH-SAT-32: the client's copy — outcome; sent " + from + " | applied " + copy,
+                    Events.text(from, "outcome"), Events.text(copy, "outcome"));
+            for (String field : new String[]{"received", "lostAboard", "partsFailed", "readings", "missed",
+                    "powerPerTick", "aboard", "capacity", "terminalData", "rows", "rowsDigest"}) {
+                assertEquals("MECH-SAT-32: the client's copy — " + field + "; sent " + from + " | applied " + copy,
+                        Events.number(from, field), Events.number(copy, field), 0d);
+            }
+        } finally {
+            if (satId >= 0) {
+                arrange("stellurgytest satellite set-dead 0 " + satId);
+            }
+        }
+    }
+
+    /** The index of the first record that shows a contact — the satellite in sight and answering — or -1. */
+    private static int firstContact(List<String> records) {
+        for (int i = 0; i < records.size(); i++) {
+            String outcome = Events.text(records.get(i), "outcome");
+            if ("RECEIVED".equals(outcome) || "NOTHING_NEW".equals(outcome)) {
+                return i;
+            }
+        }
+        return -1;
     }
 }
