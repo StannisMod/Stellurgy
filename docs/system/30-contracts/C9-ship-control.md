@@ -23,7 +23,8 @@ build probe. **the linked computer** = the `TileAdvancedFlightComputer` at
 is retired: ALL AFCs tick, so the phrase denotes nothing on a multi-AFC craft.) **boarding paths**:
 P1 = world-frame right-click (`BlockPilotSeat.onBlockActivated`) `[V]`; P2 = probe/subspace
 bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA SETTING** =
-{flight-assist mode, engaged autopilot, cruise setpoint} — see SHIPCTL-18.
+{flight-assist mode, cruise setpoint} — see SHIPCTL-18. The craft's motion slot (ship-guidance) is
+neither: it is an ORDER the pilot hands over and takes back (SHIPCTL-21, SHIPCTL-22).
 
 ## Clauses
 
@@ -174,7 +175,21 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   теперь он вернулся и управление снова его, ИИ больше не должен пытаться управлять этой системой."*
   (if the pilot and the AI both try to write one system, the pilot handed it over earlier; now he is back
   and control is his again, and the AI must stop trying to control it). Pinned by
-  `test/unit/MotionGuidanceLawsTest#aPilotsInputTakesTheCraftBackAndNothingResumes`.
+  `test/unit/MotionGuidanceLawsTest#aPilotsInputTakesTheCraftBackAndNothingResumes`, and in a running
+  game mid-climb — the slot empties under the pilot's input and, when he lets go, stays empty while the
+  craft stops climbing — by
+  `test/server/VSShipAutoTakeoffTest#aPilotsInputMidClimbTakesTheCraftBackAndLettingGoResumesNothing`.
+- **SHIPCTL-22** `[T][BEH]` The seated pilot's auto-takeoff key, on a craft on a planet's surface, hands
+  its motion slot ONE order — `GO_TO` the orbit of the body whose surface that world is (ship-guidance
+  MECH-GDN-11) — and nothing else climbs the craft: no branch of the flight computer flies a take-off of
+  its own. Pressed while the slot flies that very order, it takes the craft back (the slot empties);
+  pressed after it was refused, it issues it afresh; in space or hyperspace it does nothing
+  (`TileAdvancedFlightComputer#toggleAutoTakeoff`). A take-off is therefore an order like any other: it
+  rides a crossing, a pilot's input ends it for good (SHIPCTL-21), and it does not resume when he lets
+  go — the climb that used to resume is gone. FOR: maintainer 2026-10-21, *"Авто-взлёт — это
+  GO_TO(орбита) - да. Так это изначально и думалось"* (auto-takeoff is GO_TO(orbit), yes; that is how it
+  was meant from the start). Pinned by
+  `test/server/VSShipAutoTakeoffTest#theTakeoffKeyClimbsTheCraftIntoSpaceWhereItHoldsInOrbit`.
 
 ## Rulings index (R1-R22, all maintainer, 2026-07-19 / 2026-07-20)
 

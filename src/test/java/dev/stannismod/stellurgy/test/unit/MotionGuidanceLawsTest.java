@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.ship.guidance.MotionSlot;
 import dev.stannismod.stellurgy.ship.guidance.Surroundings;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.ShipEntryController;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
 import dev.stannismod.stellurgy.test.contract.Pins;
@@ -483,6 +484,104 @@ public class MotionGuidanceLawsTest {
                 MotionSlot.Event.ARRIVED, landAt(column).fly(landingCraft(live, near, reach, depth), overGround).event());
     }
 
+    /**
+     * INV-GDN-16: on its body's surface an orbit is climbed STRAIGHT UP, never arrived at, refused while
+     * the column above is blocked or the world has no orbit line, and needs a crossing from another
+     * planet; in space it is the sphere about the body — a craft on it at rest has arrived, one far off is
+     * sent toward the body — and a body nobody can find is refused as such. The world is an
+     * {@link OrbitWorld}: the line, the solid block and the sphere are the experiment's inputs.
+     */
+    @Test
+    @Pins("INV-GDN-16")
+    @RedWitness(verdict = "straight up", member = "GuidanceTarget#orbitIn",
+            at = "new double[]{craft.position[0], top, craft.position[2]}", replacedBy = "new double[]{x, top, z}",
+            fails = "INV-GDN-16 straight up", on = "2026-10-23")
+    @RedWitness(verdict = "never arrived", member = "GuidanceTarget#orbitIn",
+            at = "Placement.beforeACrossing(new double[]{craft.position[0], top, craft.position[2]})",
+            replacedBy = "Placement.at(new double[]{craft.position[0], top, craft.position[2]}, 0.0D)",
+            fails = "INV-GDN-16 never arrived", on = "2026-10-23")
+    @RedWitness(verdict = "blocked", member = "GuidanceTarget#orbitIn",
+            at = "if (!around.openAbove(", replacedBy = "if (false && !around.openAbove(",
+            fails = "INV-GDN-16 blocked", on = "2026-10-23")
+    @RedWitness(verdict = "no orbit line", member = "GuidanceTarget#orbitIn",
+            at = "return Placement.unplaced(Unplaced.NO_ORBIT_LINE);",
+            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
+            fails = "INV-GDN-16 no orbit line", on = "2026-10-23")
+    @RedWitness(verdict = "another planet", member = "GuidanceTarget#orbitIn",
+            at = "if (craft.dimension != dimension) {", replacedBy = "if (false) {",
+            fails = "INV-GDN-16 another planet", on = "2026-10-23")
+    @RedWitness(verdict = "on the sphere", member = "GuidanceTarget#orbitIn",
+            at = "return Placement.sphere(seen.centre(), seen.radius());",
+            replacedBy = "return Placement.sphere(seen.centre(), 2.0D * seen.radius());",
+            fails = "INV-GDN-16 on the sphere", on = "2026-10-23")
+    @RedWitness(verdict = "toward the body", member = "GuidanceTarget#orbitIn",
+            at = "return Placement.sphere(seen.centre(), seen.radius());",
+            replacedBy = "return Placement.sphere(new double[]{0.0D, seen.centre()[1], 0.0D}, seen.radius());",
+            fails = "INV-GDN-16 toward the body", on = "2026-10-23")
+    @RedWitness(verdict = "not found", member = "GuidanceTarget#orbitIn",
+            at = "return Placement.unplaced(seen.unplaced());",
+            replacedBy = "return Placement.unplaced(Unplaced.NO_FRAME);",
+            fails = "INV-GDN-16 not found", on = "2026-10-23")
+    public void anOrbitIsClimbedStraightUpFromItsBodyAndIsTheSphereAboutItInSpace() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        double line = 200.0D;
+        double depth = 2.75D;
+        double[] grounded = {12.5D, 70.0D, -7.5D};
+        GuidanceTarget orbit = GuidanceTarget.orbit(PLANET_DIM);
+        OrbitWorld clear = new OrbitWorld(line, Double.NaN);
+
+        MotionSlot climbing = new MotionSlot();
+        climbing.issue(MotionIntent.goTo(orbit));
+        MotionSlot.Step first = climbing.fly(onSurface(live, grounded, depth, PLANET_DIM, null), clear);
+        assertPointsAlong("INV-GDN-16 straight up: a grounded craft told to orbit climbs", first.command(),
+                new double[]{0.0D, 1.0D, 0.0D});
+
+        // At rest at every height from the line to the top of the room the clamp leaves above it — the aim
+        // lies among them — and not one of them is an arrival: the crossing takes the craft on first.
+        for (int above = 0; above <= ShipEntryController.PHYSICS_CLAMP_ENTRY_MARGIN; above++) {
+            MotionSlot at = new MotionSlot();
+            at.issue(MotionIntent.goTo(orbit));
+            double[] there = {grounded[0], line + above, grounded[2]};
+            assertEquals("INV-GDN-16 never arrived: at rest " + above + " blocks above the line",
+                    MotionSlot.Event.NONE, at.fly(onSurface(live, there, depth, PLANET_DIM, null), clear).event());
+        }
+
+        // The column blocked above the craft refuses the climb; solid ground under it does not.
+        assertRefusedFor("INV-GDN-16 blocked: a solid block in the column overhead", orbit,
+                onSurface(live, grounded, depth, PLANET_DIM, null), new OrbitWorld(line, 150.0D),
+                MotionSlot.Refusal.PATH_BLOCKED);
+        MotionSlot underfoot = new MotionSlot();
+        underfoot.issue(MotionIntent.goTo(orbit));
+        for (int tick = 0; tick < MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
+            underfoot.fly(onSurface(live, grounded, depth, PLANET_DIM, null), new OrbitWorld(line, 50.0D));
+        }
+        requireArranged("the control: solid ground under the craft blocks no climb",
+                underfoot.reading().state() == MotionSlot.State.ACTIVE);
+        assertRefusedFor("INV-GDN-16 no orbit line: a world no climb leaves", orbit,
+                onSurface(live, grounded, depth, PLANET_DIM, null), new OrbitWorld(Double.NaN, Double.NaN),
+                MotionSlot.Refusal.NO_ORBIT_LINE);
+        assertRefusedFor("INV-GDN-16 another planet: the orbit of a body the craft is not on", orbit,
+                onSurface(live, grounded, depth, PLANET_DIM + 1, null), clear, MotionSlot.Refusal.NEEDS_A_CROSSING);
+
+        // In space: the sphere of the ring about the body.
+        GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);
+        double ring = 1024.0D;
+        double[] body = {300.0D, -40.0D, 500.0D};
+        OrbitWorld space = new OrbitWorld(body, ring);
+        double[] u = unit(new double[]{0.6D, 0.0D, -0.8D});
+        MotionSlot farOff = new MotionSlot();
+        farOff.issue(MotionIntent.goTo(orbit));
+        assertPointsAlong("INV-GDN-16 toward the body: from ten rings off the craft is sent at the body",
+                farOff.fly(inCell(live, back(body, u, 10.0D * ring), cell), space).command(), u);
+        MotionSlot onIt = new MotionSlot();
+        onIt.issue(MotionIntent.goTo(orbit));
+        assertEquals("INV-GDN-16 on the sphere: at rest on the ring about the body is there",
+                MotionSlot.Event.ARRIVED, onIt.fly(inCell(live, back(body, u, ring), cell), space).event());
+        assertRefusedFor("INV-GDN-16 not found: a body nobody can find", orbit,
+                inCell(live, back(body, u, 10.0D * ring), cell), new OrbitWorld(GuidanceTarget.Unplaced.NOT_FOUND),
+                MotionSlot.Refusal.TARGET_NOT_FOUND);
+    }
+
     private static MotionSlot.Craft landingCraft(ShipCapability live, double[] position, double reach, double depth) {
         return new MotionSlot.Craft(SELF, PLANET_DIM, null, position, new double[]{0.0D, 0.0D, 0.0D},
                 FreeFlightPhysics.Quat.IDENTITY, live, new double[]{0.0D, -PhysicsUnits.ENGINE_GRAVITY, 0.0D}, 40.0D,
@@ -835,6 +934,92 @@ public class MotionGuidanceLawsTest {
         @Override
         public double groundTop(double x, double z, double radius) {
             return ground;
+        }
+
+        // This world states nothing about orbits: no clause it serves asks it, and an answer here would be
+        // one nobody wrote down.
+        @Override
+        public double orbitLine() {
+            throw new UnsupportedOperationException("this world states no orbit line");
+        }
+
+        @Override
+        public boolean openAbove(double x, double z, double fromY, double toY) {
+            throw new UnsupportedOperationException("this world states no column");
+        }
+
+        @Override
+        public Orbit orbit(int dimension) {
+            throw new UnsupportedOperationException("this world states no body");
+        }
+    }
+
+    /**
+     * The world as INV-GDN-16 is written over: a planet world with an orbit line (or none) and, maybe, one
+     * solid block somewhere in every column at a stated height; and, seen from space, the sphere about the
+     * body of {@link #PLANET_DIM} (or why it cannot be placed).
+     */
+    private static final class OrbitWorld implements Surroundings {
+
+        private final double line;
+        private final double solidAt;
+        private final double[] centre;
+        private final double radius;
+        private final GuidanceTarget.Unplaced unplaced;
+
+        /** A planet world whose orbit line is {@code line} (NaN: none), solid at height {@code solidAt} (NaN: nowhere). */
+        OrbitWorld(double line, double solidAt) {
+            this.line = line;
+            this.solidAt = solidAt;
+            this.centre = null;
+            this.radius = Double.NaN;
+            this.unplaced = null;
+        }
+
+        /** Space, where the body's orbit is the sphere of {@code radius} about {@code centre}. */
+        OrbitWorld(double[] centre, double radius) {
+            this.line = Double.NaN;
+            this.solidAt = Double.NaN;
+            this.centre = centre;
+            this.radius = radius;
+            this.unplaced = null;
+        }
+
+        /** Space, where the body's orbit cannot be placed, for {@code why}. */
+        OrbitWorld(GuidanceTarget.Unplaced why) {
+            this.line = Double.NaN;
+            this.solidAt = Double.NaN;
+            this.centre = null;
+            this.radius = Double.NaN;
+            this.unplaced = why;
+        }
+
+        @Override
+        public Sighting ship(UUID shipId) {
+            return Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
+        }
+
+        @Override
+        public double groundTop(double x, double z, double radius) {
+            throw new UnsupportedOperationException("this world states no ground");
+        }
+
+        @Override
+        public double orbitLine() {
+            return line;
+        }
+
+        @Override
+        public boolean openAbove(double x, double z, double fromY, double toY) {
+            return Double.isNaN(solidAt) || solidAt < fromY || solidAt > toY;
+        }
+
+        @Override
+        public Orbit orbit(int dimension) {
+            if (dimension != PLANET_DIM) {
+                return Orbit.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
+            }
+            return unplaced != null ? Orbit.unplaced(unplaced) : Orbit.about(centre, radius);
         }
     }
 

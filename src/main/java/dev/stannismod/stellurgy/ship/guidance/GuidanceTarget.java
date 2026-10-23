@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.ship.guidance;
 
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.ShipEntryController;
 import net.minecraft.nbt.NBTTagCompound;
 
 import java.util.UUID;
@@ -9,7 +10,7 @@ import java.util.UUID;
 /**
  * What a motion intent wants the craft to go to: a THING, never a bare point of space.
  *
- * <p>Two kinds:</p>
+ * <p>Three kinds:</p>
  * <ul>
  *   <li><b>A ship</b>, named by its durable id. Where it is is asked afresh on every tick, wherever it
  *       has gone — so a target that moves is followed, and one in a neighbouring cell is reached by
@@ -17,6 +18,11 @@ import java.util.UUID;
  *   <li><b>A point on a planet's surface</b>, named by the planet's world and a column {@code (x, z)}.
  *       The height is the ground's, read on every tick. Going to one is landing: the craft ends
  *       resting on the ground at that point.</li>
+ *   <li><b>A body's orbit</b>, named by the planet world that is the body's surface. In space it is the
+ *       sphere about the body at the body's entry ring; the craft is sent to the nearest point of it and
+ *       stays there. From the body's own surface it is reached by climbing STRAIGHT UP past the world's
+ *       orbit line, where the entry crossing takes the craft into space — the climb is made for, never
+ *       arrived at, and is refused while anything solid stands in the column above the craft.</li>
  * </ul>
  *
  * <p>A target in another world than the craft's — a planet seen from space, space from a planet, a
@@ -30,7 +36,10 @@ public final class GuidanceTarget {
     public enum Unplaced {
         /** The target is in another world; getting to it takes a crossing, not a flight. */
         NEEDS_A_CROSSING,
-        /** No craft by that name is in this world, in space, or in any loaded world. */
+        /**
+         * The target is nowhere: no craft by that name is in this world, in space, or in any loaded world;
+         * or no body of the universe has that planet world for its surface.
+         */
         NOT_FOUND,
         /** The target names the craft itself. */
         IS_THE_CRAFT,
@@ -43,8 +52,20 @@ public final class GuidanceTarget {
          * The CRAFT's own hull cannot be measured, so no distance outside it can be derived. A target
          * ship's hull that cannot be measured is not this: it is approached (see {@link #placeIn}).
          */
-        NOT_MEASURED
+        NOT_MEASURED,
+        /** The craft's world has no orbit line: no climb, however high, leaves it for space. */
+        NO_ORBIT_LINE,
+        /** Something solid stands in the column above the craft, between it and its world's orbit line. */
+        PATH_BLOCKED
     }
+
+    /**
+     * How far past its world's orbit line a climbing craft is aimed, blocks: half the room the entry
+     * line is kept below the physics substrate's altitude clamp
+     * ({@link ShipEntryController#PHYSICS_CLAMP_ENTRY_MARGIN}), so the aim is reachable whatever the clamp,
+     * and the line is crossed that far before the aim, while the approach is still closing.
+     */
+    static final double CLIMB_PAST_THE_LINE = ShipEntryController.PHYSICS_CLAMP_ENTRY_MARGIN / 2.0D;
 
     /**
      * The first whole-block offset from a cell's centre, along one axis, at which the seam carries a
@@ -56,18 +77,29 @@ public final class GuidanceTarget {
     private static final String NBT_KIND = "kind";
     private static final String KIND_SHIP = "ship";
     private static final String KIND_SURFACE = "surface";
+    private static final String KIND_ORBIT = "orbit";
     private static final String NBT_SHIP = "ship";
     private static final String NBT_DIM = "dim";
     private static final String NBT_X = "x";
     private static final String NBT_Z = "z";
 
-    /** The ship aimed at; {@code null} for a surface point. */
+    /** The kinds of thing a target names. */
+    private enum Kind {
+        SHIP,
+        SURFACE,
+        ORBIT
+    }
+
+    private final Kind kind;
+    /** The ship aimed at; {@code null} unless a ship is. */
     private final UUID ship;
+    /** The planet world of a surface point, or of the body whose orbit is aimed at. */
     private final int dimension;
     private final double x;
     private final double z;
 
-    private GuidanceTarget(UUID ship, int dimension, double x, double z) {
+    private GuidanceTarget(Kind kind, UUID ship, int dimension, double x, double z) {
+        this.kind = kind;
         this.ship = ship;
         this.dimension = dimension;
         this.x = x;
@@ -79,7 +111,7 @@ public final class GuidanceTarget {
         if (shipId == null) {
             throw new IllegalArgumentException("a ship target names a ship");
         }
-        return new GuidanceTarget(shipId, 0, 0.0D, 0.0D);
+        return new GuidanceTarget(Kind.SHIP, shipId, 0, 0.0D, 0.0D);
     }
 
     /** The point of the surface of the planet world {@code dimension} above the column {@code (x, z)}. */
@@ -87,12 +119,17 @@ public final class GuidanceTarget {
         if (Double.isNaN(x) || Double.isInfinite(x) || Double.isNaN(z) || Double.isInfinite(z)) {
             throw new IllegalArgumentException("a surface point is a finite column; got " + x + ", " + z);
         }
-        return new GuidanceTarget(null, dimension, x, z);
+        return new GuidanceTarget(Kind.SURFACE, null, dimension, x, z);
+    }
+
+    /** The orbit of the body whose surface is the planet world {@code dimension}. */
+    public static GuidanceTarget orbit(int dimension) {
+        return new GuidanceTarget(Kind.ORBIT, null, dimension, 0.0D, 0.0D);
     }
 
     /** Whether going to this target means landing on it. */
     boolean isSurface() {
-        return ship == null;
+        return kind == Kind.SURFACE;
     }
 
     /**
@@ -115,7 +152,10 @@ public final class GuidanceTarget {
      * the real keep-out takes over on that tick.</p>
      */
     Placement placeIn(MotionSlot.Craft craft, Surroundings around) {
-        if (ship != null) {
+        if (kind == Kind.ORBIT) {
+            return orbitIn(craft, around);
+        }
+        if (kind == Kind.SHIP) {
             if (ship.equals(craft.id)) {
                 return Placement.unplaced(Unplaced.IS_THE_CRAFT);
             }
@@ -149,6 +189,37 @@ public final class GuidanceTarget {
     }
 
     /**
+     * Where this orbit stands as seen from {@code craft}. In space: the sphere {@link Surroundings#orbit}
+     * answers, which the craft is sent to the nearest point of. On the body's own surface: the point
+     * {@link #CLIMB_PAST_THE_LINE} above the orbit line straight over the craft — re-placed over the
+     * column the craft is in on every tick, so the climb is vertical — made for, never arrived at, since
+     * the entry crossing takes the craft on before it gets there; unplaced while the world has no orbit
+     * line, or something solid stands in the column between the craft and that point. On any other
+     * world it needs a crossing.
+     */
+    private Placement orbitIn(MotionSlot.Craft craft, Surroundings around) {
+        if (craft.cell != null) {
+            Surroundings.Orbit seen = around.orbit(dimension);
+            if (seen.unplaced() != null) {
+                return Placement.unplaced(seen.unplaced());
+            }
+            return Placement.sphere(seen.centre(), seen.radius());
+        }
+        if (craft.dimension != dimension) {
+            return Placement.unplaced(Unplaced.NEEDS_A_CROSSING);
+        }
+        double line = around.orbitLine();
+        if (Double.isNaN(line)) {
+            return Placement.unplaced(Unplaced.NO_ORBIT_LINE);
+        }
+        double top = line + CLIMB_PAST_THE_LINE;
+        if (!around.openAbove(craft.position[0], craft.position[2], craft.position[1], top)) {
+            return Placement.unplaced(Unplaced.PATH_BLOCKED);
+        }
+        return Placement.beforeACrossing(new double[]{craft.position[0], top, craft.position[2]});
+    }
+
+    /**
      * Where a craft in the cell {@code from} makes for to reach a ship at {@code position} (the craft's
      * world frame, whose origin is its cell's centre) in the world of the cell {@code to}: the position
      * itself, except along an axis on which {@code to} lies beyond {@code from} in the same lattice,
@@ -175,9 +246,12 @@ public final class GuidanceTarget {
     }
 
     void writeToNBT(NBTTagCompound nbt) {
-        if (ship != null) {
+        if (kind == Kind.SHIP) {
             nbt.setString(NBT_KIND, KIND_SHIP);
             nbt.setString(NBT_SHIP, ship.toString());
+        } else if (kind == Kind.ORBIT) {
+            nbt.setString(NBT_KIND, KIND_ORBIT);
+            nbt.setInteger(NBT_DIM, dimension);
         } else {
             nbt.setString(NBT_KIND, KIND_SURFACE);
             nbt.setInteger(NBT_DIM, dimension);
@@ -196,6 +270,9 @@ public final class GuidanceTarget {
             if (KIND_SURFACE.equals(kind)) {
                 return surface(nbt.getInteger(NBT_DIM), nbt.getDouble(NBT_X), nbt.getDouble(NBT_Z));
             }
+            if (KIND_ORBIT.equals(kind)) {
+                return orbit(nbt.getInteger(NBT_DIM));
+            }
         } catch (IllegalArgumentException malformed) {
             return null;
         }
@@ -204,7 +281,29 @@ public final class GuidanceTarget {
 
     @Override
     public String toString() {
-        return ship != null ? "ship " + ship : "surface " + dimension + " (" + x + "," + z + ")";
+        switch (kind) {
+            case SHIP:
+                return "ship " + ship;
+            case ORBIT:
+                return "orbit " + dimension;
+            default:
+                return "surface " + dimension + " (" + x + "," + z + ")";
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof GuidanceTarget)) {
+            return false;
+        }
+        GuidanceTarget t = (GuidanceTarget) o;
+        return kind == t.kind && java.util.Objects.equals(ship, t.ship) && dimension == t.dimension
+                && Double.compare(x, t.x) == 0 && Double.compare(z, t.z) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(kind, ship, dimension, x, z);
     }
 
     /** A target placed in the craft's world, or the reason it could not be. */
@@ -212,34 +311,48 @@ public final class GuidanceTarget {
 
         private final double[] position;
         private final double keepOut;
+        private final boolean hullsApart;
         private final boolean provisional;
         private final double[] over;
         private final Unplaced unplaced;
 
-        private Placement(double[] position, double keepOut, boolean provisional, double[] over, Unplaced unplaced) {
+        private Placement(double[] position, double keepOut, boolean hullsApart, boolean provisional, double[] over,
+                          Unplaced unplaced) {
             this.position = position;
             this.keepOut = keepOut;
+            this.hullsApart = hullsApart;
             this.provisional = provisional;
             this.over = over;
             this.unplaced = unplaced;
         }
 
+        /** A ship at {@code position} whose hull and the craft's touch nearer than {@code keepOut}. */
         static Placement at(double[] position, double keepOut) {
-            return new Placement(position.clone(), keepOut, false, null, null);
+            return new Placement(position.clone(), keepOut, true, false, null, null);
+        }
+
+        /** The sphere of radius {@code radius} about {@code centre}: the place itself, no hull to keep from. */
+        static Placement sphere(double[] centre, double radius) {
+            return new Placement(centre.clone(), radius, false, false, null, null);
         }
 
         /** An aim at {@code position} for a ship whose hull nobody here could measure: no keep-out. */
         static Placement provisional(double[] position) {
-            return new Placement(position.clone(), 0.0D, true, null, null);
+            return new Placement(position.clone(), 0.0D, false, true, null, null);
+        }
+
+        /** An aim at {@code position} that a crossing takes the craft on from before it gets there. */
+        static Placement beforeACrossing(double[] position) {
+            return new Placement(position.clone(), 0.0D, false, true, null, null);
         }
 
         /** A landing at {@code position}, let down from {@code over}, the point above it clear of the ground. */
         static Placement landing(double[] position, double[] over) {
-            return new Placement(position.clone(), 0.0D, false, over.clone(), null);
+            return new Placement(position.clone(), 0.0D, false, false, over.clone(), null);
         }
 
         static Placement unplaced(Unplaced why) {
-            return new Placement(null, 0.0D, false, null, why);
+            return new Placement(null, 0.0D, false, false, null, why);
         }
 
         /** The point a landing is let down from; {@code null} for anything else. */
@@ -247,7 +360,10 @@ public final class GuidanceTarget {
             return over == null ? null : over.clone();
         }
 
-        /** Whether no hull was measured: the position is only made for, and reaching it is not arrival. */
+        /**
+         * Whether the position is only MADE FOR, and reaching it is not arrival: no hull was measured there,
+         * or a crossing takes the craft on before it gets there.
+         */
         boolean provisional() {
             return provisional;
         }
@@ -257,9 +373,20 @@ public final class GuidanceTarget {
             return position == null ? null : position.clone();
         }
 
-        /** How near the craft's position may come to {@link #position} before the hulls could touch. */
+        /**
+         * How near the craft's position may come to {@link #position}: before the hulls could touch, for a
+         * ship; the radius of the sphere itself, for an orbit.
+         */
         double keepOut() {
             return keepOut;
+        }
+
+        /**
+         * Whether {@link #keepOut} keeps two hulls apart, so that an arrival anywhere within its radius must
+         * still leave them apart and the arrival clearance is added past it; an orbit's sphere IS the place.
+         */
+        boolean hullsApart() {
+            return hullsApart;
         }
 
         Unplaced unplaced() {

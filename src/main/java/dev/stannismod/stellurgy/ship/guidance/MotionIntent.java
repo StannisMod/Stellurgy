@@ -82,14 +82,16 @@ public final class MotionIntent {
      *
      * <p>The geometry is a SHELL about the placed target: nothing nearer than its keep-out distance
      * plus {@code clearance} (a ship's two hulls, plus the margin an arrival is judged within, so even
-     * an arrival at its far edge leaves the hulls apart — zero keep-out for a surface point), and
+     * an arrival at its far edge leaves the hulls apart — zero keep-out for a surface point; an orbit's
+     * sphere is its keep-out alone, with no hull to keep from), and
      * nothing farther than that for a GO_TO, or than the larger of that and the range for a HOLD. The
      * aim is the craft's own position while it is inside the shell, otherwise the nearest point of the
      * shell along the line to the target. A craft exactly on the target is sent straight up out of it.</p>
      */
     double[] aimFrom(double[] position, GuidanceTarget.Placement placed, double clearance) {
         double[] target = placed.position();
-        double inner = placed.keepOut() > 0.0D ? placed.keepOut() + clearance : 0.0D;
+        double inner = !(placed.keepOut() > 0.0D) ? 0.0D
+                : placed.hullsApart() ? placed.keepOut() + clearance : placed.keepOut();
         double outer = kind == Kind.GO_TO ? inner : Math.max(inner, range);
         double dx = position[0] - target[0];
         double dy = position[1] - target[1];

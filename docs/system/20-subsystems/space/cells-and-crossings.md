@@ -175,9 +175,10 @@ player is sent only the dimension he is in; the feed is rebroadcast every 20 tic
 [C14](../../30-contracts/C14-cell-sky-and-bodies.md) CON-C14-06..11, 14..16.
 
 ### MECH-SPC-22 — Takeoff corridor planner and the build-band constant (peripheral)
-`AutoTakeoffPlanner` is a pure diagonal-climb direction/length and a sampled corridor check — declined, not errored,
-when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:56,64`; used at
-`TileAdvancedFlightComputer.java:1031-1052`. `TerrainHeightFinder.MAX_BUILD_Y` is live; `pasteY` and
+`AutoTakeoffPlanner` is the pure take-off corridor check: a column of blocks is clear when none from the craft's
+height to the top answers solid, every block asked (`AutoTakeoffPlanner.java:23-33`) [T] `AutoTakeoffPlannerTest`;
+the climb itself is a vertical `GO_TO` an orbit flown by ship-guidance (MECH-GDN-11), which asks it through
+`WorldSurroundings#openAbove` and refuses a blocked column. `TerrainHeightFinder.MAX_BUILD_Y` is live; `pasteY` and
 `terrainTopOfFootprint` have no production caller (`TerrainHeightFinder.java:36,56,76`; grep of `src/main`) [V].
 
 ## Invariants

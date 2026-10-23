@@ -21,6 +21,60 @@ public interface Surroundings {
      */
     double groundTop(double x, double z, double radius);
 
+    /**
+     * The height above which the craft's own world gives way to space: the line a craft crosses into
+     * orbit at. NaN where the world has none — no climb leaves it. Asked of a craft on a planet.
+     */
+    double orbitLine();
+
+    /** Whether nothing solid stands in the column {@code (x, z)} of the craft's world from {@code fromY} up to {@code toY}. */
+    boolean openAbove(double x, double z, double fromY, double toY);
+
+    /**
+     * Where the orbit of the body whose surface is the planet world {@code dimension} lies, seen from a
+     * craft in space, or why it cannot be placed. Asked of a craft in space.
+     */
+    Orbit orbit(int dimension);
+
+    /** One answer of {@link #orbit}: a sphere about a body. Immutable. */
+    final class Orbit {
+
+        private final double[] centre;
+        private final double radius;
+        private final GuidanceTarget.Unplaced unplaced;
+
+        private Orbit(double[] centre, double radius, GuidanceTarget.Unplaced unplaced) {
+            this.centre = centre;
+            this.radius = radius;
+            this.unplaced = unplaced;
+        }
+
+        /** The sphere of radius {@code radius} about the body standing at {@code centre} in the craft's world. */
+        public static Orbit about(double[] centre, double radius) {
+            if (!(radius > 0.0D)) {
+                throw new IllegalArgumentException("an orbit is a sphere of positive radius; got " + radius);
+            }
+            return new Orbit(centre.clone(), radius, null);
+        }
+
+        /** The orbit cannot be placed in the craft's world, for {@code why}. */
+        public static Orbit unplaced(GuidanceTarget.Unplaced why) {
+            return new Orbit(null, Double.NaN, why);
+        }
+
+        double[] centre() {
+            return centre.clone();
+        }
+
+        double radius() {
+            return radius;
+        }
+
+        GuidanceTarget.Unplaced unplaced() {
+            return unplaced;
+        }
+    }
+
     /** One answer of {@link #ship}. Immutable. */
     final class Sighting {
 

@@ -550,7 +550,8 @@ public final class ServerEventRecorder {
      * production's own {@code ShipEvent.MotionIntentArrivedEvent}.
      *
      * <p>{@code ship} is the craft's durable name, {@code dim} the world it arrived in (a crossing
-     * changes it), {@code afcX/Y/Z} the computer's own address and {@code kind} the intent's verb. The
+     * changes it), {@code afcX/Y/Z} the computer's own address, {@code kind} the intent's verb and
+     * {@code target} what it names ({@code ship <id>}, {@code surface <dim> (<x>,<z>)}, {@code orbit <dim>}). The
      * record says only that production DECLARED arrival; where the craft is, a scenario reads itself.</p>
      */
     @SubscribeEvent
@@ -566,7 +567,8 @@ public final class ServerEventRecorder {
                 "\"ship\":\"" + str(event.shipId) + "\""
                         + ",\"dim\":" + world.provider.getDimension()
                         + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
-                        + ",\"kind\":\"" + event.intent.kind().name() + "\"");
+                        + ",\"kind\":\"" + event.intent.kind().name() + "\""
+                        + ",\"target\":\"" + event.intent.target() + "\"");
     }
 
     /**
@@ -588,6 +590,7 @@ public final class ServerEventRecorder {
                         + ",\"dim\":" + world.provider.getDimension()
                         + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
                         + ",\"kind\":\"" + event.intent.kind().name() + "\""
+                        + ",\"target\":\"" + event.intent.target() + "\""
                         + ",\"reason\":\"" + event.reason.name() + "\"");
     }
 

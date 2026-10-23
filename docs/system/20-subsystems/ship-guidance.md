@@ -11,45 +11,51 @@ confidence: medium — the laws are unit-pinned, the in-world flights are pinned
 
 Flies a tier-2 craft to what an ORDER names, with nobody at the stick: a motion slot on the flight
 computer holds one motion intent, and guidance turns it, tick by tick, into the same `FlightCommand`
-every other producer on that computer publishes. An order names a THING — a ship, or a point on the
-surface of the planet the craft is on — never a bare point of space. Nothing issues an intent from a
-player's screen yet; the slot is filled through the flight computer's own entry.
+every other producer on that computer publishes. An order names a THING — a ship, a point on the
+surface of the planet the craft is on, or a body's orbit — never a bare point of space. The one order a
+player issues today is take-off: the pilot's auto-takeoff key hands the slot `GO_TO` the orbit of the body
+the craft stands on (C9 SHIPCTL-22); everything else fills the slot through the flight computer's own entry.
 
 ## Responsibility boundary
 
-Owns: the motion slot and its states, the two motion verbs (`GO_TO`, `HOLD`), the two target kinds and
-how each is placed in the craft's world, the approach law (which attitude, how fast, when to turn over),
+Owns: the motion slot and its states, the two motion verbs (`GO_TO`, `HOLD`), the three target kinds and
+how each is placed in the craft's world (the climb to an orbit and its corridor included), the approach law (which attitude, how fast, when to turn over),
 the arrival, landing and refusal decisions, what a refused craft is commanded, and the slot's NBT form.
 Does NOT own: the flight law below the `FlightCommand` (ship-flight-model MECH-SFM-08), what the hull
 can do (C10), pilot input delivery (C9), cell crossings (they carry the slot; they do not know it), the
-substrate's ship records (C11; read through the port), and what decides to issue an intent. A target in
-another world is a crossing, and flying one is not this slice's.
+substrate's ship records (C11; read through the port), the orbit line (the flight computer's
+`entryCeiling`, handed in), and what decides to issue an intent. A target in another world is a crossing,
+and flying one is not guidance's — save the climb from a body's surface to its orbit, which guidance
+flies and the entry crossing ends.
 
 ## Key types
 
 | type | role |
 |---|---|
-| `GuidanceTarget` | what an intent wants: a ship by its durable id, or a surface point (world + column); placed in the craft's world per tick |
+| `GuidanceTarget` | what an intent wants: a ship by its durable id, a surface point (world + column), or a body's orbit (the body's planet world); placed in the craft's world per tick |
 | `MotionIntent` | one order: `GO_TO(target)` or `HOLD(target, range)`; immutable |
 | `MotionSlot` | at most one intent, its state (EMPTY / ACTIVE / REFUSED), and the per-tick law (`fly`) |
 | `MotionSlot.Craft` | the craft as guidance reads it on one tick, all in its world's frame, with its hull's reach and the attitude law's gain and slew cap |
-| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands, how high the ground is |
-| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames, the ground |
+| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands, how high the ground is, where its world's orbit line is and whether the column above is open, where a body's orbit lies |
+| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames, the ground, the flight computer's orbit line, the universe's bodies |
+| `AutoTakeoffPlanner` (`space/`) | the take-off corridor: whether a column of blocks holds anything solid, every block asked |
 
 ## Mechanics
 
 - **MECH-GDN-01 — the slot.** One intent at most; issuing replaces whatever was held and starts it
   ACTIVE (`ship/guidance/MotionSlot.java:202`). While the slot holds anything — active or refused — it
   outranks the pilot's latched input and the unmanned hold in the flight computer's tick, and runs after
-  the entry, descent and auto-takeoff branches (`tile/TileAdvancedFlightComputer.java:706`) `[V]`.
+  the entry and descent branches (`tile/TileAdvancedFlightComputer.java:687`) `[V]`. Nothing else in that
+  tick climbs a craft to orbit: take-off is an intent in this slot (MECH-GDN-11).
   Persisted in the computer's NBT (`motionSlot`, `:1727`, `:1761`); a slot that cannot be read back loads
   EMPTY and is logged `[V]`.
 - **MECH-GDN-02** — retired: a space point of a cell name plus offset is no longer a target kind;
   MECH-GDN-08 places targets.
 - **MECH-GDN-03 — the generators.** The aim is the nearest point of a shell about the placed target:
-  nothing nearer than its keep-out plus `ARRIVAL_RADIUS` (zero keep-out for a surface point), nothing
+  nothing nearer than its keep-out plus `ARRIVAL_RADIUS` (zero keep-out for a surface point; an orbit's
+  sphere is its keep-out alone, there being no hull to keep apart), nothing
   farther than that for a `GO_TO`, or than the larger of that and the range for a `HOLD`; inside the
-  shell the aim is the craft itself (`ship/guidance/MotionIntent.java:90`) `[V]`. An intent stays in the
+  shell the aim is the craft itself (`ship/guidance/MotionIntent.java:93`) `[V]`. An intent stays in the
   slot after it is satisfied and goes on holding the craft there.
 - **MECH-GDN-04 — the approach.** Beyond the arrival radius guidance picks two attitudes — one to close
   in, one to brake in — each the candidate whose signed translation axis delivers most along the way
@@ -83,8 +89,9 @@ another world is a crossing, and flying one is not this slice's.
 - **MECH-GDN-06 — arrival.** Within `ARRIVAL_RADIUS` of the aim (a landing: let down, and within
   `TOUCHDOWN`, `ARRIVAL_SPEED / POSITION_GAIN`, of its height — MECH-GDN-09) and slower than
   `ARRIVAL_SPEED`, once per intent,
-  `ShipEvent.MotionIntentArrivedEvent` is posted — never against a PROVISIONAL placement
-  (MECH-GDN-08), whose hull nobody measured (`ship/guidance/MotionSlot.java:325`) `[V]`.
+  `ShipEvent.MotionIntentArrivedEvent` is posted — never against a PROVISIONAL placement: a ship whose
+  hull nobody measured (MECH-GDN-08), or the climb to an orbit, which the entry crossing takes the craft on
+  from (MECH-GDN-11) (`ship/guidance/MotionSlot.java:329`) `[V]`.
 - **MECH-GDN-07 — reclaim.** C9 SHIPCTL-21.
 - **MECH-GDN-08 — placing a target.** A SHIP is looked for in the craft's world's ship registry first
   (exact position, and its hull's reach about it); from space, then in the ship ledger, whose SETTLED
@@ -135,12 +142,34 @@ another world is a crossing, and flying one is not this slice's.
   close-in gain `2k/27` — the fastest a position loop over that lagged velocity loop can close without
   overshooting (`POSITION_GAIN` is `k`, its stability edge), along the vertical too, since how hard the
   lift pushes is what a lean turns into push across (`:446`, `:484`) `[V]`.
+- **MECH-GDN-11 — a body's orbit, and take-off.** An ORBIT target names the planet world that is the
+  body's surface (`ship/guidance/GuidanceTarget.java:201`). On that world it is placed straight over the
+  craft, `CLIMB_PAST_THE_LINE` above the world's orbit line — half the room the entry line is kept below
+  the physics clamp (`ShipEntryController.PHYSICS_CLAMP_ENTRY_MARGIN`), so it is reachable and the line
+  is crossed before it — re-placed over the column the craft is in on every tick, so the climb is
+  vertical, flown by the ordinary approach (MECH-GDN-04); PROVISIONAL, since the entry crossing takes the
+  craft on as it passes the line (`tile/TileAdvancedFlightComputer.java:667-684`) and the slot rides the
+  crossing in the computer's NBT. The line is the flight computer's own `entryCeiling`, handed in, so the
+  climb and the crossing read one line (`:1085`). While anything of solid material stands in the
+  craft's column from its height to the aim — every block asked, none above the build height
+  (`space/AutoTakeoffPlanner.java`, `ship/guidance/WorldSurroundings.java:114`) — the tick is short for
+  PATH_BLOCKED; on a world with no orbit line, for NO_ORBIT_LINE; both refuse through the common window
+  (MECH-GDN-05). From another planet it needs a crossing. In space the orbit is the sphere about the body
+  — the body the dimension's zone cell lists for that world (`SpaceSubsystem.launchBody`), placed where
+  it stands at the space clock's tick (its position, not its address) against where the craft's cell
+  centre stands — of the body's own entry ring (`ShipEntryController.entryRingAround(SystemBody)`)
+  (`WorldSurroundings.java:127`): a craft on it at rest has arrived and holds, and the same order from
+  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND `[V]`. The entry is
+  meant to put a craft on that ring, and today does not (Failure modes).
+  The pilot's auto-takeoff key issues `GO_TO` this orbit on a planet's surface; pressed while the slot
+  flies that very order it empties the slot, and anywhere else it does nothing
+  (`tile/TileAdvancedFlightComputer.java:1017`) `[V]`.
 
 ## State & persistence
 
 | key | owner | note |
 |---|---|---|
-| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing; the refusal window's count and the held hover/landing attitude are not saved |
+| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing; the refusal window's count and the held hover/landing attitude are not saved |
 
 ## Invariants
 
@@ -254,8 +283,40 @@ another world is a crossing, and flying one is not this slice's.
   cell, its one edge — a ship parked inside the carry band just past a face — to be pinned by a test,
   not by a number; and INV-GDN-03's ground, that a neighbouring cell of the same lattice is reached by
   flying. Pinned by `test/unit/MotionGuidanceLawsTest#aShipInTheNeighbouringCellIsMadeForThroughTheSeam`.
+- **INV-GDN-16** `[T][SYS]` On its body's surface a `GO_TO` an orbit sends the craft straight up and is
+  never arrived at there, wherever between the orbit line and the room the physics clamp leaves above it
+  the craft comes to rest; it is refused as PATH_BLOCKED while something solid stands in the column over
+  the craft — never for what lies under it — as NO_ORBIT_LINE on a world with none, and as needing a
+  crossing from another planet. In space it is the sphere about the body at the radius it is given: a
+  craft at rest on it has arrived, one far off is sent at the body, and a body nobody can find is refused
+  as TARGET_NOT_FOUND. FOR: the maintainer's rulings of 2026-10-23 (*"по рекомендациям"*) — take-off is
+  a `GO_TO` a new target kind, the orbit; the climb is vertical and flown by guidance, the corridor
+  check staying a predicate along it; in space the orbit is the sphere at the ring an entry puts a craft
+  on; a blocked corridor and a world with no orbit line refuse through the common window — on his of
+  2026-10-21 that take-off is `GO_TO(orbit)` (*"Авто-взлёт — это GO_TO(орбита) - да"*). Pinned by
+  `test/unit/MotionGuidanceLawsTest#anOrbitIsClimbedStraightUpFromItsBodyAndIsTheSphereAboutItInSpace`.
+- **INV-GDN-17** `[T][BEH]` A craft on the overworld whose pilot presses the take-off key climbs across
+  the entry line into space, and there its slot goes on flying the order. FOR: the maintainer's rulings of 2026-10-23 (*"по рекомендациям"*) that take-off is a `GO_TO`
+  an orbit, climbed vertically by guidance, with the orbit in space the sphere an entry puts a craft on —
+  so the craft that has just entered is there and holds — and his of 2026-10-21 (*"Авто-взлёт — это
+  GO_TO(орбита) - да"*). Pinned by
+  `test/server/VSShipAutoTakeoffTest#theTakeoffKeyClimbsTheCraftIntoSpaceWhereItHoldsInOrbit`.
+- **INV-GDN-18** `[T][BEH]` A craft whose column is blocked overhead, told to take off, has the climb
+  refused for PATH_BLOCKED — announced — and its slot reads REFUSED, holding the order, not empty. FOR:
+  the ruling of 2026-10-23 (*"по рекомендациям"*) that a blocked corridor is an ordinary refusal through
+  the common window, which INV-GDN-05 states. Pinned by `test/server/VSShipAutoTakeoffTest#aBlockedColumnRefusesTheTakeoffAndTheSlotSaysSo`.
 
 ## Failure modes & edge cases
+
+**A take-off does not end on the ring today.** The entry crossing does not put a craft on its body's own
+ring: it draws its ring at the WIDEST ring of every body sharing the launch body's address
+(`ShipEntryController.entryRingAround(GalacticCoord)`, a star among them) about a point built from the
+body's absolute position read as a cell name plus offset (`ShipEntryController.aimPoint`), in the plane
+of the cell. Measured 2026-10-23 on the overworld: the ring drawn was 5 657 844 blocks against the body's
+own 51 826, and the craft came out 3 955 113 blocks from the body — so a taken-off craft holding its
+`GO_TO` orbit then flies the whole way in to the body's ring, at its top speed, which is hours `[V]`.
+A take-off issued while the post-descent entry latch holds (the craft above the line, not yet below it
+since its descent) climbs to its aim and hovers there: the entry does not fire until the latch clears.
 
 A craft whose flight model is not built yet reads as having no authority and is short. A `GO_TO`
 across a galactic cell face is carried by the seam, which places the craft `REENTRY_DEPTH` inside the
@@ -285,7 +346,9 @@ Events posted: `ShipEvent.MotionIntentArrivedEvent`, `ShipEvent.MotionIntentRefu
 `msg.guidance.refused.*` (C7). Port: `VSIntegration#hullAboutPosition` (C11). The seam's constants
 `GalacticCoord.HALF_CELL`, `CellSeam.CARRY_MARGIN` (space). Probe:
 `vs motion-go-to-ship-by-id`, `vs motion-hold-ship-by-id`, `vs motion-go-to-surface-by-id`,
-`vs motion-read-by-id`.
+`vs motion-read-by-id`, `space auto-takeoff` (the take-off key). Space: `SpaceSubsystem.launchBody`,
+`ShipEntryController.entryRingAround` and `PHYSICS_CLAMP_ENTRY_MARGIN`; the flight computer's
+`entryCeiling`. Key: `key.autoTakeoffToggle` → `TilePilotSeat.PACKET_AUTO_TAKEOFF_TOGGLE` (C9 SHIPCTL-22).
 
 ## Config surface
 
@@ -293,8 +356,14 @@ None.
 
 ## Test coverage
 
-`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, SHIPCTL-21);
-`test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14). Not seen
+`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, SHIPCTL-21);
+`test/unit/AutoTakeoffPlannerTest` (the corridor);
+`test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14);
+`test/server/VSShipAutoTakeoffTest` (take-off: INV-GDN-17, -18, SHIPCTL-21 mid-climb, SHIPCTL-22). Not
+seen in a running game: an orbit flown to, or arrived at, in space (INV-GDN-16 pins it on the law; the
+entry does not put a taken-off craft on the ring — Failure modes), and a MOON's orbit — a moon moves
+inside the cell it shares with its parent, so a craft held on its ring follows it and is not declared
+arrived while that is faster than the arrival speed. Not seen
 in a running game: a ship parked inside the carry band past a face, and a ship record with no blocks
 (INV-GDN-13 and -15 are pinned on the law alone). That the substrate turns a hull at a slow rate,
 which INV-GDN-14 rests on, is pinned on the substrate's side (valkyrienskies INV-VSK-14).

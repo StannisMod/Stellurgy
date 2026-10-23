@@ -6933,14 +6933,15 @@ public class TestProbeCommand extends CommandBase {
             send(sender, sb.append("]}").toString());
             return;
         }
-        // auto-takeoff <dim> id <shipUuid> [toggle|status] | auto-takeoff <dim> [toggle|status]: drive/read
-        // the auto-takeoff autopilot on a pilot seat's AFC (the production seat->AFC path server-side) —
-        // the client keybind's server effect, bisected from the keybind/packet layer. `toggle` (default)
-        // flips it; `status` reads only. Reports afcResolved + engaged, and the seat it acted through.
+        // auto-takeoff <dim> id <shipUuid> [toggle|status] | auto-takeoff <dim> [toggle|status]: press/read
+        // the auto-takeoff key on a pilot seat's AFC (the production seat->AFC call server-side) — the
+        // client keybind's server effect, bisected from the keybind/packet layer. `toggle` (default)
+        // presses it; `status` reads only. Reports afcResolved, the craft's motion slot `state` and its
+        // `target` (`orbit <dim>` for a take-off), and the seat it acted through.
         //
         // PREFER THE ID FORM. The bare form takes the FIRST TilePilotSeat in the world's
         // loadedTileEntityList, which is an arrival order and not an identity: on a world holding two
-        // craft it engages a stranger's autopilot and answers {"engaged":true} for it, while the caller's
+        // craft it presses a stranger's key and answers that stranger's slot, while the caller's
         // ship sits still and every later altitude assertion reads a ship nobody commanded. The id form
         // resolves the seat inside THAT ship's own subspace shipyard, so a wrong ship is unreachable
         // rather than merely unlikely. <shipUuid> is the PHYSICS id (what `ship-info`/`find-seat` speak);
@@ -6990,11 +6991,16 @@ public class TestProbeCommand extends CommandBase {
             if (afc != null && !read) {
                 afc.toggleAutoTakeoff();
             }
+            // What the key left in the craft's motion slot: take-off is an order there, read by name.
+            dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading takeoffSlot =
+                    afc == null ? null : afc.motionReading();
             send(sender, "{\"seatFound\":true" + seatWhose
                     + ",\"seatX\":" + seatPos.getX() + ",\"seatY\":" + seatPos.getY()
                     + ",\"seatZ\":" + seatPos.getZ()
-                    + ",\"afcResolved\":" + (afc != null) + ",\"engaged\":"
-                    + (afc != null && afc.isAutoTakeoffEngaged()) + "}");
+                    + ",\"afcResolved\":" + (afc != null)
+                    + ",\"state\":" + (takeoffSlot == null ? "null" : "\"" + takeoffSlot.state() + "\"")
+                    + ",\"target\":" + (takeoffSlot == null || takeoffSlot.intent() == null ? "null"
+                            : "\"" + takeoffSlot.intent().target() + "\"") + "}");
             return;
         }
         // entry-status [id <durableShipId>]: the entry stack's observable state — pending entries + ONE

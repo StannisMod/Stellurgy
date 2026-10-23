@@ -105,7 +105,7 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
   solved under constraints (STAT-15..18), not a coupled wrench solve: for each of 6 axes the hull
   exposes a max CLEAN force/torque from geometry + the LIVE working-thruster state (fuel/power this
   tick). Every producer of intent — manual input, Flight Assist's cruise, the unmanned hold, the
-  auto-takeoff climb, an autopilot — publishes ONE kind of value, a `FlightCommand` (world-frame
+  motion slot's guidance (take-off included) — publishes ONE kind of value, a `FlightCommand` (world-frame
   velocity, angular-velocity feed-forward, attitude; each part optional); the flight law turns it into
   wanted accelerations, and the scheme delivers each axis's share as a fraction of that axis's
   authority, clipped at one (`ship/control/CleanAxisScheme.java:40-65`) `[V]`. No producer addresses

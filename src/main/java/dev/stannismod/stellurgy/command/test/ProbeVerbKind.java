@@ -579,7 +579,6 @@ enum ProbeVerbKind {
             case "shield rotate-code":
             case "shot clear":
             case "space add-poi":
-            case "space auto-takeoff":
             case "space enter":
             case "space entry-clear":
             case "space entry-setup":
@@ -748,6 +747,8 @@ enum ProbeVerbKind {
             case "shield strike":
             case "shield tick":
             case "shot fire":
+            // The take-off key: the flight computer's own entry the seat's packet calls, which issues the order.
+            case "space auto-takeoff":
             case "space descent-begin":
             case "space jump":
             case "space jump-key":

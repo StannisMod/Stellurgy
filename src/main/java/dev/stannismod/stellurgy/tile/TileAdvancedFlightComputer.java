@@ -88,15 +88,6 @@ public class TileAdvancedFlightComputer extends TileEntity
     private java.util.UUID shipId = null;
 
     /**
-     * Whether the AUTO-TAKEOFF autopilot is engaged: a diagonal climb to orbit, driven from this
-     * computer instead of a held throttle. Live state, never persisted (an autopilot must not
-     * survive a reload and resume climbing an unattended ship). Counts as "a pilot is flying" for
-     * the entry ceiling check; self-disengages when the corridor is blocked (a surfaced decline —
-     * fall back to manual) or once the ship enters space.
-     */
-    private volatile boolean autoTakeoffEngaged = false;
-
-    /**
      * Whether this ship holds station (hover + attitude) while unmanned. Set true the first time a pilot
      * flies it, and PERSISTED: the live {@link #attitudeReference} does not survive a world save/load, so
      * without a saved flag a hovering ship dropped out of the sky the instant its world was reloaded and
@@ -664,7 +655,6 @@ public class TileAdvancedFlightComputer extends TileEntity
                                 + "from here, however high it climbs.",
                         world.provider.getDimension(), getPos());
             }
-            autoTakeoffEngaged = false;
         }
         if (onPlanetSide && entryLatched && line.isPresent()) {
             double[] latchPos = VSIntegration.getShipWorldPosition(world, getPos());
@@ -686,19 +676,10 @@ public class TileAdvancedFlightComputer extends TileEntity
                             getOrCreateShipId())) {
                 // The crossing started: this tile has just been cut out of the world - do not
                 // publish commands from a stale tick. The re-assembled ship's own computer
-                // resumes in the cell. (A REFUSED entry falls through: the pilot keeps full control
-                // to fly back below the ceiling; the autopilot keeps climbing for the next retry.)
-                autoTakeoffEngaged = false; // entry took over; the climb is done
+                // resumes in the cell, still holding its motion slot. (A REFUSED entry falls through: the
+                // pilot keeps full control to fly back below the ceiling; a craft climbing to orbit holds
+                // its aim above the line for the next retry.)
                 return;
-            }
-            // AUTO-TAKEOFF autopilot: drive a diagonal climb toward orbit while engaged and below the
-            // ceiling. A blocked corridor is a NORMAL surfaced decline (disengage, fall back to manual).
-            if (autoTakeoffEngaged && shipPos != null && in == null) {
-                if (driveAutoTakeoff(attitude, shipPos, ceiling)) {
-                    return; // the autopilot published this tick's command
-                }
-                // else: corridor blocked — disengaged inside driveAutoTakeoff; fall through to
-                // station-keeping so the ship holds instead of coasting.
             }
         }
         // A motion intent outranks the pilot's latched input and the unmanned hold: it was issued after
@@ -1025,59 +1006,30 @@ public class TileAdvancedFlightComputer extends TileEntity
     }
 
     /**
-     * Toggle the auto-takeoff autopilot (server-side; the pilot seat forwards its packet here). A
-     * safe idempotent flip: engaging arms the diagonal climb, disengaging returns full manual
-     * control. Re-engaging after a decline lets the pilot retry once he has repositioned.
+     * The pilot's auto-takeoff key (server side; the pilot seat forwards its packet here). Take-off is
+     * an order like any other: {@code GO_TO} the orbit of the body whose surface this world is, handed to
+     * the motion slot and flown by guidance — straight up, past the orbit line, where the entry crossing
+     * takes the craft into space. Pressed while the slot is flying that very order, it takes the craft
+     * back instead; pressed after the order was refused, it issues it afresh, so a pilot who has moved out
+     * from under what blocked him tries again. Anywhere but a planet's surface there is no body under the
+     * craft to take off from, and the key does nothing.
      */
     public void toggleAutoTakeoff() {
-        autoTakeoffEngaged = !autoTakeoffEngaged;
-    }
-
-    /** Whether the auto-takeoff autopilot is currently engaged (server truth; test/HUD observable). */
-    public boolean isAutoTakeoffEngaged() {
-        return autoTakeoffEngaged;
-    }
-
-    /**
-     * Drive one tick of the auto-takeoff climb. Raycasts the diagonal corridor from the ship toward
-     * the ceiling; on obstruction it DISENGAGES, messages the pilot, and returns {@code false} (the
-     * caller falls back to station-keeping). On a clear corridor it publishes the diagonal climb
-     * velocity + holds the ship's current heading and returns {@code true}. The ship's own blocks
-     * live in a far subspace, so the ray tests only world terrain/structures in the climb path.
-     */
-    private boolean driveAutoTakeoff(FreeFlightPhysics.Quat attitude, double[] shipPos, int ceiling) {
-        // Heading = the ship's nose (+Z) projected onto the world XZ plane.
-        double[] nose = attitude.rotate(0.0, 0.0, 1.0);
-        double[] dir = dev.stannismod.stellurgy.space.AutoTakeoffPlanner
-                .climbDirection(nose[0], nose[2]);
-        double length = dev.stannismod.stellurgy.space.AutoTakeoffPlanner
-                .corridorLength(shipPos[1], ceiling);
-        boolean clear = dev.stannismod.stellurgy.space.AutoTakeoffPlanner.corridorClear(
-                shipPos[0], shipPos[1], shipPos[2], dir, length,
-                p -> {
-                    net.minecraft.util.math.BlockPos bp =
-                            new net.minecraft.util.math.BlockPos(p[0], p[1], p[2]);
-                    return world.getBlockState(bp).getMaterial().isSolid();
-                });
-        if (!clear) {
-            autoTakeoffEngaged = false;
-            messageSeatedPilot("msg.shipentry.autotakeoff.blocked");
-            return false;
+        if (world == null || world.provider instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot
+                || dev.stannismod.stellurgy.space.HyperspaceWorld.isHyperspace(world)) {
+            return;
         }
-        VSIntegration.ensureShipPhysicsEnabled(world, getPos());
-        // Hold the current attitude while climbing (no rotation commanded); drive the diagonal velocity.
-        if (attitudeReference == null) {
-            attitudeReference = attitude;
-        }
-        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
-                dev.stannismod.stellurgy.space.AutoTakeoffPlanner.climbVelocity(nose[0], nose[2]),
-                new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
-                        attitudeReference.y, attitudeReference.z});
-        if (!stationKeeping) {
-            stationKeeping = true;
+        dev.stannismod.stellurgy.ship.guidance.MotionIntent takeoff = dev.stannismod.stellurgy.ship.guidance
+                .MotionIntent.goTo(dev.stannismod.stellurgy.ship.guidance.GuidanceTarget.orbit(
+                        world.provider.getDimension()));
+        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading now = motion.reading();
+        if (now.state() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.State.ACTIVE
+                && now.intent().kind() == takeoff.kind() && now.intent().target().equals(takeoff.target())) {
+            motion.reclaim();
             markDirty();
+            return;
         }
-        return true;
+        issueMotion(takeoff);
     }
 
     /** Hand the craft's motion to {@code intent}, replacing whatever the slot held. Server side. */
@@ -1130,7 +1082,7 @@ public class TileAdvancedFlightComputer extends TileEntity
                         SHIP_MAX_SPEED, hull == null ? Double.NaN : hull[0], hull == null ? Double.NaN : hull[1],
                         AR_ATTITUDE_GAIN, AR_MAX_ANGULAR_SPEED),
                 new dev.stannismod.stellurgy.ship.guidance.WorldSurroundings((net.minecraft.world.WorldServer) world,
-                        cell));
+                        cell, cell == null ? entryCeiling() : java.util.OptionalInt.empty()));
         dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading held = motion.reading();
         String durable = shipId == null ? null : shipId.toString();
         if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.ARRIVED) {

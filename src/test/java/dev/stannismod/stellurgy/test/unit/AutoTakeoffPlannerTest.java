@@ -1,72 +1,59 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.AutoTakeoffPlanner;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
- * Contract tests for the auto-takeoff corridor planner: the climb is a genuine DIAGONAL (gains
- * altitude AND translates), the corridor length reaches past the ceiling, a clear path engages, and
- * an obstruction is DECLINED (a normal surfaced outcome). The slope/speed/clearance magnitudes are
- * {@code tunable} and deliberately not pinned — only the geometric contract is.
+ * The take-off corridor: the column a climb to orbit goes straight up through is clear exactly when no
+ * block of it, from the craft's height to the top, is solid. The world's notion of solid is the caller's;
+ * this pins that every block of the column is asked and that nothing outside it decides.
  */
 public class AutoTakeoffPlannerTest {
 
-    /** The ceiling the corridor must clear, in blocks — the arrangement's own orbit line. */
-    private static final double CEILING_BLOCKS = 1000.0;
+    /** A constant: the column's footprint across, blocks; an input. */
+    private static final double X = 0.5D;
 
-    private static final double EPS = 1e-9;
+    /** A constant: the column's footprint along, blocks; an input. */
+    private static final double Z = 0.5D;
 
-    @Test
-    public void climbIsAUnitDiagonalGainingAltitudeAndTranslating() {
-        double[] dir = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
-        assertEquals("climb direction is a unit vector",
-                1.0, dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2], 1e-9);
-        assertTrue("the ship gains altitude", dir[1] > 0.0);
-        assertTrue("the ship also translates (diagonal, not vertical)",
-                Math.abs(dir[0]) + Math.abs(dir[2]) > 0.0);
-    }
+    /** A constant: where the climb starts, blocks; an input. */
+    private static final double FROM_Y = 100.0D;
+
+    /** A constant: where the corridor tops out, blocks; an input. */
+    private static final double TO_Y = 300.0D;
 
     @Test
-    public void climbFollowsTheShipHeading() {
-        double[] alongX = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
-        double[] alongZ = AutoTakeoffPlanner.climbDirection(0.0, 1.0);
-        assertTrue("heading +X translates along +X", alongX[0] > 0.0 && Math.abs(alongX[2]) < EPS);
-        assertTrue("heading +Z translates along +Z", alongZ[2] > 0.0 && Math.abs(alongZ[0]) < EPS);
-        // A degenerate (zero) heading still yields a valid diagonal (defaults to +X), never NaN.
-        double[] zero = AutoTakeoffPlanner.climbDirection(0.0, 0.0);
-        assertEquals(1.0, zero[0] * zero[0] + zero[1] * zero[1] + zero[2] * zero[2], 1e-9);
-    }
-
-    @Test
-    public void corridorLengthReachesPastTheCeilingAndZeroesAtOrbit() {
-        double len = AutoTakeoffPlanner.corridorLength(100.0, 1000.0);
-        double[] dir = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
-        // Climbing `len` along the diagonal must lift the ship strictly past the ceiling.
-        assertTrue("the corridor clears the ceiling", 100.0 + dir[1] * len > CEILING_BLOCKS);
-        assertEquals("already at/above orbit needs no corridor",
-                0.0, AutoTakeoffPlanner.corridorLength(1000.0, 1000.0), 0.0);
-    }
-
-    @Test
+    @RedWitness(verdict = "nothing solid", member = "AutoTakeoffPlanner#corridorClear", at = "return true;",
+            replacedBy = "return false;", fails = "a column with nothing solid in it is clear", on = "2026-10-23")
+    @RedWitness(verdict = "outside", member = "AutoTakeoffPlanner#corridorClear",
+            at = "long bx = (long) Math.floor(x);", replacedBy = "long bx = (long) Math.floor(x) + 1L;",
+            fails = "solid ground everywhere OUTSIDE the column does not block it", on = "2026-10-23")
+    @RedWitness(verdict = "below", member = "AutoTakeoffPlanner#corridorClear",
+            at = "for (long y = (long) Math.floor(fromY);", replacedBy = "for (long y = (long) Math.floor(fromY) - 1L;",
+            fails = "solid ground below the climb's start does not block it", on = "2026-10-23")
     public void clearCorridorEngages() {
-        double[] dir = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
-        boolean clear = AutoTakeoffPlanner.corridorClear(0.5, 100.0, 0.5, dir,
-                AutoTakeoffPlanner.corridorLength(100.0, 300.0), p -> false /* void above */);
-        assertTrue("an empty corridor is clear (auto-takeoff engages)", clear);
+        assertTrue("a column with nothing solid in it is clear",
+                AutoTakeoffPlanner.corridorClear(X, Z, FROM_Y, TO_Y, p -> false));
+        assertTrue("solid ground everywhere OUTSIDE the column does not block it",
+                AutoTakeoffPlanner.corridorClear(X, Z, FROM_Y, TO_Y, p -> p[0] != 0L || p[2] != 0L));
+        assertTrue("solid ground below the climb's start does not block it",
+                AutoTakeoffPlanner.corridorClear(X, Z, FROM_Y, TO_Y, p -> p[1] < (long) FROM_Y));
     }
 
     @Test
+    @RedWitness(member = "AutoTakeoffPlanner#corridorClear", at = "y++", replacedBy = "y += 2",
+            fails = "a one-block slab at y=101 in the column blocks it", on = "2026-10-23")
     public void obstructedCorridorIsDeclined() {
-        double[] dir = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
-        // A ceiling of solid blocks ~40 blocks up: the ray must hit one and decline.
-        Predicate<long[]> solidAt = p -> p[1] >= 140 && p[1] <= 145; // a slab of terrain overhead
-        boolean clear = AutoTakeoffPlanner.corridorClear(0.5, 100.0, 0.5, dir,
-                AutoTakeoffPlanner.corridorLength(100.0, 400.0), solidAt);
-        assertFalse("an obstructed corridor is declined (surfaced, fall back to manual)", clear);
+        // One block thick, at every height of the column in turn: none may be stepped over.
+        for (long y = (long) FROM_Y; y <= (long) TO_Y; y++) {
+            final long slab = y;
+            assertFalse("a one-block slab at y=" + slab + " in the column blocks it",
+                    AutoTakeoffPlanner.corridorClear(X, Z, FROM_Y, TO_Y,
+                            p -> p[0] == 0L && p[2] == 0L && p[1] == slab));
+        }
     }
-
-    // Minimal local functional interface alias so the test reads clearly without importing j.u.f.
-    private interface Predicate<T> extends java.util.function.Predicate<T> { }
 }

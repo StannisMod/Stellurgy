@@ -88,14 +88,18 @@ public final class MotionSlot {
         NO_STOPPING_AUTHORITY,
         /** The target is in another world: reaching it takes a crossing — an entry, a descent, a jump. */
         NEEDS_A_CROSSING,
-        /** No craft by the target's name is in this world, in space, or in any loaded world. */
+        /** The target is nowhere: no craft by its name, or no body with its planet world for a surface. */
         TARGET_NOT_FOUND,
         /** The target names this craft. */
         TARGET_IS_THIS_CRAFT,
         /** The craft is in space but the target cannot be placed against its cell's frame. */
         TARGET_HAS_NO_FRAME,
         /** The craft's own hull could not be measured, so no distance outside it can be derived. */
-        CRAFT_NOT_MEASURED
+        CRAFT_NOT_MEASURED,
+        /** The target is orbit, and the craft's world has no orbit line: no climb leaves it. */
+        NO_ORBIT_LINE,
+        /** The target is orbit, and something solid stands in the column above the craft on the way up. */
+        PATH_BLOCKED
     }
 
     /** What one tick of guidance did that somebody outside should hear about. */
@@ -370,8 +374,14 @@ public final class MotionSlot {
                 return Refusal.TARGET_IS_THIS_CRAFT;
             case NO_FRAME:
                 return Refusal.TARGET_HAS_NO_FRAME;
-            default:
+            case NO_ORBIT_LINE:
+                return Refusal.NO_ORBIT_LINE;
+            case PATH_BLOCKED:
+                return Refusal.PATH_BLOCKED;
+            case NOT_MEASURED:
                 return Refusal.CRAFT_NOT_MEASURED;
+            default:
+                throw new IllegalStateException("no refusal stated for " + why);
         }
     }
 

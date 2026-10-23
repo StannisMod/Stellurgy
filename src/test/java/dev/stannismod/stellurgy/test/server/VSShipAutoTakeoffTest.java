@@ -1,129 +1,68 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
-import static org.junit.Assert.assertFalse;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
- * E2E: the tier-2 AUTO-TAKEOFF autopilot — the AUTOMATED half of the entry on-ramp. Two legs on one
- * assembled ship:
+ * AUTO-TAKEOFF as the motion slot flies it: the pilot's take-off key hands the craft {@code GO_TO} the
+ * orbit of the body it stands on, and guidance climbs it straight up past the orbit line, where the entry
+ * crossing takes it into space with the order still in its slot. One group, three scenarios — the climb
+ * that enters, the climb refused by a blocked column, and the pilot taking the craft back mid-climb.
  *
- * <ul>
- *   <li><b>Decline</b> (the falsifiable leg): with a solid slab of terrain directly overhead, engaging
- *       auto-takeoff must self-DISENGAGE within a tick — a NORMAL surfaced outcome (fall back to
- *       manual), not a crash and not a silent stuck-on climb.</li>
- *   <li><b>Climb + enter</b>: with a CLEAR corridor and the ship a short hop below the orbit ceiling,
- *       engaging auto-takeoff drives a diagonal climb that crosses the ceiling and hands off to the
- *       entry on-ramp — the ship ends SETTLED in the ledger via the same production path the manual
- *       entry e2e proves.</li>
- * </ul>
- *
- * <p>The autopilot's pure geometry (diagonal slope, corridor length, obstruction test) is pinned
- * deterministically by {@code AutoTakeoffPlannerTest}; this e2e proves it composes with the real force
- * flight controller + entry state machine in a live world. Gated on; skips otherwise.</p>
+ * <p>What this does NOT see: the client's keybind and the seat packet's pilot guard (the key is pressed
+ * through the {@code space auto-takeoff} probe, which calls the flight computer's take-off entry the seat
+ * packet calls); the message a refused pilot is shown (no player is seated — the refusal reaches the pilot
+ * by the same call every refusal does); the craft being declared arrived in orbit after the entry — the
+ * entry does not put a craft on the body's own ring today (measured 2026-10-23: millions of blocks out),
+ * so where it ends up is the entry's to fix and not judged here; and the law of the orbit target, which is
+ * pinned without a world in {@code MotionGuidanceLawsTest}.</p>
  */
 public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
 
-
-    private static final int SRC_X = 6500, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6500;
     /**
-     * How far below the overworld's reported takeoff ceiling the ship is put: a short hop, so the
-     * diagonal climb crosses it within {@link #CLIMB_TICKS}. The ceiling itself is read from the server —
-     * it is the body's own line, not a number this class can know.
+     * How far below the overworld's entry line the climbing craft is put, blocks: a climb guidance must
+     * accelerate, close and cross on its own — several hull lengths — while keeping the scenario short.
+     * The line itself is read from the server: it is the body's own, not a number this class can know.
      */
-    private static final int BELOW_CEILING_HOP = 15;
+    private static final int BELOW_THE_LINE = 20;
 
-    /**
-     * Budgets in SERVER TICKS, none fork-scaled: 100 for the autopilot's raycast to run on the AFC's
-     * own tick and decline (the old 20 x 250 ms), 800 for the diagonal climb under force plus the
-     * async entry (the old 160 x 250 ms), 200 for a ship becoming loadable.
-     */
-    private static final int DECLINE_TICKS = 100;
+    /** A LINK budget in server ticks: a craft named and usable, one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** A LINK budget in server ticks: the climb from {@link #BELOW_THE_LINE} plus the entry's settle. */
     private static final int CLIMB_TICKS = 800;
 
-    @Test
-    public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
+    /** A LINK budget in server ticks: the refusal window ({@code MotionSlot.REFUSAL_WINDOW_TICKS}, 40) and room. */
+    private static final int REFUSE_TICKS = 200;
 
-        String setup = arrange("stellurgytest space entry-setup 2").raw();
-        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
+    /**
+     * How long the craft climbs before the pilot takes it, in server ticks, and how far it must have risen
+     * by then, blocks: enough to read as climbing rather than settling on its pad.
+     */
+    private static final int CLIMB_BEFORE_INPUT_TICKS = 40;
+    private static final double RISEN_AT_LEAST = 1.0D;
 
-        // Build + assemble a piloted ship in the overworld.
-        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        buildMark = events.mark();
-        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
-        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
-                "the craft the autopilot flies");
-        builtDurable = birth.durable;
-        assertTrue("AFC build must route to a ship: " + birth, birth.rocketsBorn.isEmpty());
+    /** The window after the pilot lets go over which the craft must not climb on, in server ticks. */
+    private static final int AFTER_LETTING_GO_TICKS = 60;
 
-        // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
-        // mints the durable id on the pad and hands it back, and the physics id every `vs` verb is
-        // keyed on is resolved from it once the craft's own announcement says it is usable.
-        String durableId = birth.durable;
-        String shipId = ArrangementFailure.arranged(
-                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
+    /**
+     * The fraction of the rate it was climbing at before the pilot took it back that the craft may still
+     * rise at after he lets go. A craft that resumed the climb would rise at the climb's own rate or
+     * faster; one that holds rises at none.
+     */
+    private static final double CLIMB_FRACTION_LEFT = 0.25D;
 
-        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
-        double sx = src.x, sy = src.y, sz = src.z;
-
-        // ---- DECLINE leg: put a solid slab directly overhead, engage, expect a self-disengage. ----
-        // The corridor is a 45-degree diagonal, so it moves ~1 block sideways per block of climb; a
-        // blocking slab must be CLOSE overhead and WIDE enough to intercept it before it exits the span.
-        int slabY = (int) sy + 5;
-        assertTrue("slab fill failed", Reply.of(arrange("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
-                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:stone").raw()
-                ).ok());
-        // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
-        // cleared any stale static input channel.
-        // Marked before the engage, because the refusal below is announced once, on the first AFC
-        // tick that raycasts the blocked corridor — which can be the tick the engage itself lands on.
-        long declineMark = events.mark();
-        String engaged = arrange("stellurgytest space auto-takeoff 0 id " + shipId).raw();
-        assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged"));
-
-        // Linked on the autopilot's own refusal, narrowed to THIS craft's ship id. The raycast runs
-        // on the AFC's own tick, and `auto_takeoff_declined` is written from the RETURN of the
-        // method that clears the engaged latch — so the wait ends on the decision rather than on a
-        // status read that happened to be taken after it. The poll it replaces asked for `engaged`
-        // and treated its ABSENCE as a decline, so a status the autopilot had nothing to say about
-        // yet was indistinguishable from a corridor it had refused.
-        events.awaitField(declineMark, "auto_takeoff_declined", "ship", shipId,
-                "auto-takeoff must decline a blocked corridor", DECLINE_TICKS);
-        String status = read("stellurgytest space auto-takeoff 0 id " + shipId + " status").raw();
-        // The bare verb: `engaged` is missing when the seat was not found (`seatFound:false`), and a
-        // default of false there would PASS this assertFalse about a craft nobody located.
-        assertFalse("the autopilot announced a decline, so it must no longer be engaged: " + status,
-                Reply.of(status).bool("engaged"));
-
-        // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
-        assertTrue("slab clear failed", Reply.of(arrange("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
-                + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air").raw()
-                ).ok());
-        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + (OrbitLine.of(c -> read(c).raw(), 0).entryCeiling() - BELOW_CEILING_HOP)
-                + " " + (int) sz).raw();
-        assertTrue("hop teleport failed: " + tp, Reply.of(tp).ok());
-        arrange("stellurgytest vs unpark-by-id 0 " + shipId);
-        // Marked before the re-engage is allowed to carry the craft up: the arrival is announced
-        // once, and a mark taken afterwards would wait for a second climb.
-        long climbMark = events.mark();
-        String reEngage = arrange("stellurgytest space auto-takeoff 0 id " + shipId).raw();
-        assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
-                Reply.of(reEngage).bool("engaged"));
-
-        // Linked on the record the entry publishes at its settle, and narrowed to THIS craft's
-        // durable id — "somebody settled" is a different question, and a slot the entry stack has
-        // ledgered twice used to answer it with a neighbour's row.
-        awaitEnteredSpace(events, climbMark, durableId,
-                "auto-takeoff must climb the ship into space", CLIMB_TICKS, null);
-    }
-
-    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
-    private static final int USABLE_TICKS = 200;
+    /** This class's reader of the server's ordered event log, on the server's own clock. */
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks),
+                    evictionReports());
 
     /** The mark taken before this scenario's build, and the durable name of the craft it built. */
     private long buildMark;
@@ -139,49 +78,162 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         arrange("stellurgytest space entry-clear");
     }
 
-    // --- helpers ------------------------------------------------------------------------------------
+    /**
+     * The take-off key issues ONE {@code GO_TO} the orbit of the overworld's body; the craft climbs, the
+     * entry takes it into space, and there the slot goes on flying the order.
+     */
+    @Pins({"INV-GDN-17", "SHIPCTL-22"})
+    @RedWitness(verdict = "enters", member = "GuidanceTarget#orbitIn",
+            at = "double top = line + CLIMB_PAST_THE_LINE;", replacedBy = "double top = line - CLIMB_PAST_THE_LINE;",
+            fails = "the take-off must climb the craft across the entry line into space", on = "2026-10-23")
+    @RedWitness(verdict = "rides on", member = "GuidanceTarget#writeToNBT",
+            at = "nbt.setString(NBT_KIND, KIND_ORBIT);", replacedBy = "nbt.setString(NBT_KIND, \"\");",
+            fails = "in space the slot goes on flying the take-off's order", on = "2026-10-23")
+    @RedWitness(verdict = "issued", member = "TileAdvancedFlightComputer#toggleAutoTakeoff",
+            at = "issueMotion(takeoff);", replacedBy = "",
+            fails = "the take-off key must hand the craft's motion slot one GO_TO the orbit", on = "2026-10-23")
+    @Test
+    public void theTakeoffKeyClimbsTheCraftIntoSpaceWhereItHoldsInOrbit() throws Exception {
+        Reply setup = arrange("stellurgytest space entry-setup 2");
+        requireArranged("the entry stack must be there to take the craft into space: " + setup, setup.ok());
+        String shipId = buildCraft("the craft the take-off flies");
+        ShipInfo built = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
+        int line = OrbitLine.of(c -> read(c).raw(), 0).entryCeiling();
+        Reply hop = arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " " + built.x + " "
+                + (line - BELOW_THE_LINE) + " " + built.z);
+        requireArranged("the craft must be put " + BELOW_THE_LINE + " blocks below the line: " + hop, hop.ok());
+        requireArranged("the craft must fly again after the hop",
+                arrange("stellurgytest vs unpark-by-id 0 " + shipId).ok());
 
-    /** This class's reader of the server's ordered event log. */
-    private final Events events =
-            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+        long climbMark = events.mark();
+        Reply pressed = act("stellurgytest space auto-takeoff 0 id " + shipId);
+        // The target is read only of a slot that holds something: an empty one has none to read.
+        assertTrue("the take-off key must hand the craft's motion slot one GO_TO the orbit: " + pressed,
+                "ACTIVE".equals(pressed.text("state")) && "orbit 0".equals(pressed.text("target")));
 
+        // Linked on the entry's own record of the craft leaving its planet, posted at the settle.
+        String left = events.awaitRecordWithField(climbMark, "ship_left_planet", "ship", builtDurable,
+                "the take-off must climb the craft across the entry line into space", CLIMB_TICKS);
+        int cellDim = (int) Events.number(left, "cellDim");
+        // In space the order rides on, flown and not refused. Whether the craft is then declared arrived
+        // depends on where the entry put it, which this scenario does not judge (see the class javadoc).
+        Reply slot = read("stellurgytest vs motion-read-by-id " + cellDim + " " + shipId);
+        assertTrue("in space the slot goes on flying the take-off's order (" + left + "): " + slot,
+                slot.bool("afcResolved") && "ACTIVE".equals(slot.text("state"))
+                        && "orbit 0".equals(slot.text("target")));
+    }
 
     /**
-     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
-     *
-     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
-     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
-     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
-     * were standing in the volume. The shared builder asks instead, and on an open-air site
-     * anything found is an arrangement failure that names itself. The warmup went with it: the
-     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
-     *
-     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
-     * they are what this scenario's green runs were taken over.</p>
+     * A solid block in the column over the craft refuses the climb: the refusal is announced, and the slot
+     * reads REFUSED with the reason, not empty.
      */
-    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
-        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
-                "the craft this scenario builds stands in this volume");
+    @Pins("INV-GDN-18")
+    @RedWitness(verdict = "refused", member = "GuidanceTarget#orbitIn", at = "if (!around.openAbove(",
+            replacedBy = "if (false && !around.openAbove(",
+            fails = "a blocked column must refuse the take-off", on = "2026-10-23")
+    @RedWitness(verdict = "the slot says so", member = "MotionSlot#fly",
+            at = "state = State.REFUSED;", replacedBy = "state = State.ACTIVE;",
+            fails = "refused, the slot reads REFUSED with the reason", on = "2026-10-23")
+    @Test
+    public void aBlockedColumnRefusesTheTakeoffAndTheSlotSaysSo() throws Exception {
+        FixtureSite site = site();
+        String shipId = buildCraftAt(site, "the craft whose way up is blocked");
+        ShipInfo built = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
+        // A slab across the whole pad, above everything the fixture laid (its tower tops out at site.y+6),
+        // inside the volume the site cleared.
+        int slabY = site.y + SLAB_ABOVE_SITE;
+        Reply slab = arrange("stellurgytest fill 0 " + site.x + " " + slabY + " " + site.z + " "
+                + (site.x + FixtureSite.PAD) + " " + slabY + " " + (site.z + FixtureSite.PAD) + " minecraft:stone");
+        requireArranged("a slab must stand over the craft (pose y=" + built.y + ", slab y=" + slabY + "): " + slab,
+                slab.ok() && slabY > built.y);
+
+        long refusalMark = events.mark();
+        Reply pressed = act("stellurgytest space auto-takeoff 0 id " + shipId);
+        requireArranged("the key must have handed the slot the climb before it is refused: " + pressed,
+                "ACTIVE".equals(pressed.text("state")));
+        String refused = events.awaitRecordWithFields(refusalMark, "motion_refused",
+                "a blocked column must refuse the take-off", REFUSE_TICKS,
+                "ship", builtDurable, "target", "orbit 0", "reason", "PATH_BLOCKED");
+        Reply slot = read("stellurgytest vs motion-read-by-id 0 " + shipId);
+        assertTrue("refused, the slot reads REFUSED with the reason and still holds the order (" + refused
+                        + "): " + slot,
+                "REFUSED".equals(slot.text("state")) && "PATH_BLOCKED".equals(slot.text("refusal"))
+                        && "orbit 0".equals(slot.text("target")));
     }
 
-    private static int extractInt(String json, String key) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+    /** Where the blocking slab is laid above the site, blocks: over the fixture's tower, inside the cleared volume. */
+    private static final int SLAB_ABOVE_SITE = 10;
+
+    /**
+     * A pilot's input mid-climb takes the craft back: the slot empties, and when he lets go nothing resumes
+     * — the slot stays empty and the craft does not climb on.
+     */
+    @Pins("SHIPCTL-21")
+    @RedWitness(member = "TileAdvancedFlightComputer#setPilotInput",
+            at = "if (input != null && motion.reclaim()) {", replacedBy = "if (false && motion.reclaim()) {",
+            fails = "the pilot's input must take the craft back for good", on = "2026-10-23")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), CLIMB_BEFORE_INPUT_TICKS);",
+            why = "the climb is a dose before the pilot's input: how far it rose is read and required after it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<ShipInfo> climbing = Window.over(",
+            why = "the climb's rate: a height that changes continuously, judged over the ticks stamped at both reads.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "Window<ShipInfo> afterwards = Window.over(",
+            why = "the rate after letting go: a height that changes continuously, judged over the ticks stamped"
+                    + " at both reads.")
+    @Test
+    public void aPilotsInputMidClimbTakesTheCraftBackAndLettingGoResumesNothing() throws Exception {
+        String shipId = buildCraft("the craft the pilot takes back");
+        Events.Step serverTicks = ticks -> GameTicks.advance(client(), GameTicks.server(), ticks);
+        ShipInfo built = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
+        Reply pressed = act("stellurgytest space auto-takeoff 0 id " + shipId);
+        requireArranged("the key must have handed the slot the climb: " + pressed,
+                "ACTIVE".equals(pressed.text("state")));
+        GameTicks.advance(client(), GameTicks.server(), CLIMB_BEFORE_INPUT_TICKS);
+        Window<ShipInfo> climbing = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), 0, shipId), client(),
+                GameTicks.server(), serverTicks, CLIMB_BEFORE_INPUT_TICKS);
+        double climbRate = climbing.rate(info -> info.y);
+        ShipInfo before = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
+        int line = OrbitLine.of(c -> read(c).raw(), 0).entryCeiling();
+        requireArranged("the craft must be climbing, still below the line (built y=" + built.y + ", line " + line
+                        + ", rate " + climbRate + " blocks/tick): " + before,
+                before.y - built.y >= RISEN_AT_LEAST && climbRate * CLIMB_BEFORE_INPUT_TICKS >= RISEN_AT_LEAST
+                        && before.y < line);
+
+        // The pilot turns the craft — an input that leaves the cruise he left it alone — through the seat's
+        // own hop to its computer, the path his control packet takes on the server.
+        Reply turning = arrange("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 0 0 1 0 0");
+        requireArranged("the input must reach the craft through its seat: " + turning, turning.bool("afcResolved"));
+        Reply taken = read("stellurgytest vs motion-read-by-id 0 " + shipId);
+        // ...and lets go: the idle input a released key sends.
+        Reply released = arrange("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 0 0 0 0 0");
+        requireArranged("the release must reach the craft through its seat: " + released, released.bool("afcResolved"));
+        Window<ShipInfo> afterwards = Window.over(() -> ShipInfo.byId(c -> read(c).raw(), 0, shipId), client(),
+                GameTicks.server(), serverTicks, AFTER_LETTING_GO_TICKS);
+        Reply after = read("stellurgytest vs motion-read-by-id 0 " + shipId);
+        double rateAfter = afterwards.rate(info -> info.y);
+        System.out.println("[takeoff-reclaim] climbing " + climbRate + " blocks/tick, after letting go " + rateAfter
+                + " :: taken " + taken + " :: after " + after);
+        assertTrue("the pilot's input must take the craft back for good: the slot after his input " + taken
+                        + ", after he let go " + after + "; rising " + rateAfter + " blocks/tick against the climb's "
+                        + climbRate + " :: " + afterwards,
+                "EMPTY".equals(taken.text("state")) && "EMPTY".equals(after.text("state"))
+                        && rateAfter < CLIMB_FRACTION_LEFT * climbRate);
     }
 
-    private static double extractDouble(String json, String key) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        return Reply.of(json).numberOr(key, 0.0);
+    /** Build and assemble a piloted craft on this scenario's own site; answers its physics id once usable. */
+    private String buildCraft(String what) throws Exception {
+        return buildCraftAt(site(), what);
     }
 
-    private static String extractString(String json, String key) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        return Reply.of(json).textOr(key, null);
+    private String buildCraftAt(FixtureSite site, String what) throws Exception {
+        // HEIGHT 12: the fixture's tower reaches site.y+6 and a blocking slab, where one is laid, site.y+10.
+        int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 2, 12,
+                "the craft stands and starts its climb in this volume");
+        buildMark = events.mark();
+        String pressed = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, site.dim, builder, pressed, USABLE_TICKS, what);
+        builtDurable = birth.durable;
+        requireArranged("with VS, the pilot-seat build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        return ArrangementFailure.arranged(() -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
     }
 }

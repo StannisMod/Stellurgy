@@ -355,26 +355,48 @@ public final class SpaceSubsystem {
      * probe-built entry stack wires, so tests exercise the real lookup chain.
      */
     public static GalacticCoord launchBodyAddress(int dimId) {
+        java.util.Optional<dev.stannismod.stellurgy.universe.SystemBody> body = launchBody(dimId);
+        if (body.isPresent()) {
+            // The body's own offset inside its zone cell, as of now: a moon is a live point inside its
+            // parent's neighbourhood, and a ship leaving it has to be put beside where the moon IS, not
+            // beside where its cell is named.
+            return body.get().addressAt(spaceClock());
+        }
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         dev.stannismod.stellurgy.universe.UniverseRegistry reg =
                 dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
-        if (reg != null) {
-            java.util.Optional<GalacticCoord> cell = reg.coordForPlanet(dimId);
-            if (cell.isPresent()) {
-                for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(cell.get())) {
-                    if (body.dimId() == dimId) {
-                        // The body's own offset inside its zone cell, as of now: a moon is a live
-                        // point inside its parent's neighbourhood, and a ship leaving it has to be
-                        // put beside where the moon IS, not beside where its cell is named.
-                        return body.addressAt(spaceClock());
-                    }
-                }
-                return cell.get();
-            }
+        java.util.Optional<GalacticCoord> cell = reg == null ? java.util.Optional.empty()
+                : reg.coordForPlanet(dimId);
+        if (cell.isPresent()) {
+            return cell.get();
         }
         StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
         return cfg == null ? null
                 : dev.stannismod.stellurgy.universe.UniverseRegistry.parseAnchor(cfg.spaceHomeSystemCoord);
+    }
+
+    /**
+     * The BODY a planet dimension is the surface of: the body of the dimension's zone cell whose world
+     * it is. Empty when the registry cannot be reached, places the dimension nowhere, or lists no body
+     * of that world there — and then there is nothing to stand beside: no stand-in is answered.
+     */
+    public static java.util.Optional<dev.stannismod.stellurgy.universe.SystemBody> launchBody(int dimId) {
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+        if (reg == null) {
+            return java.util.Optional.empty();
+        }
+        java.util.Optional<GalacticCoord> cell = reg.coordForPlanet(dimId);
+        if (!cell.isPresent()) {
+            return java.util.Optional.empty();
+        }
+        for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(cell.get())) {
+            if (body.dimId() == dimId) {
+                return java.util.Optional.of(body);
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     /**

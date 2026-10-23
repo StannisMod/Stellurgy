@@ -446,16 +446,20 @@ realization.
 **ASCENT, distinct from the hyperjump**: ascent is takeoff (planet → orbit), the hyperjump is
 space↔space travel.
 - **Manual or automated.** Manual: the pilot at the helm climbs under thrust; crossing the planet's
-  ceiling enters the home system's space. Automated: a helm action triggers a basic auto-takeoff
-  pathfinder to orbit — a DIAGONAL climb. If the pathfinder finds no way up, that is a NORMAL surfaced
-  outcome (fall back to manual), not an error.
+  ceiling enters the home system's space. Automated: the helm's take-off key hands the craft an ORDER —
+  `GO_TO` the orbit of the body it stands on — which guidance flies STRAIGHT UP (the nearest point of
+  the orbit above a craft; a manoeuvre is guidance's, never the order's), and the entry crossing takes it
+  on at the line (ship-guidance MECH-GDN-11). A blocked column overhead, or a world with no orbit line,
+  is a NORMAL surfaced outcome — the order is refused and the pilot told — not an error. In space the
+  orbit is the sphere about the body at its entry ring, where the entry is meant to put a craft (today it
+  does not — ship-guidance, Failure modes).
 - **Ascent is the SAFE exit, not the only one.** A hyperjump from within the gravity well is also legal,
   costlier and more dangerous (§6).
 - **First `GalacticCoord` = the launch planet's system.** On entering space the ship materializes at the
   coordinate of the system containing the planet it launched from; the registry resolves
   `planet dim → DimensionProperties → star / system → GalacticCoord`.
-- **Plumbing = a dedicated tier-2 entry handler.** The trigger (ascent crosses the ceiling / auto-takeoff
-  completes) fires a server-side handler that resolves the coord via `UniverseRegistry`, then hands off
+- **Plumbing = a dedicated tier-2 entry handler.** The trigger (ascent — manual or ordered — crosses
+  the ceiling) fires a server-side handler that resolves the coord via `UniverseRegistry`, then hands off
   to Layer-2 `materialize`. The universe layer exposes only the `planet/pos → GalacticCoord` lookup. Only
   tier-2 VS ships acquire a coord — tier-1 rockets stay intra-system via a direct orbit→dim selector and
   never enter the grid.
@@ -782,7 +786,7 @@ most-graceful-first; under pressure we NEVER force-evict an OBSERVED live bubble
   system RENDER stays for the nav / targeting UI. `EntityRocket.getInSpaceFlight()` cruise is deleted;
   tier-1 rocket travel is the station-as-ship model.
 - **A (planet content, system retinue):** §4.
-- **B (entry):** entry = ascent (manual or auto-pathfinder-to-orbit, diagonal, declinable), distinct from
+- **B (entry):** entry = ascent (manual, or a `GO_TO` orbit flown straight up, refusable), distinct from
   the hyperjump; first coord = launch planet's system; a tier-2 entry handler resolves coord → Layer-2
   materialize.
 - **C (seam):** planet→coord via `starId` + registry reverse index; descent by proximity across the

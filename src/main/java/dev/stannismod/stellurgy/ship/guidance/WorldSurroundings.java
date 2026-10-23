@@ -1,9 +1,11 @@
 package dev.stannismod.stellurgy.ship.guidance;
 
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.space.AutoTakeoffPlanner;
 import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.ShipEntryController;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.space.TerrainHeightFinder;
@@ -27,20 +29,28 @@ import java.util.UUID;
  * <p><b>The ground</b> is the highest solid or liquid block top in the square asked, read through
  * {@link TerrainHeightFinder#terrainTopOfFootprint}, which loads the chunks it reads.</p>
  *
+ * <p><b>The orbit line</b> is the one the craft's own flight computer holds and hands in, so the entry
+ * crossing and the climb to it read one line. <b>A body's orbit</b> is placed like a ship in another
+ * cell.</p>
+ *
  * <p>Server game thread only.</p>
  */
 public final class WorldSurroundings implements Surroundings {
 
     private final WorldServer world;
     private final GalacticCoord cell;
+    private final java.util.OptionalInt orbitLine;
 
     /**
-     * @param world the world the craft is in
-     * @param cell  the space cell that world realizes, {@code null} on a planet
+     * @param world     the world the craft is in
+     * @param cell      the space cell that world realizes, {@code null} on a planet
+     * @param orbitLine the height the entry crossing fires above in that world, as its flight computer
+     *                  holds it; empty where the world has none, and in space
      */
-    public WorldSurroundings(WorldServer world, GalacticCoord cell) {
+    public WorldSurroundings(WorldServer world, GalacticCoord cell, java.util.OptionalInt orbitLine) {
         this.world = world;
         this.cell = cell;
+        this.orbitLine = orbitLine;
     }
 
     @Override
@@ -88,5 +98,54 @@ public final class WorldSurroundings implements Surroundings {
         int width = (int) Math.floor(x + radius) - minX + 1;
         int depth = (int) Math.floor(z + radius) - minZ + 1;
         return TerrainHeightFinder.terrainTopOfFootprint(world, minX, minZ, width, depth);
+    }
+
+    @Override
+    public double orbitLine() {
+        return orbitLine.isPresent() ? orbitLine.getAsInt() : Double.NaN;
+    }
+
+    /**
+     * The take-off corridor ({@link AutoTakeoffPlanner#corridorClear}), with solid MATERIAL as what blocks.
+     * Nothing stands above the world's build height, so the column is read no higher. The craft's own
+     * blocks are not in it: a ship's hull lives in its shipyard, far from the pose.
+     */
+    @Override
+    public boolean openAbove(double x, double z, double fromY, double toY) {
+        return AutoTakeoffPlanner.corridorClear(x, z, fromY, Math.min(toY, world.getHeight() - 1),
+                p -> world.getBlockState(new net.minecraft.util.math.BlockPos(p[0], p[1], p[2]))
+                        .getMaterial().isSolid());
+    }
+
+    /**
+     * The body is the one {@link SpaceSubsystem#launchBody} names for the planet world, placed where it
+     * stands at the space clock's tick ({@code SystemBody#absoluteAt} — its position, never its address,
+     * which is a name) against the absolute position of this cell's centre at the same tick; the sphere's
+     * radius is the body's own entry ring ({@link ShipEntryController#entryRingAround(dev.stannismod.stellurgy.universe.SystemBody)}).
+     */
+    @Override
+    public Orbit orbit(int dimension) {
+        if (cell == null) {
+            throw new IllegalStateException("an orbit is placed through a space cell's frame, and this craft"
+                    + " is in no cell");
+        }
+        java.util.Optional<dev.stannismod.stellurgy.universe.SystemBody> body = SpaceSubsystem.launchBody(dimension);
+        if (!body.isPresent()) {
+            return Orbit.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
+        }
+        if (!cell.knowsItsLattice()) {
+            return Orbit.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
+        }
+        long clock = SpaceSubsystem.spaceClock();
+        // FRAME: where the body IS at this tick — its own position, not its address, which is a name —
+        // less where the craft's cell centre is, both absolute at one tick: the body's position in this world.
+        BlockDelta fromHere = body.get().absoluteAt(clock)
+                .minus(SpaceSubsystem.frames().absoluteOf(cell.cellCentre(), clock));
+        if (fromHere.isSaturated()) {
+            return Orbit.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
+        }
+        double[] origin = CellWorldMapper.poseWorldOf(cell.cellCentre());
+        return Orbit.about(new double[]{origin[0] + fromHere.dx(), origin[1] + fromHere.dy(), origin[2] + fromHere.dz()},
+                ShipEntryController.entryRingAround(body.get()));
     }
 }

@@ -46,7 +46,7 @@ parking a ship (`integration/vs`, `VSIntegration.crossShip`); the flight compute
 | `HyperspaceWorld`, `HyperspaceTiles`, `HyperspaceVoid` | the one shared parking world, its lane allocator, the lethal-void rule |
 | `ShipCrossingService`, `VSShipCrossingOps` | shared pin → cut → settle (pose, re-seat, unpark) machine and its production seam |
 | `ShipEntryController`, `DescentController`, `CellCrossingController`, `VSDescentPasteResolver` | planet→cell, cell→planet, cell→cell (seam carry / direct jump) |
-| `DescentShell`, `StandoffRing`, `TerrainHeightFinder`, `AutoTakeoffPlanner` | atmosphere shell geometry, placement off a body, build-band constant, takeoff corridor |
+| `DescentShell`, `StandoffRing`, `TerrainHeightFinder`, `AutoTakeoffPlanner` | atmosphere shell geometry, placement off a body, build-band constant, the take-off column check (the climb is ship-guidance's) |
 | `CrewTransfer`, `AboardBodies`, `ShipRelativePoint`, `ArrivalSpawn`, `AssemblyCrewRebind` | carry crew and loose bodies across a cut by flight-computer-relative point |
 | `ShipAboardTag`, `AboardRecord`, `LoginRestore`, `SpaceEventHandler` | per-player durable "aboard ship X" record, its one deriver, the pure restore decision, the Forge wiring |
 | `SpaceSubsystemEvents`, `SpaceClockSync`, `SystemBodiesProducer`, `SkyNebulaeProducer` | tick/save subscriptions, client clock copy, server-side sky feed |
