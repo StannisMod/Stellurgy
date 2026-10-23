@@ -508,8 +508,9 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   A terminal on a station stands in the system of the planet the station orbits; a terminal in a world
   that is no registered body (the Nether, another mod's world) stands in no system at all, so every
   satellite is out of range of it (`DimensionManager.java`, `getEffectiveBodyOrNull`). Pinned by
-  `SatelliteTerminalChipRecognitionTest#aTerminalInAWorldOutsideEverySystemIsOutOfRange`; a satellite of a
-  second registered system is not staged — the shared test server registers one (Earth and Luna). FOR:
+  `SatelliteTerminalChipRecognitionTest#aTerminalInAWorldOutsideEverySystemIsOutOfRange` (a world with no body)
+  and `SatelliteOutsideItsSystemTest#aSatelliteOfAnotherSystemIsOutOfRange` (a satellite of a planet of another
+  star, in a galaxy of two systems declared for that class). FOR:
   maintainer 2026-10-20 — the terminal's screen tells out of contact apart from loss, and out of range is a
   reason no window cures; maintainer 2026-10-22 — a world with no body answers "out of system", *"Будем
   отдавать такому "вне системы""*.
@@ -577,7 +578,8 @@ terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
 `SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), INV-SAT-07, -38 →
 `SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
-(server, a terminal in a world with no body); the terminal's client copy, MECH-SAT-32 →
+(server, a terminal in a world with no body) and `SatelliteOutsideItsSystemTest` (server, a satellite of
+another system); the terminal's client copy, MECH-SAT-32 →
 `SatelliteClientGroupTest` (client, the update packet's hand-off). Not pinned: the text the pages draw from
 that copy, and a player's path to seeing a failure — the client harness has no reader of a screen's text; scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
