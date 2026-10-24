@@ -1,12 +1,12 @@
 ---
 id: C16
-covers: which clock the space subsystem reads, on either side
-confidence: implemented (CLOCK-3 is pinned at the unit tier plus one client e2e)
+covers: which clock the space subsystem reads, on either side; a world's time of day and the time skip
+confidence: CLOCK-1..5 implemented (CLOCK-3 is pinned at the unit tier plus one client e2e); CLOCK-6..9 design stage
 owner-subsystem: space (SpaceSubsystem, SpaceClockSync)
 see-also: [C15 (a cell's address and frame — ADDR-9 says distance exists only AT A TICK; this says WHOSE tick), C13 (space presence), C1 (NBT persistence — the clock is stored with the ship ledger)]
 ---
 
-# C16 — The space clock, clauses CLOCK-1..CLOCK-5
+# C16 — The space clock, clauses CLOCK-1..CLOCK-9
 
 Maintainer direction, 2026-08-04: *"Структурную половину берем сейчас и закрываем баг
 целиком."*
@@ -62,18 +62,66 @@ stands the ship off from where the target was, by the difference between the two
      world was not resolvable. The only way for the controller to be absent is Valkyrien Skies
      missing from the classpath, and VS is vendored into this jar; the clause still holds and is the
      reason the advance sits above the null return. See CLOCK-5.1.
-  2. **Exactly once per tick.** One writer, `SpaceSubsystemEvents.onServerTick` calling
-     `ServerState.advanceSpaceClock()`; the subsystem's other
-     server-tick handler only reads. Two writers on the same event would run the clock at double the
-     tick rate and silently change what every persisted tick value means.
-  3. **No world's clock moves it, and moving it moves no world.** Aging the universe costs a shared
-     server nothing: every vanilla and third-party gate keyed on `totalTime % N` stays where it was.
+  2. **Two writers, both forward.** The ADVANCE, exactly once per server tick
+     (`SpaceSubsystemEvents.onServerTick` calling `ServerState.advanceSpaceClock()`; the subsystem's other
+     server-tick handler only reads), and the TIME SKIP (CLOCK-7), which moves the clock forward by the
+     amount CLOCK-7 fixes at the moment a skip happens. Nothing else writes it, and nothing moves it back.
+     A second per-tick writer would run the clock at double the tick rate and silently change what every
+     persisted tick value means. (Until the skip was ruled, 2026-10-23, the advance was the only writer.)
+  3. **No world's AGE moves it, and moving it ages no world.** A world's total time
+     (`getTotalWorldTime`) is not the space clock, and a skip leaves it where it was: every vanilla and
+     third-party gate keyed on `totalTime % N` stays where it was. A world's TIME OF DAY is not a clock at
+     all — it is read off the space clock (CLOCK-6), so it is not moved by anything but the space clock.
   4. **It is durable, and MONOTONIC — deliberately not part of any snapshot.** The counter is written
      to the ship-ledger store on every dim-0 save and read back on server start. It is written by its
      own writer (`ShipLedgerData.setClock`), **outside** `replaceAll`'s all-or-nothing fleet write, and
      the write-out happens in a `finally` so a fleet step that refuses or fails cannot take the clock
      with it.
   **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it. Pinned by `AimAndArrivalShareOneClockTest#theClockAdvancesWithoutBeingTold`, `SpaceClockIsTheSubsystemsOwnTest#neitherClockMovesTheOther`. FOR: CLOCK-2.
+- **CLOCK-6 (a world's time of day is its body's turn)** `[A][BEH]` The time of day at a place on a world
+  that is a body — the overworld included — is the LOCAL SOLAR TIME at that place's longitude (its block x
+  over the body's radius, as the space model places it) at the space clock: noon when the body's star
+  stands on that meridian, sunrise a quarter of a solar day before. A body's `rotationalPeriod` IS its
+  solar day; the space model turns the body by the sidereal period that solar day and the body's orbit
+  give (1/sidereal = 1/solar + 1/orbital). A tidally locked body's time of day stands still. No world keeps
+  a time-of-day counter of its own. Both layers follow the place: what a client draws (the sky, the sun,
+  the light) for the place its player stands, and what the server decides (the sky light a block reads,
+  daytime, spawning, the daylight sensor, a bed) for the place it is decided at. Vanilla's `doDaylightCycle`
+  rule has no effect on a body's time of day. Vanilla's day counter (`worldTime / 24000`) keeps vanilla's
+  arithmetic: it matches a body whose solar day is 24 000, the overworld's. **Player form:** the sky over a planet shows where its star really is, and two players on two
+  worlds agree on how much time has passed. FOR: maintainer 2026-10-23, *"Вообще, не должно "время мира"
+  расходиться с космологическим. Вот как планета повернута, такое и время"* (a world's time must not drift
+  from the cosmological one; as the planet is turned, so is the time).
+- **CLOCK-7 (the time skip)** `[A][BEH]` A skip moves the space clock forward (CLOCK-5.2), and with it every
+  world's time of day (CLOCK-6). It happens in two ways:
+  1. **Sleep.** With the server-wide mode (the default), when every non-spectator player on the server is
+     asleep, in whatever worlds; with the per-world mode, when every non-spectator player of one world is.
+     Either way the clock moves to the next local dawn of the world where the sleep completed — with
+     several, the earliest of their dawns — and the weather is reset in each of those worlds. A world
+     whose skip is locked (`TimeSkipPolicy`: `allowTimeSkipOnPlanets`, `allowTimeSkipOnOverworld`, both on by
+     default) never completes a sleep. In a world that is not a body (a station, a slot world, hyperspace)
+     there is no night: a bed there may be slept in at any time, and its sleeper counts. A ship in transit is
+     carried through the skipped span: the blocks it has flown grow by its speed times the span, up to the
+     priced distance, while its crew counts as online; the ship's own systems (heat, air, power) are world
+     simulation and are not carried, as nothing a world simulates tick by tick is.
+  2. **`/time add` and `/time set`**, an operator's command, from any world: `add N` moves the clock N
+     ticks; `set T` moves it to the next moment that world reads T. Never backwards (CLOCK-5.4).
+  **Player form:** when everyone has gone to bed the night is over — on every world at once, because the
+  universe turned — and a ship, a satellite and a planet's orbit are where that much time puts them.
+  FOR: maintainer 2026-10-23 — the skip ages the universe (*"Игровой пропуск"*), sleeping in any world
+  (*"Сон в любом мире"*), the mode a config with the server-wide one by default (*"в конфиге можно
+  настроить варианты: для пропуска ночи все должны спать (во всех мирах), или спать должны все в мире …
+  По-умолчанию первое"*), `/time add` too (*"да"*), the amount the skipped world's own (*"да, давай
+  относительно планеты"*), the whole universe in either mode (*"В режиме "весь мир" - стареет вся
+  вселенная, да"*).
+- **CLOCK-8 (a client is told at a skip)** `[A][SYS]` At a skip every connected client is sent the new
+  clock at once, not at its next periodic sync. FOR: CLOCK-3, CLOCK-6 — a client's sky and its space clock
+  must not disagree for up to a sync period.
+- **CLOCK-9 (a skip is time passing)** `[A][SYS]` Every deadline the skip carries the clock past has passed
+  — a jump spool, a retry cooldown, a stored cell's age — and every lazy accrual (a satellite's life) catches
+  up over the skipped span. No reader of the clock may assume it moves one tick at a time unless it
+  integrates per tick by design and says so. Gates on the time of day (`getWorldTime() % N`) move to the
+  world's total time, which a skip does not touch. FOR: CLOCK-7.
 
 ## Witnesses
 
@@ -86,6 +134,48 @@ stands the ship off from where the target was, by the difference between the two
 | CLOCK-5.2 | the RATE leg of `theClockAdvancesWithoutBeingTold` — the two clocks' DELTAS over one window must match (a rate comparison, not a value one, so it does not couple them). **Red at `space=198 world=99`** with a second writer added to the other server-tick handler |
 | CLOCK-5.3 | `neitherClockMovesTheOther` — both directions, each with its own arrangement assertion that the clock it drove really jumped. The class owns its server: one leg hammers the overworld's counter by 20 M ticks, which is exactly the collateral this clause removes from shared servers. **Red at "the overworld jumped 20 000 000 and the space clock moved 20 000 001"** with `spaceClock()` re-pointed at the overworld |
 | CLOCK-5.4 | no restart witness: the durability half is `[V]` only — staged on save at `SpaceSubsystemEvents.java:164-169`, written and read under `spaceClock` at `ShipLedgerData.java:248,276`, restored on start at `SpaceSubsystem.java:302-303`. The unit tier pins the decisions around it: `ShipLedgerDataTest.aSaveWithNoClockInItReadsBackAsTickZero` and `.aRefusedFleetWriteDoesNotRollTheClockBack` |
+
+| CLOCK-6..9 | not built — design-stage clauses, ratified before code; the distance below |
+
+## CLOCK-6..9 — the distance from the code (design stage)
+
+What the code already does that these rest on: orbits already run on the space clock
+(`DimensionProperties#updateOrbit`); the space model already turns every body by it
+(`BodyRotation#angleAt`, `SatellitePlacement#rotationOf`); a satellite's life already catches up over any
+span (`SatelliteLife#bringUpTo`); a planet's celestial angle is already a pure function of a time and a
+period (`WorldProviderPlanet#calculateCelestialAngle`); the skip locks exist (`TimeSkipPolicy`).
+
+Not written yet:
+
+- **CLOCK-6** — a world's time of day is its own counter (`PlanetWeatherState` under `perDimWorldInfo`,
+  advanced by vanilla only while the world ticks; the overworld's is level.dat's), and its phase is not the
+  space model's: sky and model share the period, not the phase. Nothing yet computes a local solar time.
+- **CLOCK-7** — sleep is per world (vanilla `WorldServer#areAllPlayersAsleep`); the skip writes the
+  sleeping world's own counter (`MixinWorldServer`), `/time` writes every loaded world's
+  (`TimeCommandGuard`); neither touches the space clock. No server-wide sleep check and no mode config.
+- **CLOCK-8** — the client's clock is re-synced every `CLOCK_SYNC_TICKS` (200) only.
+- **CLOCK-9** — two time-of-day gates: `TileAtmosphereDetector` (`getWorldTime() % 10`),
+  `TileRocketServiceStation` (`% 20`).
+
+More not written: `allowTimeSkipOnPlanets` defaults to off; the space model turns a body by
+`rotationalPeriod` as if it were the sidereal period (`SatellitePlacement#rotationOf`, `PlanetEnvironment`,
+`SatelliteLife`); the server's sky light is one number per world (vanilla `skylightSubtracted`, read in
+`World`, `WorldServer`, `WorldProvider`, `EntityMob`, `BlockDaylightDetector`); a ship's transit is integrated
+per tick (`ShipTransitManager`) and a skip does not carry it.
+
+## CLOCK-6..9 — edge cases of the stress-test, as ruled (2026-10-24)
+
+1. A player in a locked world — moot: the locks are on by default now (*"Раз мы вводим концепцию
+   синхронизованного сна, надо поставить там по-умолчанию true"*).
+2. The place, not meridian 0 — both layers (*"Хочется нормально"*; the recommendation, *"ок"*).
+3. `rotationalPeriod` is the solar day (*"важно, чтобы игра была согласована внутри себя"*; *"ок"*).
+4. `doDaylightCycle` has no effect, documented (*"Документируем, что это правило с модом не работает"*).
+5. A ship in transit is carried through a skip (*"Надо продвигать"*). Its design pass found that nobody in
+   a space-type world could sleep (permanently noon on the server); ruled with it: a bed in a world with no
+   night may be slept in at any time and counts, the ship's systems are not carried, several arrivals at the
+   end of a skip are accepted (*"по рекомендациям"*).
+6. Worlds that are not bodies keep what they do, *"если их жизнь - функция от времени"* — each is checked
+   for that when CLOCK-6 is written.
 
 ## Scope, stated so it is not over-claimed
 
@@ -112,16 +202,14 @@ stands the ship off from where the target was, by the difference between the two
 
 ## Why the clock is monotonic and not part of the fleet snapshot
 
-**The fleet is not the only thing this clock dates.** A jump capacitor's `since` lives in TILE NBT
-(`TileJumpCapacitor.java`) and a memory crystal's `observedTick` in ITEM NBT
-(`CrystalEntry.java`) `[V]`, and Minecraft commits both BEFORE a world-save event reaches this
+**The fleet is not the only thing this clock dates.** A memory crystal's `observedTick` lives in ITEM
+NBT (`CrystalEntry.java`) `[V]`, and Minecraft commits it BEFORE a world-save event reaches this
 subsystem — `WorldServer.saveAllChunks` saves the chunks and only then posts `WorldEvent.Save` `[V]`.
 
 A clock rolled back with a declined fleet write would therefore come back EARLIER than stamps already
-on disk. `CapacitorCharge.at` returns the stored base whenever `now - since <= 0`
-(`CapacitorCharge.java`) `[V]`, so every affected bank would freeze at its post-burst level until
-the clock catches up — the pilot cannot jump and nothing logs it. `CrystalEntry.mergedWith` inverts
-the same way `[V]`.
+on disk, and `CrystalEntry.mergedWith`, which keeps the newer entry, would then prefer an entry stamped
+in the future `[V]`. (A jump capacitor no longer dates its charge by this clock: it holds a Forge Energy
+charge, `TileJumpCapacitor.java` `[V]`.)
 
 Written forward instead, the worst case is a clock at most one save cycle AHEAD of a stale fleet: a
 cell reads a cycle older, a jump lands a cycle sooner. **A clock that runs backwards breaks
@@ -131,7 +219,7 @@ fleet is atomic, and they are written by different writers because they are diff
 ## What the clock counts
 
 Every persisted tick value in this subsystem is the subsystem's own counter: ledger ages, transit
-`arrivalTick` / `lastTicked`, cell `lastVisit`, drive-charge stamps and crystal `observedTick`. A save
+`arrivalTick` / `lastTicked`, cell `lastVisit` and crystal `observedTick`. A save
 that carries no clock key reads its clock back as **0**, and its stamps would therefore be in the future;
 such a save is not loaded.
 

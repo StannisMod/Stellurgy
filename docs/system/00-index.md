@@ -113,7 +113,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C13](./30-contracts/C13-space-presence.md) | what survives a logout in a space cell — presence vs aboard-ness, which record wins, what a RELEASE lets go, and what survives a DEATH | `PRES-1..11` |
 | [C14](./30-contracts/C14-cell-sky-and-bodies.md) | which sky a world draws, and when a cell's bodies feed it | `CON-C14-01..20` |
 | [C15](./30-contracts/C15-cell-address-and-frame.md) | what a cell's address MEANS — a durable name vs a position that moves with its body, and what an authored neighbourhood holds | `ADDR-1..25` (ADDR-5 retired) |
-| [C16](./30-contracts/C16-space-clock.md) | which clock the space subsystem reads, on either side | `CLOCK-1..5` |
+| [C16](./30-contracts/C16-space-clock.md) | which clock the space subsystem reads, on either side; a world's time of day and the time skip | `CLOCK-1..9` |
 | [C18](./30-contracts/C18-living-through-a-jump.md) | what a jump promises the people ABOARD — where they are, what they may do, what each crossing carries, and that an arrival has no failure path | `JUMP-1..16` (JUMP-7 retired) |
 | [C19](./30-contracts/C19-reference-frames.md) | which body a craft's velocity is measured AGAINST, and what a change of frame may not alter | `FRAME-1..11` |
 | [C20](./30-contracts/C20-repair.md) | what repairing a structure means — the two outcomes, who pays, how bays share a hull | `REPAIR-1..15` |
