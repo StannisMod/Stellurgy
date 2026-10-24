@@ -80,7 +80,7 @@ launch dimension to the body's address now, else the configured home anchor (`Sp
 
 - **Events** (`api/event`): `ShipCrossingEvent` `LeftCell`/`EnteredCell` (`CellCrossingController.java:372-420`),
   `TransitBegan`/`TransitEnded` with `Route.HYPERSPACE` (`ShipTransitManager.java:1366-1397`) or `Route.DIRECT`,
-  `LeftPlanet` (`ShipEntryController.java:303-307`), `EnteredPlanet` (`DescentController.java:254-258`);
+  `LeftPlanet` (`ShipEntryController.java:285-289`), `EnteredPlanet` (`DescentController.java:254-258`);
   `SpaceCellEvent.CollectPre` (veto, `SpaceManager.java:461-467`).
 - **Packets**: `PacketSlotDimSync`, `PacketSpaceClockSync`, `PacketSystemBodiesSync` (its `parentIndex` is produced and
   never read, Open question 3).

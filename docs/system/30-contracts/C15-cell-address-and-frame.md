@@ -340,9 +340,12 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   somewhere is the other question**, and it takes the body's position at that tick: a standoff ring
   drawn around a name stands where the body would be only if it never moved (a ship entering space from
   Earth, ringed around Earth's name, arrived **5 657 554 chart blocks** from Earth — 1.41 M km, 26 h of
-  flight). `ShipEntryController.aimPoint` resolves the launch DIMENSION's body among those sharing
-  the address and rings `SystemBody.absoluteAt(tick)` (a POI still shares a cell it is not the
-  primary of, and an aim at a BODY is the honest thing to state). A body that cannot be resolved still
+  flight). `ShipEntryController#entryPoint` resolves the launch DIMENSION's body among those sharing
+  the address and rings `SystemBody.absoluteAt(tick)` placed in the entered cell's frame
+  (`CellFrames.positionInCell`) at that body's own ring — never an absolute position read back as a
+  cell name plus an offset, which is a name again (a cell rides its primary, so its frame is not the
+  static one), nor the widest ring at the address, which is the star's (cells-and-crossings
+  INV-SPC-19). A body that cannot be resolved still
   places the ship — an arrival is never refused — but says so in the log, because falling back to the
   name IS the defect and a silent one reads as a working aim.
   This clause is about placement only; **holding station once placed is C19's subject**, not this

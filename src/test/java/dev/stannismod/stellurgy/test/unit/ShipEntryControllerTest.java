@@ -381,79 +381,158 @@ public class ShipEntryControllerTest {
     }
 
     /**
-     * How far {@code coord} lies from {@code where}, in blocks. Measured rather than compared field by
-     * field: what this test is about is WHICH POINT was chosen, and a distance says that without also
-     * pinning the sector/local split production happens to express it in.
+     * How far an entry was put from where its body stands, in blocks, at {@code tick} — read through the
+     * same frames the placement was given, so the verdict is about WHICH POINT was chosen in the cell.
      */
-    private static double gapTo(GalacticCoord coord, AbsolutePos where) {
-        return AbsolutePos.ofSectorLocal(coord.sectorX(), coord.sectorY(), coord.sectorZ(),
-                coord.localX(), coord.localY(), coord.localZ()).distanceTo(where);
+    private static double entryToBody(GalacticCoord entry, SystemBody body, CellFrames frames, long tick) {
+        return frames.absoluteOf(entry, tick).distanceTo(body.absoluteAt(tick));
     }
 
-    /** An orbiting body: named at its own cell, riding a frame that carries it around its star. */
-    private static SystemBody orbiting(GalacticCoord name, int dimId) {
-        return new SystemBody(name,
-                CellFrame.of(AbsolutePos.ofCellName(name),
-                        BodyEphemeris.orbit(100d, 0.0, 0.0, false, 1000d, 1_000_000L)),
-                BodyEphemeris.STATIC, SystemBodyKind.PLANET, dimId, 0);
+    /** The galactic cell every placement below is about, and the name its bodies share. An input. */
+    private static final long CELL_SECTOR = 19L;
+
+    /** A dimension that is no body's surface: a star's, and a stranger's launch. An input. */
+    private static final int NO_SURFACE = -1;
+
+    /**
+     * The star's radius, Earth radii: the Sun's, 109 — so its own ring is millions of blocks, as at the
+     * address a launch planet shares with its star. An input.
+     */
+    private static final double STAR_RADIUS_EARTHS = 109.0D;
+
+    /** The launch planet's radius, Earth radii: Earth's. An input. */
+    private static final double PLANET_RADIUS_EARTHS = 1.0D;
+
+    /**
+     * How far, blocks, an entry may lie off its ring and still be ON it: the arrival radius of a
+     * {@code GO_TO}, the maintainer's acceptance of 2026-10-21 ("ends within 2 blocks of it") — an entry
+     * is on its body's orbit when a craft put there has arrived at that orbit.
+     */
+    private static final double ON_THE_RING = 2.0D;
+
+    /**
+     * An orbit's distance unit, blocks, and the two orbits drawn in it: the ridden planet 4 million blocks
+     * from its cell's name — the order the overworld was measured to stand from its own (2026-10-23) — and
+     * the offset planet one million from its still cell's centre, at a base angle and inclined, so it lies
+     * off the cell's plane. Inputs.
+     */
+    private static final long ORBIT_UNIT_BLOCKS = 1_000_000L;
+    private static final double RIDDEN_ORBIT_UNITS = 4.0D;
+    private static final double OFFSET_ORBIT_UNITS = 1.0D;
+    private static final double OFFSET_BASE_ANGLE = 0.3D;
+    private static final double OFFSET_INCLINATION_DEGREES = 10.0D;
+
+    /**
+     * How many of the planet's rings apart counts as FAR, for the arrangement's two premises — the planet
+     * from its cell's name, the star's ring against the planet's: an order of magnitude, so a placement that
+     * took the wrong point or the wrong ring cannot land within {@link #ON_THE_RING} of the right one.
+     */
+    private static final long FAR = 10L;
+
+    /** How many bearings a ring seed can select: one per value of its low byte. An input domain, swept whole. */
+    private static final int BEARINGS = 256;
+
+    /** An orbit's period, ticks, and a quarter of it: a tick at which an orbiting body stands elsewhere
+     *  than at the epoch, and not back where it began. Inputs. */
+    private static final double PERIOD_TICKS = 1000D;
+    private static final long A_QUARTER_ON = 250L;
+
+    /** The star at {@code name}: still, and with a ring far wider than any planet's. */
+    private static SystemBody star(GalacticCoord name) {
+        return new SystemBody(name, CellFrame.staticAt(name), BodyEphemeris.STATIC, SystemBodyKind.STAR,
+                NO_SURFACE, 0, SystemBody.ORBIT_UNKNOWN, STAR_RADIUS_EARTHS);
+    }
+
+    /** A planet named at {@code name} on {@code frame}, standing {@code inCell} off that frame's origin. */
+    private static SystemBody planet(GalacticCoord name, CellFrame frame, BodyEphemeris inCell, int dimId) {
+        return new SystemBody(name, frame, inCell, SystemBodyKind.PLANET, dimId, 0, SystemBody.ORBIT_UNKNOWN,
+                PLANET_RADIUS_EARTHS);
     }
 
     /**
-     * This test fails if production breaks the contract that a ship arriving in space is put beside
-     * where its launch body IS, rather than beside the address that body is named after — so the
-     * spawn ring tracks a planet along its orbit instead of standing at a fixed point it has left.
+     * This test fails if production breaks the contract that an entering ship is put in the cell its launch
+     * body's address names, on that body's OWN entry ring about where the body stands in that cell's frame
+     * (cells-and-crossings INV-SPC-19). It visits: a cell that rides the launch planet while the planet's
+     * absolute position is millions of blocks from its cell's name; a still cell in which the planet stands
+     * at an inclined in-cell offset; both at the epoch and a quarter-period on, at every one of the 256
+     * bearings a ship id can select, with a star sharing the address whose ring is far wider; and an
+     * address with no body, or with bodies none of which is the launch body. What it does not see: that
+     * production hands it the registry's bodies and frames at the space clock's tick — that wiring is seen
+     * where a taken-off craft arrives at its orbit (ship-guidance INV-GDN-17).
      */
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-SPC-19")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "in its cell",
+            member = "ShipEntryController#entryPoint", at = "GalacticCoord cell = address.cellCentre();",
+            replacedBy = "GalacticCoord cell = address.cellCentre().plusLocal(GalacticCoord.CELL, 0L, 0L).cellCentre();",
+            fails = "an entry is put in the cell its launch body's address names", on = "2026-10-23")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "about the body in the cell's frame",
+            member = "ShipEntryController#entryPoint", at = "frames.positionInCell(cell, b.absoluteAt(tick), tick)",
+            replacedBy = "CellFrames.STATIC.positionInCell(cell, b.absoluteAt(tick), tick)",
+            fails = "an entry is put on its launch body's own ring", on = "2026-10-23")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "at the body's own ring",
+            member = "ShipEntryController#entryPoint", at = "entryRingAround(b), seed);",
+            replacedBy = "entryRingAround(java.util.Collections.max(atAddress,"
+                    + " java.util.Comparator.comparingLong(ShipEntryController::entryRingAround))), seed);",
+            fails = "an entry is put on its launch body's own ring", on = "2026-10-23")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "off the name, with no body",
+            member = "ShipEntryController#entryPoint",
+            at = "return StandoffRing.pointAround(address, ENTRY_RING_BLOCKS, seed);", replacedBy = "return address;",
+            fails = "with no launch body at the address, an entry is put the flat ring off the name", on = "2026-10-23")
     @Test
-    public void anArrivalIsAimedAtTheBodyAndNotAtTheNameItIsCalledAfter() {
-        GalacticCoord name = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);
-        SystemBody planet = orbiting(name, LAUNCH_DIM);
-        List<SystemBody> atAddress = new ArrayList<>();
-        atAddress.add(planet);
+    public void anEntryIsPutOnItsLaunchBodysOwnRingInTheCellItEnters() {
+        GalacticCoord name = GalacticCoord.ofSectorLocal(CELL_SECTOR, 0L, 0L, 0L, 0L, 0L);
+        SystemBody star = star(name);
 
-        // Even at the epoch the body does not stand at its own name: the name is its CELL, and an
-        // orbiting body sits an orbital radius away from that cell's centre from the very first tick.
-        // So the gap the old aim ignored is never zero, not even before anything has moved.
-        assertEquals("the aim lands ON the body, at tick 0 as much as later",
-                0.0, gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name),
-                        planet.absoluteAt(0L)), 1e-6);
-        assertTrue("and the name is already an orbital radius away from it",
-                gapTo(name, planet.absoluteAt(0L)) > 1_000_000d);
+        // A cell that RIDES its launch planet: the planet orbits millions of blocks from the cell's name, and
+        // the cell's frame origin goes with it.
+        SystemBody ridden = planet(name, CellFrame.of(AbsolutePos.ofCellName(name),
+                BodyEphemeris.orbit(RIDDEN_ORBIT_UNITS, 0.0D, 0.0D, false, PERIOD_TICKS, ORBIT_UNIT_BLOCKS)),
+                BodyEphemeris.STATIC, LAUNCH_DIM);
+        CellFrames ridesThePlanet = (cell, tick) -> cell.sameCell(name)
+                ? ridden.frame().originAt(tick) : AbsolutePos.ofCellName(cell);
+        // A STILL cell in which the launch planet stands at an inclined offset from the centre.
+        SystemBody offset = planet(name, CellFrame.staticAt(name),
+                BodyEphemeris.orbit(OFFSET_ORBIT_UNITS, OFFSET_BASE_ANGLE, OFFSET_INCLINATION_DEGREES, false,
+                        PERIOD_TICKS, ORBIT_UNIT_BLOCKS), LAUNCH_DIM);
 
-        // Later the body has moved on and the name still has not. The aim must follow the body: this
-        // is the whole defect — a ship was ringed around the name while the planet was elsewhere.
-        // A QUARTER of the orbital period below, deliberately: a whole number of periods puts the body
-        // back where it started and the assertion below would compare a point with itself and pass.
-        long later = 250L;
-        GalacticCoord aim = ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, later, name);
-        assertEquals("the aim lands on the body at that tick", 0.0,
-                gapTo(aim, planet.absoluteAt(later)), 1e-6);
-        assertNotEquals("and by then that is a different point from the epoch's",
-                ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name), aim);
+        for (long tick : new long[]{0L, A_QUARTER_ON}) {
+            for (Object[] arm : new Object[][]{{ridden, ridesThePlanet}, {offset, CellFrames.STATIC}}) {
+                SystemBody planet = (SystemBody) arm[0];
+                CellFrames frames = (CellFrames) arm[1];
+                List<SystemBody> atAddress = new ArrayList<>();
+                atAddress.add(star);
+                atAddress.add(planet);
+                long ring = ShipEntryController.entryRingAround(planet);
+                dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                        "the planet must stand far from its cell's name, and the star at its address must ring far "
+                                + "wider than it (ring " + ring + ", tick " + tick + "): " + planet,
+                        planet.absoluteAt(tick).distanceTo(AbsolutePos.ofCellName(name)) > FAR * ring
+                                && ShipEntryController.entryRingAround(star) > FAR * ring);
+                for (int seed = 0; seed < BEARINGS; seed++) {
+                    GalacticCoord entry = ShipEntryController.entryPoint(atAddress, LAUNCH_DIM, tick,
+                            planet.addressAt(tick), frames, seed);
+                    String which = planet + " tick " + tick + " seed " + seed + " -> " + entry;
+                    assertTrue("an entry is put in the cell its launch body's address names: " + which,
+                            entry.sameCell(name));
+                    double distance = entryToBody(entry, planet, frames, tick);
+                    assertTrue("an entry is put on its launch body's own ring, " + ring + " blocks (within "
+                                    + ON_THE_RING + "), not " + distance + ": " + which,
+                            Math.abs(distance - ring) <= ON_THE_RING);
+                }
+            }
+        }
 
-        // A moon shares its parent's NAME, so an address can hold several bodies in different places.
-        // The one a ship is leaving is the one whose DIMENSION it launched from.
-        List<SystemBody> family = new ArrayList<>();
-        family.add(orbiting(name, LAUNCH_DIM + 1));
-        family.add(planet);
-        assertEquals("the launch dimension picks which of the family is aimed at", 0.0,
-                gapTo(ShipEntryController.aimPoint(family, LAUNCH_DIM, later, name),
-                        planet.absoluteAt(later)), 1e-6);
-
-        // An EMPTY address holds no body, so there is no position that beats the name: an unplaced
-        // launch or the config home anchor. This one is a real answer and not a degraded one.
-        assertEquals("with no body there, the name is the only place there is",
-                name, ShipEntryController.aimPoint(new ArrayList<SystemBody>(), LAUNCH_DIM, later, name));
-        assertEquals("and so does a missing list",
-                name, ShipEntryController.aimPoint(null, LAUNCH_DIM, later, name));
-
-        // A NON-empty address that does not hold the launch body is a different case entirely, and it
-        // must not be confused with the one above: bodies are there, the ship's own is not, and the
-        // name it falls back to is exactly the defect this method removes. It still places the ship —
-        // an arrival is never refused — but production REPORTS it, so it cannot pass for a working
-        // aim. The value is asserted here; that it is loud is the point of the branch.
+        // No body at the address — an unplaced launch, the config home anchor — or bodies none of which is the
+        // launch body: the name is the only place there is, and the ship is put the flat ring off it.
         List<SystemBody> strangers = new ArrayList<>();
-        strangers.add(orbiting(name, LAUNCH_DIM + 7));
-        assertEquals("a launch body missing from its own address still places the ship, at the name",
-                name, ShipEntryController.aimPoint(strangers, LAUNCH_DIM, later, name));
+        strangers.add(star);
+        for (List<SystemBody> nobody : java.util.Arrays.asList(new ArrayList<SystemBody>(), strangers)) {
+            GalacticCoord entry = ShipEntryController.entryPoint(nobody, LAUNCH_DIM, A_QUARTER_ON, name,
+                    CellFrames.STATIC, 0);
+            double distance = entry.staticFrameDistanceTo(name);
+            assertTrue("with no launch body at the address, an entry is put the flat ring off the name, "
+                            + ShipEntryController.ENTRY_RING_BLOCKS + " blocks, not " + distance + " (" + nobody + ")",
+                    Math.abs(distance - ShipEntryController.ENTRY_RING_BLOCKS) <= ON_THE_RING);
+        }
     }
 }

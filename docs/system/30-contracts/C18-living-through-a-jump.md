@@ -219,7 +219,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   **The code holds the opposite belief** `[V]`: `ShipCrossingService` carries
   `MAX_SETTLE_ATTEMPTS = 200` (`ShipCrossingService.java:39`; the give-up at `:281`) and an `abandoned()`
   callback (`:170`), and all three arrival controllers implement it (`CellCrossingController.java:305`,
-  `DescentController.java:262`, `ShipEntryController.java:311`) — settling the ledger anyway and
+  `DescentController.java:262`, `ShipEntryController.java:293`) — settling the ledger anyway and
   messaging the crew with a `…failedKey`. That courtesy makes the breach look like a feature: a give-up
   dressed as a handled case reads, to everyone downstream, as an outcome the design admits. While it
   stands the clause is violated.

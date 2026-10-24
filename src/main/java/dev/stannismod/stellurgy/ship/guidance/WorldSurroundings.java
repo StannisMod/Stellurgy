@@ -137,10 +137,9 @@ public final class WorldSurroundings implements Surroundings {
             return Orbit.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
         }
         long clock = SpaceSubsystem.spaceClock();
-        // FRAME: where the body IS at this tick — its own position, not its address, which is a name —
-        // less where the craft's cell centre is, both absolute at one tick: the body's position in this world.
-        BlockDelta fromHere = body.get().absoluteAt(clock)
-                .minus(SpaceSubsystem.frames().absoluteOf(cell.cellCentre(), clock));
+        // FRAME: where the body IS at this tick — its own position, not its address, which is a name — in the
+        // frame of the craft's cell: the body's position in this world. The entry draws its ring about the same.
+        BlockDelta fromHere = SpaceSubsystem.frames().positionInCell(cell, body.get().absoluteAt(clock), clock);
         if (fromHere.isSaturated()) {
             return Orbit.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
         }

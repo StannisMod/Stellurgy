@@ -68,23 +68,6 @@ public final class ShipEntryController {
         return Math.max(ENTRY_RING_BLOCKS, shell * 2L);
     }
 
-    /**
-     * The same ring for a body known only by ADDRESS — the entry path holds a coordinate, not the
-     * body object, so the body is resolved through the registry and the flat ring is used when there
-     * is nothing there to resolve (an unplaced launch, the config home anchor).
-     */
-    public static long entryRingAround(GalacticCoord bodyAddress) {
-        if (bodyAddress == null) {
-            return ENTRY_RING_BLOCKS;
-        }
-        long widest = ENTRY_RING_BLOCKS;
-        for (dev.stannismod.stellurgy.universe.SystemBody b
-                : dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(bodyAddress)) {
-            widest = Math.max(widest, entryRingAround(b));
-        }
-        return widest;
-    }
-
     /** Ticks a ship waits after a refused/failed entry before the ceiling check may re-trigger. */
     private static final int RETRY_COOLDOWN_TICKS = 100;
 
@@ -338,79 +321,66 @@ public final class ShipEntryController {
         return decided(Decision.STARTED, shipId, now);
     }
 
-    /** The launch body's position + spawn ring, or the config home anchor when unplaced. The ring
-     *  direction is derived from the ship id, so simultaneous entries at one body spread out. */
+    /** {@link #entryPoint} for this launch, against the live registry and the space clock. The ring
+     *  bearing is derived from the ship id, so simultaneous entries at one body spread out. */
     private GalacticCoord resolveEntryCoord(int launchDimId, UUID shipId) {
-        GalacticCoord body = coordResolver.launchBodyAddress(launchDimId);
-        if (body == null) {
-            body = GalacticCoord.ORIGIN;
+        GalacticCoord address = coordResolver.launchBodyAddress(launchDimId);
+        if (address == null) {
+            address = GalacticCoord.ORIGIN;
         }
-        return StandoffRing.pointAround(aimAt(launchDimId, body), entryRingAround(body),
-                shipId.hashCode());
+        return entryPoint(dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(address),
+                launchDimId, clock.getAsLong(), address, SpaceSubsystem.frames(), shipId.hashCode());
     }
 
     /**
-     * Where the launch body actually IS at this tick, as the point the spawn ring is drawn around.
+     * Where an entering ship is put: in the cell its launch body's address names, on that body's OWN
+     * entry ring ({@link #entryRingAround(dev.stannismod.stellurgy.universe.SystemBody)}), drawn about
+     * where the body stands at {@code tick} in that cell's frame — the same point a {@code GO_TO} its orbit
+     * makes the sphere about, so a ship that has just entered is on its body's orbit.
      *
-     * <p><b>The address is a name, not a place.</b> A body's {@link GalacticCoord} is its durable
-     * name and it does not move; where the body stands comes from its own frame and ephemeris. Ringing
-     * the NAME therefore puts a ship beside the place a planet is called after rather than beside the
-     * planet, and the gap is the whole orbital offset — measured at Earth as 5 657 554 blocks, which
-     * is 26 hours of flight at the Flight Assist ceiling. This aims at the body instead.</p>
+     * <p><b>The address is a name, not a place.</b> Where the body stands comes from its own frame and
+     * ephemeris, and it is placed in the cell through the cell's frame ({@link CellFrames#positionInCell}).
+     * A cell rides its primary, so a planet that is its cell's primary stands at the cell's centre
+     * whatever its orbit has carried it to; its absolute position is not a cell name plus an offset.</p>
      *
-     * <p><b>Matched on the launch DIMENSION, not on the address.</b> A moon shares its parent's name,
-     * so an address can hold several bodies that are in quite different places; the one a ship is
-     * leaving is the one whose dimension it launched from.</p>
+     * <p><b>The ring is the launch body's, not the widest at its address.</b> A system's star shares its
+     * planets' address, so the widest ring there is the star's, millions of blocks across. Every other
+     * body stands elsewhere in the cell, so a ring drawn about the launch body clears their shells only by
+     * the distance between them, never by its own width.</p>
      *
-     * <p><b>When nothing resolves the address is used, and that is REPORTED, never silent.</b> The
-     * fallback IS the defect this method exists to remove: it puts a ship beside a name while the
-     * body may be an orbit away, and a ship placed there reads as a working arrival right up until the
-     * pilot looks out of a window. Two callers reach it legitimately — an unplaced launch and the
-     * config home anchor, where there is no body and so no position to prefer — but a LAUNCH BODY
-     * that failed to resolve is a broken universe, not a configuration, and it says so in the log.</p>
+     * <p><b>Matched on the launch DIMENSION, not on the address.</b> An address can hold several bodies
+     * that are in quite different places; the one a ship is leaving is the one whose dimension it
+     * launched from.</p>
      *
-     * <p>NOTE: this places a ARRIVAL correctly and nothing more. A ship parked beside a body is not
-     * carried by that body's orbit, so it is left behind the moment it stops thrusting — at Earth,
-     * roughly 119 blocks per second. Making a parking orbit hold is a separate change.</p>
+     * <p><b>With no body at the address</b> — an unplaced launch, the config home anchor — there is no
+     * position better than the name, and the ship is put the flat {@link #ENTRY_RING_BLOCKS} off it.
+     * <b>With bodies there and none of them the launch body</b> the universe is broken, not configured:
+     * the ship is put the same way, and that is REPORTED, because a ship ringed about a name reads as a
+     * working arrival until the pilot looks out of a window.</p>
+     *
+     * <p>The ring lies in the plane of the cell through the body, as every standoff does
+     * ({@link StandoffRing}).</p>
      */
-    private GalacticCoord aimAt(int launchDimId, GalacticCoord address) {
-        return aimPoint(dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(address),
-                launchDimId, clock.getAsLong(), address);
-    }
-
-    /**
-     * The decision {@link #aimAt} makes, as arithmetic on a body list — so it can be driven by a test
-     * without a server standing behind the registry.
-     *
-     * <p>Kept separate deliberately: with no server the registry answers an EMPTY list, so a test
-     * exercising the whole method would take the fallback every time and pass while proving nothing
-     * about the case the change exists for.</p>
-     */
-    public static GalacticCoord aimPoint(
+    public static GalacticCoord entryPoint(
             java.util.List<dev.stannismod.stellurgy.universe.SystemBody> atAddress,
-            int launchDimId, long tick, GalacticCoord address) {
-        if (atAddress == null) {
-            return address;
-        }
+            int launchDimId, long tick, GalacticCoord address, CellFrames frames, int seed) {
         for (dev.stannismod.stellurgy.universe.SystemBody b : atAddress) {
-            if (b == null || b.dimId() != launchDimId) {
+            if (b.dimId() != launchDimId) {
                 continue;
             }
-            AbsolutePos at = b.absoluteAt(tick);
-            return GalacticCoord.ofSectorLocal(at.sectorX(), at.sectorY(), at.sectorZ(),
-                    at.localX(), at.localY(), at.localZ());
+            GalacticCoord cell = address.cellCentre();
+            BlockDelta there = frames.positionInCell(cell, b.absoluteAt(tick), tick);
+            return StandoffRing.pointAround(cell.plusLocalSaturating(there.dx(), there.dy(), there.dz()),
+                    entryRingAround(b), seed);
         }
-        if (atAddress.isEmpty()) {
-            // Nothing stands at this address at all: an unplaced launch or the config home anchor.
-            // There is no body, so there is no position that would be better than the name.
-            return address;
+        if (!atAddress.isEmpty()) {
+            LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
+                    + "are there and none of them is it. Putting the entry {} blocks off the NAME, which is "
+                    + "where this body would be only if it never moved; if it orbits, the ship is being put "
+                    + "beside a place the planet has left.",
+                    launchDimId, address.cellKey(), atAddress.size(), ENTRY_RING_BLOCKS);
         }
-        LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
-                + "are there and none of them is it. Aiming the entry at the NAME, which is where "
-                + "this body would be only if it never moved; if it orbits, the ship is being put "
-                + "beside a place the planet has left.",
-                launchDimId, address.cellKey(), atAddress.size());
-        return address;
+        return StandoffRing.pointAround(address, ENTRY_RING_BLOCKS, seed);
     }
 
     /** Advance every in-flight entry one tick (the shared crossing settle loop). */

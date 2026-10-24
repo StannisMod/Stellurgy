@@ -451,8 +451,8 @@ space↔space travel.
   the orbit above a craft; a manoeuvre is guidance's, never the order's), and the entry crossing takes it
   on at the line (ship-guidance MECH-GDN-11). A blocked column overhead, or a world with no orbit line,
   is a NORMAL surfaced outcome — the order is refused and the pilot told — not an error. In space the
-  orbit is the sphere about the body at its entry ring, where the entry is meant to put a craft (today it
-  does not — ship-guidance, Failure modes).
+  orbit is the sphere about the body at its entry ring, which is where the entry puts a craft — so a
+  taken-off craft has arrived once it rests there.
 - **Ascent is the SAFE exit, not the only one.** A hyperjump from within the gravity well is also legal,
   costlier and more dangerous (§6).
 - **First `GalacticCoord` = the launch planet's system.** On entering space the ship materializes at the

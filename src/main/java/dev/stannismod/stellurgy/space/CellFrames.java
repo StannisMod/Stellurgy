@@ -45,6 +45,15 @@ public interface CellFrames {
         return originAt(coord.cellCentre(), tick).plus(coord.localX(), coord.localY(), coord.localZ());
     }
 
+    /**
+     * Where the absolute position {@code at} stands in the frame of the cell named by {@code cell}, at
+     * {@code tick}: the vector from that cell's centre — the origin of the world that realizes it — to
+     * {@code at}. This is how a thing that is not addressed in the cell, a body most of all, is placed in it.
+     */
+    default BlockDelta positionInCell(GalacticCoord cell, AbsolutePos at, long tick) {
+        return at.minus(absoluteOf(cell.cellCentre(), tick));
+    }
+
     /** The vector FROM {@code from} TO {@code to} at {@code tick}, through both frames. */
     default BlockDelta deltaBetween(GalacticCoord from, GalacticCoord to, long tick) {
         return absoluteOf(to, tick).minus(absoluteOf(from, tick));

@@ -13,16 +13,16 @@ import static org.junit.Assert.assertTrue;
 /**
  * AUTO-TAKEOFF as the motion slot flies it: the pilot's take-off key hands the craft {@code GO_TO} the
  * orbit of the body it stands on, and guidance climbs it straight up past the orbit line, where the entry
- * crossing takes it into space with the order still in its slot. One group, three scenarios — the climb
- * that enters, the climb refused by a blocked column, and the pilot taking the craft back mid-climb.
+ * crossing takes it into space with the order still in its slot, on its body's ring, where the order has
+ * arrived. One group, three scenarios — the climb that enters and arrives, the climb refused by a blocked
+ * column, and the pilot taking the craft back mid-climb.
  *
  * <p>What this does NOT see: the client's keybind and the seat packet's pilot guard (the key is pressed
  * through the {@code space auto-takeoff} probe, which calls the flight computer's take-off entry the seat
  * packet calls); the message a refused pilot is shown (no player is seated — the refusal reaches the pilot
- * by the same call every refusal does); the craft being declared arrived in orbit after the entry — the
- * entry does not put a craft on the body's own ring today (measured 2026-10-23: millions of blocks out),
- * so where it ends up is the entry's to fix and not judged here; and the law of the orbit target, which is
- * pinned without a world in {@code MotionGuidanceLawsTest}.</p>
+ * by the same call every refusal does); a MOON's orbit, which moves inside the cell it shares; and the laws
+ * of the orbit target and of the entry's placement, which are pinned without a world in
+ * {@code MotionGuidanceLawsTest} and {@code ShipEntryControllerTest}.</p>
  */
 public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
 
@@ -38,6 +38,14 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
 
     /** A LINK budget in server ticks: the climb from {@link #BELOW_THE_LINE} plus the entry's settle. */
     private static final int CLIMB_TICKS = 800;
+
+    /**
+     * A LINK budget in server ticks, from before the climb: the climb and the entry's settle
+     * ({@link #CLIMB_TICKS}), then the craft coming to rest on the orbit it was put on, with room. Measured
+     * 2026-10-23: the arrival was declared within a tick of the entry's own settle record
+     * ({@code logs/t847-takeoff2-results.xml}, the {@code [takeoff-orbit]} line).
+     */
+    private static final int ORBIT_TICKS = CLIMB_TICKS + 200;
 
     /** A LINK budget in server ticks: the refusal window ({@code MotionSlot.REFUSAL_WINDOW_TICKS}, 40) and room. */
     private static final int REFUSE_TICKS = 200;
@@ -80,7 +88,7 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
 
     /**
      * The take-off key issues ONE {@code GO_TO} the orbit of the overworld's body; the craft climbs, the
-     * entry takes it into space, and there the slot goes on flying the order.
+     * entry takes it into space onto that body's ring, and there the order has arrived and the slot holds it.
      */
     @Pins({"INV-GDN-17", "SHIPCTL-22"})
     @RedWitness(verdict = "enters", member = "GuidanceTarget#orbitIn",
@@ -88,7 +96,16 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
             fails = "the take-off must climb the craft across the entry line into space", on = "2026-10-23")
     @RedWitness(verdict = "rides on", member = "GuidanceTarget#writeToNBT",
             at = "nbt.setString(NBT_KIND, KIND_ORBIT);", replacedBy = "nbt.setString(NBT_KIND, \"\");",
-            fails = "in space the slot goes on flying the take-off's order", on = "2026-10-23")
+            fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
+    @RedWitness(verdict = "arrives", member = "ShipEntryController#entryPoint",
+            at = "frames.positionInCell(cell, b.absoluteAt(tick), tick)",
+            replacedBy = "CellFrames.STATIC.positionInCell(cell, b.absoluteAt(tick), tick)",
+            fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
+    @RedWitness(verdict = "arrives at its body's own ring", member = "ShipEntryController#entryPoint",
+            at = "entryRingAround(b), seed);",
+            replacedBy = "entryRingAround(java.util.Collections.max(atAddress,"
+                    + " java.util.Comparator.comparingLong(ShipEntryController::entryRingAround))), seed);",
+            fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
     @RedWitness(verdict = "issued", member = "TileAdvancedFlightComputer#toggleAutoTakeoff",
             at = "issueMotion(takeoff);", replacedBy = "",
             fails = "the take-off key must hand the craft's motion slot one GO_TO the orbit", on = "2026-10-23")
@@ -115,12 +132,20 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         String left = events.awaitRecordWithField(climbMark, "ship_left_planet", "ship", builtDurable,
                 "the take-off must climb the craft across the entry line into space", CLIMB_TICKS);
         int cellDim = (int) Events.number(left, "cellDim");
-        // In space the order rides on, flown and not refused. Whether the craft is then declared arrived
-        // depends on where the entry put it, which this scenario does not judge (see the class javadoc).
+        // Linked on guidance's own declaration that the craft is on its body's orbit, at rest. The entry
+        // puts it on that body's ring, so this is the order finished, not a flight across the system: a
+        // craft put anywhere else is still making for the orbit when the budget runs out.
+        String arrived = events.awaitRecordWithFields(climbMark, "motion_arrived",
+                "in space the take-off's order arrives at the overworld's orbit", ORBIT_TICKS,
+                "ship", builtDurable, "target", "orbit 0");
+        // Arrival is declared only in space: on the planet the climb is made for, never arrived at.
         Reply slot = read("stellurgytest vs motion-read-by-id " + cellDim + " " + shipId);
-        assertTrue("in space the slot goes on flying the take-off's order (" + left + "): " + slot,
-                slot.bool("afcResolved") && "ACTIVE".equals(slot.text("state"))
-                        && "orbit 0".equals(slot.text("target")));
+        System.out.println("[takeoff-orbit] left " + left + " :: arrived " + arrived + " :: slot " + slot);
+        assertTrue("in space the take-off's order arrives at the overworld's orbit, in the cell the entry put the"
+                        + " craft in, and the slot holds it there (" + left + " :: " + arrived + "): " + slot,
+                (int) Events.number(arrived, "dim") == cellDim && slot.bool("afcResolved")
+                        && "ACTIVE".equals(slot.text("state")) && "orbit 0".equals(slot.text("target"))
+                        && slot.bool("arrived"));
     }
 
     /**

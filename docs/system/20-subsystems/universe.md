@@ -364,7 +364,7 @@ server in one JVM never sees another's model.
 
 - **Boot**: `Stellurgy#serverStarted` → `UniverseRegistry.populate` (`Stellurgy.java:1715`); `DimensionManager` stages the pack's `<galaxyGen>` and authored anchors and owns the `ReportOnce` (`dimension/DimensionManager.java:94`; `dimension/DimensionManager.java:586` forgets a deleted dimension's name).
 - **XML**: `XMLPlanetLoader` reads and writes `<galaxyGen>` (`util/XMLPlanetLoader.java:68, 335, 2085, 2150` — the last folds declared galaxies into the config).
-- **Descent**: `tile/TileAdvancedFlightComputer.java:633` calls `PlanetRealizer.realize`; `space/ShipEntryController.java:83, 378` read `bodiesAtOnServer`.
+- **Descent**: `tile/TileAdvancedFlightComputer.java:633` calls `PlanetRealizer.realize`; `space/ShipEntryController.java:331` reads `bodiesAtOnServer`.
 - **Survey**: `tile/multiblock/TileObservatory.java:1156` → `TelescopeScan.resolveBatch`; crystals are `navigation/` types (`CrystalEntry`, `ItemMemoryCrystal`).
 - **Feeds**: `space/SystemBodiesProducer` and `space/SkyNebulaeProducer` read `skyBodiesAt` / `nebulaeAround` (C14 CON-C14-06..CON-C14-11 own the wire); `IGalaxyGenerator.nebulaeAround` / `columnDensityBetween` default to empty / zero, the correct answer for a generator without clouds.
 - **Addon seam**: `UniverseRegistry.attachGenerator` accepts any `IGalaxyGenerator` (replacing is legitimate up to three times per load; `null` is refused; `detachGenerator` is the explicit void; `UniverseRegistry.java:1853-1889`). `setStarLookup` lets a test supply fabricated stars (`UniverseRegistry.java:1895`).

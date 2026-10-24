@@ -159,8 +159,10 @@ flies and the entry crossing ends.
   it stands at the space clock's tick (its position, not its address) against where the craft's cell
   centre stands — of the body's own entry ring (`ShipEntryController.entryRingAround(SystemBody)`)
   (`WorldSurroundings.java:127`): a craft on it at rest has arrived and holds, and the same order from
-  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND `[V]`. The entry is
-  meant to put a craft on that ring, and today does not (Failure modes).
+  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND `[V]`. The entry puts a
+  craft on that ring, about the body placed in the same cell's frame by the same function
+  (`CellFrames.positionInCell`; space/cells-and-crossings INV-SPC-19), so a taken-off craft has arrived as
+  it comes to rest there `[T]`.
   The pilot's auto-takeoff key issues `GO_TO` this orbit on a planet's surface; pressed while the slot
   flies that very order it empties the slot, and anywhere else it does nothing
   (`tile/TileAdvancedFlightComputer.java:1017`) `[V]`.
@@ -296,7 +298,8 @@ flies and the entry crossing ends.
   2026-10-21 that take-off is `GO_TO(orbit)` (*"Авто-взлёт — это GO_TO(орбита) - да"*). Pinned by
   `test/unit/MotionGuidanceLawsTest#anOrbitIsClimbedStraightUpFromItsBodyAndIsTheSphereAboutItInSpace`.
 - **INV-GDN-17** `[T][BEH]` A craft on the overworld whose pilot presses the take-off key climbs across
-  the entry line into space, and there its slot goes on flying the order. FOR: the maintainer's rulings of 2026-10-23 (*"по рекомендациям"*) that take-off is a `GO_TO`
+  the entry line into space, and there the order has arrived at its body's orbit — the entry put the craft
+  on that body's ring — and the slot holds it. FOR: the maintainer's rulings of 2026-10-23 (*"по рекомендациям"*) that take-off is a `GO_TO`
   an orbit, climbed vertically by guidance, with the orbit in space the sphere an entry puts a craft on —
   so the craft that has just entered is there and holds — and his of 2026-10-21 (*"Авто-взлёт — это
   GO_TO(орбита) - да"*). Pinned by
@@ -308,13 +311,6 @@ flies and the entry crossing ends.
 
 ## Failure modes & edge cases
 
-**A take-off does not end on the ring today.** The entry crossing does not put a craft on its body's own
-ring: it draws its ring at the WIDEST ring of every body sharing the launch body's address
-(`ShipEntryController.entryRingAround(GalacticCoord)`, a star among them) about a point built from the
-body's absolute position read as a cell name plus offset (`ShipEntryController.aimPoint`), in the plane
-of the cell. Measured 2026-10-23 on the overworld: the ring drawn was 5 657 844 blocks against the body's
-own 51 826, and the craft came out 3 955 113 blocks from the body — so a taken-off craft holding its
-`GO_TO` orbit then flies the whole way in to the body's ring, at its top speed, which is hours `[V]`.
 A take-off issued while the post-descent entry latch holds (the craft above the line, not yet below it
 since its descent) climbs to its aim and hovers there: the entry does not fire until the latch clears.
 
@@ -359,9 +355,9 @@ None.
 `test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, SHIPCTL-21);
 `test/unit/AutoTakeoffPlannerTest` (the corridor);
 `test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14);
-`test/server/VSShipAutoTakeoffTest` (take-off: INV-GDN-17, -18, SHIPCTL-21 mid-climb, SHIPCTL-22). Not
-seen in a running game: an orbit flown to, or arrived at, in space (INV-GDN-16 pins it on the law; the
-entry does not put a taken-off craft on the ring — Failure modes), and a MOON's orbit — a moon moves
+`test/server/VSShipAutoTakeoffTest` (take-off: INV-GDN-17 — arrival at the orbit it was entered onto —
+-18, SHIPCTL-21 mid-climb, SHIPCTL-22). Not seen in a running game: an orbit flown to from far off in
+space (INV-GDN-16 pins it on the law), and a MOON's orbit — a moon moves
 inside the cell it shares with its parent, so a craft held on its ring follows it and is not declared
 arrived while that is faster than the arrival speed. Not seen
 in a running game: a ship parked inside the carry band past a face, and a ship record with no blocks
