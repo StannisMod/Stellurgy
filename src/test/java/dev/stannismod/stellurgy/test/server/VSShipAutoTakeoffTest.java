@@ -103,7 +103,7 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
             fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
     @RedWitness(verdict = "arrives at its body's own ring", member = "ShipEntryController#entryPoint",
             at = "entryRingAround(b), seed);",
-            replacedBy = "entryRingAround(java.util.Collections.max(atAddress,"
+            replacedBy = "entryRingAround(java.util.Collections.max(systemBodies,"
                     + " java.util.Comparator.comparingLong(ShipEntryController::entryRingAround))), seed);",
             fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
     @RedWitness(verdict = "issued", member = "TileAdvancedFlightComputer#toggleAutoTakeoff",

@@ -135,8 +135,8 @@ body's own ring `max(2·512, 2·shell)` about where the body **is** at this tick
 (`CellFrames.positionInCell`, the same placement `WorldSurroundings#orbit` gives a `GO_TO` an orbit), the body
 matched on the launch dimension, the ring in the cell's plane through the body and saturating inside the cell
 (`ShipEntryController#entryPoint`; `StandoffRing.java:38-43,90-100`) [V][T]
-`ShipEntryControllerTest#anEntryIsPutOnItsLaunchBodysOwnRingInTheCellItEnters` (INV-SPC-19). With no body at the
-address, or none of them the launch body, it is the flat `2·512` off the name, the second case logged. On settle
+`ShipEntryControllerTest#anEntryIsPutOnItsLaunchBodysOwnRingInTheCellItEnters` (INV-SPC-19). With no system at the
+address, or a system the launch body is not in, it is the flat `2·512` off the name, the second case logged. On settle
 the ledger takes the entry coordinate (`ShipEntryController.java:272`). After a descent the entry latch holds until the ship has been below the line
 (`DescentController.java:230`) [T] `DescentControllerTest.java:358`. Contract: C15 ADDR-16.
 
@@ -201,7 +201,7 @@ the climb itself is a vertical `GO_TO` an orbit flown by ship-guidance (MECH-GDN
   inside the descent trigger (`ShipEntryController.java:60-70`; `ShipEntryControllerTest.java:173`).
 - **INV-SPC-19** [T][SYS] An entering ship is put in the cell its launch body's address names, on that body's OWN
   entry ring about where the body stands at that tick in that cell's frame — never at the ring of another body
-  sharing the address (a star's is millions of blocks), and never about the body's absolute position read as a cell
+  of its system (the entry reads the whole system, `systemBodiesAt`; the star's ring is millions of blocks), and never about the body's absolute position read as a cell
   name plus an offset. FOR: C15 ADDR-16 (a placement is measured against a position, never a name) and ship-guidance
   INV-GDN-16 (in space an orbit is the sphere at the ring an entry puts a craft on). Pinned by
   `test/unit/ShipEntryControllerTest#anEntryIsPutOnItsLaunchBodysOwnRingInTheCellItEnters`.

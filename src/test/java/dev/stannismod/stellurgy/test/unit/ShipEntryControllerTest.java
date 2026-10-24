@@ -455,8 +455,8 @@ public class ShipEntryControllerTest {
      * (cells-and-crossings INV-SPC-19). It visits: a cell that rides the launch planet while the planet's
      * absolute position is millions of blocks from its cell's name; a still cell in which the planet stands
      * at an inclined in-cell offset; both at the epoch and a quarter-period on, at every one of the 256
-     * bearings a ship id can select, with a star sharing the address whose ring is far wider; and an
-     * address with no body, or with bodies none of which is the launch body. What it does not see: that
+     * bearings a ship id can select, with a star in the address's system whose ring is far wider; and an
+     * address with no system, or a system the launch body is not in. What it does not see: that
      * production hands it the registry's bodies and frames at the space clock's tick — that wiring is seen
      * where a taken-off craft arrives at its orbit (ship-guidance INV-GDN-17).
      */
@@ -471,7 +471,7 @@ public class ShipEntryControllerTest {
             fails = "an entry is put on its launch body's own ring", on = "2026-10-23")
     @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "at the body's own ring",
             member = "ShipEntryController#entryPoint", at = "entryRingAround(b), seed);",
-            replacedBy = "entryRingAround(java.util.Collections.max(atAddress,"
+            replacedBy = "entryRingAround(java.util.Collections.max(systemBodies,"
                     + " java.util.Comparator.comparingLong(ShipEntryController::entryRingAround))), seed);",
             fails = "an entry is put on its launch body's own ring", on = "2026-10-23")
     @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "off the name, with no body",
@@ -499,17 +499,17 @@ public class ShipEntryControllerTest {
             for (Object[] arm : new Object[][]{{ridden, ridesThePlanet}, {offset, CellFrames.STATIC}}) {
                 SystemBody planet = (SystemBody) arm[0];
                 CellFrames frames = (CellFrames) arm[1];
-                List<SystemBody> atAddress = new ArrayList<>();
-                atAddress.add(star);
-                atAddress.add(planet);
+                List<SystemBody> systemBodies = new ArrayList<>();
+                systemBodies.add(star);
+                systemBodies.add(planet);
                 long ring = ShipEntryController.entryRingAround(planet);
                 dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
-                        "the planet must stand far from its cell's name, and the star at its address must ring far "
+                        "the planet must stand far from its cell's name, and the star of its system must ring far "
                                 + "wider than it (ring " + ring + ", tick " + tick + "): " + planet,
                         planet.absoluteAt(tick).distanceTo(AbsolutePos.ofCellName(name)) > FAR * ring
                                 && ShipEntryController.entryRingAround(star) > FAR * ring);
                 for (int seed = 0; seed < BEARINGS; seed++) {
-                    GalacticCoord entry = ShipEntryController.entryPoint(atAddress, LAUNCH_DIM, tick,
+                    GalacticCoord entry = ShipEntryController.entryPoint(systemBodies, LAUNCH_DIM, tick,
                             planet.addressAt(tick), frames, seed);
                     String which = planet + " tick " + tick + " seed " + seed + " -> " + entry;
                     assertTrue("an entry is put in the cell its launch body's address names: " + which,
@@ -522,8 +522,8 @@ public class ShipEntryControllerTest {
             }
         }
 
-        // No body at the address — an unplaced launch, the config home anchor — or bodies none of which is the
-        // launch body: the name is the only place there is, and the ship is put the flat ring off it.
+        // No system at the address — an unplaced launch, the config home anchor — or a system the launch body
+        // is not in: the name is the only place there is, and the ship is put the flat ring off it.
         List<SystemBody> strangers = new ArrayList<>();
         strangers.add(star);
         for (List<SystemBody> nobody : java.util.Arrays.asList(new ArrayList<SystemBody>(), strangers)) {

@@ -343,18 +343,18 @@ public final class ShipEntryController {
      * A cell rides its primary, so a planet that is its cell's primary stands at the cell's centre
      * whatever its orbit has carried it to; its absolute position is not a cell name plus an offset.</p>
      *
-     * <p><b>The ring is the launch body's, not the widest at its address.</b> A system's star shares its
-     * planets' address, so the widest ring there is the star's, millions of blocks across. Every other
-     * body stands elsewhere in the cell, so a ring drawn about the launch body clears their shells only by
-     * the distance between them, never by its own width.</p>
+     * <p><b>{@code systemBodies} is the whole SYSTEM the address belongs to</b> — its star, every planet,
+     * every moon ({@code UniverseRegistry#systemBodiesAt}) — and the ring is the launch body's, never the
+     * widest among them: that is the star's, millions of blocks across. Every other body stands elsewhere,
+     * so a ring drawn about the launch body clears their shells by the distance between them, not by its
+     * own width.</p>
      *
-     * <p><b>Matched on the launch DIMENSION, not on the address.</b> An address can hold several bodies
-     * that are in quite different places; the one a ship is leaving is the one whose dimension it
+     * <p><b>Matched on the launch DIMENSION.</b> The one a ship is leaving is the body whose dimension it
      * launched from.</p>
      *
-     * <p><b>With no body at the address</b> — an unplaced launch, the config home anchor — there is no
+     * <p><b>With no system at the address</b> — an unplaced launch, the config home anchor — there is no
      * position better than the name, and the ship is put the flat {@link #ENTRY_RING_BLOCKS} off it.
-     * <b>With bodies there and none of them the launch body</b> the universe is broken, not configured:
+     * <b>With a system there and the launch body not in it</b> the universe is broken, not configured:
      * the ship is put the same way, and that is REPORTED, because a ship ringed about a name reads as a
      * working arrival until the pilot looks out of a window.</p>
      *
@@ -362,9 +362,9 @@ public final class ShipEntryController {
      * ({@link StandoffRing}).</p>
      */
     public static GalacticCoord entryPoint(
-            java.util.List<dev.stannismod.stellurgy.universe.SystemBody> atAddress,
+            java.util.List<dev.stannismod.stellurgy.universe.SystemBody> systemBodies,
             int launchDimId, long tick, GalacticCoord address, CellFrames frames, int seed) {
-        for (dev.stannismod.stellurgy.universe.SystemBody b : atAddress) {
+        for (dev.stannismod.stellurgy.universe.SystemBody b : systemBodies) {
             if (b.dimId() != launchDimId) {
                 continue;
             }
@@ -373,12 +373,12 @@ public final class ShipEntryController {
             return StandoffRing.pointAround(cell.plusLocalSaturating(there.dx(), there.dy(), there.dz()),
                     entryRingAround(b), seed);
         }
-        if (!atAddress.isEmpty()) {
-            LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
-                    + "are there and none of them is it. Putting the entry {} blocks off the NAME, which is "
+        if (!systemBodies.isEmpty()) {
+            LOGGER.warn("[SPACE] launch dimension {} is not a body of the system at its own address {} — {} "
+                    + "body(ies) are in that system and none of them is it. Putting the entry {} blocks off the NAME, which is "
                     + "where this body would be only if it never moved; if it orbits, the ship is being put "
                     + "beside a place the planet has left.",
-                    launchDimId, address.cellKey(), atAddress.size(), ENTRY_RING_BLOCKS);
+                    launchDimId, address.cellKey(), systemBodies.size(), ENTRY_RING_BLOCKS);
         }
         return StandoffRing.pointAround(address, ENTRY_RING_BLOCKS, seed);
     }
