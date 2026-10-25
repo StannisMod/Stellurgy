@@ -440,7 +440,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
 
     @Override
     public boolean canPerformFunction() {
-        if (world.isRemote || world.getWorldTime() % 20 != 0) {
+        if (world.isRemote || world.getTotalWorldTime() % 20 != 0) {
             return false;
         }
 

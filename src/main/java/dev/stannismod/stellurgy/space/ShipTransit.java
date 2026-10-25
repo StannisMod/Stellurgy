@@ -90,6 +90,27 @@ public final class ShipTransit {
         return new ShipTransit(origin, target, distanceBlocks, travelledBlocks + speedBlocksPerTick);
     }
 
+    /**
+     * Carry the flight through {@code ticks} ticks at once — a time skip. The same state {@code ticks}
+     * calls of {@link #advance(long)} would reach, computed without them.
+     */
+    public ShipTransit carry(long speedBlocksPerTick, long ticks) {
+        if (ticks <= 0L || arrived()) {
+            return this;
+        }
+        if (speedBlocksPerTick <= 0L) {
+            return advance(speedBlocksPerTick);
+        }
+        long remaining = distanceBlocks - travelledBlocks;
+        // advance completes once the remainder is within one tick's reach, so the last tick is the one
+        // that starts within it: ceil(remaining / speed) ticks finish the flight.
+        long ticksToArrive = (remaining - 1L) / speedBlocksPerTick + 1L;
+        if (ticks >= ticksToArrive) {
+            return new ShipTransit(origin, target, distanceBlocks, distanceBlocks);
+        }
+        return new ShipTransit(origin, target, distanceBlocks, travelledBlocks + speedBlocksPerTick * ticks);
+    }
+
     @Override
     public String toString() {
         return "ShipTransit[origin=" + origin + ", target=" + target

@@ -125,7 +125,7 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   are mutually gated on tank fluid type. Runs every 2 ticks. `tile/atmosphere/TileGasChargePad.java:94-174`.
 - **MECH-ATM-10 atmosphere detector** — every 10t emits redstone via `BlockRedstoneEmitter` when
   any non-opaque neighbour cell's atmosphere equals the player-selected `atmosphereToDetect`
-  (selection synced by unlocalized name). `tile/atmosphere/TileAtmosphereDetector.java:46-67`.
+  (selection synced by unlocalized name). `tile/atmosphere/TileAtmosphereDetector.java:46-69`.
 - **MECH-ATM-11 modular space armor** — `EmbeddedInventory` of components serialised into stack
   NBT; `onArmorTick`/`damageArmor` dispatch to each `IArmorComponent`; `protectsFromSubstance`
   whitelists all hostile atmosphere singletons. `armor/ItemSpaceArmor.java:119-245`.

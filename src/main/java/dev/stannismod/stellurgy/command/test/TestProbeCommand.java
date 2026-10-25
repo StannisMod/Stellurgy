@@ -14474,8 +14474,8 @@ public class TestProbeCommand extends CommandBase {
         }
         if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {
             // Bypasses TileAtmosphereDetector.update()'s
-            // world.getWorldTime() % 10 == 0 gate so headless tests don't
-            // depend on the server's world-time being a multiple of 10 at the
+            // world.getTotalWorldTime() % 10 == 0 gate so headless tests don't
+            // depend on the server's total time being a multiple of 10 at the
             // moment the command runs. Runs the same sample loop + setState
             // call as production.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);

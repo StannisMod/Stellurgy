@@ -47,7 +47,9 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
 
     @Override
     public void update() {
-        if (!world.isRemote && world.getWorldTime() % 10 == 0) {
+        // Total time, not time of day: a planet's time of day is its body's turn, which stands still on a
+        // body locked to its star, so a gate on it would never fire there, or fire every tick.
+        if (!world.isRemote && world.getTotalWorldTime() % 10 == 0) {
             IBlockState state = world.getBlockState(pos);
             boolean detectedAtm = false;
 

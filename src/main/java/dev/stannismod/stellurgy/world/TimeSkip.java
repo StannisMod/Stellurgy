@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.mixin.WorldServerSleepAccessor;
 import dev.stannismod.stellurgy.network.PacketSpaceClockSync;
+import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
@@ -29,12 +30,19 @@ public final class TimeSkip {
     private TimeSkip() {
     }
 
-    /** Move the universe {@code ticks} forward and tell every client at once (C16 CLOCK-8). */
+    /**
+     * Move the universe {@code ticks} forward, carry every ship in flight through them (C16 CLOCK-7), and
+     * tell every client at once (C16 CLOCK-8).
+     */
     public static void skip(MinecraftServer server, long ticks) {
         if (ticks <= 0L) {
             return;
         }
         Stellurgy.serverState().skipSpaceClock(ticks);
+        SpaceSubsystem space = Stellurgy.spaceSubsystem();
+        if (space != null) {
+            space.transit.carryThrough(ticks);
+        }
         for (EntityPlayerMP player : server.getPlayerList().getPlayers()) {
             PacketHandler.sendToPlayer(PacketSpaceClockSync.current(), player);
         }

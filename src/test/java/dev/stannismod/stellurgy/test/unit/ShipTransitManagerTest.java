@@ -1274,4 +1274,90 @@ public class ShipTransitManagerTest {
         assertEquals("...and where in it the hull actually landed",
                 HyperspaceTiles.tilePos(r.laneIndex), r.hyperAnchor);
     }
+
+    /** Ticks of the skip: long enough to move every flight, short of any arrival (distance / speed). */
+    private static final long SKIP_TICKS = 400L;
+
+    /**
+     * Pins INV-SPC-21 where the skip meets the offline-progress gate (MECH-SPC-15): through the manager, a
+     * skip of Δ ticks leaves every flight where Δ of the manager's own ticks leave it, under the crew-online
+     * gate — an unmanned flight and a manned one with a member online are carried, a manned one whose whole
+     * crew is offline is not. Two managers built alike, one skipped and one ticked; the verdict is their
+     * agreement ship by ship, and that the carried ones moved at all.
+     */
+    @Pins("INV-SPC-21")
+    @RedWitness(member = "ShipTransitManager#carryThrough",
+            at = "if (offlineProgress != null && !offlineProgress.advances(t.crew)) { continue; }",
+            replacedBy = "", fails = "INV-SPC-21: ship crew-offline", on = "2026-10-25")
+    @RedWitness(member = "ShipTransitManager#carryThrough",
+            at = "t.integrator = t.integrator.carry(t.speed, ticks);", replacedBy = "",
+            fails = "INV-SPC-21: ship unmanned", on = "2026-10-25")
+    @Test
+    public void aSkipCarriesEveryFlightItsGateLetsAdvance() {
+        UUID online = UUID.randomUUID();
+        UUID offline = UUID.randomUUID();
+        String[] ships = {"unmanned", "crew-online", "crew-offline"};
+        ShipTransitManager skipped = flyingFleet(online, offline);
+        ShipTransitManager ticked = flyingFleet(online, offline);
+
+        skipped.carryThrough(SKIP_TICKS);
+        for (long k = 0; k < SKIP_TICKS; k++) {
+            ticked.tick();
+        }
+
+        List<TransitRecord> a = skipped.exportTransits();
+        List<TransitRecord> b = ticked.exportTransits();
+        assertEquals("arrangement: no flight arrived in either", ships.length, a.size());
+        assertEquals("arrangement: no flight arrived in either", ships.length, b.size());
+        for (int i = 0; i < ships.length; i++) {
+            assertEquals("INV-SPC-21: ship " + ships[i] + " — a skip flies what its ticks fly",
+                    b.get(i).travelledBlocks, a.get(i).travelledBlocks);
+        }
+        assertTrue("arrangement: the ticked unmanned flight moved", b.get(0).travelledBlocks > 0L);
+        assertEquals("arrangement: the ticked flight whose crew is offline stood still", 0L, b.get(2).travelledBlocks);
+    }
+
+    /** Three flights restored into a fresh manager under the crew-online gate, in a fixed order. */
+    private static ShipTransitManager flyingFleet(UUID online, UUID offline) {
+        SlotBinder noSlots = new SlotBinder() {
+            @Override public int[] slotDims() { return new int[0]; }
+            @Override public void load(int dimId, GalacticCoord cell) { }
+            @Override public void unload(int dimId) { }
+            @Override public void discard(int dimId) { }
+            @Override public void deleteStore(String cellKey) { }
+        };
+        ShipTransitManager.Crosser noCrossing = new ShipTransitManager.Crosser() {
+            @Override
+            public ShipCrossingService.Crossed departToHyperspace(int srcSlotDim, BlockPos srcAnchor, String shipId,
+                                                                  HyperspaceTiles.Tile tile) {
+                return null;
+            }
+
+            @Override
+            public ShipCrossingService.Crossed arriveFromHyperspace(String shipId, HyperspaceTiles.Tile tile,
+                                                                    BlockPos hyperAnchor, int targetSlotDim) {
+                return null;
+            }
+        };
+        ShipTransitManager manager = new ShipTransitManager(
+                new SpaceManager(noSlots, () -> 0L, new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0L, 0)),
+                new HyperspaceTiles(), noCrossing);
+        manager.setOfflineProgress(new OfflineProgress(OfflineProgress.Mode.CREW_ONLINE, online::equals));
+        List<UUID> none = new ArrayList<>();
+        List<UUID> withOnline = new ArrayList<>();
+        withOnline.add(offline);
+        withOnline.add(online);
+        List<UUID> allOffline = new ArrayList<>();
+        allOffline.add(offline);
+        GalacticCoord from = GalacticCoord.ofAbsolute(0, 0, 0);
+        GalacticCoord to = GalacticCoord.ofAbsolute(1_000_000, 0, 0);
+        // 10 blocks a tick against a million: 400 ticks fly 4 000, nowhere near an arrival.
+        manager.importTransit(new TransitRecord("unmanned", from, to, 1_000_000L, 0L, 0L, 0L, 10L, none,
+                new NBTTagCompound()));
+        manager.importTransit(new TransitRecord("crew-online", from, to, 1_000_000L, 0L, 0L, 0L, 10L, withOnline,
+                new NBTTagCompound()));
+        manager.importTransit(new TransitRecord("crew-offline", from, to, 1_000_000L, 0L, 0L, 0L, 10L, allOffline,
+                new NBTTagCompound()));
+        return manager;
+    }
 }

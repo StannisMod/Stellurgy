@@ -1,7 +1,7 @@
 ---
 id: space/hyperspace-and-persistence
 parent: space/00-overview.md
-covers: MECH-SPC-09, 10, 15..19 · INV-SPC-03, 05, 07, 08, 09, 11, 12, 13, 14, 18
+covers: MECH-SPC-09, 10, 15..19 · INV-SPC-03, 05, 07, 08, 09, 11, 12, 13, 14, 18, 21
 ---
 
 # space — hyperspace, the ledger, the crew and a restart
@@ -180,6 +180,12 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
   (`LoginRestore.java:159-234`; `LoginRestoreTest.java:270`).
 - **INV-SPC-14** [V] Hyperspace's saved content is named after the world, never after the per-boot dimension id
   (`SpaceSlotPool.java:403-405`; `HyperspaceSurvivesARestartTest.java:201`).
+- **INV-SPC-21 [T][SYS]** A time skip of Δ ticks carries a flight exactly as Δ ticks of the per-tick advance
+  would — the blocks flown grow by speed·Δ, never past the priced distance — under the offline-progress gate as it
+  reads at the skip; a flight the skip completes arrives on the next tick through the ordinary arrival
+  (`ShipTransit.java:97-112`, `ShipTransitManager.java:794-806`, called from `TimeSkip#skip`) [T]
+  `ShipTransitTest#aSkipFliesWhatItsTicksWouldFly`, `ShipTransitManagerTest#aSkipCarriesEveryFlightItsGateLetsAdvance`.
+  FOR: C16 CLOCK-7 (a ship in transit is carried through the skipped span).
 - **INV-SPC-18** [V] Statics here are effectively final and written once by the mod in pre-init (`SpaceSlotPool.java:69`,
   `HyperspaceWorld.java:35`); every other per-server fact lives in `SpaceSubsystem` / `ServerState` and dies with the
   server (`SlotBindings.java:17`; `SpaceSubsystemOwnershipTest.java:58,86`).

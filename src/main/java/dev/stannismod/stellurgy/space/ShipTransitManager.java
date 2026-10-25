@@ -785,6 +785,26 @@ public final class ShipTransitManager {
         }
     }
 
+    /**
+     * Carry every flight through a time skip of {@code ticks} (C16 CLOCK-7): each flies what that many
+     * {@link #tick()}s would have flown it, under the offline-progress gate as it reads now — a sleeping
+     * crew is online. Only the distance is carried; a flight that the skip completes arrives on the next
+     * tick, through the arrival above, at a target that rode its body through the skip.
+     */
+    public void carryThrough(long ticks) {
+        if (ticks <= 0L) {
+            return;
+        }
+        long now = clock.getAsLong();
+        for (Transit t : transits.values()) {
+            if (offlineProgress != null && !offlineProgress.advances(t.crew)) {
+                continue;
+            }
+            t.integrator = t.integrator.carry(t.speed, ticks);
+            t.lastTicked = now;
+        }
+    }
+
     /** Whether {@code shipId} is currently in transit. */
     public boolean isInTransit(String shipId) {
         return transits.containsKey(shipId);

@@ -142,10 +142,10 @@ stands the ship off from where the target was, by the difference between the two
 | CLOCK-5.3 | `neitherClockMovesTheOther` — both directions, each with its own arrangement assertion that the clock it drove really jumped. The class owns its server: one leg hammers the overworld's counter by 20 M ticks, which is exactly the collateral this clause removes from shared servers. **Red at "the overworld jumped 20 000 000 and the space clock moved 20 000 001"** with `spaceClock()` re-pointed at the overworld |
 | CLOCK-5.4 | no restart witness: the durability half is `[V]` only — staged on save at `SpaceSubsystemEvents.java:164-169`, written and read under `spaceClock` at `ShipLedgerData.java:248,276`, restored on start at `SpaceSubsystem.java:302-303`. The unit tier pins the decisions around it: `ShipLedgerDataTest.aSaveWithNoClockInItReadsBackAsTickZero` and `.aRefusedFleetWriteDoesNotRollTheClockBack` |
 
-| CLOCK-6 | partly built: the law in `environment` (MECH-ENV-06/07, `PlanetEnvironmentLawsTest`), the time of day read from it (world-gen MECH-WGEN-31, `TimeCommandMovesTheUniverseTest`) |
-| CLOCK-7 | `/time` → `TimeCommandMovesTheUniverseTest`; sleep → `PlanetBedSleepClientGroupTest` (one player: the server-wide mode met), its decision → `SleepWakeTimeTest` (MECH-WGEN-32); the transit not yet |
+| CLOCK-6 | built: the law in `environment` (MECH-ENV-06/07, `PlanetEnvironmentLawsTest`), the time of day read from it (world-gen MECH-WGEN-31, `TimeCommandMovesTheUniverseTest`) |
+| CLOCK-7 | `/time` → `TimeCommandMovesTheUniverseTest`; sleep → `PlanetBedSleepClientGroupTest` (one player: the server-wide mode met), its decision → `SleepWakeTimeTest` (MECH-WGEN-32); the transit → space INV-SPC-21 (`ShipTransitTest`, `ShipTransitManagerTest`), the law and the gate; its wiring from a skip is unwitnessed |
 | CLOCK-8 | built (`TimeSkip#skip`), not pinned yet |
-| CLOCK-9 | not built — the distance below |
+| CLOCK-9 | built (the two time-of-day gates read total time), not pinned yet |
 
 ## CLOCK-6..9 — the distance from the code (design stage)
 
@@ -155,19 +155,17 @@ What the code already does that these rest on: orbits already run on the space c
 span (`SatelliteLife#bringUpTo`); a planet's celestial angle is already a pure function of a time and a
 period (`WorldProviderPlanet#calculateCelestialAngle`); the skip locks exist (`TimeSkipPolicy`).
 
-Not written yet:
+Where each stands:
 
 - **CLOCK-6** — written: the law (`environment` MECH-ENV-06/07, `SolarDay`, bodies turning with their
   orbits), the space model turning by it (`SatellitePlacement#rotationOf`), and a body world's time of day
   read from it at meridian 0 on both sides (`world-gen` MECH-WGEN-31).
 - **CLOCK-7** — written for sleep and `/time` (`TimeSkip`, `TimeCommandGuard`, world-gen MECH-WGEN-32; the
-  locks on by default); not yet the transit carried through a skip.
+  locks on by default), and the transit carried (`TimeSkip#skip` → `ShipTransitManager#carryThrough`, space
+  INV-SPC-21).
 - **CLOCK-8** — written (`TimeSkip#skip` sends every player the clock at the skip).
-- **CLOCK-9** — two time-of-day gates: `TileAtmosphereDetector` (`getWorldTime() % 10`),
-  `TileRocketServiceStation` (`% 20`).
-
-More not written: a ship's transit is integrated
-per tick (`ShipTransitManager`) and a skip does not carry it.
+- **CLOCK-9** — written: the two time-of-day gates, `TileAtmosphereDetector` (`% 10`) and
+  `TileRocketServiceStation` (`% 20`), read the world's total time.
 
 ## CLOCK-6..9 — edge cases of the stress-test, as ruled (2026-10-24)
 
