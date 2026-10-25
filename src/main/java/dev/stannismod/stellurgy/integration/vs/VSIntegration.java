@@ -1278,6 +1278,15 @@ public final class VSIntegration {
     }
 
     /**
+     * Whether the physics substrate steps the ship whose block {@code pos} is — false while a ship just
+     * assembled or pasted is still waiting out its initial ticks or its surrounding chunks, when it
+     * exists and does not move. False for a block no ship holds.
+     */
+    public static boolean shipPhysicsSteps(World world, BlockPos pos) {
+        return VSBridge.shipPhysicsSteps(world, pos);
+    }
+
+    /**
      * The world-frame linear velocity {@code [x,y,z]} (blocks/second) of the ship managing the block
      * at {@code pos}, or {@code null} when no ship manages it. Used to capture the
      * live velocity as a Flight-Assist setpoint on re-enable. Only Stellurgy-core/MC types cross the gate.

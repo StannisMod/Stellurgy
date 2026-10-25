@@ -2971,6 +2971,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("kind", held.intent() == null ? null : held.intent().kind().name());
             info.put("target", held.intent() == null ? null : held.intent().target().toString());
             info.put("refusal", held.refusal() == null ? null : held.refusal().name());
+            info.put("declinedBy", held.declinedBy());
             info.put("arrived", held.intent() == null ? null : held.arrived());
             info.put("leg", held.leg() == null ? null : held.leg().name());
             info.put("worldTick", world.getTotalWorldTime());

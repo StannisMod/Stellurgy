@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.Window;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
+import dev.stannismod.stellurgy.universe.UniverseScale;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -23,18 +24,19 @@ import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
  * A craft flying the motion intent its flight computer was handed, in a running game: it arrives
  * alongside the ship it was sent to and stops, outside both hulls; a hull with no reverse thrust turns
- * over and arrives too; a hull with no thrust at all is refused; a target in another system is refused
- * as needing a jump and the craft hovers; an order whose course crosses a cell face survives the
- * crossing; on a planet a craft sent to a point of the surface lands there, a hull that pushes along
- * heave alone by leaning into its thrust; and an order for another world of the system is flown across
- * the crossings between — up from the overworld to a ship in space, and down from space to a point of
- * the overworld (ship-guidance INV-GDN-01, -03, -07..10, -14, -20, -21).
+ * over and arrives too; a hull with no thrust at all is refused; an order for another system whose jump
+ * the drive cannot make is refused naming what declined it, and the craft hovers; an order whose course
+ * crosses a cell face survives the crossing; on a planet a craft sent to a point of the surface lands
+ * there, a hull that pushes along heave alone by leaning into its thrust; an order for another world of
+ * the system is flown across the crossings between — up from the overworld to a ship in space, and down
+ * from space to a point of the overworld; an order for a ship in another system jumps there and arrives;
+ * and a way through the shell of a body the order does not lead into goes around it (ship-guidance
+ * INV-GDN-01, -03, -07..10, -14, -20, -21, -24..26).
  *
  * <p>NEW-GROUP: guidance — the flight computer flying an ORDER with nobody at the stick. No existing
  * group holds it: the flight-model group measures what a hull can do under a command a probe writes
@@ -66,6 +68,12 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
 
     /** How far above the site the fixture reaches: its structure tower, six courses above the pad. */
     private static final int HEIGHT = 7;
+
+    /**
+     * How far above the site the jump craft's fixture reaches: its structure tower stands seven courses
+     * above the pad, one over the highest machine of its drive bay (the fixture verb's own layout).
+     */
+    private static final int JUMP_CRAFT_HEIGHT = 8;
 
     /**
      * The deadline of the arrival and refusal LINKS, in server ticks. Expiry means the record never
@@ -219,6 +227,34 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     private static final double BESIDE_THE_ENTRY = 200.0D;
 
     /**
+     * The deadline of the link from an order to the jump it needs, in server ticks: the order asks the
+     * drive on its first tick, the drive winds up for {@code DriveTuning.SPOOL_TICKS} and commits at its
+     * end. Four times the wind-up. Expiry means no jump came.
+     */
+    private static final int JUMP_LINK_TICKS = 4 * dev.stannismod.stellurgy.hyperdrive.DriveTuning.SPOOL_TICKS;
+
+    /**
+     * How far inside the descent shell the straight way of INV-GDN-25 dips, blocks, at its middle; an input
+     * — deep enough that no rounding of where the crafts are put can lift the way out of the shell.
+     */
+    private static final double GRAZE_DEEP = 100.0D;
+
+    /**
+     * How far to either side of the dip the craft and its ship are put, blocks, along a line square to the
+     * body; an input. For the dip's depth {@code d} below a shell of radius {@code r} both ends stand
+     * outside the shell once this exceeds {@code √(2rd)} — 2 276 for the overworld's 25 913 — so 3 000 puts
+     * them some 70 blocks out, which the scenario asserts before the order.
+     */
+    private static final double GRAZE_ALONG = 3_000.0D;
+
+    /**
+     * The deadline of INV-GDN-25's arrival link, in server ticks: the way around is barely longer than the
+     * 6 000-block chord between the two places, 150 engine seconds at the craft's 40 blocks a second —
+     * 3 000 ticks at the physics clock's pace. Four times that. Expiry means no arrival came.
+     */
+    private static final int AROUND_LINK_TICKS = 12_000;
+
+    /**
      * How near the ring the ledger may read a craft the entry has just put on it, blocks: the arrival radius
      * (2) within which its orbit order holds it there, plus the ledger's whole-block
      * rounding of the craft's position and of the body's address, under √3 each (3.46).
@@ -325,42 +361,62 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
         }
     }
 
+    /**
+     * INV-GDN-09: a craft in a cell of another system than the overworld's, told {@code GO_TO} a point of
+     * the overworld's surface, flies the jump leg — and its drive cannot make the jump: its bank was never
+     * charged, so the jump gate declines it on the capacitor. The order is refused within 10 s as a declined
+     * jump, naming the clause the gate itself declines this ship's jump with; the slot reads REFUSED; and
+     * the craft then hovers although its pilot left it a cruise.
+     *
+     * <p>What is ARRANGED: the craft's place (a cell of another system, its ledger row there — the gate's
+     * "position known"), the uncharged bank (asserted); what is the subject: the computer's own tick arming
+     * and pressing for the order, the gate's verdict reaching the slot as its refusal. The gate is read the
+     * way the console reads it ({@code drive observe}) after the refusal, when the order has aimed it.</p>
+     */
     @Test
     @Pins("INV-GDN-09")
     @RedWitness(verdict = "refused at all", member = "TileAdvancedFlightComputer#flyMotionIntent",
             at = "} else if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.REFUSED) {",
             replacedBy = "} else if (step.event() == null) {", fails = "INV-GDN-09 refused at all", on = "2026-10-21")
-    @RedWitness(verdict = "reason", member = "MotionSlot#refusalFor",
-            at = "return Refusal.NEEDS_A_JUMP;", replacedBy = "return Refusal.TARGET_NOT_FOUND;",
-            fails = "INV-GDN-09 reason", on = "2026-10-24")
+    @RedWitness(verdict = "reason", member = "MotionSlot#fly",
+            at = "shortBy = Refusal.JUMP_DECLINED;", replacedBy = "shortBy = Refusal.TARGET_NOT_FOUND;",
+            fails = "INV-GDN-09 reason", on = "2026-10-25")
+    @RedWitness(verdict = "the clause", member = "TileAdvancedFlightComputer#jumpForGuidance",
+            at = "return pressed.langKey();", replacedBy = "return \"msg.jumpgate.nodrive\";",
+            fails = "INV-GDN-09 the clause", on = "2026-10-25")
     @RedWitness(verdict = "of another system", member = "WorldSurroundings#sphereAbout",
-            at = "if (!systemOf(body.get().name()).equals(systemHere())) {", replacedBy = "if (false) {",
-            fails = "INV-GDN-09 refused at all", on = "2026-10-24")
+            at = "if (!same) {", replacedBy = "if (false) {",
+            fails = "INV-GDN-09 refused at all", on = "2026-10-25")
     @RedWitness(verdict = "within", member = "MotionSlot#fly",
             at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks >= 10 * REFUSAL_WINDOW_TICKS",
             fails = "INV-GDN-09 within", on = "2026-10-21")
+    @RedWitness(verdict = "marked refused", member = "MotionSlot#fly",
+            at = "state = State.REFUSED;", replacedBy = "state = State.ACTIVE;",
+            fails = "INV-GDN-09 marked refused", on = "2026-10-25")
     @RedWitness(verdict = "hovers", member = "MotionSlot#holdsAnIntent",
             at = "return state != State.EMPTY;", replacedBy = "return state == State.ACTIVE;",
             fails = "INV-GDN-09 hovers", on = "2026-10-21")
     @Wait(shape = Wait.Shape.WINDOW, at = "Window.over(",
             why = "a hover is the absence of motion over time; the refusal record says the order was refused,"
                     + " not what the craft does afterwards, and no record is published per tick of hovering")
-    public void aTargetInAnotherWorldIsRefusedForACrossingAndTheCraftHovers() throws Exception {
-        // A cell of another system than the overworld's: reaching the overworld from it needs the jump, the
-        // leg not flown. (The name predates the legs: the crossing it is refused for is that jump.)
+    public void aJumpTheGateDeclinesRefusesTheOrderNamingTheClauseAndTheCraftHovers() throws Exception {
         CellInfo elsewhere = CellInfo.atSector(c -> read(c).raw(), CELL_ELSEWHERE, 0L, 0L);
         Reply launch = read("stellurgytest space launch-cell 0").requireOk("read the overworld's cell");
         CellInfo home = CellInfo.atKey(c -> read(c).raw(), launch.text("cellKey"));
         requireArranged("the cell must be of another system than the overworld's: " + elsewhere + " | " + home,
-                home.anchor != null && !home.anchor.equals(elsewhere.anchor));
+                home.anchor != null && elsewhere.anchor != null && !home.anchor.equals(elsewhere.anchor));
         int slotDim = emptyCell(CELL_ELSEWHERE, "the cell a craft is sent to a planet's surface from");
         Events events = events();
         long buildMark = events.mark();
         List<String> built = new ArrayList<>();
         try {
-            AssembledCraft craft = build(plot().inDimension(slotDim).site(), "with-pilot-seat",
-                    "a craft sent to another world");
+            AssembledCraft craft = buildJumpCraft(plot().inDimension(slotDim).site(),
+                    "a craft with an uncharged drive, sent to another system");
             built.add(craft.durable);
+            settle(craft, CELL_ELSEWHERE, slotDim);
+            Reply bank = driveOf(craft);
+            requireArranged("the bank must hold less than the burst that opens a window: " + bank,
+                    bank.integer("capacitors") > 0 && bank.longInteger("charge") < bank.longInteger("burstCost"));
 
             long mark = events.mark();
             Reply issued = arrange("stellurgytest vs motion-go-to-surface-by-id " + slotDim + " " + craft.physicsId
@@ -378,11 +434,19 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
             String refused = events.awaitRecordWithFields(mark, "motion_refused",
                     "INV-GDN-09 refused at all — the order must be refused", FLIGHT_LINK_TICKS, "ship",
                     craft.durable);
-            assertEquals("INV-GDN-09 reason: refused as needing a jump: " + refused, "NEEDS_A_JUMP",
+            assertEquals("INV-GDN-09 reason: refused as a declined jump: " + refused, "JUMP_DECLINED",
                     Events.text(refused, "reason"));
+            Reply gate = driveOf(craft);
+            requireArranged("the gate must decline this ship's jump on its uncharged bank: " + gate,
+                    !gate.bool("allowed") && dev.stannismod.stellurgy.navigation.JumpGate.MSG_CAPACITOR_LOW
+                            .equals(gate.text("message")));
+            assertEquals("INV-GDN-09 the clause: the refusal names what the gate declines the jump with: " + refused
+                    + " | " + gate, gate.text("message"), Events.text(refused, "declinedBy"));
             long took = (long) Events.number(refused, "tick") - issuedAt;
             assertTrue("INV-GDN-09 within: refused " + took + " ticks after the order, not within "
                     + REFUSED_WITHIN_TICKS + ": " + refused, took <= REFUSED_WITHIN_TICKS);
+            Reply slot = read("stellurgytest vs motion-read-by-id " + slotDim + " " + craft.physicsId);
+            assertEquals("INV-GDN-09 marked refused: " + slot, "REFUSED", slot.text("state"));
 
             Reply kept = read("stellurgytest vs ff-cruise-read-by-id " + slotDim + " " + craft.physicsId);
             requireArranged("the cruise the pilot left must still be there to be flown: " + kept,
@@ -398,6 +462,7 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
                     + ARRIVED_SLOWER_THAN + ": " + hover, speed < ARRIVED_SLOWER_THAN);
         } finally {
             dispose(events, buildMark, built);
+            release(new long[]{CELL_ELSEWHERE, 0L, 0L});
         }
     }
 
@@ -406,10 +471,10 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     @RedWitness(verdict = "arrival", member = "TileAdvancedFlightComputer#writeToNBT",
             at = "nbt.setTag(NBT_MOTION, slot);", replacedBy = "",
             fails = "INV-GDN-03 arrival", on = "2026-10-21")
-    @RedWitness(verdict = "crossed", member = "WorldSurroundings#inSpaceAt",
-            at = "origin[0] + fromHere.dx()",
-            replacedBy = "origin[0] + fromHere.dx() - dev.stannismod.stellurgy.space.CellSeam.REENTRY_DEPTH",
-            fails = "INV-GDN-03 crossed", on = "2026-10-21")
+    @RedWitness(verdict = "crossed", member = "GuidanceTarget#throughTheSeam",
+            at = "aim[i] = Math.max(aim[i], FIRST_CARRIED);",
+            replacedBy = "aim[i] = Math.min(aim[i], FIRST_CARRIED - 2L);",
+            fails = "INV-GDN-03 crossed", on = "2026-10-25")
     @RedWitness(verdict = "outside both hulls", member = "MotionIntent#aimFrom",
             at = "placed.keepOut() + clearance", replacedBy = "clearance",
             fails = "INV-GDN-03 outside both hulls", on = "2026-10-21")
@@ -453,18 +518,24 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
             requireArranged("the craft must stand past the face and short of the carry: " + start,
                     start.x > GalacticCoord.HALF_CELL && start.x < GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
 
+            String beyondKey = CellInfo.atSector(c -> read(c).raw(), CELL_CROSSES + 1L, 0L, 0L).cellKey;
             long mark = events.mark();
             Reply issued = arrange("stellurgytest vs motion-go-to-ship-by-id " + slotDim + " " + craft.physicsId
                     + " " + target.durable);
             requireArranged("the order must be in the slot: " + issued,
                     issued.bool("afcResolved") && "ACTIVE".equals(issued.text("state")));
 
+            // Led across the face by the order: the seam's own record of carrying THIS craft into the cell
+            // its target is in. Nothing else moves it — the order is the only thing flying it.
+            events.awaitRecordWithFields(mark, "ship_entered_cell",
+                    "INV-GDN-03 crossed — the craft must be carried into the cell the ship it was sent to is in",
+                    CROSSING_LINK_TICKS, "ship", craft.durable, "destination", beyondKey);
             String arrived = events.awaitRecordWithFields(mark, "motion_arrived",
                     "INV-GDN-03 arrival — the craft must report it got alongside the ship it was sent to",
                     CROSSING_LINK_TICKS, "ship", craft.durable);
             int arrivedIn = (int) Events.number(arrived, "dim");
-            assertNotEquals("INV-GDN-03 crossed: the craft arrived without leaving its cell's world: "
-                    + arrived, slotDim, arrivedIn);
+            requireArranged("the craft must have arrived in the world of the cell it was carried into: " + arrived,
+                    arrivedIn == beyondDim);
             String naming = OwnShip.latestNaming(events, buildMark, craft.durable);
             requireArranged("the craft must have been named in the world it arrived in: " + naming,
                     naming != null && (int) Events.number(naming, "dim") == arrivedIn);
@@ -876,6 +947,320 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     }
 
     /**
+     * INV-GDN-24: a craft in the last cell of the overworld's system told {@code GO_TO} a ship in the next
+     * cell along +X — the first cell of the neighbouring system — jumps there with nobody at the helm, and
+     * arrives alongside the ship as INV-GDN-01 measures an arrival.
+     *
+     * <p>The overworld's system's neighbourhood reaches {@code UniverseScale.DEFAULT_SPACING_CELLS / 2}
+     * sectors to each side of its anchor; that the first cell is of it and the second of another system is
+     * asserted before anything is built (measured 2026-10-25: the next cell resolves to the system anchored
+     * at {@code 3525313_0_0}, logs/t616b-server1.log). The scenario itself is {@link #jumpToAShipInTheNextCell}.</p>
+     */
+    @Test
+    @Pins("INV-GDN-24")
+    @RedWitness(verdict = "jumped", member = "WorldSurroundings#sameSystem",
+            at = "return systemOf(reg, there).equals(systemOf(reg, here()));", replacedBy = "return true;",
+            fails = "INV-GDN-24 jumped", on = "2026-10-25")
+    @RedWitness(verdict = "armed", member = "TileAdvancedFlightComputer#jumpForGuidance",
+            at = "computer.setTargetBody(destination.body(), destination.address());", replacedBy = "",
+            fails = "INV-GDN-24 jumped", on = "2026-10-25")
+    @RedWitness(verdict = "arrival", member = "TileAdvancedFlightComputer#writeToNBT",
+            at = "nbt.setTag(NBT_MOTION, slot);", replacedBy = "",
+            fails = "INV-GDN-24 arrival", on = "2026-10-25")
+    @RedWitness(verdict = "outside both hulls", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "clearance",
+            fails = "INV-GDN-24 outside both hulls", on = "2026-10-25")
+    @RedWitness(verdict = "standoff", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut() + 3.0D * clearance",
+            fails = "INV-GDN-24 standoff", on = "2026-10-25")
+    @RedWitness(verdict = "rest", member = "MotionSlot#fly",
+            at = "magnitude(craft.velocity) <= ARRIVAL_SPEED", replacedBy = "magnitude(craft.velocity) >= 0.0D",
+            fails = "INV-GDN-24 rest", on = "2026-10-25")
+    public void aCraftToldToGoToAShipInAnotherSystemJumpsThereAndArrives() throws Exception {
+        CellInfo home = homeCell();
+        long[] anchor = sectorOf(home.anchor);
+        long edge = anchor[0] + UniverseScale.DEFAULT_SPACING_CELLS / 2;
+        long[] fromSector = {edge, anchor[1], anchor[2]};
+        long[] toSector = {edge + 1L, anchor[1], anchor[2]};
+        CellInfo from = CellInfo.atSector(c -> read(c).raw(), fromSector[0], fromSector[1], fromSector[2]);
+        CellInfo to = CellInfo.atSector(c -> read(c).raw(), toSector[0], toSector[1], toSector[2]);
+        requireArranged("the craft's cell must be of the overworld's system and the ship's of another: "
+                + from + " | " + to, home.anchor.equals(from.anchor) && to.anchor != null && !to.anchor.equals(home.anchor));
+        jumpToAShipInTheNextCell(fromSector, toSector, to.cellKey, "INV-GDN-24");
+    }
+
+    /**
+     * INV-GDN-26: a craft in the void told {@code GO_TO} a ship in the next cell of the void — every cell of
+     * the void a system of its own, so the ship is in another system — jumps there with nobody at the helm,
+     * and arrives alongside it as INV-GDN-01 measures an arrival.
+     *
+     * <p>The two cells are the first two past the overworld's system's neighbourhood along one of its six
+     * axes — every axis read, and the first whose two cells no system's neighbourhood holds taken; that one
+     * exists is asserted. The scenario itself is {@link #jumpToAShipInTheNextCell}.</p>
+     */
+    @Test
+    @Pins("INV-GDN-26")
+    @RedWitness(verdict = "jumped", member = "WorldSurroundings#systemOf",
+            at = "\"void \" + at.cellKey()", replacedBy = "\"void\"",
+            fails = "INV-GDN-26 jumped", on = "2026-10-25")
+    @RedWitness(verdict = "arrival", member = "TileAdvancedFlightComputer#writeToNBT",
+            at = "nbt.setTag(NBT_MOTION, slot);", replacedBy = "",
+            fails = "INV-GDN-26 arrival", on = "2026-10-25")
+    @RedWitness(verdict = "outside both hulls", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "clearance",
+            fails = "INV-GDN-26 outside both hulls", on = "2026-10-25")
+    @RedWitness(verdict = "standoff", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut() + 3.0D * clearance",
+            fails = "INV-GDN-26 standoff", on = "2026-10-25")
+    @RedWitness(verdict = "rest", member = "MotionSlot#fly",
+            at = "magnitude(craft.velocity) <= ARRIVAL_SPEED", replacedBy = "magnitude(craft.velocity) >= 0.0D",
+            fails = "INV-GDN-26 rest", on = "2026-10-25")
+    public void aCraftInTheVoidToldToGoToAShipInTheNextVoidCellJumpsThereAndArrives() throws Exception {
+        CellInfo home = homeCell();
+        long[] anchor = sectorOf(home.anchor);
+        long reach = UniverseScale.DEFAULT_SPACING_CELLS / 2;
+        long[][] fromCandidates = new long[6][];
+        long[][] toCandidates = new long[6][];
+        CellInfo[] froms = new CellInfo[6];
+        CellInfo[] tos = new CellInfo[6];
+        for (int i = 0; i < 6; i++) {
+            int axis = i / 2;
+            long sign = i % 2 == 0 ? 1L : -1L;
+            fromCandidates[i] = anchor.clone();
+            toCandidates[i] = anchor.clone();
+            fromCandidates[i][axis] += sign * (reach + 1L);
+            toCandidates[i][axis] += sign * (reach + 2L);
+            froms[i] = CellInfo.atSector(c -> read(c).raw(), fromCandidates[i][0], fromCandidates[i][1], fromCandidates[i][2]);
+            tos[i] = CellInfo.atSector(c -> read(c).raw(), toCandidates[i][0], toCandidates[i][1], toCandidates[i][2]);
+        }
+        int chosen = -1;
+        StringBuilder read = new StringBuilder();
+        for (int i = 5; i >= 0; i--) {
+            read.append(froms[i]).append(" -> ").append(tos[i]).append(" | ");
+            if (froms[i].anchor == null && tos[i].anchor == null) {
+                chosen = i;
+            }
+        }
+        requireArranged("two neighbouring cells of the void must lie past the overworld's system along one axis: "
+                + read, chosen >= 0);
+        jumpToAShipInTheNextCell(fromCandidates[chosen], toCandidates[chosen], tos[chosen].cellKey, "INV-GDN-26");
+    }
+
+    /** The overworld's cell, which must be of a system. */
+    private CellInfo homeCell() throws Exception {
+        Reply launch = read("stellurgytest space launch-cell 0").requireOk("read the overworld's cell");
+        CellInfo home = CellInfo.atKey(c -> read(c).raw(), launch.text("cellKey"));
+        requireArranged("the overworld's cell must be of a system: " + home, home.anchor != null);
+        return home;
+    }
+
+    /** The sector triple a galactic cell key {@code sx_sy_sz} names. */
+    private static long[] sectorOf(String cellKey) {
+        String[] parts = cellKey.split("_");
+        return new long[]{Long.parseLong(parts[0]), Long.parseLong(parts[1]), Long.parseLong(parts[2])};
+    }
+
+    /**
+     * The jump scenario of INV-GDN-24 and -26: a craft with a jump drive in the cell of {@code fromSector},
+     * a ship in the neighbouring cell of {@code toSector} (key {@code toKey}), the craft told {@code GO_TO}
+     * the ship; it must jump there — the jump's own record, naming that cell — and arrive alongside it.
+     *
+     * <p>What is ARRANGED: both crafts' places and ledger rows (the gate's "position known"), and the craft's
+     * charged bank (a charge no player's start holds, by the drive's own fill), with its window holding the
+     * whole hull — both asserted. What is the subject: the craft's computer arming its navigation computer
+     * and committing the jump for the order, the jump carrying the order, and the arrival; nothing here
+     * presses a key or touches the craft after the order. The jump goes through hyperspace (measured
+     * 2026-10-25, both scenarios). What this does NOT see: the order's leg while the craft is in hyperspace;
+     * a jump short enough to be crossed directly; a body target in another system.</p>
+     */
+    private void jumpToAShipInTheNextCell(long[] fromSector, long[] toSector, String toKey, String anchorId)
+            throws Exception {
+        int fromDim = emptyCellAt(fromSector, "the cell the craft starts in");
+        int toDim = emptyCellAt(toSector, "the next cell, where the ship it is sent to is");
+        Events events = events();
+        long buildMark = events.mark();
+        List<String> built = new ArrayList<>();
+        try {
+            AssembledCraft craft = buildJumpCraft(plot().inDimension(fromDim).site(), "a craft with a jump drive");
+            built.add(craft.durable);
+            AssembledCraft target = build(plot().inDimension(toDim).site(), "with-pilot-seat",
+                    "the ship it is sent to, in the next cell");
+            built.add(target.durable);
+            settleAt(craft, fromSector, fromDim);
+            settleAt(target, toSector, toDim);
+            double craftReach = hullReach(fromDim, craft.physicsId, "the craft");
+            double targetReach = hullReach(toDim, target.physicsId, "the target");
+            Reply charged = arrange("stellurgytest drive charge " + fromDim + " " + craft.afcX + " " + craft.afcY
+                    + " " + craft.afcZ);
+            requireArranged("the craft's bank must be charged: " + charged, charged.ok());
+            Reply drive = driveOf(craft);
+            requireArranged("the bank must hold the burst that opens a window, and the window the whole hull: "
+                    + drive, drive.longInteger("charge") >= drive.longInteger("burstCost")
+                    && drive.bool("hullMeasured") && drive.longInteger("hullOutsideWindow") == 0L);
+
+            long mark = events.mark();
+            Reply issued = arrange("stellurgytest vs motion-go-to-ship-by-id " + fromDim + " " + craft.physicsId
+                    + " " + target.durable);
+            requireArranged("the order must be in the slot: " + issued,
+                    issued.bool("afcResolved") && "ACTIVE".equals(issued.text("state")));
+
+            events.awaitRecordWithFields(mark, "ship_transit_began",
+                    anchorId + " jumped — the craft must jump, with nobody at the helm", JUMP_LINK_TICKS,
+                    "ship", craft.durable, "destination", toKey);
+            // The flight between two neighbouring cells, at the drive's own speed: their centres a cell apart,
+            // the two places within a cell of them — twice a cell, at most. Measured 2026-10-25: 253 ticks
+            // (logs/t616b-server2.log's server, "transit departed ... ETA 253 ticks").
+            long flight = (long) Math.ceil(2.0D * GalacticCoord.CELL / drive.longInteger("speedBlocksPerTick"));
+            String arrived = events.awaitRecordWithFields(mark, "motion_arrived",
+                    anchorId + " arrival — the craft must report it got alongside the ship in the next cell",
+                    (int) (JUMP_LINK_TICKS + 4L * flight + CROSSING_LINK_TICKS), "ship", craft.durable);
+            assertEquals(anchorId + " arrival in the ship's world: " + arrived, toDim, (int) Events.number(arrived, "dim"));
+            String naming = OwnShip.latestNaming(events, buildMark, craft.durable);
+            requireArranged("the craft must be named in the world it arrived in: " + naming,
+                    naming != null && (int) Events.number(naming, "dim") == toDim);
+            assertAlongside(anchorId, toDim, Events.text(naming, "ship"), craftReach, target, targetReach, arrived);
+        } finally {
+            dispose(events, buildMark, built);
+            release(fromSector);
+            release(toSector);
+        }
+    }
+
+    /**
+     * Give back the hold {@link #emptyCellAt} took on the cell of {@code sector}, so the scenarios after this
+     * one find the slot pool as this one found it.
+     */
+    private void release(long[] sector) throws Exception {
+        arrange("stellurgytest space release " + sector[0] + " " + sector[1] + " " + sector[2])
+                .requireOk("release the cell this scenario occupied");
+    }
+
+    /**
+     * INV-GDN-25: a craft in space told {@code GO_TO} a ship whose straight way from it passes through the
+     * descent shell of a body the order does not lead into — the overworld's, under both — goes around that
+     * shell and arrives alongside the ship as INV-GDN-01 measures an arrival, never descended onto the body.
+     *
+     * <p>The craft gets into space by its own take-off, onto the overworld's entry ring, so the ledger holds
+     * it SETTLED and the one proximity condition is armed for it — the crossing recorder heard that
+     * take-off. Then it and the ship (built in the same cell's world) are moved, each {@link #GRAZE_ALONG}
+     * along the shell to either side of a point {@link #GRAZE_DEEP} inside it, so the straight way between
+     * them dips that deep into the shell while both stand outside it — asserted from where they are, before
+     * the order. What is ARRANGED: the orbit line (lowered, as INV-GDN-20's is), the two places; what is the
+     * subject: the order flown around the shell, and the descent condition never met. What this does NOT
+     * see: a way that must round most of a body (a few kilometres along a 26 000-block shell is a graze);
+     * two shells in the way.</p>
+     */
+    @Test
+    @Pins("INV-GDN-25")
+    @RedWitness(verdict = "never descended", member = "MotionSlot#fly",
+            at = "double[] around0 = aroundTheShells(craft.position, aim, around.shellsBut(placed.entering()));",
+            replacedBy = "double[] around0 = aim;",
+            fails = "INV-GDN-25 arrival", on = "2026-10-25")
+    @RedWitness(verdict = "outside both hulls", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "clearance",
+            fails = "INV-GDN-25 outside both hulls", on = "2026-10-25")
+    @RedWitness(verdict = "standoff", member = "MotionIntent#aimFrom",
+            at = "placed.keepOut() + clearance", replacedBy = "placed.keepOut() + 3.0D * clearance",
+            fails = "INV-GDN-25 standoff", on = "2026-10-25")
+    @RedWitness(verdict = "rest", member = "MotionSlot#fly",
+            at = "magnitude(craft.velocity) <= ARRIVAL_SPEED", replacedBy = "magnitude(craft.velocity) >= 0.0D",
+            fails = "INV-GDN-25 rest", on = "2026-10-25")
+    public void aCraftWhoseWayCrossesAnotherBodysShellGoesAroundItAndArrives() throws Exception {
+        Events events = events();
+        long buildMark = events.mark();
+        List<String> built = new ArrayList<>();
+        String lineToRestore = null;
+        try {
+            FixtureSite site = site();
+            AssembledCraft craft = build(site, "with-pilot-seat", "a craft sent past the overworld's shell");
+            built.add(craft.durable);
+            double craftReach = hullReach(craft.dim, craft.physicsId, "the craft");
+            lineToRestore = lowerTheOrbitLine(craft.dim);
+
+            long upMark = events.mark();
+            Reply pressed = act("stellurgytest space auto-takeoff " + craft.dim + " id " + craft.physicsId);
+            requireArranged("the craft's take-off must be in its slot: " + pressed,
+                    pressed.bool("afcResolved") && "ACTIVE".equals(pressed.text("state")));
+            String up = events.awaitRecordWithFields(upMark, "ship_left_planet",
+                    "the craft must have entered space", CLIMB_LINK_TICKS, "ship", craft.durable);
+            int spaceDim = (int) Events.number(up, "cellDim");
+            String inSpace = OwnShip.latestNaming(events, buildMark, craft.durable);
+            requireArranged("the craft must be named in the world it entered: " + inSpace,
+                    inSpace != null && (int) Events.number(inSpace, "dim") == spaceDim);
+            String craftId = Events.text(inSpace, "ship");
+            AssembledCraft target = build(plot().inDimension(spaceDim).site(), "with-pilot-seat",
+                    "the ship it is sent to, on the far side of the shell's edge");
+            built.add(target.durable);
+            double targetReach = hullReach(spaceDim, target.physicsId, "the target");
+
+            // Where the body is, from where the craft entered: its centre, and the two places either side.
+            Reply body = bodyFrom(craft.durable, site.dim);
+            double shell = body.number("shellRadius");
+            double[] bearing = {body.arrayNumber("bearing", 0), body.arrayNumber("bearing", 1),
+                    body.arrayNumber("bearing", 2)};
+            ShipInfo onTheRing = ShipInfo.byId(c -> read(c).raw(), spaceDim, craftId);
+            double[] centre = {onTheRing.x + bearing[0], onTheRing.y + bearing[1], onTheRing.z + bearing[2]};
+            double range = Math.sqrt(bearing[0] * bearing[0] + bearing[1] * bearing[1] + bearing[2] * bearing[2]);
+            double[] out = {-bearing[0] / range, -bearing[1] / range, -bearing[2] / range};
+            double across = Math.hypot(out[0], out[2]);
+            requireArranged("the way out from the body must not be straight up, for a level way across it: " + body,
+                    across > 0.1D);
+            double[] side = {-out[2] / across, 0.0D, out[0] / across};
+            double[] dip = {centre[0] + out[0] * (shell - GRAZE_DEEP), centre[1] + out[1] * (shell - GRAZE_DEEP),
+                    centre[2] + out[2] * (shell - GRAZE_DEEP)};
+            moveTo(spaceDim, target.physicsId, dip, side, GRAZE_ALONG);
+            moveTo(spaceDim, craftId, dip, side, -GRAZE_ALONG);
+
+            ShipInfo start = ShipInfo.byId(c -> read(c).raw(), spaceDim, craftId);
+            ShipInfo them = ShipInfo.byId(c -> read(c).raw(), spaceDim, target.physicsId);
+            double craftOut = Math.sqrt(sq(start.x - centre[0]) + sq(start.y - centre[1]) + sq(start.z - centre[2]));
+            double shipOut = Math.sqrt(sq(them.x - centre[0]) + sq(them.y - centre[1]) + sq(them.z - centre[2]));
+            double[] mid = {(start.x + them.x) / 2.0D, (start.y + them.y) / 2.0D, (start.z + them.z) / 2.0D};
+            double midOut = Math.sqrt(sq(mid[0] - centre[0]) + sq(mid[1] - centre[1]) + sq(mid[2] - centre[2]));
+            requireArranged("the craft and the ship must stand outside the shell (" + shell + ") and the straight way"
+                    + " between them dip inside it: craft " + craftOut + ", ship " + shipOut + ", midway " + midOut,
+                    craftOut > shell && shipOut > shell && midOut < shell);
+            Reply near = bodyFrom(craft.durable, site.dim);
+            requireArranged("the ledger must hold the craft outside the shell, settled: " + near,
+                    near.number("distance") > shell);
+
+            long mark = events.mark();
+            Reply issued = arrange("stellurgytest vs motion-go-to-ship-by-id " + spaceDim + " " + craftId
+                    + " " + target.durable);
+            requireArranged("the order must be in the slot: " + issued,
+                    issued.bool("afcResolved") && "ACTIVE".equals(issued.text("state")));
+
+            String arrived = events.awaitRecordWithFields(mark, "motion_arrived",
+                    "INV-GDN-25 arrival — the craft must report it got alongside the ship past the shell",
+                    AROUND_LINK_TICKS, "ship", craft.durable);
+            assertEquals("INV-GDN-25 arrival in space: " + arrived, spaceDim, (int) Events.number(arrived, "dim"));
+            String crossings = events.since(mark, "ship_entered_planet");
+            Events.assertInstrumentRan(crossings, "server_bus_ship_crossing",
+                    "the craft was never descended onto a body on its way");
+            assertTrue("INV-GDN-25 never descended: the craft was descended onto a body on its way: " + crossings
+                    + " (the recorder heard its take-off: " + up + ")",
+                    Events.recordsWhereAll(crossings, "ship", craft.durable).isEmpty());
+            assertAlongside("INV-GDN-25", spaceDim, craftId, craftReach, target, targetReach, arrived);
+        } finally {
+            dispose(events, buildMark, built);
+            restoreTheOrbitLine(lineToRestore);
+        }
+    }
+
+    /** Move the ship {@code shipId} of world {@code dim} to {@code along} blocks from {@code at} along {@code way}. */
+    private void moveTo(int dim, String shipId, double[] at, double[] way, double along) throws Exception {
+        Reply moved = arrange("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId + " "
+                + Math.round(at[0] + way[0] * along) + " " + Math.round(at[1] + way[1] * along) + " "
+                + Math.round(at[2] + way[2] * along));
+        requireArranged("the ship must be moved: " + moved, moved.bool("ok"));
+        arrange("stellurgytest vs unpark-by-id " + dim + " " + shipId);
+    }
+
+    private static double sq(double v) {
+        return v * v;
+    }
+
+    /**
      * The body whose surface is the planet world {@code dim}, as the ledger row of the craft
      * {@code durable} reads it: its bearing from the craft, its distance and its descent shell's radius.
      */
@@ -1053,7 +1438,13 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
 
     /** Settle {@code craft} in the ledger at the cell of sector {@code (sx, 0, 0)}, its world {@code dim}. */
     private void settle(AssembledCraft craft, long sx, int dim) throws Exception {
-        Reply settled = arrange("stellurgytest space ledger-settle " + craft.durable + " " + sx + " 0 0 0 0 0");
+        settleAt(craft, new long[]{sx, 0L, 0L}, dim);
+    }
+
+    /** Settle {@code craft} in the ledger at the cell of sector {@code sector}, its world {@code dim}. */
+    private void settleAt(AssembledCraft craft, long[] sector, int dim) throws Exception {
+        Reply settled = arrange("stellurgytest space ledger-settle " + craft.durable + " " + sector[0] + " "
+                + sector[1] + " " + sector[2] + " 0 0 0");
         requireArranged("the craft must be settled in its cell, or neither the seam nor the ledger knows it: "
                 + settled, settled.ok() && settled.integer("slotDim") == dim);
     }
@@ -1061,18 +1452,29 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
     /** Materialize the cell at sector {@code (sx, 0, 0)} into a slot world, refusing a cell any body
      *  stands in; answers the slot world's dimension. */
     private int emptyCell(long sx, String what) throws Exception {
-        CellInfo cell = CellInfo.atSector(c -> read(c).raw(), sx, 0L, 0L);
+        return emptyCellAt(new long[]{sx, 0L, 0L}, what);
+    }
+
+    /** {@link #emptyCell} for the cell at sector {@code sector}. */
+    private int emptyCellAt(long[] sector, String what) throws Exception {
+        long sx = sector[0];
+        CellInfo cell = CellInfo.atSector(c -> read(c).raw(), sector[0], sector[1], sector[2]);
         requireArranged(what + " must have no body standing in it: " + cell,
                 cell.bodiesAtCount == 0 && cell.cellBodies.isEmpty());
-        Reply occupied = arrange("stellurgytest space occupy " + sx + " 0 0");
+        Reply occupied = arrange("stellurgytest space occupy " + sx + " " + sector[1] + " " + sector[2]);
         requireArranged(what + " must be materialized into a loaded slot world: " + occupied,
                 occupied.ok() && occupied.bool("worldLoaded"));
         return occupied.integer("slotDim");
     }
 
-    /** Lay {@code variant} at {@code site} and assemble it. */
+    /** Lay {@code variant} — one whose tower stands {@link #HEIGHT} courses up — at {@code site} and assemble it. */
     private AssembledCraft build(FixtureSite site, String variant, String what) throws Exception {
-        Reply fixture = AssembledCraft.lay(site, c -> arrange(c).raw(), variant, HALO, HEIGHT, what);
+        return assembleAt(site, variant, HEIGHT, what);
+    }
+
+    /** Lay {@code variant}, reaching {@code height} above the site, at {@code site} and assemble it. */
+    private AssembledCraft assembleAt(FixtureSite site, String variant, int height, String what) throws Exception {
+        Reply fixture = AssembledCraft.lay(site, c -> arrange(c).raw(), variant, HALO, height, what);
         // The press is the assembler's own entry, a TRIGGER: production decides what it builds.
         AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events(), fixture, what);
         // A craft whose physics has not started sits as still as a held one, and its pose is the one it
@@ -1082,6 +1484,22 @@ public class MotionIntentGroupTest extends AbstractSharedServerTest {
         requireArranged(what + " — the craft that became usable must be the one assembled: " + usable
                 + " / " + craft, craft.physicsId.equals(usable));
         return craft;
+    }
+
+    /**
+     * Lay a craft with a jump drive at {@code site} and assemble it, as {@link #build} does: the fixture's
+     * {@code with-jump-drive}, whose tower stands {@link #JUMP_CRAFT_HEIGHT} courses up.
+     */
+    private AssembledCraft buildJumpCraft(FixtureSite site, String what) throws Exception {
+        return assembleAt(site, "with-jump-drive", JUMP_CRAFT_HEIGHT, what);
+    }
+
+    /** The drive and the jump gate of {@code craft} as its console reads them, writing nothing. */
+    private Reply driveOf(AssembledCraft craft) throws Exception {
+        Reply drive = read("stellurgytest drive observe " + craft.dim + " " + craft.afcX + " " + craft.afcY + " "
+                + craft.afcZ);
+        requireArranged("the drive must be read off the craft's own flight computer: " + drive, drive.bool("afc"));
+        return drive;
     }
 
     private void dispose(Events events, long buildMark, List<String> built) throws Exception {

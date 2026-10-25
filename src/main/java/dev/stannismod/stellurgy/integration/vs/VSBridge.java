@@ -354,6 +354,18 @@ final class VSBridge {
      * answer for a neighbour's craft. The entry ceiling check compares this against the launch
      * dimension's orbit height each tick.
      */
+    /**
+     * Whether the substrate steps the physics of the ship managing the block {@code pos}: its initial-ticks
+     * delay is over and its resolver has the surrounding chunks — the two conditions the physics loop
+     * selects ships on, and the pair {@code ShipLifecycleEvent.ShipUsable} is announced for. False for a
+     * block no ship manages.
+     */
+    static boolean shipPhysicsSteps(World world, BlockPos pos) {
+        Optional<PhysicsObject> managing = ValkyrienUtils.getPhysoManagingBlock(world, pos);
+        return managing.isPresent() && managing.get().isPhysicsReady()
+                && managing.get().getCachedSurroundingChunks() != null;
+    }
+
     static double[] shipWorldPosition(World world, BlockPos pos) {
         Optional<PhysicsObject> managing = ValkyrienUtils.getPhysoManagingBlock(world, pos);
         if (!managing.isPresent()) {

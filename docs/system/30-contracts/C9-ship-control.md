@@ -25,8 +25,10 @@ P1 = world-frame right-click (`BlockPilotSeat.onBlockActivated`) `[V]`; P2 = pro
 bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA SETTING** =
 {flight-assist mode, cruise setpoint} — see SHIPCTL-18. The craft's motion slot (ship-guidance) is
 neither: it is an ORDER the pilot hands over and takes back (SHIPCTL-21, SHIPCTL-22) — one that may
-carry the craft across worlds of its system, up through the entry and down through a descent, with nobody
-at the controls (ship-guidance MECH-GDN-12); the crossings themselves are decided as for any craft.
+carry the craft across worlds, up through the entry, through a jump to another system and down through a
+descent, with nobody at the controls (ship-guidance MECH-GDN-12, -13); the crossings themselves are
+decided as for any craft, and the jump is committed through the same gate and key a pilot uses
+(hyperdrive MECH-HYP-20). Taking the craft back also stops a jump wind-up the order started.
 
 ## Clauses
 

@@ -211,6 +211,19 @@ The press that meets an advisory is the press that RAISES it; only a second pres
 `ADVISORY_CONFIRM_TICKS` commits, and a stale one does not count. One press can never both warn and
 confirm. [T] `JumpSpool.java:66-72`, `test/unit/JumpSpoolTest.java`.
 
+### MECH-HYP-20 — The autopilot jumps through the same console and the same key
+A motion order whose leg is the jump (ship-guidance MECH-GDN-13) has the flight computer act as the pilot
+would, and through nothing of its own: it points the navigation computer at the leg's destination by the
+console's own `setTargetBody` (a body, followed and predicted; or a bare place) — re-aiming only when the
+aim differs, never during a wind-up — arms it, and presses the helm's key UNATTENDED
+(`JumpTrigger.pressUnattended`, `hyperdrive/JumpTrigger.java:110`): the same gate and wind-up as a press,
+except that an ADVISORY verdict is a refusal (nobody saw the warning, so nobody accepted it) and a press
+during the wind-up is the same ask again, not an abort. The commit at the wind-up's end is the helm's
+own (`TileAdvancedFlightComputer#tickJumpSpool`). What declines the jump — the verdict's first message,
+or how a commit FAILED (which the order then does not retry) — is what the order is refused with,
+through guidance's common window. A pilot's input taking the craft back stops a wind-up the order
+started; it costs nothing, the burst firing only at its end. [V] `tile/TileAdvancedFlightComputer.java:1632-1710`.
+
 ### MECH-HYP-14 — Dampeners: tier absorbs, coverage decides who
 `DampenerField.residualSpeed` protects a body only if a powered dampener is within radius, then
 subtracts what that dampener's tier absorbs; the best covering dampener applies, so a wall of cheap

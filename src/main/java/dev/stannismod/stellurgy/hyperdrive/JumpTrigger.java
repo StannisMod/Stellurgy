@@ -97,10 +97,30 @@ public final class JumpTrigger {
      */
     public static Result press(World world, BlockPos flightComputerPos, UUID shipId,
                                JumpSpool spool, long now) {
+        return press(world, flightComputerPos, shipId, spool, now, true);
+    }
+
+    /**
+     * A press nobody is at the helm to confirm: the autopilot's, committing the jump a motion intent's
+     * leg to another system needs. The same gate and the same wind-up as {@link #press} — but an advisory
+     * verdict, which a pilot is shown and may press through, is a refusal here, since a warning nobody can
+     * see is not one anybody has accepted; and a press during the wind-up is not a change of mind but the
+     * same ask again, answered {@link Outcome#SPOOLING}. Free in every branch, as {@link #press} is.
+     */
+    public static Result pressUnattended(World world, BlockPos flightComputerPos, UUID shipId,
+                                         JumpSpool spool, long now) {
+        return press(world, flightComputerPos, shipId, spool, now, false);
+    }
+
+    private static Result press(World world, BlockPos flightComputerPos, UUID shipId,
+                                JumpSpool spool, long now, boolean attended) {
         if (world == null || flightComputerPos == null || spool == null) {
             return new Result(Outcome.NOT_ON_SHIP, MSG_NOT_ON_SHIP);
         }
         if (spool.spooling(now)) {
+            if (!attended) {
+                return new Result(Outcome.SPOOLING, MSG_SPOOLING);
+            }
             // Pressing again during the wind-up is how a pilot changes his mind, and it is free -
             // the burst has not fired.
             spool.abort();
@@ -117,6 +137,9 @@ public final class JumpTrigger {
         JumpGate.Verdict verdict = JumpGate.check(nav);
         if (!verdict.allowed()) {
             spool.clearWarning();
+            return new Result(Outcome.REFUSED, verdict.firstMessage());
+        }
+        if (verdict.needsConfirmation() && !attended) {
             return new Result(Outcome.REFUSED, verdict.firstMessage());
         }
         if (verdict.needsConfirmation() && !spool.confirming(now)) {

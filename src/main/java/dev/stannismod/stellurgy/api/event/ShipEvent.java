@@ -140,14 +140,21 @@ public class ShipEvent extends Event {
         public final dev.stannismod.stellurgy.ship.guidance.MotionIntent intent;
         /** Why. */
         public final dev.stannismod.stellurgy.ship.guidance.MotionSlot.Refusal reason;
+        /**
+         * For {@code JUMP_DECLINED}, the lang key of what declined the jump — the jump gate's clause, or the
+         * commit's failure; {@code null} for every other reason.
+         */
+        public final String declinedBy;
 
         public MotionIntentRefusedEvent(World world, String shipId, BlockPos pos,
                                         dev.stannismod.stellurgy.ship.guidance.MotionIntent intent,
-                                        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Refusal reason) {
+                                        dev.stannismod.stellurgy.ship.guidance.MotionSlot.Refusal reason,
+                                        String declinedBy) {
             super(world, shipId);
             this.pos = pos;
             this.intent = intent;
             this.reason = reason;
+            this.declinedBy = declinedBy;
         }
     }
 }

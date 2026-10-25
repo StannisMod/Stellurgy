@@ -86,8 +86,16 @@ public final class MotionSlot {
         NO_APPROACH_AUTHORITY,
         /** No attitude guidance can give the hull, and turn it into, delivers thrust that stops it. */
         NO_STOPPING_AUTHORITY,
-        /** The target is in another system: reaching it takes a jump, a leg guidance does not fly. */
-        NEEDS_A_JUMP,
+        /**
+         * The jump the leg to another system needs was declined: the jump gate objected — the clause it
+         * would have stopped a pilot with, read off {@link Reading#declinedBy} — or the commit failed.
+         */
+        JUMP_DECLINED,
+        /**
+         * The target ship is in another system and its hull cannot be measured where it is, so no point
+         * beside it can be named for the jump to come out at.
+         */
+        JUMP_TARGET_NOT_MEASURED,
         /** The target ship is mid-jump, in hyperspace: it is in no system until its jump ends. */
         TARGET_IN_HYPERSPACE,
         /** The target is nowhere: no craft by its name, or no body with its planet world for a surface. */
@@ -115,7 +123,12 @@ public final class MotionSlot {
         /** Climbing straight up past the world's orbit line, where the entry crossing takes it into space. */
         CLIMB_TO_SPACE,
         /** Flying into the descent shell of the body whose world the target is in, to be descended onto it. */
-        INTO_THE_SHELL
+        INTO_THE_SHELL,
+        /**
+         * The jump to the target's system: held still while the jump is armed and wound up, then carried
+         * through it — the flight computer commits it, guidance only names where it is aimed.
+         */
+        JUMP
     }
 
     /** What one tick of guidance did that somebody outside should hear about. */
@@ -175,6 +188,14 @@ public final class MotionSlot {
      */
     static final double TURNED_WITHIN = Math.PI / 12.0D;
 
+    /**
+     * How far outside the descent shell of a body that is not where the order leads the craft's way is
+     * kept, blocks: two blocks, more than the √3 by which the position the descent condition measures (the
+     * craft's ledger position, each axis rounded to the block) can lie off the craft's pose, plus the
+     * arrival radius — the most guidance lets a craft lie off a point it is flown to.
+     */
+    static final double CLEAR_OF_THE_SHELL = ARRIVAL_RADIUS + 2.0D;
+
     /** Steps of the midpoint sum that integrates a turn's time; the integrand is monotone and smooth. */
     private static final int TURN_STEPS = 64;
 
@@ -206,10 +227,14 @@ public final class MotionSlot {
     private static final String NBT_REFUSAL = "refusal";
     private static final String NBT_ARRIVED = "arrived";
     private static final String NBT_INTENT = "intent";
+    private static final String NBT_DECLINED_BY = "declinedBy";
 
     private MotionIntent intent = null;
     private State state = State.EMPTY;
     private Refusal refusal = null;
+    /** The lang key of the jump gate's clause that declined the jump, or of the failed commit; {@code null}
+     *  unless the refusal is {@link Refusal#JUMP_DECLINED}. */
+    private String declinedBy = null;
     private boolean arrived = false;
     /** Consecutive guidance ticks the intent has been unflyable. Not persisted: a reload restarts the
      *  window, which delays a refusal by at most one window and never invents one. */
@@ -229,6 +254,7 @@ public final class MotionSlot {
         this.intent = intent;
         this.state = State.ACTIVE;
         this.refusal = null;
+        this.declinedBy = null;
         this.arrived = false;
         this.shortTicks = 0;
         this.held = null;
@@ -245,6 +271,7 @@ public final class MotionSlot {
         intent = null;
         state = State.EMPTY;
         refusal = null;
+        declinedBy = null;
         arrived = false;
         shortTicks = 0;
         held = null;
@@ -262,7 +289,7 @@ public final class MotionSlot {
 
     /** What the slot holds right now. */
     public Reading reading() {
-        return new Reading(state, intent, refusal, arrived, leg);
+        return new Reading(state, intent, refusal, declinedBy, arrived, leg);
     }
 
     /**
@@ -298,8 +325,23 @@ public final class MotionSlot {
         // aim, and whether it is let down at all (see below). Infinite until a landing is placed.
         double above = Double.POSITIVE_INFINITY;
         boolean heldOver = false;
+        // Whether the aim is a waypoint around a descent shell rather than what the order wants: reaching a
+        // waypoint is not arriving.
+        boolean detoured = false;
+        // What declined the jump this tick, when the leg is the jump and something did.
+        String declining = null;
         if (placed.unplaced() != null) {
             shortBy = refusalFor(placed.unplaced());
+        } else if (placed.jump() != null) {
+            // The jump: the craft's drive is asked to take it there, and is held where it is while the jump
+            // is armed and wound up. A jump declined is a short tick, refused through the same window.
+            leg = Leg.JUMP;
+            declining = around.jump(placed.jump());
+            if (declining != null) {
+                shortBy = Refusal.JUMP_DECLINED;
+            } else {
+                command = hover(craft.attitude);
+            }
         } else {
             leg = placed.leg();
             // With no hull measured there is no shell to aim at, for a GO_TO or a HOLD: the craft makes for
@@ -318,6 +360,11 @@ public final class MotionSlot {
                     aim = over;
                     heldOver = true;
                 }
+            }
+            double[] around0 = aroundTheShells(craft.position, aim, around.shellsBut(placed.entering()));
+            if (around0 != aim) {
+                aim = around0;
+                detoured = true;
             }
             double ex = aim[0] - craft.position[0];
             double ey = aim[1] - craft.position[1];
@@ -339,6 +386,7 @@ public final class MotionSlot {
             if (shortTicks >= REFUSAL_WINDOW_TICKS) {
                 state = State.REFUSED;
                 refusal = shortBy;
+                declinedBy = shortBy == Refusal.JUMP_DECLINED ? declining : null;
                 held = craft.attitude;
                 return new Step(hover(held), Event.REFUSED);
             }
@@ -348,7 +396,7 @@ public final class MotionSlot {
         boolean there = intent.isLanding() ? !heldOver && above <= TOUCHDOWN : distance <= ARRIVAL_RADIUS;
         // Against a provisional placement no hull was measured, so nothing says where alongside it is:
         // reaching the aim is not arriving.
-        if (!arrived && !placed.provisional() && there && magnitude(craft.velocity) <= ARRIVAL_SPEED) {
+        if (!arrived && !placed.provisional() && !detoured && there && magnitude(craft.velocity) <= ARRIVAL_SPEED) {
             arrived = true;
             if (intent.isLanding()) {
                 held = craft.attitude;
@@ -386,10 +434,103 @@ public final class MotionSlot {
         return FlightCommand.of(new double[]{e[0] * s, e[1] * s, e[2] * s}, zeroRate(), quatArray(craft.attitude));
     }
 
+    /**
+     * The craft is in hyperspace, mid-jump: guidance flies nothing — the jump carries it — and the order
+     * reads the jump leg until the arrival, refusing nothing on the way. A slot holding no active order is
+     * left as it is.
+     */
+    public void carriedByAJump() {
+        if (state == State.ACTIVE) {
+            leg = Leg.JUMP;
+            shortTicks = 0;
+        }
+    }
+
+    /**
+     * Of {@code aim}, the way past the descent shells in {@code shells} — the shells of bodies the order
+     * does not lead into: {@code aim} itself while the straight way from {@code from} to it keeps
+     * {@link #CLEAR_OF_THE_SHELL} outside every one of them; else a waypoint as far off as the aim, along
+     * the line that grazes the first shell met on that way at that clearance, on the aim's side of it —
+     * from inside the clearance, along the shell's surface. Re-chosen from where the craft is on every
+     * tick, so the craft rounds the shell and is sent straight at the aim once nothing stands in the way.
+     * The returned array is {@code aim} itself exactly when no shell stands in the way.
+     */
+    private static double[] aroundTheShells(double[] from, double[] aim, List<Surroundings.Sphere> shells) {
+        double[] way = aim;
+        // One shell rounded per pass, the next met on the new way after it; never more passes than shells.
+        for (int pass = 0; pass < shells.size(); pass++) {
+            Surroundings.Sphere first = null;
+            double firstAlong = Double.POSITIVE_INFINITY;
+            double[] d = {way[0] - from[0], way[1] - from[1], way[2] - from[2]};
+            double length = magnitude(d);
+            if (!(length > 0.0D)) {
+                return way;
+            }
+            double[] u = scaled(d, 1.0D / length);
+            for (Surroundings.Sphere shell : shells) {
+                double[] c = shell.centre();
+                double[] toCentre = {c[0] - from[0], c[1] - from[1], c[2] - from[2]};
+                double along = Math.max(0.0D, Math.min(length, dot(toCentre, u)));
+                double[] nearest = {from[0] + u[0] * along - c[0], from[1] + u[1] * along - c[1],
+                        from[2] + u[2] * along - c[2]};
+                double clear = shell.radius() + CLEAR_OF_THE_SHELL;
+                // In the way: the straight way comes nearer the body than the clearance, and nearer than the
+                // craft is now — a craft already within the clearance and leaving it is not held back.
+                boolean inTheWay = magnitude(nearest) < clear && magnitude(nearest) < magnitude(toCentre);
+                if (inTheWay && along < firstAlong) {
+                    first = shell;
+                    firstAlong = along;
+                }
+            }
+            if (first == null) {
+                return way;
+            }
+            way = grazing(from, way, first, length);
+        }
+        return way;
+    }
+
+    /**
+     * The point {@code length} from {@code from} along the line from it that grazes the sphere
+     * {@code shell} widened by {@link #CLEAR_OF_THE_SHELL}, on the side of it {@code aim} lies on — the
+     * tangent, whose every point lies outside the widened sphere; from inside it, along the surface there.
+     */
+    private static double[] grazing(double[] from, double[] aim, Surroundings.Sphere shell, double length) {
+        double[] c = shell.centre();
+        double clear = shell.radius() + CLEAR_OF_THE_SHELL;
+        double[] w = {from[0] - c[0], from[1] - c[1], from[2] - c[2]};
+        double away = magnitude(w);
+        double[] out = scaled(w, 1.0D / away);
+        // The way across the body, toward the aim's side: what of the aim lies square to the line from the
+        // body to the craft. With the aim straight behind the body every side is the aim's; one is taken.
+        double[] a = {aim[0] - c[0], aim[1] - c[1], aim[2] - c[2]};
+        double[] side = {a[0] - dot(a, out) * out[0], a[1] - dot(a, out) * out[1], a[2] - dot(a, out) * out[2]};
+        if (magnitude(side) < 1.0e-9D * Math.max(1.0D, magnitude(a))) {
+            side = Math.abs(out[1]) < 0.9D ? new double[]{0.0D, 1.0D, 0.0D} : new double[]{1.0D, 0.0D, 0.0D};
+            side = new double[]{side[0] - dot(side, out) * out[0], side[1] - dot(side, out) * out[1],
+                    side[2] - dot(side, out) * out[2]};
+        }
+        side = scaled(side, 1.0D / magnitude(side));
+        double[] t;
+        if (away <= clear) {
+            t = side;
+        } else {
+            // The grazing point: on the widened sphere, at the angle from the body-to-craft line whose cosine
+            // is clear / away, toward the aim's side; the way to it is tangent there.
+            double cos = clear / away;
+            double sin = Math.sqrt(1.0D - cos * cos);
+            double[] touch = {c[0] + clear * (cos * out[0] + sin * side[0]), c[1] + clear * (cos * out[1] + sin * side[1]),
+                    c[2] + clear * (cos * out[2] + sin * side[2])};
+            double[] toTouch = {touch[0] - from[0], touch[1] - from[1], touch[2] - from[2]};
+            t = scaled(toTouch, 1.0D / magnitude(toTouch));
+        }
+        return new double[]{from[0] + t[0] * length, from[1] + t[1] * length, from[2] + t[2] * length};
+    }
+
     private static Refusal refusalFor(GuidanceTarget.Unplaced why) {
         switch (why) {
-            case NEEDS_A_JUMP:
-                return Refusal.NEEDS_A_JUMP;
+            case JUMP_TARGET_NOT_MEASURED:
+                return Refusal.JUMP_TARGET_NOT_MEASURED;
             case IN_HYPERSPACE:
                 return Refusal.TARGET_IN_HYPERSPACE;
             case NOT_FOUND:
@@ -1009,6 +1150,9 @@ public final class MotionSlot {
         if (refusal != null) {
             nbt.setString(NBT_REFUSAL, refusal.name());
         }
+        if (declinedBy != null) {
+            nbt.setString(NBT_DECLINED_BY, declinedBy);
+        }
         if (intent != null) {
             NBTTagCompound i = new NBTTagCompound();
             intent.writeToNBT(i);
@@ -1049,6 +1193,7 @@ public final class MotionSlot {
         intent = read;
         state = stored;
         refusal = why;
+        declinedBy = why == Refusal.JUMP_DECLINED && nbt.hasKey(NBT_DECLINED_BY) ? nbt.getString(NBT_DECLINED_BY) : null;
         arrived = nbt.getBoolean(NBT_ARRIVED);
         return true;
     }
@@ -1132,15 +1277,25 @@ public final class MotionSlot {
         private final State state;
         private final MotionIntent intent;
         private final Refusal refusal;
+        private final String declinedBy;
         private final boolean arrived;
         private final Leg leg;
 
-        Reading(State state, MotionIntent intent, Refusal refusal, boolean arrived, Leg leg) {
+        Reading(State state, MotionIntent intent, Refusal refusal, String declinedBy, boolean arrived, Leg leg) {
             this.state = state;
             this.intent = intent;
             this.refusal = refusal;
+            this.declinedBy = declinedBy;
             this.arrived = arrived;
             this.leg = leg;
+        }
+
+        /**
+         * For a refusal {@link Refusal#JUMP_DECLINED}, the lang key of what declined the jump — the jump
+         * gate's clause, or the commit's failure; {@code null} for every other reading.
+         */
+        public String declinedBy() {
+            return declinedBy;
         }
 
         /**

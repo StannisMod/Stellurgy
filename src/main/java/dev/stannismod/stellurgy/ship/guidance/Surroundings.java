@@ -5,12 +5,25 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import java.util.UUID;
 
 /**
- * What guidance may ask of the world around one craft on one tick. Every answer is in the WORLD frame
- * of the craft's own world, blocks — whatever world or cell the thing asked about is really in.
+ * What guidance may ask of the world around one craft on one tick — and the one thing besides flying it
+ * may ask the craft to do: jump. Every answer is in the WORLD frame of the craft's own world, blocks —
+ * whatever world or cell the thing asked about is really in.
  *
  * <p>The seam between guidance's laws, which read nothing of the world, and the world they fly in.</p>
  */
 public interface Surroundings {
+
+    /**
+     * Ask the craft's jump drive to take it to {@code destination}, the way the leg to another system
+     * needs: the destination armed at the craft's navigation computer as a pilot arms it, and the jump
+     * committed as the helm's key commits it — the ask being one nobody can confirm, so anything that
+     * would have stopped a pilot's press declines it. Asked on every tick of that leg until the jump
+     * carries the craft off; asking again while it winds up is not a second press.
+     *
+     * @return {@code null} while the jump is under way — winding up, or committed; else the lang key of
+     *         what declines it this tick: the jump gate's clause, or how the last commit failed
+     */
+    String jump(JumpDestination destination);
 
     /** Where the ship whose durable id is {@code shipId} stands as seen from the craft, or why not. */
     Sighting ship(UUID shipId);
@@ -32,23 +45,30 @@ public interface Surroundings {
 
     /**
      * Where the orbit of the body whose surface is the planet world {@code dimension} lies, seen from a
-     * craft in space, or why it cannot be placed — {@code NEEDS_A_JUMP} for a body of another system than
-     * the craft's cell. Asked of a craft in space.
+     * craft in space; or, for a body of another system than the craft's cell, where the jump to it is
+     * aimed ({@link Sphere#inAnotherSystem}); or why it cannot be placed. Asked of a craft in space.
      */
     Sphere orbit(int dimension);
 
     /**
      * Where the descent shell of the body whose surface is the planet world {@code dimension} lies — the
-     * sphere a craft inside of descends onto that body — seen from a craft in space, or why it cannot be
-     * placed, as {@link #orbit} answers. Asked of a craft in space.
+     * sphere a craft inside of descends onto that body — seen from a craft in space, or the jump to it, or
+     * why it cannot be placed, as {@link #orbit} answers. Asked of a craft in space.
      */
     Sphere shell(int dimension);
 
     /**
-     * Why the body whose surface is the planet world {@code dimension} cannot be flown to from the craft's
-     * world — {@code NOT_FOUND} when no body has that world for its surface, {@code NEEDS_A_JUMP} when it is
-     * a body of another system than the craft's — or {@code null} when it can: it is of the craft's own
-     * system, reached through space. Asked of a craft on a planet.
+     * Every descent shell in the craft's world — the sphere about each body a craft inside of descends
+     * onto, placed as {@link #shell} places one — but the shell of the body whose surface is the planet
+     * world {@code entering}, when one is given: the shell the craft is being flown into. Empty on a
+     * planet.
+     */
+    java.util.List<Sphere> shellsBut(java.util.OptionalInt entering);
+
+    /**
+     * {@code NOT_FOUND} when no body has the planet world {@code dimension} for its surface, so it cannot
+     * be flown to from the craft's world; {@code null} when one has — in the craft's system or another,
+     * either way reached through space. Asked of a craft on a planet.
      */
     GuidanceTarget.Unplaced unreachable(int dimension);
 
@@ -57,11 +77,13 @@ public interface Surroundings {
 
         private final double[] centre;
         private final double radius;
+        private final JumpDestination elsewhere;
         private final GuidanceTarget.Unplaced unplaced;
 
-        private Sphere(double[] centre, double radius, GuidanceTarget.Unplaced unplaced) {
+        private Sphere(double[] centre, double radius, JumpDestination elsewhere, GuidanceTarget.Unplaced unplaced) {
             this.centre = centre;
             this.radius = radius;
+            this.elsewhere = elsewhere;
             this.unplaced = unplaced;
         }
 
@@ -70,12 +92,23 @@ public interface Surroundings {
             if (!(radius > 0.0D)) {
                 throw new IllegalArgumentException("a sphere about a body has a positive radius; got " + radius);
             }
-            return new Sphere(centre.clone(), radius, null);
+            return new Sphere(centre.clone(), radius, null, null);
+        }
+
+        /**
+         * The body is of another system than the craft's cell, so nothing about it can be placed in the
+         * craft's world: reaching it is a jump, aimed at {@code destination}.
+         */
+        public static Sphere inAnotherSystem(JumpDestination destination) {
+            if (destination == null) {
+                throw new IllegalArgumentException("a body of another system is jumped to somewhere");
+            }
+            return new Sphere(null, Double.NaN, destination, null);
         }
 
         /** The sphere cannot be placed in the craft's world, for {@code why}. */
         public static Sphere unplaced(GuidanceTarget.Unplaced why) {
-            return new Sphere(null, Double.NaN, why);
+            return new Sphere(null, Double.NaN, null, why);
         }
 
         double[] centre() {
@@ -84,6 +117,11 @@ public interface Surroundings {
 
         double radius() {
             return radius;
+        }
+
+        /** Where the jump to a body of another system is aimed; {@code null} for a body placed here. */
+        JumpDestination elsewhere() {
+            return elsewhere;
         }
 
         GuidanceTarget.Unplaced unplaced() {
@@ -100,21 +138,23 @@ public interface Surroundings {
         private final GalacticCoord cell;
         private final boolean inSpace;
         private final Integer planet;
+        private final GalacticCoord elsewhere;
         private final GuidanceTarget.Unplaced unplaced;
 
         private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
                          GuidanceTarget.Unplaced unplaced) {
-            this(position, hullRadius, measured, cell, false, null, unplaced);
+            this(position, hullRadius, measured, cell, false, null, null, unplaced);
         }
 
         private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
-                         boolean inSpace, Integer planet, GuidanceTarget.Unplaced unplaced) {
+                         boolean inSpace, Integer planet, GalacticCoord elsewhere, GuidanceTarget.Unplaced unplaced) {
             this.position = position;
             this.hullRadius = hullRadius;
             this.measured = measured;
             this.cell = cell;
             this.inSpace = inSpace;
             this.planet = planet;
+            this.elsewhere = elsewhere;
             this.unplaced = unplaced;
         }
 
@@ -123,16 +163,29 @@ public interface Surroundings {
          * no position in the craft's world; reaching it starts with the climb into space.
          */
         public static Sighting inSpace() {
-            return new Sighting(null, Double.NaN, false, null, true, null, null);
+            return new Sighting(null, Double.NaN, false, null, true, null, null, null);
         }
 
         /**
-         * The ship is in the planet world {@code dimension}, which is not the craft's world, and that world's
-         * body is of the craft's own system. It has no position in the craft's world; reaching it goes
-         * through space and down onto that body.
+         * The ship is in the planet world {@code dimension}, which is not the craft's world, and some body
+         * has that world for its surface. It has no position in the craft's world; reaching it goes through
+         * space — and a jump, when that body is of another system — and down onto that body.
          */
         public static Sighting onPlanet(int dimension) {
-            return new Sighting(null, Double.NaN, false, null, false, dimension, null);
+            return new Sighting(null, Double.NaN, false, null, false, dimension, null, null);
+        }
+
+        /**
+         * The ship is in space, settled at {@code address}, in a cell of ANOTHER system than the craft's
+         * world — or in the void, where every cell is a system of its own — and its hull reaches
+         * {@code hullRadius} about its position there (NaN when its world holds no hull to measure). It has
+         * no position in the craft's world; reaching it takes a jump.
+         */
+        public static Sighting inAnotherSystem(GalacticCoord address, double hullRadius) {
+            if (address == null) {
+                throw new IllegalArgumentException("a ship in another system is settled somewhere");
+            }
+            return new Sighting(null, hullRadius, !Double.isNaN(hullRadius), null, false, null, address, null);
         }
 
         /**
@@ -177,7 +230,8 @@ public interface Surroundings {
             return position.clone();
         }
 
-        /** The hull's measured reach about {@link #position}; NaN when not {@link #measured}. */
+        /** The hull's measured reach about {@link #position} — about its address, for a ship in another
+         *  system; NaN when not {@link #measured}. */
         double hullRadius() {
             return hullRadius;
         }
@@ -199,6 +253,11 @@ public interface Surroundings {
         /** The planet world the ship is in when that is another world than the craft's; {@code null} otherwise. */
         Integer planet() {
             return planet;
+        }
+
+        /** Where the ship is settled when that is a cell of another system ({@link #inAnotherSystem}); else {@code null}. */
+        GalacticCoord elsewhere() {
+            return elsewhere;
         }
 
         GuidanceTarget.Unplaced unplaced() {

@@ -573,8 +573,9 @@ public final class ServerEventRecorder {
 
     /**
      * A craft's motion intent was REFUSED — {@code motion_refused}, off production's own
-     * {@code ShipEvent.MotionIntentRefusedEvent}: the fields of {@code motion_arrived} and
-     * {@code reason}, the refusal's own name.
+     * {@code ShipEvent.MotionIntentRefusedEvent}: the fields of {@code motion_arrived}, {@code reason}, the
+     * refusal's own name, and {@code declinedBy}, the lang key of what declined a jump (JSON null for every
+     * other reason).
      */
     @SubscribeEvent
     public static void onMotionIntentRefused(
@@ -591,7 +592,8 @@ public final class ServerEventRecorder {
                         + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
                         + ",\"kind\":\"" + event.intent.kind().name() + "\""
                         + ",\"target\":\"" + event.intent.target() + "\""
-                        + ",\"reason\":\"" + event.reason.name() + "\"");
+                        + ",\"reason\":\"" + event.reason.name() + "\""
+                        + ",\"declinedBy\":" + (event.declinedBy == null ? "null" : "\"" + str(event.declinedBy) + "\""));
     }
 
     /**

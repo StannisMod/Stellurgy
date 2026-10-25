@@ -401,6 +401,12 @@ public class TileAdvancedFlightComputer extends TileEntity
     public void setPilotInput(FreeFlightInput input) {
         this.pilotInput = input;
         if (input != null && motion.reclaim()) {
+            // Taking the craft back is total: a jump the order was winding up is the order's, and stops
+            // with it. It costs nothing — the burst fires only at the end of the wind-up.
+            if (guidanceSpooled) {
+                jumpSpool.abort();
+                guidanceSpooled = false;
+            }
             markDirty();
         }
     }
@@ -479,6 +485,8 @@ public class TileAdvancedFlightComputer extends TileEntity
         // ships exist there exactly while parked mid-transit. Deliberate-exit and the exit-warning
         // channel stay OUTSIDE this gate when they land — they are the survival path mid-transit.
         if (dev.stannismod.stellurgy.space.HyperspaceWorld.isHyperspace(world)) {
+            // An order the jump is carrying reads its jump leg until the arrival, and is flown again there.
+            motion.carriedByAJump();
             flightCommand = null;
             return;
         }
@@ -1035,6 +1043,7 @@ public class TileAdvancedFlightComputer extends TileEntity
     /** Hand the craft's motion to {@code intent}, replacing whatever the slot held. Server side. */
     public void issueMotion(dev.stannismod.stellurgy.ship.guidance.MotionIntent intent) {
         motion.issue(intent);
+        lastJumpFailure = null;
         markDirty();
     }
 
@@ -1053,14 +1062,21 @@ public class TileAdvancedFlightComputer extends TileEntity
     /**
      * Fly one tick of the motion intent: hand guidance the craft as this computer reads it, publish
      * what guidance commands, and tell whoever must hear it when the intent arrives or is refused.
-     * Returns whether a command was published — always, while guidance has the craft, unless the craft
-     * cannot be read this tick; a refused intent is flown too, as a hover.
+     * Returns whether guidance has the craft this tick — it publishes a command whenever the craft can be
+     * read and its physics steps, a refused intent too, as a hover; while its physics does not step yet,
+     * it holds the craft for the order and publishes nothing.
      */
     private boolean flyMotionIntent(FreeFlightPhysics.Quat attitude) {
         double[] pose = VSIntegration.getShipWorldPosition(world, getPos());
         double[] velocity = VSIntegration.getShipVelocity(world, getPos());
         if (pose == null || velocity == null) {
             return false;
+        }
+        if (!VSIntegration.shipPhysicsSteps(world, getPos())) {
+            // A hull the substrate does not step yet — just assembled, or just pasted by a crossing or a
+            // jump — reads at rest wherever it was put, and is not flying at all. The order waits for it:
+            // nothing is judged against it, no arrival and no shortfall, and nothing else takes the craft.
+            return true;
         }
         double[] gravity = new double[]{0.0, 0.0, 0.0};
         if (VSConfig.doGravity) {
@@ -1082,8 +1098,18 @@ public class TileAdvancedFlightComputer extends TileEntity
                         SHIP_MAX_SPEED, hull == null ? Double.NaN : hull[0], hull == null ? Double.NaN : hull[1],
                         AR_ATTITUDE_GAIN, AR_MAX_ANGULAR_SPEED),
                 new dev.stannismod.stellurgy.ship.guidance.WorldSurroundings((net.minecraft.world.WorldServer) world,
-                        cell, cell == null ? entryCeiling() : java.util.OptionalInt.empty()));
+                        cell, cell == null ? entryCeiling() : java.util.OptionalInt.empty(), this::jumpForGuidance));
         dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading held = motion.reading();
+        if (held.state() != dev.stannismod.stellurgy.ship.guidance.MotionSlot.State.ACTIVE
+                || held.leg() != dev.stannismod.stellurgy.ship.guidance.MotionSlot.Leg.JUMP) {
+            // Off the jump leg — refused, arrived elsewhere, the target come into reach — a wind-up the
+            // order started is the order's, and stops; the failure it ended in no longer speaks for anything.
+            if (guidanceSpooled) {
+                jumpSpool.abort();
+                guidanceSpooled = false;
+            }
+            lastJumpFailure = null;
+        }
         String durable = shipId == null ? null : shipId.toString();
         if (step.event() == dev.stannismod.stellurgy.ship.guidance.MotionSlot.Event.ARRIVED) {
             markDirty();
@@ -1094,9 +1120,12 @@ public class TileAdvancedFlightComputer extends TileEntity
             markDirty();
             messageSeatedPilot("msg.guidance.refused."
                     + held.refusal().name().toLowerCase(java.util.Locale.ROOT));
+            if (held.declinedBy() != null) {
+                messageSeatedPilot(held.declinedBy());
+            }
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
                     new dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentRefusedEvent(world, durable,
-                            getPos(), held.intent(), held.refusal()));
+                            getPos(), held.intent(), held.refusal(), held.declinedBy()));
         }
         dev.stannismod.stellurgy.ship.control.FlightCommand command = step.command();
         if (command == null) {
@@ -1616,6 +1645,65 @@ public class TileAdvancedFlightComputer extends TileEntity
                 dev.stannismod.stellurgy.hyperdrive.JumpTrigger.commit(world, getPos(),
                         shipIdOrNull(), jumpSpool, now);
         messageSeatedPilot(result.langKey());
+        if (guidanceSpooled) {
+            guidanceSpooled = false;
+            // A commit that FAILED — paid for or not — is not tried again by the order: it is what declines
+            // the jump from then on, until the order is refused for it. A REFUSED one is the gate changing
+            // its mind during the wind-up, and the next ask meets the gate afresh.
+            if (result.outcome() == dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Outcome.FAILED
+                    || result.outcome() == dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Outcome.NOT_ON_SHIP) {
+                lastJumpFailure = result.langKey();
+            }
+        }
+    }
+
+    /** Whether the wind-up running now was started by the motion slot's jump leg, not by the pilot's key. */
+    private boolean guidanceSpooled;
+
+    /** How the last jump the motion slot committed failed; {@code null} when none did since the order. */
+    private String lastJumpFailure;
+
+    /**
+     * The motion slot's jump leg asking this craft's drive to take it to {@code destination}
+     * ({@code Surroundings#jump}): aim the navigation computer there and arm it — the same two acts a
+     * pilot makes at the console — then press the helm's key unattended
+     * ({@link dev.stannismod.stellurgy.hyperdrive.JumpTrigger#pressUnattended}). While the wind-up runs the
+     * aim is left alone; the commit at its end is the helm's own ({@link #tickJumpSpool}).
+     *
+     * @return {@code null} while the jump winds up; else the lang key of what declined it
+     */
+    private String jumpForGuidance(dev.stannismod.stellurgy.ship.guidance.JumpDestination destination) {
+        if (lastJumpFailure != null) {
+            return lastJumpFailure;
+        }
+        long now = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
+        if (!jumpSpool.spooling(now)) {
+            dev.stannismod.stellurgy.tile.TileNavigationComputer computer =
+                    new dev.stannismod.stellurgy.navigation.ShipNavigation(world, getPos(), shipIdOrNull())
+                            .findNavComputer();
+            if (computer != null) {
+                boolean aimed = computer.getTargetDim() == destination.body()
+                        && (destination.body() != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET
+                        || destination.address().equals(computer.getTarget()));
+                if (!aimed) {
+                    computer.setTargetBody(destination.body(), destination.address());
+                }
+                if (!computer.isArmed()) {
+                    computer.arm();
+                }
+            }
+        }
+        dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Result pressed =
+                dev.stannismod.stellurgy.hyperdrive.JumpTrigger.pressUnattended(world, getPos(),
+                        shipIdOrNull(), jumpSpool, now);
+        if (pressed.outcome() == dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Outcome.SPOOLING) {
+            if (!guidanceSpooled) {
+                guidanceSpooled = true;
+                messageSeatedPilot(pressed.langKey());
+            }
+            return null;
+        }
+        return pressed.langKey();
     }
 
     // ─── The hull's own size ───────────────────────────────────────────────────

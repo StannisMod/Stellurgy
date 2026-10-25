@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.ship.control.Endurance;
 import dev.stannismod.stellurgy.ship.control.FlightCommand;
 import dev.stannismod.stellurgy.ship.control.ShipCapability;
 import dev.stannismod.stellurgy.ship.guidance.GuidanceTarget;
+import dev.stannismod.stellurgy.ship.guidance.JumpDestination;
 import dev.stannismod.stellurgy.ship.guidance.MotionIntent;
 import dev.stannismod.stellurgy.ship.guidance.MotionSlot;
 import dev.stannismod.stellurgy.ship.guidance.Surroundings;
@@ -599,47 +600,27 @@ public class MotionGuidanceLawsTest {
     }
 
     /**
-     * INV-GDN-19's refusing half: a target that cannot be flown to is refused for what it is — one of
-     * another system for the jump it needs (a ship the world says is there; a surface point of a body the
-     * world says is of another system, asked from a planet and from space), and a ship mid-jump for being
-     * in hyperspace. Whether a place IS of another system is the world's answer ({@code WorldSurroundings}),
-     * an input here; it is pinned in a running game by INV-GDN-09.
+     * INV-GDN-19's refusing half: a ship mid-jump is refused for being in hyperspace, from space and from a
+     * planet alike. Whether a ship IS in hyperspace is the world's answer ({@code WorldSurroundings}), an
+     * input here.
      */
     @Test
     @Pins("INV-GDN-19")
-    @RedWitness(verdict = "a ship of another system", member = "MotionSlot#refusalFor",
-            at = "return Refusal.NEEDS_A_JUMP;", replacedBy = "return Refusal.TARGET_NOT_FOUND;",
-            fails = "INV-GDN-19 another system: a ship", on = "2026-10-24")
     @RedWitness(verdict = "a ship in hyperspace", member = "MotionSlot#refusalFor",
-            at = "return Refusal.TARGET_IN_HYPERSPACE;", replacedBy = "return Refusal.NEEDS_A_JUMP;",
-            fails = "INV-GDN-19 in hyperspace", on = "2026-10-24")
-    @RedWitness(verdict = "from a planet", member = "GuidanceTarget#outOfThisWorldFor",
-            at = "return why != null ? Placement.unplaced(why) : climb(craft, around);",
-            replacedBy = "return climb(craft, around);",
-            fails = "INV-GDN-19 another system: a surface point asked from a planet", on = "2026-10-24")
-    @RedWitness(verdict = "from space", member = "GuidanceTarget#intoTheShell",
-            at = "return Placement.unplaced(shell.unplaced());",
-            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
-            fails = "INV-GDN-19 another system: a surface point asked from space", on = "2026-10-24")
-    public void aTargetInAnotherSystemOrInHyperspaceIsRefusedForWhatItIs() {
+            at = "return Refusal.TARGET_IN_HYPERSPACE;", replacedBy = "return Refusal.TARGET_NOT_FOUND;",
+            fails = "INV-GDN-19 in hyperspace", on = "2026-10-25")
+    public void aShipInHyperspaceIsRefusedForBeingThere() {
         ShipCapability live = solve(ShipMotionCases.symmetricHull());
         double[] away = back(new double[]{200.0D, 30.0D, -40.0D}, new double[]{0.6D, 0.0D, 0.8D}, 60.0D);
         double depth = 2.75D;
         double[] landed = {12.5D, 71.0D + depth, -7.5D};
-        GuidanceTarget afar = GuidanceTarget.surface(PLANET_DIM + 1, landed[0], landed[2]);
-        Elsewhere ofAnotherSystem = Elsewhere.withBody(200.0D, null, Double.NaN, GuidanceTarget.Unplaced.NEEDS_A_JUMP);
 
-        assertRefusedFor("INV-GDN-19 another system: a ship the world says is of another system",
-                GuidanceTarget.ship(OTHER), atRestAt(live, away),
-                new Fixed(GuidanceTarget.Unplaced.NEEDS_A_JUMP), MotionSlot.Refusal.NEEDS_A_JUMP);
-        assertRefusedFor("INV-GDN-19 in hyperspace: a ship the world says is mid-jump",
-                GuidanceTarget.ship(OTHER), atRestAt(live, away),
+        assertRefusedFor("INV-GDN-19 in hyperspace: a ship the world says is mid-jump, asked from space",
+                GuidanceTarget.ship(OTHER), inCell(live, away, GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L)),
                 new Fixed(GuidanceTarget.Unplaced.IN_HYPERSPACE), MotionSlot.Refusal.TARGET_IN_HYPERSPACE);
-        assertRefusedFor("INV-GDN-19 another system: a surface point asked from a planet", afar,
-                onSurface(live, landed, depth, PLANET_DIM, null), ofAnotherSystem, MotionSlot.Refusal.NEEDS_A_JUMP);
-        assertRefusedFor("INV-GDN-19 another system: a surface point asked from space", afar,
-                inCell(live, away, GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L)), ofAnotherSystem,
-                MotionSlot.Refusal.NEEDS_A_JUMP);
+        assertRefusedFor("INV-GDN-19 in hyperspace: a ship the world says is mid-jump, asked from a planet",
+                GuidanceTarget.ship(OTHER), onSurface(live, landed, depth, PLANET_DIM, null),
+                new Fixed(GuidanceTarget.Unplaced.IN_HYPERSPACE), MotionSlot.Refusal.TARGET_IN_HYPERSPACE);
     }
 
     /**
@@ -782,10 +763,346 @@ public class MotionGuidanceLawsTest {
         }
     }
 
+    /**
+     * INV-GDN-22's law: from space a target in another system is the JUMP. A ship there — its hull measured
+     * where it is — has the craft's drive asked, on every tick, to take it to a place in the ship's own cell
+     * farther off the ship than the arrival radius beyond the standoff (the two hulls plus the arrival
+     * radius), so the arrival is flown; the craft is held still, reads JUMP, is never arrived, and is never
+     * refused while the drive answers that the jump is under way. A drive that declines for the window
+     * refuses the order as JUMP_DECLINED, naming what declined it. A ship there whose hull cannot be measured
+     * is refused as JUMP_TARGET_NOT_MEASURED. A surface point or the orbit of a body of another system has
+     * the drive asked to take the craft where the world says the jump to that body is aimed. From a planet
+     * the same ship is the climb, and no jump is asked. The world is an {@link Afar}: where the ship is,
+     * what the bodies are and what the drive answers are inputs.
+     */
+    @Test
+    @Pins("INV-GDN-22")
+    @RedWitness(verdict = "the jump asked", member = "GuidanceTarget#placeIn",
+            at = "return craft.cell != null ? jumpBeside(seen, craft) : climb(craft, around);",
+            replacedBy = "return climb(craft, around);",
+            fails = "INV-GDN-22 a ship of another system: leg", on = "2026-10-25")
+    @RedWitness(verdict = "from a planet", member = "GuidanceTarget#placeIn",
+            at = "return craft.cell != null ? jumpBeside(seen, craft) : climb(craft, around);",
+            replacedBy = "return jumpBeside(seen, craft);",
+            fails = "INV-GDN-22 from a planet: the climb", on = "2026-10-25")
+    @RedWitness(verdict = "under way", member = "MotionSlot#fly",
+            at = "command = hover(craft.attitude);", replacedBy = "shortBy = Refusal.JUMP_DECLINED;",
+            fails = "INV-GDN-22 a ship of another system: flown past the window", on = "2026-10-25")
+    @RedWitness(verdict = "the drive asked", member = "MotionSlot#fly",
+            at = "declining = around.jump(placed.jump());", replacedBy = "declining = null;",
+            fails = "INV-GDN-22 the drive asked on every tick", on = "2026-10-25")
+    @RedWitness(verdict = "a place", member = "GuidanceTarget#jumpBeside",
+            at = "return Placement.jump(JumpDestination.toPlace(", replacedBy = "return Placement.jump(JumpDestination.toBody(1, ",
+            fails = "INV-GDN-22 beside the ship: a place, not a body", on = "2026-10-25")
+    @RedWitness(verdict = "in its cell", member = "GuidanceTarget#jumpBeside",
+            at = "StandoffRing.pointAround(seen.elsewhere(), ring, craft.id.hashCode())",
+            replacedBy = "StandoffRing.pointAround(craft.cell, ring, craft.id.hashCode())",
+            fails = "INV-GDN-22 beside the ship: in its cell", on = "2026-10-25")
+    @RedWitness(verdict = "beside the ship", member = "GuidanceTarget#jumpBeside",
+            at = "craft.hullRadius + seen.hullRadius() + MotionSlot.ARRIVAL_RADIUS", replacedBy = "craft.hullRadius + MotionSlot.ARRIVAL_RADIUS",
+            fails = "INV-GDN-22 beside the ship", on = "2026-10-25")
+    @RedWitness(verdict = "out past the arrival radius", member = "GuidanceTarget#jumpBeside",
+            at = "+ OUT_OF_THE_JUMP_PAST_THE_STANDOFF);", replacedBy = ");",
+            fails = "INV-GDN-22 beside the ship", on = "2026-10-25")
+    @RedWitness(verdict = "held still", member = "MotionSlot#fly",
+            at = "command = hover(craft.attitude);",
+            replacedBy = "command = FlightCommand.of(new double[]{1.0D, 0.0D, 0.0D}, zeroRate(), quatArray(craft.attitude));",
+            fails = "INV-GDN-22 held still", on = "2026-10-25")
+    @RedWitness(verdict = "not before the window", member = "MotionSlot#fly",
+            at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks >= 1",
+            fails = "INV-GDN-22 declined: not before the window", on = "2026-10-25")
+    @RedWitness(verdict = "declined", member = "MotionSlot#fly",
+            at = "shortBy = Refusal.JUMP_DECLINED;", replacedBy = "command = hover(craft.attitude);",
+            fails = "INV-GDN-22 declined", on = "2026-10-25")
+    @RedWitness(verdict = "for the jump", member = "MotionSlot#fly",
+            at = "shortBy = Refusal.JUMP_DECLINED;", replacedBy = "shortBy = Refusal.TARGET_NOT_FOUND;",
+            fails = "INV-GDN-22 declined: for the jump", on = "2026-10-25")
+    @RedWitness(verdict = "where the world aims it", member = "GuidanceTarget#intoTheShell",
+            at = "return Placement.jump(shell.elsewhere());",
+            replacedBy = "return Placement.jump(JumpDestination.toPlace(shell.elsewhere().address()));",
+            fails = "where the world aims the jump to it", on = "2026-10-25")
+    @RedWitness(verdict = "naming what declined it", member = "MotionSlot#fly",
+            at = "declinedBy = shortBy == Refusal.JUMP_DECLINED ? declining : null;", replacedBy = "declinedBy = null;",
+            fails = "INV-GDN-22 naming what declined it", on = "2026-10-25")
+    @RedWitness(verdict = "not measured", member = "GuidanceTarget#jumpBeside",
+            at = "return Placement.unplaced(Unplaced.JUMP_TARGET_NOT_MEASURED);",
+            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
+            fails = "INV-GDN-22 not measured", on = "2026-10-25")
+    @RedWitness(verdict = "a body of another system", member = "GuidanceTarget#intoTheShell",
+            at = "return Placement.jump(shell.elsewhere());",
+            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
+            fails = "INV-GDN-22 a surface point of a body of another system", on = "2026-10-25")
+    @RedWitness(verdict = "the orbit of a body of another system", member = "GuidanceTarget#orbitIn",
+            at = "return Placement.jump(seen.elsewhere());",
+            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
+            fails = "INV-GDN-22 the orbit of a body of another system", on = "2026-10-25")
+    public void aTargetInAnotherSystemIsTheJumpFromSpaceAndTheClimbFromAPlanet() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);
+        GalacticCoord there = GalacticCoord.ofSectorLocal(9L, 0L, 0L, 1_000L, -200L, 300L);
+        double targetHull = 6.0D;
+        double[] away = {200.0D, 30.0D, -40.0D};
+        String clause = "a clause of the gate";
+
+        Afar underWay = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), null);
+        MotionSlot slot = goToShip();
+        MotionSlot.Step step = null;
+        for (int tick = 0; tick <= MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
+            step = slot.fly(inCell(live, away, cell), underWay);
+        }
+        assertEquals("INV-GDN-22 a ship of another system: leg", MotionSlot.Leg.JUMP, slot.reading().leg());
+        assertEquals("INV-GDN-22 a ship of another system: flown past the window while the jump is under way",
+                MotionSlot.State.ACTIVE, slot.reading().state());
+        assertEquals("INV-GDN-22 held still: commanded no speed", 0.0D, speedOf(step.command()), 0.0D);
+        assertEquals("INV-GDN-22 the drive asked on every tick", MotionSlot.REFUSAL_WINDOW_TICKS + 1, underWay.asks);
+        JumpDestination asked = underWay.asked;
+        assertEquals("INV-GDN-22 beside the ship: a place, not a body", dev.stannismod.stellurgy.api.Constants.INVALID_PLANET,
+                asked.body());
+        assertEquals("INV-GDN-22 beside the ship: in its cell", there.cellKey(), asked.address().cellKey());
+        double off = asked.address().staticFrameDistanceTo(there);
+        double standoff = HULL + targetHull + ARRIVAL_RADIUS;
+        assertTrue("INV-GDN-22 beside the ship: " + off + " blocks off it, not beyond the arrival radius past the"
+                + " standoff " + standoff, off - standoff > ARRIVAL_RADIUS);
+
+        Afar declining = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), clause);
+        MotionSlot declined = goToShip();
+        for (int tick = 1; tick < MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
+            assertEquals("INV-GDN-22 declined: not before the window, tick " + tick, MotionSlot.Event.NONE,
+                    declined.fly(inCell(live, away, cell), declining).event());
+        }
+        assertEquals("INV-GDN-22 declined: refused when the window ran out", MotionSlot.Event.REFUSED,
+                declined.fly(inCell(live, away, cell), declining).event());
+        assertEquals("INV-GDN-22 declined: for the jump", MotionSlot.Refusal.JUMP_DECLINED, declined.reading().refusal());
+        assertEquals("INV-GDN-22 naming what declined it", clause, declined.reading().declinedBy());
+
+        assertRefusedFor("INV-GDN-22 not measured", GuidanceTarget.ship(OTHER), inCell(live, away, cell),
+                Afar.ship(Surroundings.Sighting.inAnotherSystem(there, Double.NaN), null),
+                MotionSlot.Refusal.JUMP_TARGET_NOT_MEASURED);
+
+        JumpDestination toBody = JumpDestination.toBody(PLANET_DIM + 1, there);
+        String[] bodyNames = {"a surface point of a body of another system", "the orbit of a body of another system"};
+        GuidanceTarget[] ofBody = {GuidanceTarget.surface(PLANET_DIM + 1, 30.0D, 40.0D), GuidanceTarget.orbit(PLANET_DIM + 1)};
+        for (int i = 0; i < ofBody.length; i++) {
+            Afar elsewhere = Afar.body(Surroundings.Sphere.inAnotherSystem(toBody));
+            MotionSlot toIt = goTo(ofBody[i]);
+            toIt.fly(inCell(live, away, cell), elsewhere);
+            assertEquals("INV-GDN-22 " + bodyNames[i] + ": leg", MotionSlot.Leg.JUMP, toIt.reading().leg());
+            assertEquals("INV-GDN-22 " + bodyNames[i] + ": where the world aims the jump to it", toBody, elsewhere.asked);
+        }
+
+        double depth = 2.75D;
+        double[] grounded = {12.5D, 70.0D, -7.5D};
+        Afar fromAPlanet = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), null);
+        MotionSlot climbing = goToShip();
+        climbing.fly(onSurface(live, grounded, depth, PLANET_DIM, null), fromAPlanet);
+        assertEquals("INV-GDN-22 from a planet: the climb", MotionSlot.Leg.CLIMB_TO_SPACE, climbing.reading().leg());
+    }
+
+    /**
+     * INV-GDN-23's law: in space the craft is never sent into the descent shell of a body the order does not
+     * lead into. A straight way to a ship that passes through another body's shell is replaced by a way that
+     * never comes nearer that body than its shell and the clearance, toward the ship's side; a straight way
+     * that keeps clear is flown straight; a craft already inside the clearance and leaving it is sent straight
+     * on, and one there whose aim lies across the body is sent along the shell, getting no nearer; and the
+     * shell of the body the order leads into is flown into as INV-GDN-19 says. The clearance is the clause's,
+     * the arrival radius plus two blocks. The world is an {@link Afar}: where the ship is and the shells are
+     * inputs.
+     */
+    @Test
+    @Pins("INV-GDN-23")
+    @RedWitness(verdict = "around a shell", member = "MotionSlot#fly",
+            at = "double[] around0 = aroundTheShells(craft.position, aim, around.shellsBut(placed.entering()));",
+            replacedBy = "double[] around0 = aim;",
+            fails = "INV-GDN-23 around a shell", on = "2026-10-25")
+    @RedWitness(verdict = "the clearance", member = "MotionSlot#grazing",
+            at = "double clear = shell.radius() + CLEAR_OF_THE_SHELL;", replacedBy = "double clear = shell.radius();",
+            fails = "INV-GDN-23 around a shell", on = "2026-10-25")
+    @RedWitness(verdict = "leaving", member = "MotionSlot#aroundTheShells",
+            at = "magnitude(nearest) < clear && magnitude(nearest) < magnitude(toCentre)",
+            replacedBy = "magnitude(nearest) < clear",
+            fails = "INV-GDN-23 leaving", on = "2026-10-25")
+    @RedWitness(verdict = "along the shell", member = "MotionSlot#grazing",
+            at = "t = side;", replacedBy = "t = scaled(new double[]{aim[0] - from[0], aim[1] - from[1], aim[2] - from[2]}, 1.0D / magnitude(new double[]{aim[0] - from[0], aim[1] - from[1], aim[2] - from[2]}));",
+            fails = "INV-GDN-23 along the shell", on = "2026-10-25")
+    @RedWitness(verdict = "toward the ship", member = "MotionSlot#grazing",
+            at = "t = scaled(toTouch, 1.0D / magnitude(toTouch));", replacedBy = "t = scaled(toTouch, -1.0D / magnitude(toTouch));",
+            fails = "INV-GDN-23 around a shell: sent toward the ship's side", on = "2026-10-25")
+    @RedWitness(verdict = "along the shell toward the aim", member = "MotionSlot#grazing",
+            at = "t = side;", replacedBy = "t = scaled(side, -1.0D);",
+            fails = "INV-GDN-23 along the shell: toward the aim's side", on = "2026-10-25")
+    @RedWitness(verdict = "the shell led into", member = "GuidanceTarget#intoTheShell",
+            at = "return Placement.intoTheShellOf(target, aim);",
+            replacedBy = "return Placement.beforeACrossing(aim, MotionSlot.Leg.INTO_THE_SHELL);",
+            fails = "INV-GDN-23 the shell led into", on = "2026-10-25")
+    public void aWayThroughTheShellOfABodyTheOrderDoesNotLeadIntoGoesAroundIt() {
+        ShipCapability live = solve(ShipMotionCases.symmetricHull());
+        GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);
+        double[] body = {0.0D, 0.0D, 0.0D};
+        double shell = 1_000.0D;
+        double clear = shell + ARRIVAL_RADIUS + 2.0D;
+        java.util.Map<Integer, Surroundings.Sphere> shells = new java.util.HashMap<>();
+        shells.put(PLANET_DIM + 1, Surroundings.Sphere.about(body, shell));
+
+        // A ship on the far side of the body, the straight way to it 300 blocks off the body's centre.
+        double[] from = {-2_000.0D, 300.0D, 0.0D};
+        double[] ship = {2_000.0D, 300.0D, 0.0D};
+        Afar behind = Afar.shipAt(ship, shells);
+        double[] v = goToShip().fly(inCell(live, from, cell), behind).command().velocity();
+        double nearest = closestApproach(from, v, body);
+        assertTrue("INV-GDN-23 around a shell: sent along " + Arrays.toString(v) + ", " + nearest
+                + " blocks from the body at the nearest, inside the shell and its clearance " + clear,
+                nearest >= clear * (1.0D - RELATIVE));
+        double[] toShip = {ship[0] - from[0], ship[1] - from[1], ship[2] - from[2]};
+        assertTrue("INV-GDN-23 around a shell: sent toward the ship's side, not back: " + Arrays.toString(v),
+                v[0] * toShip[0] + v[1] * toShip[1] + v[2] * toShip[2] > 0.0D);
+
+        // The same ship with the straight way clear of the shell.
+        double[] high = {-2_000.0D, 1_500.0D, 0.0D};
+        double[] shipHigh = {2_000.0D, 1_500.0D, 0.0D};
+        assertPointsAlong("INV-GDN-23 a clear way flown straight",
+                goToShip().fly(inCell(live, high, cell), Afar.shipAt(shipHigh, shells)).command(),
+                unit(new double[]{1.0D, 0.0D, 0.0D}));
+
+        // Inside the clearance, leaving: sent straight on.
+        double[] inside = {0.0D, shell + 1.0D, 0.0D};
+        double[] outward = {0.0D, shell + 500.0D, 0.0D};
+        assertPointsAlong("INV-GDN-23 leaving: a craft inside the clearance sent away from the body",
+                goToShip().fly(inCell(live, inside, cell), Afar.shipAt(outward, shells)).command(),
+                new double[]{0.0D, 1.0D, 0.0D});
+
+        // Inside the clearance, its aim across the body: sent along the shell, no nearer.
+        double[] across = {300.0D, -(shell + 500.0D), 0.0D};
+        double[] w = goToShip().fly(inCell(live, inside, cell), Afar.shipAt(across, shells)).command().velocity();
+        double radial = w[1];
+        assertEquals("INV-GDN-23 along the shell: the craft inside the clearance sent no nearer the body: "
+                + Arrays.toString(w), 0.0D, radial, RELATIVE * Math.sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
+        assertTrue("INV-GDN-23 along the shell: toward the aim's side of the body: " + Arrays.toString(w), w[0] > 0.0D);
+
+        // The shell of the body the order leads into: flown into, at the body.
+        double[] u = unit(new double[]{0.6D, 0.0D, -0.8D});
+        MotionSlot down = goTo(GuidanceTarget.surface(PLANET_DIM + 1, 30.0D, 40.0D));
+        assertPointsAlong("INV-GDN-23 the shell led into: sent at the body",
+                down.fly(inCell(live, back(body, u, 10.0D * shell), cell), Afar.shell(body, shell, shells)).command(), u);
+    }
+
+    /** How near the ray from {@code from} along {@code v} comes to {@code point}. */
+    private static double closestApproach(double[] from, double[] v, double[] point) {
+        double n = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        double[] d = {point[0] - from[0], point[1] - from[1], point[2] - from[2]};
+        double along = Math.max(0.0D, (d[0] * v[0] + d[1] * v[1] + d[2] * v[2]) / n);
+        double[] off = {d[0] - v[0] / n * along, d[1] - v[1] / n * along, d[2] - v[2] / n * along};
+        return Math.sqrt(off[0] * off[0] + off[1] * off[1] + off[2] * off[2]);
+    }
+
     private static MotionSlot goTo(GuidanceTarget target) {
         MotionSlot slot = new MotionSlot();
         slot.issue(MotionIntent.goTo(target));
         return slot;
+    }
+
+    /**
+     * The world as INV-GDN-22 and -23 are written over, every answer an input: the target ship seen as stated;
+     * the body of every planet world asked, from space, answered as stated (its shell and orbit placed here, or
+     * of another system); every descent shell in the craft's world by its planet world; the craft's world's
+     * orbit line with its column open; and the craft's drive answering every jump asked of it as stated —
+     * {@code null}, under way, or what declines it — remembering the last destination and how many asks.
+     */
+    private static final class Afar implements Surroundings {
+
+        private final Sighting sighting;
+        private final Sphere body;
+        private final java.util.Map<Integer, Sphere> shells;
+        private final String declines;
+        JumpDestination asked;
+        int asks;
+
+        private Afar(Sighting sighting, Sphere body, java.util.Map<Integer, Sphere> shells, String declines) {
+            this.sighting = sighting;
+            this.body = body;
+            this.shells = shells;
+            this.declines = declines;
+        }
+
+        /** The target ship seen as {@code sighting}, the drive answering {@code declines}; no body, no shell. */
+        static Afar ship(Sighting sighting, String declines) {
+            return new Afar(sighting, null, java.util.Collections.<Integer, Sphere>emptyMap(), declines);
+        }
+
+        /** The target ship measured at {@code at} in the craft's world, the hull this class's; {@code shells} about. */
+        static Afar shipAt(double[] at, java.util.Map<Integer, Sphere> shells) {
+            return new Afar(Sighting.at(at, HULL), null, shells, null);
+        }
+
+        /** Every planet world's body answered as {@code body}; no ship, no shell, a drive under way. */
+        static Afar body(Sphere body) {
+            return new Afar(Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND), body,
+                    java.util.Collections.<Integer, Sphere>emptyMap(), null);
+        }
+
+        /** Every planet world's body's shell the sphere of {@code radius} about {@code centre}; {@code shells} about. */
+        static Afar shell(double[] centre, double radius, java.util.Map<Integer, Sphere> shells) {
+            return new Afar(Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND), Sphere.about(centre, radius),
+                    shells, null);
+        }
+
+        @Override
+        public String jump(JumpDestination destination) {
+            asked = destination;
+            asks++;
+            return declines;
+        }
+
+        @Override
+        public Sighting ship(UUID shipId) {
+            return OTHER.equals(shipId) ? sighting : Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
+        }
+
+        @Override
+        public double groundTop(double x, double z, double radius) {
+            throw new UnsupportedOperationException("this world states no ground");
+        }
+
+        @Override
+        public double orbitLine() {
+            return 200.0D;
+        }
+
+        @Override
+        public boolean openAbove(double x, double z, double fromY, double toY) {
+            return true;
+        }
+
+        @Override
+        public Sphere orbit(int dimension) {
+            if (body == null) {
+                throw new UnsupportedOperationException("this world states no body");
+            }
+            return body;
+        }
+
+        @Override
+        public Sphere shell(int dimension) {
+            if (body == null) {
+                throw new UnsupportedOperationException("this world states no body");
+            }
+            return body;
+        }
+
+        @Override
+        public java.util.List<Sphere> shellsBut(java.util.OptionalInt entering) {
+            java.util.List<Sphere> them = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<Integer, Sphere> e : shells.entrySet()) {
+                if (!entering.isPresent() || e.getKey() != entering.getAsInt()) {
+                    them.add(e.getValue());
+                }
+            }
+            return them;
+        }
+
+        @Override
+        public GuidanceTarget.Unplaced unreachable(int dimension) {
+            return null;
+        }
     }
 
     @Test
@@ -910,8 +1227,8 @@ public class MotionGuidanceLawsTest {
             at = "if (!seen.measured()) {", replacedBy = "if (true) {",
             fails = "INV-GDN-13 measured", on = "2026-10-22")
     @RedWitness(verdict = "gone", member = "MotionSlot#refusalFor",
-            at = "return Refusal.TARGET_NOT_FOUND;", replacedBy = "return Refusal.NEEDS_A_JUMP;",
-            fails = "INV-GDN-13 gone", on = "2026-10-22")
+            at = "return Refusal.TARGET_NOT_FOUND;", replacedBy = "return Refusal.TARGET_IN_HYPERSPACE;",
+            fails = "INV-GDN-13 gone", on = "2026-10-25")
     public void aShipWhoseHullCannotBeMeasuredIsMadeForNotRefusedAndNeverArrivedAt() {
         ShipCapability live = solve(ShipMotionCases.symmetricHull());
         double[] target = {2000.0D, 30.0D, -40.0D};
@@ -1120,8 +1437,18 @@ public class MotionGuidanceLawsTest {
         }
 
         @Override
+        public java.util.List<Sphere> shellsBut(java.util.OptionalInt entering) {
+            return java.util.Collections.emptyList();
+        }
+
+        @Override
         public GuidanceTarget.Unplaced unreachable(int dimension) {
             throw new UnsupportedOperationException("this world states no body");
+        }
+
+        @Override
+        public String jump(JumpDestination destination) {
+            throw new UnsupportedOperationException("this world states no jump drive");
         }
     }
 
@@ -1202,9 +1529,21 @@ public class MotionGuidanceLawsTest {
             return Sphere.about(centre, shellRadius);
         }
 
+        /** The one body's shell, about {@code centre}, is the shell of every planet world's body. */
+        @Override
+        public java.util.List<Sphere> shellsBut(java.util.OptionalInt entering) {
+            return centre == null || entering.isPresent() ? java.util.Collections.<Sphere>emptyList()
+                    : java.util.Collections.singletonList(Sphere.about(centre, shellRadius));
+        }
+
         @Override
         public GuidanceTarget.Unplaced unreachable(int dimension) {
             return body;
+        }
+
+        @Override
+        public String jump(JumpDestination destination) {
+            throw new UnsupportedOperationException("this world states no jump drive");
         }
     }
 
@@ -1281,9 +1620,20 @@ public class MotionGuidanceLawsTest {
             throw new UnsupportedOperationException("this world states no shell");
         }
 
+        /** The orbit's body has a shell, inside its orbit; no way to the orbit asked of here crosses it. */
+        @Override
+        public java.util.List<Sphere> shellsBut(java.util.OptionalInt entering) {
+            return java.util.Collections.emptyList();
+        }
+
         @Override
         public GuidanceTarget.Unplaced unreachable(int dimension) {
             throw new UnsupportedOperationException("this world states no other body");
+        }
+
+        @Override
+        public String jump(JumpDestination destination) {
+            throw new UnsupportedOperationException("this world states no jump drive");
         }
     }
 
