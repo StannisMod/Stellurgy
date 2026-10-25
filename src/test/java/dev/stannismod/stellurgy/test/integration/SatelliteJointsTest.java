@@ -4,9 +4,14 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteOrbit;
 import dev.stannismod.stellurgy.environment.BodyRotation;
 import dev.stannismod.stellurgy.environment.MagnetosphereDerivation;
 import dev.stannismod.stellurgy.environment.PlanetEnvironment;
+import dev.stannismod.stellurgy.environment.PlanetaryDipole;
 import dev.stannismod.stellurgy.satellite.DoseReadings;
 import dev.stannismod.stellurgy.satellite.FailureJournal;
+import dev.stannismod.stellurgy.satellite.HeldModel;
 import dev.stannismod.stellurgy.satellite.SatelliteAccrual;
+import dev.stannismod.stellurgy.satellite.SatelliteDosimeter;
+import dev.stannismod.stellurgy.tile.satellite.TerminalReadout;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Regions;
@@ -222,5 +227,144 @@ public class SatelliteJointsTest {
             }
             assertTrue("arrangement: " + name + " — some readings were of a dose", i == 1 || nonZero > 0);
         }
+    }
+
+    /** Orbits flown for the closing law: four orbits of 64 readings fill the terminal's 256 rows exactly. */
+    private static final int CLOSING_ORBITS = TerminalReadout.CAPACITY / SatelliteAccrual.SEGMENTS_PER_PERIOD;
+    /** The body's turn and day, ticks: a vanilla day, which is what the overworld's body turns by. */
+    private static final double CLOSING_DAY_TICKS = 24_000d;
+    /** Seeds tried for a field that is not uniform along the equator; the first that is, is used. */
+    private static final int CLOSING_SEEDS = 200;
+
+    /**
+     * Pins INV-SAT-42 where it meets the field it models (environment, through INV-SAT-26 and INV-SAT-41): a
+     * dosimeter on an equatorial orbit inside the inner belt of a body whose field is tilted and offset —
+     * production's derivation from an Earth's inputs — reads for four orbits, and one terminal takes every
+     * reading, each placed by production's ground track. The readings the terminal holds then expect each
+     * reading better than the uniform field does, AND better than a map keyed by the orbit's phase — the
+     * squared residuals sum to less than either's. The first is MECH-SAT-33's closing; the second is why a
+     * region is a place over the body and not a stretch of the orbit: the body turns under the orbit, so one
+     * phase sees different places. The body and its turn are the test's; that production
+     * builds a real body's environment from the same turn it places rows by is `SatelliteLife#environmentOf`'s,
+     * read in code. Counted: how many readings stand where another reading also stood (at least half the
+     * table), so the closing is measured where there is something to close.
+     */
+    @Pins("INV-SAT-42")
+    @RedWitness(member = "HeldModel#expect", at = "return here.isPresent() ? here : meanOf(Basis.ORBIT, null, held);",
+            replacedBy = "return meanOf(Basis.ORBIT, null, held);", fails = "INV-SAT-42: closing", on = "2026-10-25")
+    @RedWitness(member = "GroundTrack#under", at = "Downlink.under(orbit.positionAt(tick), turn, tick)",
+            replacedBy = "Downlink.under(orbit.positionAt(tick), turn, 0L)", fails = "INV-SAT-42: closing",
+            on = "2026-10-25")
+    @Test
+    public void readingARegionAgainClosesWhatTheUniformFieldLeftThere() {
+        BodyRotation turn = BodyRotation.of(CLOSING_DAY_TICKS, 0d);
+        SatelliteOrbit orbit = SatelliteOrbit.releasedAt(1.5d * AstronomicalBodyHelper.EARTH_RADIUS_METRES, 0d,
+                SatelliteOrbit.EARTH_MU_M3_S2, turn, 0L);
+        TerminalReadout readout = null;
+        long seed = 0L;
+        for (; seed < CLOSING_SEEDS && readout == null; seed++) {
+            Optional<PlanetaryDipole> field = MagnetosphereDerivation.derive(1d, 1d, (long) CLOSING_DAY_TICKS, false,
+                    true, 1d, seed);
+            if (!field.isPresent()) {
+                continue;
+            }
+            TerminalReadout taken = flyAndTake(orbit, turn, PlanetEnvironment.of(field, CLOSING_DAY_TICKS, 0d));
+            if (unevenAlongTheEquator(taken)) {
+                readout = taken;
+            }
+        }
+        assertTrue("arrangement: no field among " + CLOSING_SEEDS + " seeds varies along the equator", readout != null);
+
+        double held = 0d;
+        double uniform = 0d;
+        double byPhase = 0d;
+        int revisited = 0;
+        List<TerminalReadout.Row> rows = readout.rows();
+        for (TerminalReadout.Row row : rows) {
+            Optional<HeldModel.Expectation> expected = readout.expectationOf(row);
+            if (!expected.isPresent()) {
+                continue;
+            }
+            double value = row.gyPerS().getAsDouble();
+            double residual = expected.get().residualOf(value);
+            held += residual * residual;
+            // The two models the held one is measured against, from the readings' own values: the uniform
+            // field, and a map keyed by where on the ORBIT a reading was taken instead of where over the body.
+            double all = 0d;
+            int n = 0;
+            double samePhase = 0d;
+            int m = 0;
+            boolean placeRevisited = false;
+            for (TerminalReadout.Row other : rows) {
+                if (other == row || !other.gyPerS().isPresent()) {
+                    continue;
+                }
+                all += other.gyPerS().getAsDouble();
+                n++;
+                if (segmentOf(other) == segmentOf(row)) {
+                    samePhase += other.gyPerS().getAsDouble();
+                    m++;
+                }
+                placeRevisited |= other.region().equals(row.region());
+            }
+            double againstUniform = value - all / n;
+            uniform += againstUniform * againstUniform;
+            double againstPhase = m == 0 ? againstUniform : value - samePhase / m;
+            byPhase += againstPhase * againstPhase;
+            if (placeRevisited) {
+                revisited++;
+            }
+        }
+        String inCase = " (seed " + (seed - 1) + ", held " + held + ", by phase " + byPhase + ", uniform " + uniform + ")";
+        assertTrue("arrangement: readings whose place another reading revisited: " + revisited + inCase,
+                revisited >= TerminalReadout.CAPACITY / 2);
+        assertTrue("INV-SAT-42: closing — the held readings expect no better than the uniform field" + inCase,
+                held < uniform);
+        assertTrue("INV-SAT-42: closing — the held readings expect no better than a map of the orbit's phases" + inCase,
+                held < byPhase);
+    }
+
+    /** Which of the orbit's segments a row was read in. */
+    private static int segmentOf(TerminalReadout.Row row) {
+        return (int) Math.floor(row.phaseRad / (2d * Math.PI / SatelliteAccrual.SEGMENTS_PER_PERIOD));
+    }
+
+    /** Four orbits of a dosimeter's accrual on {@code orbit} in {@code field}, taken by one terminal. */
+    private static TerminalReadout flyAndTake(SatelliteOrbit orbit, BodyRotation turn, PlanetEnvironment field) {
+        // A battery no segment can empty and a panel that always covers the draw: every segment reads.
+        double battery = 1e12d;
+        List<SatelliteAccrual.Part> parts = new ArrayList<>();
+        parts.add(new SatelliteAccrual.Part(0, SatelliteAccrual.PartKind.ELECTRONICS, true, 0d, 0, 0d));
+        parts.add(new SatelliteAccrual.Part(1, SatelliteAccrual.PartKind.POWER_GENERATION, false,
+                10d * SatelliteDosimeter.DRAW_PER_TICK, 0, 0d));
+        SatelliteAccrual.State state = new SatelliteAccrual.State(0L, battery, battery, 0L, 0d, new FailureJournal(),
+                new DoseReadings());
+        SatelliteAccrual.Body body = new SatelliteAccrual.Body(orbit, Optional.of(field),
+                tick -> Optional.of(new Vector3d(1d, 0d, 0d)), AstronomicalBodyHelper.EARTH_RADIUS_METRES);
+        SatelliteAccrual.advance(body, parts, new SatelliteAccrual.Payload(false, true, 0d, SatelliteDosimeter.DRAW_PER_TICK),
+                state, new SatelliteAccrual.Rules(false, 1d), 1L,
+                orbit.epochTick() + CLOSING_ORBITS * orbit.periodTicks());
+        TerminalReadout readout = new TerminalReadout();
+        readout.take(1L, state.journal(), state.readings(), 0, 0, 0, 0, TerminalReadout.GroundTrack.under(orbit, turn));
+        return readout;
+    }
+
+    /** Whether the readings' regions differ by a factor of two or more in their mean: a field that is not uniform. */
+    private static boolean unevenAlongTheEquator(TerminalReadout readout) {
+        java.util.Map<HeldModel.Region, double[]> sums = new java.util.HashMap<>();
+        for (TerminalReadout.Row row : readout.rows()) {
+            if (row.gyPerS().isPresent()) {
+                double[] s = sums.computeIfAbsent(row.region(), r -> new double[2]);
+                s[0] += row.gyPerS().getAsDouble();
+                s[1]++;
+            }
+        }
+        double low = Double.POSITIVE_INFINITY;
+        double high = 0d;
+        for (double[] s : sums.values()) {
+            low = Math.min(low, s[0] / s[1]);
+            high = Math.max(high, s[0] / s[1]);
+        }
+        return sums.size() > 1 && low > 0d && high >= 2d * low;
     }
 }

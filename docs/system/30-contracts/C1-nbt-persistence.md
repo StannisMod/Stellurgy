@@ -183,7 +183,7 @@ mass for may not be undone by a chunk reload).
 `sat_power_per_tick`, `randomblocks_per_tick`, `was_enabled_last_tick`. `TileSatelliteTerminal`: `data`,
 `outcome` (byte, the ordinal of its last try's outcome), `readout` {`satellite`, `journalNext`,
 `readingsNext`, `dropped`, `rows` [{`tick`, `phase`, `kind`, `count`, `slot`, `rate` — absent for a failure
-or "absent here"}], `last` {`received`, `lost`, `parts`, `readings`, `missed`, `power`, `aboard`,
+or "absent here", `north`, `east` — radians, the place under the satellite at `tick` (satellite INV-SAT-41)}], `last` {`received`, `lost`, `parts`, `readings`, `missed`, `power`, `aboard`,
 `capacity`}}; the same tag is its update packet.
 
 **api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons, a LONG — one nuclear core rates

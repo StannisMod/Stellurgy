@@ -1,7 +1,11 @@
 package dev.stannismod.stellurgy.tile.satellite;
 
+import dev.stannismod.stellurgy.api.satellite.SatelliteOrbit;
+import dev.stannismod.stellurgy.environment.BodyRotation;
 import dev.stannismod.stellurgy.satellite.DoseReadings;
+import dev.stannismod.stellurgy.satellite.Downlink;
 import dev.stannismod.stellurgy.satellite.FailureJournal;
+import dev.stannismod.stellurgy.satellite.HeldModel;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
@@ -12,6 +16,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalDouble;
 
 /**
@@ -47,19 +52,40 @@ public final class TerminalReadout {
         /** The chassis slot of a failed part; -1 otherwise. */
         public final int slot;
         private final double gyPerS;
+        private final double northRad;
+        private final double eastRad;
 
-        Row(long tick, double phaseRad, Kind kind, int count, int slot, double gyPerS) {
+        Row(long tick, double phaseRad, Kind kind, int count, int slot, double gyPerS, double northRad,
+            double eastRad) {
             this.tick = tick;
             this.phaseRad = phaseRad;
             this.kind = kind;
             this.count = count;
             this.slot = slot;
             this.gyPerS = gyPerS;
+            this.northRad = northRad;
+            this.eastRad = eastRad;
         }
 
         /** A reading's dose rate, Gy/s; empty for a failure, and for a reading that found none here. */
         public OptionalDouble gyPerS() {
             return Double.isNaN(gyPerS) ? OptionalDouble.empty() : OptionalDouble.of(gyPerS);
+        }
+
+        /** The region under the satellite at {@link #tick}. */
+        public HeldModel.Region region() {
+            return HeldModel.regionOf(new Downlink.GroundPoint(northRad, eastRad));
+        }
+    }
+
+    /** The place under a satellite on its body at a tick. */
+    @FunctionalInterface
+    public interface GroundTrack {
+        Downlink.GroundPoint at(long tick);
+
+        /** Under a satellite flying {@code orbit} about a body turning by {@code turn} (INV-SAT-41). */
+        static GroundTrack under(SatelliteOrbit orbit, BodyRotation turn) {
+            return tick -> Downlink.under(orbit.positionAt(tick), turn, tick);
         }
     }
 
@@ -105,12 +131,12 @@ public final class TerminalReadout {
 
     /**
      * Take what satellite {@code satelliteId} recorded since this terminal last read it, with
-     * {@code received} data points that arrived and the telemetry it sent. Another satellite than the last
-     * one read starts afresh: its rows replace the old ones, since a table mixing two orbits correlates
-     * nothing.
+     * {@code received} data points that arrived and the telemetry it sent; {@code track} places each row
+     * under the satellite. Another satellite than the last one read starts afresh: its rows replace the old
+     * ones, since a table mixing two orbits correlates nothing.
      */
     public Contact take(long satelliteId, FailureJournal journal, @Nullable DoseReadings readings, int received,
-                        int powerPerTick, int aboard, int capacity) {
+                        int powerPerTick, int aboard, int capacity, GroundTrack track) {
         if (satelliteId != this.satelliteId) {
             this.satelliteId = satelliteId;
             journalNext = 0L;
@@ -128,7 +154,7 @@ public final class TerminalReadout {
             } else {
                 lost += e.count;
             }
-            fresh.add(new Row(e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN));
+            fresh.add(placed(track, e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN));
         }
         journalNext = journal.recorded();
         int read = 0;
@@ -136,7 +162,8 @@ public final class TerminalReadout {
             missed += Math.max(0L, readings.dropped() - readingsNext);
             for (DoseReadings.Reading r : readings.since(readingsNext)) {
                 OptionalDouble rate = r.gyPerS();
-                fresh.add(new Row(r.tick, r.phaseRad, Kind.DOSE_RATE, 0, -1, rate.isPresent() ? rate.getAsDouble() : Double.NaN));
+                fresh.add(placed(track, r.tick, r.phaseRad, Kind.DOSE_RATE, 0, -1,
+                        rate.isPresent() ? rate.getAsDouble() : Double.NaN));
                 read++;
             }
             readingsNext = readings.recorded();
@@ -148,6 +175,30 @@ public final class TerminalReadout {
         }
         last = new Contact(received, lost, parts, read, missed, powerPerTick, aboard, capacity);
         return last;
+    }
+
+    private static Row placed(GroundTrack track, long tick, double phaseRad, Kind kind, int count, int slot,
+                              double gyPerS) {
+        Downlink.GroundPoint under = track.at(tick);
+        return new Row(tick, phaseRad, kind, count, slot, gyPerS, under.northRad, under.eastRad);
+    }
+
+    /**
+     * What the readings held expect of {@code row}, a reading held here: from the other readings of its region,
+     * or of the whole table while its region holds none ({@link HeldModel#expect}). Empty for a failure, for a
+     * reading that found no dose, and when no other reading is held.
+     */
+    public Optional<HeldModel.Expectation> expectationOf(Row row) {
+        if (row.kind != Kind.DOSE_RATE || !row.gyPerS().isPresent()) {
+            return Optional.empty();
+        }
+        List<HeldModel.Sample> others = new ArrayList<>();
+        for (Row held : rows) {
+            if (held != row && held.kind == Kind.DOSE_RATE && held.gyPerS().isPresent()) {
+                others.add(new HeldModel.Sample(held.region(), held.gyPerS().getAsDouble()));
+            }
+        }
+        return HeldModel.expect(row.region(), others);
     }
 
     private static Kind kindOf(FailureJournal.Kind kind) {
@@ -226,6 +277,8 @@ public final class TerminalReadout {
             if (!Double.isNaN(r.gyPerS)) {
                 tag.setDouble("rate", r.gyPerS);
             }
+            tag.setDouble("north", r.northRad);
+            tag.setDouble("east", r.eastRad);
             list.appendTag(tag);
         }
         nbt.setTag("rows", list);
@@ -251,7 +304,8 @@ public final class TerminalReadout {
         for (int i = 0; i < list.tagCount(); i++) {
             NBTTagCompound tag = list.getCompoundTagAt(i);
             rows.addLast(new Row(tag.getLong("tick"), tag.getDouble("phase"), Kind.values()[tag.getByte("kind")],
-                    tag.getInteger("count"), tag.getByte("slot"), tag.hasKey("rate") ? tag.getDouble("rate") : Double.NaN));
+                    tag.getInteger("count"), tag.getByte("slot"), tag.hasKey("rate") ? tag.getDouble("rate") : Double.NaN,
+                    tag.getDouble("north"), tag.getDouble("east")));
         }
         NBTTagCompound contact = nbt.getCompoundTag("last");
         last = new Contact(contact.getInteger("received"), contact.getInteger("lost"), contact.getInteger("parts"),

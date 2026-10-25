@@ -34,6 +34,30 @@ public final class Downlink {
     }
 
     /**
+     * The place on a turning body's surface straight under {@code position} at {@code tick} — the inverse of
+     * {@link #surfacePoint}: a satellite over a block's place is under the same north and east that block
+     * stands at. {@code position} is in the same frame, from the body's centre, and not at it.
+     */
+    public static GroundPoint under(Vector3dc position, BodyRotation rotation, long tick) {
+        double north = Math.asin(-position.z() / position.length());
+        double east = rotation.angleAt(tick) - Math.atan2(position.y(), position.x());
+        return new GroundPoint(north, east);
+    }
+
+    /** A place on a body's surface: radians north of the equator and east of meridian 0. Immutable. */
+    public static final class GroundPoint {
+        public final double northRad;
+        /** Taken into {@code [-π, π)}. */
+        public final double eastRad;
+
+        public GroundPoint(double northRad, double eastRad) {
+            this.northRad = northRad;
+            double turn = 2d * Math.PI;
+            this.eastRad = eastRad - turn * Math.floor((eastRad + Math.PI) / turn);
+        }
+    }
+
+    /**
      * Whether a terminal at {@code terminal}, on the surface of a body centred at the origin, sees
      * {@code target}: the target is not below its horizon — a target on it is seen — and the straight line
      * to it does not pass through {@code hiding}, a further body about {@code hidingCentre}. Pass a

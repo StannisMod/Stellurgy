@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.environment.PlanetEnvironment;
 import dev.stannismod.stellurgy.satellite.DoseReadings;
 import dev.stannismod.stellurgy.satellite.Downlink;
 import dev.stannismod.stellurgy.satellite.FailureJournal;
+import dev.stannismod.stellurgy.satellite.HeldModel;
 import dev.stannismod.stellurgy.satellite.RadiationWear;
 import dev.stannismod.stellurgy.satellite.SatelliteAccrual;
 import dev.stannismod.stellurgy.satellite.SatelliteAttitude;
@@ -1116,11 +1117,16 @@ public class SatelliteLawsTest {
      * while the terminal had read three; then another satellite. Every expected row and count is read off
      * the journals the test wrote.
      */
+    /** INV-SAT-37 is about which rows a contact brings, not where they were read: every row at one place. */
+    private static TerminalReadout.GroundTrack atOnePlace() {
+        return tick -> new Downlink.GroundPoint(0d, 0d);
+    }
+
     @Pins("INV-SAT-37")
     @Regions(of = "INV-SAT-37", value = {"first contact", "nothing new", "new failures", "journal overran", "another satellite"})
     @RedWitness(verdict = "first contact", member = "TerminalReadout#take",
-            at = "fresh.add(new Row(e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN));", replacedBy = "",
-            fails = "INV-SAT-37: first contact", on = "2026-10-21")
+            at = "fresh.add(placed(track, e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN));",
+            replacedBy = "", fails = "INV-SAT-37: first contact", on = "2026-10-25")
     @RedWitness(verdict = "nothing new", member = "TerminalReadout#take", at = "journalNext = journal.recorded();",
             replacedBy = "", fails = "INV-SAT-37: nothing new", on = "2026-10-21")
     @RedWitness(verdict = "new failures", member = "TerminalReadout#take", at = "parts++;", replacedBy = "",
@@ -1136,13 +1142,13 @@ public class SatelliteLawsTest {
         long[][] lossAt10 = {{10L, FailureJournal.Kind.DATA_LOST.ordinal(), 3, -1}};
         DoseReadings readings = readingsOf(new long[]{15L, 25L}, new double[]{1e-5d, Double.NaN});
 
-        TerminalReadout.Contact first = readout.take(7L, journalOf(0L, lossAt10), readings, 5, 0, 0, 0);
+        TerminalReadout.Contact first = readout.take(7L, journalOf(0L, lossAt10), readings, 5, 0, 0, 0, atOnePlace());
         assertEquals("INV-SAT-37: first contact — the rows, by tick",
                 "10 DATA_LOST 3 | 15 DOSE_RATE 1.0E-5 | 25 DOSE_RATE absent", rowsOf(readout));
         assertEquals("INV-SAT-37: first contact — received, lost aboard, parts, readings, missed",
                 "5 3 0 2 0", countsOf(first));
 
-        TerminalReadout.Contact again = readout.take(7L, journalOf(0L, lossAt10), readings, 0, 0, 0, 0);
+        TerminalReadout.Contact again = readout.take(7L, journalOf(0L, lossAt10), readings, 0, 0, 0, 0, atOnePlace());
         assertEquals("INV-SAT-37: nothing new — the rows", "10 DATA_LOST 3 | 15 DOSE_RATE 1.0E-5 | 25 DOSE_RATE absent",
                 rowsOf(readout));
         assertEquals("INV-SAT-37: nothing new — the counts", "0 0 0 0 0", countsOf(again));
@@ -1151,7 +1157,7 @@ public class SatelliteLawsTest {
 
         long[][] withTwoMore = {lossAt10[0], {30L, FailureJournal.Kind.PART_FAILED.ordinal(), 1, 2},
                 {40L, FailureJournal.Kind.DATA_OVERFLOWED.ordinal(), 4, -1}};
-        TerminalReadout.Contact more = readout.take(7L, journalOf(0L, withTwoMore), readings, 0, 0, 0, 0);
+        TerminalReadout.Contact more = readout.take(7L, journalOf(0L, withTwoMore), readings, 0, 0, 0, 0, atOnePlace());
         assertEquals("INV-SAT-37: new failures — received, lost aboard, parts, readings, missed",
                 "0 4 1 0 0", countsOf(more));
         assertEquals("INV-SAT-37: new failures — the rows",
@@ -1159,12 +1165,12 @@ public class SatelliteLawsTest {
                 rowsOf(readout));
 
         long[][] afterSevenDropped = {{90L, FailureJournal.Kind.DATA_LOST.ordinal(), 1, -1}};
-        TerminalReadout.Contact overran = readout.take(7L, journalOf(7L, afterSevenDropped), readings, 0, 0, 0, 0);
+        TerminalReadout.Contact overran = readout.take(7L, journalOf(7L, afterSevenDropped), readings, 0, 0, 0, 0, atOnePlace());
         assertEquals("INV-SAT-37: journal overran — received, lost aboard, parts, readings, missed (entries 3..6 gone)",
                 "0 1 0 0 4", countsOf(overran));
 
         long[][] otherPart = {{5L, FailureJournal.Kind.PART_FAILED.ordinal(), 1, 1}};
-        readout.take(8L, journalOf(0L, otherPart), null, 0, 0, 0, 0);
+        readout.take(8L, journalOf(0L, otherPart), null, 0, 0, 0, 0, atOnePlace());
         assertEquals("INV-SAT-37: another satellite — the rows", "5 PART_FAILED slot 1", rowsOf(readout));
     }
 
@@ -1314,5 +1320,191 @@ public class SatelliteLawsTest {
 
     private static String countsOf(TerminalReadout.Contact c) {
         return c.received + " " + c.lostAboard + " " + c.partsFailed + " " + c.readings + " " + c.missed;
+    }
+
+    /** Places swept for INV-SAT-41. */
+    private static final int PLACE_CASES = 20_000;
+    /**
+     * Radians the round trip may miss by: the turn's angle at a tick a billion in on a fast body is ~6e6 rad,
+     * whose ulp is ~1e-9, and both directions read it. 1e-6 is a hundred-thousandth of a region's side, so it
+     * never moves a place across one by more than the cases skipped at a cell's edge.
+     */
+    private static final double PLACE_TOLERANCE_RAD = 1e-6d;
+    /** Within this of a pole, east is not defined; such places are checked for north only. */
+    private static final double NEAR_A_POLE_RAD = 1e-3d;
+
+    /**
+     * Pins INV-SAT-41: a satellite anywhere over a block's place — any altitude, any tick, a body turning fast,
+     * slowly or not at all — is under that block's north (−z/R) and east (x/R), the place
+     * {@link Downlink#surfacePoint} puts the block at, and in the region those give. Regions, counted:
+     * north and south of the equator; east past the antimeridian (x beyond ±πR, which wraps); near a pole; a
+     * body that does not turn.
+     */
+    @Pins("INV-SAT-41")
+    @RedWitness(member = "Downlink#under", at = "Math.asin(-position.z() / position.length())",
+            replacedBy = "Math.asin(position.z() / position.length())", fails = "INV-SAT-41: north",
+            on = "2026-10-25")
+    @RedWitness(member = "Downlink#under", at = "rotation.angleAt(tick) - Math.atan2(position.y(), position.x())",
+            replacedBy = "Math.atan2(position.y(), position.x()) - rotation.angleAt(tick)", fails = "INV-SAT-41: east",
+            on = "2026-10-25")
+    @RedWitness(member = "HeldModel#regionOf", at = "(point.eastRad + Math.PI) / REGION_RAD",
+            replacedBy = "(point.eastRad + Math.PI) / (2d * REGION_RAD)", fails = "INV-SAT-41: region",
+            on = "2026-10-25")
+    @Test
+    public void aSatelliteOverABlocksPlaceIsUnderThatPlace() {
+        SplittableRandom draw = new SplittableRandom(0x41L);
+        int[] visits = new int[5];
+        for (int i = 0; i < PLACE_CASES; i++) {
+            double radius = 1e5d + draw.nextDouble() * 1e7d;
+            boolean turning = i % 10 != 0;
+            BodyRotation turn = BodyRotation.of(turning ? 1_000d + draw.nextDouble() * 1e7d : Double.POSITIVE_INFINITY, 0d);
+            long tick = draw.nextLong(1_000_000_000L);
+            double x = (draw.nextDouble() * 2d - 1d) * radius * (i % 7 == 0 ? 3d : 1d) * Math.PI;
+            double z = (draw.nextDouble() * 2d - 1d) * radius * Math.PI / 2d;
+            double altitude = draw.nextDouble() * 4d;
+            Vector3d over = Downlink.surfacePoint(x, z, radius, turn, tick).mul(1d + altitude);
+            String inCase = " — x " + x + ", z " + z + ", R " + radius + ", tick " + tick + ", turning " + turning;
+
+            Downlink.GroundPoint under = Downlink.under(over, turn, tick);
+
+            double north = -z / radius;
+            double east = Math.IEEEremainder(x / radius, 2d * Math.PI);
+            assertEquals("INV-SAT-41: north" + inCase, north, under.northRad, PLACE_TOLERANCE_RAD);
+            boolean nearPole = Math.abs(north) > Math.PI / 2d - NEAR_A_POLE_RAD;
+            if (!nearPole) {
+                assertEquals("INV-SAT-41: east" + inCase, 0d,
+                        Math.IEEEremainder(under.eastRad - east, 2d * Math.PI), PLACE_TOLERANCE_RAD);
+                // Rows centred on the equator: row 16 spans half a cell either side of it.
+                double cellNorth = north / HeldModel.REGION_RAD + 0.5d + SatelliteAccrual.SEGMENTS_PER_PERIOD / 4;
+                double cellEast = (east + Math.PI) / HeldModel.REGION_RAD;
+                boolean onAnEdge = distanceToInteger(cellNorth) * HeldModel.REGION_RAD < PLACE_TOLERANCE_RAD
+                        || distanceToInteger(cellEast) * HeldModel.REGION_RAD < PLACE_TOLERANCE_RAD;
+                if (!onAnEdge) {
+                    HeldModel.Region region = HeldModel.regionOf(under);
+                    assertEquals("INV-SAT-41: region, north cell" + inCase, (int) Math.floor(cellNorth), region.north);
+                    assertEquals("INV-SAT-41: region, east cell" + inCase,
+                            Math.floorMod((int) Math.floor(cellEast), SatelliteAccrual.SEGMENTS_PER_PERIOD), region.east);
+                }
+            }
+            visits[north >= 0d ? 0 : 1]++;
+            if (Math.abs(x / radius) > Math.PI) {
+                visits[2]++;
+            }
+            if (Math.abs(north) > Math.PI / 2d - 0.05d) {
+                visits[3]++;
+            }
+            if (!turning) {
+                visits[4]++;
+            }
+        }
+        String[] names = {"north", "south", "past the antimeridian", "near a pole", "not turning"};
+        for (int r = 0; r < visits.length; r++) {
+            assertTrue("arrangement: " + names[r] + " visited " + visits[r] + " times", visits[r] >= 200);
+        }
+    }
+
+    private static double distanceToInteger(double v) {
+        return Math.abs(v - Math.rint(v));
+    }
+
+    /** Tables swept for INV-SAT-42. */
+    private static final int TABLE_CASES = 3_000;
+
+    /**
+     * Pins INV-SAT-42: in tables of readings over a handful of regions, with "absent here" readings and
+     * failures among them, every reading's expectation is the mean of the OTHER readings of its region — or of
+     * every other reading while its region holds none — with the standard error of that mean behind two or
+     * more, and none when nothing else is held; a failure and an absent reading have none. The oracle is the
+     * clause's arithmetic over the values the test put in. Regions, counted at the reading judged: a region
+     * holding two or more others; exactly one other; none (the whole orbit); nothing else held at all.
+     */
+    @Pins("INV-SAT-42")
+    @RedWitness(member = "TerminalReadout#expectationOf", at = "held != row && ", replacedBy = "",
+            fails = "INV-SAT-42", on = "2026-10-25")
+    @RedWitness(member = "HeldModel#expect", at = "return here.isPresent() ? here : meanOf(Basis.ORBIT, null, held);",
+            replacedBy = "return meanOf(Basis.ORBIT, null, held);", fails = "INV-SAT-42", on = "2026-10-25")
+    @RedWitness(member = "HeldModel#meanOf", at = "Math.sqrt(squares / (n - 1)) / Math.sqrt(n)",
+            replacedBy = "Math.sqrt(squares / n)", fails = "INV-SAT-42", on = "2026-10-25")
+    @RedWitness(member = "TerminalReadout#expectationOf", at = "|| !row.gyPerS().isPresent()", replacedBy = "",
+            fails = "INV-SAT-42", on = "2026-10-25")
+    @Test
+    public void aReadingIsExpectedFromTheOtherReadingsOfItsRegion() {
+        SplittableRandom draw = new SplittableRandom(0x42L);
+        int[] visits = new int[4];
+        for (int c = 0; c < TABLE_CASES; c++) {
+            int size = 1 + draw.nextInt(30);
+            int places = 1 + draw.nextInt(6);
+            long[] ticks = new long[size];
+            double[] rates = new double[size];
+            Downlink.GroundPoint[] at = new Downlink.GroundPoint[size];
+            for (int i = 0; i < size; i++) {
+                ticks[i] = 100L + 10L * i;
+                rates[i] = draw.nextInt(8) == 0 ? Double.NaN : draw.nextDouble() * 1e-3d;
+                int place = draw.nextInt(places);
+                // Each place in the middle of its own cell, so which region a reading is in is never in doubt here.
+                at[i] = new Downlink.GroundPoint((place - 2d) * HeldModel.REGION_RAD,
+                        (place * 3d + 0.5d) * HeldModel.REGION_RAD);
+            }
+            long[][] failure = {{105L, FailureJournal.Kind.PART_FAILED.ordinal(), 1, 3}};
+            TerminalReadout readout = new TerminalReadout();
+            readout.take(1L, journalOf(0L, failure), readingsOf(ticks, rates), 0, 0, 0, 0,
+                    tick -> tick == 105L ? at[0] : at[(int) ((tick - 100L) / 10L)]);
+            String inCase = " — case " + c + ", rates " + Arrays.toString(rates);
+
+            for (TerminalReadout.Row row : readout.rows()) {
+                Optional<HeldModel.Expectation> got = readout.expectationOf(row);
+                if (row.kind != TerminalReadout.Kind.DOSE_RATE || !row.gyPerS().isPresent()) {
+                    assertFalse("INV-SAT-42: a failure or an absent reading has no expectation" + inCase, got.isPresent());
+                    continue;
+                }
+                int self = (int) ((row.tick - 100L) / 10L);
+                HeldModel.Region region = HeldModel.regionOf(at[self]);
+                List<Double> same = new ArrayList<>();
+                List<Double> all = new ArrayList<>();
+                for (int j = 0; j < size; j++) {
+                    if (j != self && !Double.isNaN(rates[j])) {
+                        all.add(rates[j]);
+                        if (HeldModel.regionOf(at[j]).equals(region)) {
+                            same.add(rates[j]);
+                        }
+                    }
+                }
+                List<Double> behind = same.isEmpty() ? all : same;
+                visits[behind.isEmpty() ? 3 : same.size() >= 2 ? 0 : same.size() == 1 ? 1 : 2]++;
+                if (behind.isEmpty()) {
+                    assertFalse("INV-SAT-42: nothing else held, yet expected" + inCase, got.isPresent());
+                    continue;
+                }
+                assertTrue("INV-SAT-42: other readings held, yet nothing expected" + inCase, got.isPresent());
+                HeldModel.Expectation e = got.get();
+                double mean = 0d;
+                for (double v : behind) {
+                    mean += v / behind.size();
+                }
+                assertEquals("INV-SAT-42: the basis" + inCase, same.isEmpty() ? HeldModel.Basis.ORBIT : HeldModel.Basis.REGION,
+                        e.basis);
+                assertEquals("INV-SAT-42: the readings behind it" + inCase, behind.size(), e.readings);
+                assertEquals("INV-SAT-42: the expectation" + inCase, mean, e.gyPerS, 1e-12d * Math.max(mean, 1e-12d));
+                assertEquals("INV-SAT-42: the residual" + inCase, row.gyPerS().getAsDouble() - mean,
+                        e.residualOf(row.gyPerS().getAsDouble()), 1e-12d);
+                if (behind.size() < 2) {
+                    assertFalse("INV-SAT-42: a standard error behind one reading" + inCase, e.standardError().isPresent());
+                } else {
+                    double squares = 0d;
+                    for (double v : behind) {
+                        squares += (v - mean) * (v - mean);
+                    }
+                    double error = Math.sqrt(squares / (behind.size() - 1) / behind.size());
+                    assertEquals("INV-SAT-42: the standard error" + inCase, error, e.standardError().getAsDouble(),
+                            1e-9d * Math.max(error, 1e-12d));
+                }
+            }
+        }
+        String[] names = {"two or more in the region", "one in the region", "the whole orbit", "nothing else"};
+        // "Nothing else" is mostly a one-reading table: a thirtieth of the tables, ~90 of them; the rest are common.
+        int[] minimum = {200, 200, 200, 40};
+        for (int r = 0; r < visits.length; r++) {
+            assertTrue("arrangement: " + names[r] + " visited " + visits[r] + " times", visits[r] >= minimum[r]);
+        }
     }
 }

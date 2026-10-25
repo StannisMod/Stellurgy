@@ -25,6 +25,7 @@ import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.satellite.GroundContact;
 import dev.stannismod.stellurgy.satellite.SatelliteData;
 import dev.stannismod.stellurgy.satellite.SatelliteLife;
+import dev.stannismod.stellurgy.satellite.SatellitePlacement;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.util.IDataInventory;
@@ -193,6 +194,10 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
             default:
                 break;
         }
+        // Every row is placed under the satellite on ITS body, which turns by its own day. Sight was refused above
+        // for a satellite with no orbit or whose world has no body properties, so both are here.
+        TerminalReadout.GroundTrack track = TerminalReadout.GroundTrack.under(sat.getOrbit().get(),
+                SatellitePlacement.rotationOf(DimensionManager.getInstance().getDimensionPropertiesOrNull(sat.getDimensionId())));
         sat.bringUpToNow();
         if (!SatelliteLife.functioning(sat)) {
             return Outcome.SILENT;
@@ -209,7 +214,7 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
             capacity = dataSat.data.getMaxData();
         }
         TerminalReadout.Contact contact = readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(),
-                received, (int) Math.round(sat.currentPowerPerTick()), aboard, capacity);
+                received, (int) Math.round(sat.currentPowerPerTick()), aboard, capacity, track);
         return contact.broughtAnything() ? Outcome.RECEIVED : Outcome.NOTHING_NEW;
     }
 

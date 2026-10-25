@@ -281,7 +281,8 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   its last contact brought — the satellite's power and the points still aboard as it sent them, the
   points received, those lost aboard since the contact before, and the parts that failed. Its second
   page, opened by Journal, holds the rows downloaded at each contact — a failure or a reading, each with
-  its tick, its phase on the orbit and its value — newest first, ten to a page; and says how many rows the
+  its tick, its phase on the orbit, its region under the satellite (INV-SAT-41) and its value, a reading
+  with what the held readings expect of it (MECH-SAT-33) — newest first, ten to a page; and says how many rows the
   satellite no longer held when it was read. 256 rows are kept, older ones dropped. A chip of another
   satellite starts the table afresh. Readings, never a conclusion. The client draws both pages from the
   terminal's own copy, which the server sends whenever the outcome changes or a contact brings anything;
@@ -524,6 +525,41 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
   `SatelliteLawsTest#theReadoutsPagesHoldEveryRowOnceNewestFirst`. FOR: MECH-SAT-32 — the second page holds
   the rows newest first, ten to a page.
 
+- **INV-SAT-41 [T][SYS] A row's region.** Every row a terminal takes carries the place straight under its
+  satellite at the row's tick, on the satellite's turning body: north from the equator and east from
+  meridian 0 by the same convention a block's place has (MECH-SAT-31) — a satellite over a block's place
+  is under that block's north and east (`Downlink#under`, the inverse of `Downlink#surfacePoint`). The
+  place falls in a region: a cell of `2π/64` of latitude by `2π/64` of longitude, the arc one segment of
+  the orbit spans, which is as fine as one reading tells places apart; its rows are centred on the
+  equator, so an equatorial orbit — a release with no orbit stated — flies along the middle of one row
+  (`HeldModel#regionOf`). A terminal
+  whose satellite's body has no properties has no place to read its rows at: it answers no place and logs
+  why once (`GroundContact#sightOf`). Pinned by
+  `SatelliteLawsTest#aSatelliteOverABlocksPlaceIsUnderThatPlace`. FOR: maintainer 2026-10-25, a region is a
+  cell of the body's surface under the satellite, not a stretch of its orbit (*"рекомендации принимаю"*);
+  serves MECH-SAT-33.
+- **INV-SAT-42 [T][SYS] The expectation of a reading.** A reading's expectation is the mean of the OTHER
+  readings the terminal holds in its region; with none there, the mean of every other reading held (the
+  uniform field); none when nothing else is held. Its uncertainty is the standard error of that mean, given
+  behind two readings or more; its residual is the reading less the expectation. The reading judged is
+  never among the readings that judge it, and "absent here" readings are not readings of a value
+  (`HeldModel#expect`, `TerminalReadout#expectationOf`). Pinned by
+  `SatelliteLawsTest#aReadingIsExpectedFromTheOtherReadingsOfItsRegion`; where it meets the field it models —
+  four orbits of a real derived field, the held readings expecting each reading better than the uniform field
+  does — by `SatelliteJointsTest#readingARegionAgainClosesWhatTheUniformFieldLeftThere`. FOR: maintainer 2026-10-25, the
+  expectation is the region's mean or, while the region holds nothing, the orbit's, with the standard error
+  (*"рекомендации принимаю"*); serves MECH-SAT-33.
+- **MECH-SAT-33 [A][BEH] The held model and its residual.** The terminal's second page shows each row's
+  region, and each reading with what the readings already held expect of it — from its region, or from the
+  whole orbit while its region holds nothing — and the residual with its uncertainty. A field that is not
+  uniform is noticed as large residuals in one region; reading there again closes them, the expectation
+  then coming from the region itself; failures, carrying their region too, gather in one place on the page
+  without any dosimeter. Nothing stores an explanation: the held readings are the model.
+  `ModuleSatelliteReadout.java`, `TerminalReadout.java`, `HeldModel.java`. FOR: maintainer 2026-10-20, the
+  held measurements are the model's term (*"по рекомендациям"*); 2026-10-25, a region is a cell under the
+  satellite, the held readings are the terminal's, the expectation is the region's mean or the orbit's,
+  shown on the reading's row (*"рекомендации принимаю"*).
+
 ## Failure modes & edge cases
 
 - `SatelliteWeatherController.tickEntity` looks up `world` then dereferences it inside the
@@ -586,7 +622,8 @@ INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `Sate
 terraforming chip recognition → `TerraformingTerminalChipRecognitionTest`,
 `TerraformingTerminalSmokeTest`; the quantity each data satellite collects, INV-SAT-34 →
 `SatelliteLawsTest` (unit); the downlink: INV-SAT-35..37 → `SatelliteLawsTest` (unit), the readout's pages, INV-SAT-40 → `SatelliteLawsTest`
-(unit), INV-SAT-07, -38 →
+(unit), a row's region and a reading's expectation, INV-SAT-41, -42 → `SatelliteLawsTest` (unit; MECH-SAT-33's
+screen and a player's path to it not pinned), INV-SAT-07, -38 →
 `SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
 (server, a terminal in a world with no body) and `SatelliteOutsideItsSystemTest` (server, a satellite of
 another system); the terminal's client copy, MECH-SAT-32 →

@@ -78,6 +78,10 @@ public final class GroundContact {
             return noPlace("the universe names no body for world " + satellite.getDimensionId()
                     + ", which the satellite orbits");
         }
+        if (DimensionManager.getInstance().getDimensionPropertiesOrNull(satellite.getDimensionId()) == null) {
+            // Its body's turn places the satellite's rows under it (INV-SAT-41); with no properties, no turn.
+            return noPlace("world " + satellite.getDimensionId() + ", which the satellite orbits, has no body properties");
+        }
         BlockDelta between = its.get().absoluteAt(tick).minus(ground.get().absoluteAt(tick));
         if (between.isSaturated()) {
             return noPlace("the bodies of worlds " + terminalDim + " and " + satellite.getDimensionId()

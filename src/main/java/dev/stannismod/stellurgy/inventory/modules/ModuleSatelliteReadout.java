@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.satellite.HeldModel;
 import dev.stannismod.stellurgy.tile.satellite.TerminalReadout;
 import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
 import net.minecraft.client.gui.FontRenderer;
@@ -20,6 +21,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * The terminal's second page: what its last contact brought, then the downloaded rows as a table of
@@ -117,13 +119,36 @@ public class ModuleSatelliteReadout extends ModuleBase implements IButtonInvento
         }
         out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.columns")).append("\n");
         for (TerminalReadout.Row row : readout.page(page, ROWS_PER_PAGE)) {
+            HeldModel.Region region = row.region();
             out.append(row.tick).append("  ")
                     .append(Math.round(Math.toDegrees(row.phaseRad))).append("°  ")
-                    .append(valueOf(row)).append("\n");
+                    .append(String.format(Locale.ROOT, "%+.0f° %+.0f°", region.centreNorthDeg(), region.centreEastDeg()))
+                    .append("  ").append(valueOf(row));
+            Optional<HeldModel.Expectation> expected = readout.expectationOf(row);
+            if (expected.isPresent()) {
+                out.append("  ").append(expectationOf(expected.get(), row.gyPerS().getAsDouble()));
+            }
+            out.append("\n");
         }
         if (readout.rows().isEmpty()) {
             out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.norows"));
         }
+        return out.toString();
+    }
+
+    /** What the held readings expect, from where, and the reading's residual against it. */
+    private static String expectationOf(HeldModel.Expectation expected, double gyPerS) {
+        String basis = LibVulpes.proxy.getLocalizedString(expected.basis == HeldModel.Basis.REGION
+                ? "msg.satctrlcenter.basis.region" : "msg.satctrlcenter.basis.orbit");
+        StringBuilder out = new StringBuilder();
+        out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.expected")).append(" ")
+                .append(String.format(Locale.ROOT, "%.2e", expected.gyPerS));
+        if (expected.standardError().isPresent()) {
+            out.append(String.format(Locale.ROOT, " ±%.1e", expected.standardError().getAsDouble()));
+        }
+        out.append(" (").append(basis).append("), ")
+                .append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.residual")).append(" ")
+                .append(String.format(Locale.ROOT, "%+.2e", expected.residualOf(gyPerS)));
         return out.toString();
     }
 
