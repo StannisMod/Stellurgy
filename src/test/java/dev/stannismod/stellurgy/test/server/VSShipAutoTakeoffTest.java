@@ -91,9 +91,9 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
      * entry takes it into space onto that body's ring, and there the order has arrived and the slot holds it.
      */
     @Pins({"INV-GDN-17", "SHIPCTL-22"})
-    @RedWitness(verdict = "enters", member = "GuidanceTarget#orbitIn",
+    @RedWitness(verdict = "enters", member = "GuidanceTarget#climb",
             at = "double top = line + CLIMB_PAST_THE_LINE;", replacedBy = "double top = line - CLIMB_PAST_THE_LINE;",
-            fails = "the take-off must climb the craft across the entry line into space", on = "2026-10-23")
+            fails = "the take-off must climb the craft across the entry line into space", on = "2026-10-24")
     @RedWitness(verdict = "rides on", member = "GuidanceTarget#writeToNBT",
             at = "nbt.setString(NBT_KIND, KIND_ORBIT);", replacedBy = "nbt.setString(NBT_KIND, \"\");",
             fails = "in space the take-off's order arrives at the overworld's orbit", on = "2026-10-23")
@@ -153,9 +153,9 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
      * reads REFUSED with the reason, not empty.
      */
     @Pins("INV-GDN-18")
-    @RedWitness(verdict = "refused", member = "GuidanceTarget#orbitIn", at = "if (!around.openAbove(",
+    @RedWitness(verdict = "refused", member = "GuidanceTarget#climb", at = "if (!around.openAbove(",
             replacedBy = "if (false && !around.openAbove(",
-            fails = "a blocked column must refuse the take-off", on = "2026-10-23")
+            fails = "a blocked column must refuse the take-off", on = "2026-10-24")
     @RedWitness(verdict = "the slot says so", member = "MotionSlot#fly",
             at = "state = State.REFUSED;", replacedBy = "state = State.ACTIVE;",
             fails = "refused, the slot reads REFUSED with the reason", on = "2026-10-23")

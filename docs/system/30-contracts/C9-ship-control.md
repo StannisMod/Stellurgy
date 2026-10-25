@@ -24,7 +24,9 @@ is retired: ALL AFCs tick, so the phrase denotes nothing on a multi-AFC craft.) 
 P1 = world-frame right-click (`BlockPilotSeat.onBlockActivated`) `[V]`; P2 = probe/subspace
 bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA SETTING** =
 {flight-assist mode, cruise setpoint} — see SHIPCTL-18. The craft's motion slot (ship-guidance) is
-neither: it is an ORDER the pilot hands over and takes back (SHIPCTL-21, SHIPCTL-22).
+neither: it is an ORDER the pilot hands over and takes back (SHIPCTL-21, SHIPCTL-22) — one that may
+carry the craft across worlds of its system, up through the entry and down through a descent, with nobody
+at the controls (ship-guidance MECH-GDN-12); the crossings themselves are decided as for any craft.
 
 ## Clauses
 

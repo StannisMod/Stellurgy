@@ -86,8 +86,10 @@ public final class MotionSlot {
         NO_APPROACH_AUTHORITY,
         /** No attitude guidance can give the hull, and turn it into, delivers thrust that stops it. */
         NO_STOPPING_AUTHORITY,
-        /** The target is in another world: reaching it takes a crossing — an entry, a descent, a jump. */
-        NEEDS_A_CROSSING,
+        /** The target is in another system: reaching it takes a jump, a leg guidance does not fly. */
+        NEEDS_A_JUMP,
+        /** The target ship is mid-jump, in hyperspace: it is in no system until its jump ends. */
+        TARGET_IN_HYPERSPACE,
         /** The target is nowhere: no craft by its name, or no body with its planet world for a surface. */
         TARGET_NOT_FOUND,
         /** The target names this craft. */
@@ -100,6 +102,20 @@ public final class MotionSlot {
         NO_ORBIT_LINE,
         /** The target is orbit, and something solid stands in the column above the craft on the way up. */
         PATH_BLOCKED
+    }
+
+    /**
+     * Which leg of the way to its target the craft is flying: the target in the craft's own world, or one
+     * of the crossings between ({@link GuidanceTarget}'s class comment). Derived on every tick from where
+     * the craft is against where the target is, never stored.
+     */
+    public enum Leg {
+        /** The target is in the craft's world, and the craft flies to it. */
+        TO_THE_TARGET,
+        /** Climbing straight up past the world's orbit line, where the entry crossing takes it into space. */
+        CLIMB_TO_SPACE,
+        /** Flying into the descent shell of the body whose world the target is in, to be descended onto it. */
+        INTO_THE_SHELL
     }
 
     /** What one tick of guidance did that somebody outside should hear about. */
@@ -201,6 +217,9 @@ public final class MotionSlot {
     /** The attitude a refused craft hovers in, or a landed one rests in. Not persisted: a reload takes
      *  the attitude the craft has then, which is the one it was holding. */
     private FreeFlightPhysics.Quat held = null;
+    /** The leg the last tick that placed the target flew. Not persisted: it is derived on every tick, so a
+     *  reload reads none until the first tick after it. */
+    private Leg leg = null;
 
     /** Hold {@code intent}, replacing whatever the slot held, and start flying it. */
     public void issue(MotionIntent intent) {
@@ -213,6 +232,7 @@ public final class MotionSlot {
         this.arrived = false;
         this.shortTicks = 0;
         this.held = null;
+        this.leg = null;
     }
 
     /**
@@ -228,6 +248,7 @@ public final class MotionSlot {
         arrived = false;
         shortTicks = 0;
         held = null;
+        leg = null;
         return had;
     }
 
@@ -241,7 +262,7 @@ public final class MotionSlot {
 
     /** What the slot holds right now. */
     public Reading reading() {
-        return new Reading(state, intent, refusal, arrived);
+        return new Reading(state, intent, refusal, arrived, leg);
     }
 
     /**
@@ -280,6 +301,7 @@ public final class MotionSlot {
         if (placed.unplaced() != null) {
             shortBy = refusalFor(placed.unplaced());
         } else {
+            leg = placed.leg();
             // With no hull measured there is no shell to aim at, for a GO_TO or a HOLD: the craft makes for
             // the placed point itself, which is how it comes to share the target's world.
             double[] aim = placed.provisional() ? placed.position()
@@ -366,8 +388,10 @@ public final class MotionSlot {
 
     private static Refusal refusalFor(GuidanceTarget.Unplaced why) {
         switch (why) {
-            case NEEDS_A_CROSSING:
-                return Refusal.NEEDS_A_CROSSING;
+            case NEEDS_A_JUMP:
+                return Refusal.NEEDS_A_JUMP;
+            case IN_HYPERSPACE:
+                return Refusal.TARGET_IN_HYPERSPACE;
             case NOT_FOUND:
                 return Refusal.TARGET_NOT_FOUND;
             case IS_THE_CRAFT:
@@ -1109,12 +1133,22 @@ public final class MotionSlot {
         private final MotionIntent intent;
         private final Refusal refusal;
         private final boolean arrived;
+        private final Leg leg;
 
-        Reading(State state, MotionIntent intent, Refusal refusal, boolean arrived) {
+        Reading(State state, MotionIntent intent, Refusal refusal, boolean arrived, Leg leg) {
             this.state = state;
             this.intent = intent;
             this.refusal = refusal;
             this.arrived = arrived;
+            this.leg = leg;
+        }
+
+        /**
+         * The leg the craft flew on the last tick its target could be placed; {@code null} before the first
+         * such tick of the intent held, and for an empty slot. A refused slot keeps the leg it was refused on.
+         */
+        public Leg leg() {
+            return leg;
         }
 
         public State state() {

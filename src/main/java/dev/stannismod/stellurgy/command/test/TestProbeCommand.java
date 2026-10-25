@@ -2913,8 +2913,9 @@ public class TestProbeCommand extends CommandBase {
         // `afcResolved:false` = no computer for that name here; a target id that is not a uuid is refused
         // before anything is issued (`error`).
         // motion-read-by-id <dim> <shipId> — what that slot holds: `state` (EMPTY / ACTIVE / REFUSED),
-        // `kind`, `refusal` and `arrived`, each `null` where it does not apply, and `target` as the
-        // intent names it. Every form answers `worldTick`, the craft's world clock at the moment of the
+        // `kind`, `refusal`, `arrived` and `leg` (TO_THE_TARGET / CLIMB_TO_SPACE / INTO_THE_SHELL: which
+        // link of the way to a target in another world the craft is on), each `null` where it does not
+        // apply, and `target` as the intent names it. Every form answers `worldTick`, the craft's world clock at the moment of the
         // reply — the clock the craft's own records are stamped on.
         boolean motionGoToShip = args.length >= 4 && "motion-go-to-ship-by-id".equalsIgnoreCase(args[0]);
         boolean motionHoldShip = args.length >= 5 && "motion-hold-ship-by-id".equalsIgnoreCase(args[0]);
@@ -2971,6 +2972,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("target", held.intent() == null ? null : held.intent().target().toString());
             info.put("refusal", held.refusal() == null ? null : held.refusal().name());
             info.put("arrived", held.intent() == null ? null : held.arrived());
+            info.put("leg", held.leg() == null ? null : held.leg().name());
             info.put("worldTick", world.getTotalWorldTime());
             send(sender, jsonMap(info));
             return;

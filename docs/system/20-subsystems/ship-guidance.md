@@ -12,21 +12,24 @@ confidence: medium — the laws are unit-pinned, the in-world flights are pinned
 Flies a tier-2 craft to what an ORDER names, with nobody at the stick: a motion slot on the flight
 computer holds one motion intent, and guidance turns it, tick by tick, into the same `FlightCommand`
 every other producer on that computer publishes. An order names a THING — a ship, a point on the
-surface of the planet the craft is on, or a body's orbit — never a bare point of space. The one order a
+surface of a planet, or a body's orbit — never a bare point of space; a thing in another world of the
+craft's system is reached by flying the legs of one fixed chain between (MECH-GDN-12). The one order a
 player issues today is take-off: the pilot's auto-takeoff key hands the slot `GO_TO` the orbit of the body
 the craft stands on (C9 SHIPCTL-22); everything else fills the slot through the flight computer's own entry.
 
 ## Responsibility boundary
 
 Owns: the motion slot and its states, the two motion verbs (`GO_TO`, `HOLD`), the three target kinds and
-how each is placed in the craft's world (the climb to an orbit and its corridor included), the approach law (which attitude, how fast, when to turn over),
+how each is placed in the craft's world (the climb to an orbit and its corridor included), which leg of
+the way to a target in another world the craft flies, the approach law (which attitude, how fast, when to turn over),
 the arrival, landing and refusal decisions, what a refused craft is commanded, and the slot's NBT form.
 Does NOT own: the flight law below the `FlightCommand` (ship-flight-model MECH-SFM-08), what the hull
 can do (C10), pilot input delivery (C9), cell crossings (they carry the slot; they do not know it), the
 substrate's ship records (C11; read through the port), the orbit line (the flight computer's
-`entryCeiling`, handed in), and what decides to issue an intent. A target in another world is a crossing,
-and flying one is not guidance's — save the climb from a body's surface to its orbit, which guidance
-flies and the entry crossing ends.
+`entryCeiling`, handed in), and what decides to issue an intent. The crossings themselves are not
+guidance's: it flies a craft UP to the entry line and INTO a body's descent shell, and the entry and the
+descent — each decided by its own one condition, for any craft — take it on. The jump to another
+system is not flown here.
 
 ## Key types
 
@@ -34,10 +37,10 @@ flies and the entry crossing ends.
 |---|---|
 | `GuidanceTarget` | what an intent wants: a ship by its durable id, a surface point (world + column), or a body's orbit (the body's planet world); placed in the craft's world per tick |
 | `MotionIntent` | one order: `GO_TO(target)` or `HOLD(target, range)`; immutable |
-| `MotionSlot` | at most one intent, its state (EMPTY / ACTIVE / REFUSED), and the per-tick law (`fly`) |
+| `MotionSlot` | at most one intent, its state (EMPTY / ACTIVE / REFUSED), the leg it flies (`Leg`), and the per-tick law (`fly`) |
 | `MotionSlot.Craft` | the craft as guidance reads it on one tick, all in its world's frame, with its hull's reach and the attitude law's gain and slew cap |
-| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands, how high the ground is, where its world's orbit line is and whether the column above is open, where a body's orbit lies |
-| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames, the ground, the flight computer's orbit line, the universe's bodies |
+| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands (or that it is in space, or on another planet), how high the ground is, where its world's orbit line is and whether the column above is open, where a body's orbit and descent shell lie, whether a body is of the craft's system |
+| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames, the loaded worlds, the ground, the flight computer's orbit line, the universe's bodies and systems |
 | `AutoTakeoffPlanner` (`space/`) | the take-off corridor: whether a column of blocks holds anything solid, every block asked |
 
 ## Mechanics
@@ -94,12 +97,15 @@ flies and the entry crossing ends.
   from (MECH-GDN-11) (`ship/guidance/MotionSlot.java:329`) `[V]`.
 - **MECH-GDN-07 — reclaim.** C9 SHIPCTL-21.
 - **MECH-GDN-08 — placing a target.** A SHIP is looked for in the craft's world's ship registry first
-  (exact position, and its hull's reach about it); from space, then in the ship ledger, whose SETTLED
-  address is placed in the craft's world through both cells' frames at the space clock's tick, as a
-  ship in ANOTHER cell's world, whose hull is not measured from the craft's — loaded or not
-  (`ship/guidance/WorldSurroundings.java:47`). A ship mid-jump, on another world, or seen across the
-  planet/space line answers NEEDS_A_CROSSING; one found nowhere, TARGET_NOT_FOUND; the craft itself,
-  TARGET_IS_THIS_CRAFT. Its keep-out is the sum of the two hulls' radii — each the smallest sphere about
+  (exact position, and its hull's reach about it); then in the ship ledger, whose SETTLED address is,
+  from space, placed in the craft's world through both cells' frames at the space clock's tick, as a
+  ship in ANOTHER cell's world, whose hull is not measured from the craft's — loaded or not — and, from a
+  planet, answered as IN SPACE; then in every loaded world — a space cell's world placed as a settled
+  ship is, from its cell and its pose there; a planet world answered as ON THAT PLANET
+  (`ship/guidance/WorldSurroundings.java:73-128`). A ship of another system than the craft's answers
+  NEEDS_A_JUMP; one the ledger holds in transit, or in the hyperspace world, TARGET_IN_HYPERSPACE; one
+  found nowhere, TARGET_NOT_FOUND; the craft itself, TARGET_IS_THIS_CRAFT. A ship in space seen from a
+  planet, or on another planet, is placed as its leg (MECH-GDN-12). Its keep-out is the sum of the two hulls' radii — each the smallest sphere about
   the ship's position holding its block box, read off the registry (`integration/vs/VSBridge.java:899`).
   A ship whose hull cannot be measured — in another cell's world, or in the craft's own with a record
   holding no blocks — is placed PROVISIONALLY, with no keep-out, since none of its hull is in the
@@ -112,7 +118,8 @@ flies and the entry crossing ends.
   yet. Once the hull can be measured — at the latest when the craft shares its world — the real
   keep-out takes over on that tick (`GuidanceTarget.java:129-131`) `[V]`. A craft whose OWN hull cannot
   be measured answers CRAFT_NOT_MEASURED.
-  A SURFACE point placed from another world or from space answers NEEDS_A_CROSSING; otherwise it is the
+  A SURFACE point asked from space or from another planet is placed as its leg (MECH-GDN-12); on its own
+  planet it is the
   craft's position with its lowest point pressed half of `TOUCHDOWN` into the highest solid-or-liquid
   block top in the square of the craft's radius about the column, so a landing can only count as down
   once the ground has stopped it (`ship/guidance/GuidanceTarget.java:147`, `WorldSurroundings.java:85`)
@@ -154,24 +161,49 @@ flies and the entry crossing ends.
   craft's column from its height to the aim — every block asked, none above the build height
   (`space/AutoTakeoffPlanner.java`, `ship/guidance/WorldSurroundings.java:114`) — the tick is short for
   PATH_BLOCKED; on a world with no orbit line, for NO_ORBIT_LINE; both refuse through the common window
-  (MECH-GDN-05). From another planet it needs a crossing. In space the orbit is the sphere about the body
+  (MECH-GDN-05). From another planet of the body's system it is the same climb, out of that planet's
+  world (MECH-GDN-12). In space the orbit is the sphere about the body
   — the body the dimension's zone cell lists for that world (`SpaceSubsystem.launchBody`), placed where
   it stands at the space clock's tick (its position, not its address) against where the craft's cell
   centre stands — of the body's own entry ring (`ShipEntryController.entryRingAround(SystemBody)`)
-  (`WorldSurroundings.java:127`): a craft on it at rest has arrived and holds, and the same order from
-  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND `[V]`. The entry puts a
+  (`WorldSurroundings.java:165`): a craft on it at rest has arrived and holds, and the same order from
+  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND; one of another
+  system, NEEDS_A_JUMP `[V]`. The entry puts a
   craft on that ring, about the body placed in the same cell's frame by the same function
   (`CellFrames.positionInCell`; space/cells-and-crossings INV-SPC-19), so a taken-off craft has arrived as
   it comes to rest there `[T]`.
   The pilot's auto-takeoff key issues `GO_TO` this orbit on a planet's surface; pressed while the slot
   flies that very order it empties the slot, and anywhere else it does nothing
   (`tile/TileAdvancedFlightComputer.java:1017`) `[V]`.
+- **MECH-GDN-12 — the legs: a target in another world.** One fixed chain of worlds — up out of a
+  planet's world, through space, down into a planet's world — and the LEG the craft flies is derived on
+  every tick from where the craft is against where the target is (`ship/guidance/GuidanceTarget.java:186`);
+  nothing of it is stored, so the order rides each crossing unchanged in the computer's NBT and the leg
+  after a crossing is what the new world answers. On a planet, a target outside the planet's world — a
+  ship in space, the orbit or a surface point of another body, a ship on another planet — is the CLIMB:
+  MECH-GDN-11's placement straight up past the world's orbit line, refused as it is
+  (`GuidanceTarget.java:255-275`). In space, a target in a planet's world — a surface point, a ship
+  standing there — is the way INTO THE SHELL: the point `INTO_THE_SHELL` (the arrival radius plus two
+  blocks, past the √3 the ledger's whole-block position can lie off the pose) inside that body's
+  descent shell (`space/DescentShell.radiusAround`), nearest the craft, placed as an orbit is; a craft
+  already that deep is held where it is (`GuidanceTarget.java:286`). Both are PROVISIONAL — made for,
+  never arrived at — because a crossing takes the craft on first: the entry above the line, and the
+  descent inside the shell, which is the one proximity condition every craft descends by
+  (space/cells-and-crossings MECH-SPC-13), not an act of guidance; so ANY order that brings a craft inside a body's shell
+  descends it, and orbits lie outside every shell. After the descent the target is in the craft's world
+  and is flown as such. A target is reached this way only within the craft's SYSTEM: a place's system is
+  the anchor whose neighbourhood holds its cell (`UniverseRegistry.anchorForCell`) — the craft cell's in
+  space; on a planet, its body's entry address's (the origin where it has none, as the entry does); two
+  places in the void are of one system. Anything of another system is NEEDS_A_JUMP — the leg not flown
+  here — never "unreachable" (`ship/guidance/WorldSurroundings.java:110,176,184,213`). The leg flown is
+  readable: `MotionSlot.Reading#leg` (`TO_THE_TARGET` / `CLIMB_TO_SPACE` / `INTO_THE_SHELL`), the leg of
+  the last tick the target could be placed (`ship/guidance/MotionSlot.java:304`) `[V]`.
 
 ## State & persistence
 
 | key | owner | note |
 |---|---|---|
-| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing; the refusal window's count and the held hover/landing attitude are not saved |
+| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing; the refusal window's count, the held hover/landing attitude and the leg (derived per tick) are not saved |
 
 ## Invariants
 
@@ -219,11 +251,13 @@ flies and the entry crossing ends.
   turnover ruling, which keeps refusal for the genuinely unflyable — a hull that cannot hold its weight
   or on which no axis delivers thrust — and the slice's "refused within 10 s", maintainer 2026-10-21.
   Pinned by `test/server/MotionIntentGroupTest#aHullWithNoThrustIsRefused`.
-- **INV-GDN-09** `[T][BEH]` A craft in space told `GO_TO` a point of a planet's surface is refused
-  within 10 s as needing a crossing, and then hovers — slower than 0.2 blocks/s — although its pilot left
-  it a cruise. FOR: maintainer 2026-10-21, *"цель в другом мире - это же запрос на гиперпрыжок"* (a
-  target in another world is a request for a jump) — refused until a crossing can be flown, under a
-  reason that says so — and *"Да, пусть зависает"* (yes, let it hover) the same day. Pinned by
+- **INV-GDN-09** `[T][BEH]` A craft in space in a cell of another system told `GO_TO` a point of the
+  surface of a planet is refused within 10 s as NEEDS_A_JUMP, and then hovers — slower than 0.2
+  blocks/s — although its pilot left it a cruise. FOR: maintainer 2026-10-21, *"цель в другом мире - это
+  же запрос на гиперпрыжок"* (a target in another world is a request for a jump) — refused, until the
+  jump can be flown, under a reason that names the missing leg — and *"Да, пусть зависает"* (yes, let it
+  hover) the same day; and the fixed chain of 2026-10-23 (*"по рекомендациям"*), in which the jump is the
+  leg to another system. Pinned by
   `test/server/MotionIntentGroupTest#aTargetInAnotherWorldIsRefusedForACrossingAndTheCraftHovers`.
 - **INV-GDN-10** `[T][BEH]` On a planet, a craft told `GO_TO` a point of the surface ends resting on the
   ground there: its lowest point within half a block of the ground's top, its position within 2 blocks
@@ -238,17 +272,15 @@ flies and the entry crossing ends.
   lowest point on the ground there, and on arriving releases the craft (no velocity command); a craft
   resting on the ground farther across from that column than half the arrival radius has not landed and
   is sent up to the point over it where its hull clears the ground, never on along or into the ground,
-  while one resting nearer than that has landed; a surface
-  point of another world, or one asked from space, and a ship across a crossing are refused as needing a
-  crossing; the craft as its own target is refused as such. FOR: maintainer 2026-10-21, that a target
+  while one resting nearer than that has landed; the craft as its own target is refused as such. FOR:
+  maintainer 2026-10-21, that a target
   is a thing — *"Есть "лети на точку на планете", или "к кораблю", или "к базе". То есть это "к телу", а
   не "в точку пространства""* (there is "fly to a point on the planet", "to a ship", "to a base": "to a
-  body", not "to a point of space") — and that one in another world is a request for a crossing
-  (*"цель в другом мире - это же запрос на гиперпрыжок"*). Pinned by `test/unit/MotionGuidanceLawsTest#aGoToAShipAimsAtTheStandoffOutsideBothHulls`,
+  body", not "to a point of space"). Pinned by `test/unit/MotionGuidanceLawsTest#aGoToAShipAimsAtTheStandoffOutsideBothHulls`,
   `test/unit/MotionGuidanceLawsTest#aHoldKeepsTheCraftInItsShell`,
   `test/unit/MotionGuidanceLawsTest#aGoToASurfacePointAimsAtTheGroundAndLetsTheCraftDown`,
   `test/unit/MotionGuidanceLawsTest#aLandingIsLetDownOnlyOverItsColumn`,
-  `test/unit/MotionGuidanceLawsTest#aTargetInAnotherWorldOrTheCraftItselfIsRefusedForWhatItIs`.
+  `test/unit/MotionGuidanceLawsTest#theCraftItselfIsRefusedAsItsOwnTarget`.
 - **INV-GDN-12** `[T][SYS]` In a field, a hull for which a level attitude delivers thrust toward the aim
   — however weakly, and however much harder leaning would push — is kept level; a hull for which none
   does, and whose lifting axis can push harder than its weight, is flown and not refused: its lifting
@@ -288,8 +320,8 @@ flies and the entry crossing ends.
 - **INV-GDN-16** `[T][SYS]` On its body's surface a `GO_TO` an orbit sends the craft straight up and is
   never arrived at there, wherever between the orbit line and the room the physics clamp leaves above it
   the craft comes to rest; it is refused as PATH_BLOCKED while something solid stands in the column over
-  the craft — never for what lies under it — as NO_ORBIT_LINE on a world with none, and as needing a
-  crossing from another planet. In space it is the sphere about the body at the radius it is given: a
+  the craft — never for what lies under it — and as NO_ORBIT_LINE on a world with none. In space it is
+  the sphere about the body at the radius it is given: a
   craft at rest on it has arrived, one far off is sent at the body, and a body nobody can find is refused
   as TARGET_NOT_FOUND. FOR: the maintainer's rulings of 2026-10-23 (*"по рекомендациям"*) — take-off is
   a `GO_TO` a new target kind, the orbit; the climb is vertical and flown by guidance, the corridor
@@ -308,11 +340,45 @@ flies and the entry crossing ends.
   refused for PATH_BLOCKED — announced — and its slot reads REFUSED, holding the order, not empty. FOR:
   the ruling of 2026-10-23 (*"по рекомендациям"*) that a blocked corridor is an ordinary refusal through
   the common window, which INV-GDN-05 states. Pinned by `test/server/VSShipAutoTakeoffTest#aBlockedColumnRefusesTheTakeoffAndTheSlotSaysSo`.
+- **INV-GDN-19** `[T][SYS]` A target in another world of the craft's system is flown as its leg, never
+  refused for being elsewhere: from a planet — a ship in space, a ship on another planet, a surface point
+  or the orbit of another body — the craft is sent straight up, reads `CLIMB_TO_SPACE`, and is never
+  arrived there; from space — a surface point of a body, a ship on a planet — it is sent toward the
+  point `INTO_THE_SHELL` inside that body's descent shell along the line from the body, reads
+  `INTO_THE_SHELL`, is never arrived there, and once that deep is held where it is; a target of
+  another system is refused as NEEDS_A_JUMP, a ship mid-jump as TARGET_IN_HYPERSPACE, and a target
+  in the craft's world reads `TO_THE_TARGET`. FOR: the maintainer's rulings of 2026-10-23 (*"по
+  рекомендациям"*): a fixed chain of legs — climb, jump to another system, fly through cells, descend
+  onto a planet — not a search; and of 2026-10-24, *"GO_TO не может скомандовать спуск на планету, а он
+  и не должен. Он должен вести к планете. Спуском продолжает управлять одно условие"* (a GO_TO cannot
+  command a descent, nor should it: it must lead to the planet; one condition goes on governing the
+  descent). Pinned by `test/unit/MotionGuidanceLawsTest#aTargetInAnotherWorldOfTheSystemIsClimbedToFromAPlanet`,
+  `test/unit/MotionGuidanceLawsTest#aTargetOnAPlanetIsFlownIntoItsBodysShellFromSpace`,
+  `test/unit/MotionGuidanceLawsTest#aTargetInAnotherSystemOrInHyperspaceIsRefusedForWhatItIs`.
+- **INV-GDN-20** `[T][BEH]` A craft on the overworld told `GO_TO` a ship in space of its system climbs,
+  enters space with the order in its slot, and arrives alongside the ship as INV-GDN-01 measures it —
+  with no pilot input anywhere on the way. FOR: the acceptance of the crossing legs, stated before the
+  work (*"по рекомендациям"*, 2026-10-23): "a craft on a planet given `GO_TO` a ship in space climbs,
+  enters, and arrives". Pinned by
+  `test/server/MotionIntentGroupTest#aCraftOnAPlanetToldToGoToAShipInSpaceClimbsEntersAndArrives`.
+- **INV-GDN-21** `[T][BEH]` A craft in space told `GO_TO` a point of a planet's surface flies into
+  that planet's descent shell, descends onto it with the order in its slot, and lands at the point as
+  INV-GDN-10 measures a landing — with no pilot input anywhere on the way. FOR: the same acceptance, "a
+  craft in space given `GO_TO` a point on a planet's surface descends and arrives there", and the
+  maintainer's of 2026-10-24, *"GO_TO не может скомандовать спуск на планету, а он и не должен. Он должен
+  вести к планете. Спуском продолжает управлять одно условие"* (a GO_TO must lead to the planet; one
+  condition goes on governing the descent). Pinned by
+  `test/server/MotionIntentGroupTest#aCraftInSpaceToldToGoToAPointOfAPlanetDescendsAndLandsThere`.
 
 ## Failure modes & edge cases
 
 A take-off issued while the post-descent entry latch holds (the craft above the line, not yet below it
 since its descent) climbs to its aim and hovers there: the entry does not fire until the latch clears.
+
+A craft held deep inside a body's shell for a descent that does not come — refused and cooling down, or
+the craft not yet settled in the ledger — hovers there and is not refused: the leg stays placed. A ship
+target standing in a world that is no body's surface (no body has it for a world) reads as
+TARGET_NOT_FOUND, though the ship exists.
 
 A craft whose flight model is not built yet reads as having no authority and is short. A `GO_TO`
 across a galactic cell face is carried by the seam, which places the craft `REENTRY_DEPTH` inside the
@@ -342,9 +408,10 @@ Events posted: `ShipEvent.MotionIntentArrivedEvent`, `ShipEvent.MotionIntentRefu
 `msg.guidance.refused.*` (C7). Port: `VSIntegration#hullAboutPosition` (C11). The seam's constants
 `GalacticCoord.HALF_CELL`, `CellSeam.CARRY_MARGIN` (space). Probe:
 `vs motion-go-to-ship-by-id`, `vs motion-hold-ship-by-id`, `vs motion-go-to-surface-by-id`,
-`vs motion-read-by-id`, `space auto-takeoff` (the take-off key). Space: `SpaceSubsystem.launchBody`,
-`ShipEntryController.entryRingAround` and `PHYSICS_CLAMP_ENTRY_MARGIN`; the flight computer's
-`entryCeiling`. Key: `key.autoTakeoffToggle` → `TilePilotSeat.PACKET_AUTO_TAKEOFF_TOGGLE` (C9 SHIPCTL-22).
+`vs motion-read-by-id`, `space auto-takeoff` (the take-off key). Space: `SpaceSubsystem.launchBody` and
+`launchBodyAddress`, `ShipEntryController.entryRingAround` and `PHYSICS_CLAMP_ENTRY_MARGIN`,
+`DescentShell.radiusAround`, the ship ledger, `SpaceSlotPool.cellCoordFor`, `HyperspaceWorld`; universe:
+`UniverseRegistry.anchorForCell`; the flight computer's `entryCeiling`. Key: `key.autoTakeoffToggle` → `TilePilotSeat.PACKET_AUTO_TAKEOFF_TOGGLE` (C9 SHIPCTL-22).
 
 ## Config surface
 
@@ -352,9 +419,11 @@ None.
 
 ## Test coverage
 
-`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, SHIPCTL-21);
+`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, -19, SHIPCTL-21);
 `test/unit/AutoTakeoffPlannerTest` (the corridor);
-`test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14);
+`test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14; across worlds:
+-20 up to a ship in space, -21 down to a point of the overworld — each with the target, or the craft, moved
+in space by the test across a distance no scenario affords);
 `test/server/VSShipAutoTakeoffTest` (take-off: INV-GDN-17 — arrival at the orbit it was entered onto —
 -18, SHIPCTL-21 mid-climb, SHIPCTL-22). Not seen in a running game: an orbit flown to from far off in
 space (INV-GDN-16 pins it on the law), and a MOON's orbit — a moon moves
@@ -372,5 +441,12 @@ which INV-GDN-14 rests on, is pinned on the substrate's side (valkyrienskies INV
 - A lean is planned on the hull's BURST angular authority, as a turnover is, but held for as long as
   the craft leans: a hull that can turn about an axis only for its wheel's seconds leans along it and
   then drifts, rather than being refused for want of a sustained turn. Unruled.
-- How "another system" is told apart from a far cell of the same lattice: today any ship SETTLED in
-  space is flown to, however far.
+- Two places in the VOID (no system's neighbourhood holds either cell) count as one system, so a craft
+  flies between them through cells, however far; whether the void between systems should need a jump
+  instead is unruled.
+- The jump leg itself (a target in another system) is not flown: such a target is refused as
+  NEEDS_A_JUMP.
+- A target in a planet's world whose straight way from space passes through ANOTHER body's shell is
+  descended onto that other body first (the one descent condition fires for whatever shell is crossed);
+  the order then climbs out and makes for the target again, along the same line — nothing plans around a
+  shell in between.

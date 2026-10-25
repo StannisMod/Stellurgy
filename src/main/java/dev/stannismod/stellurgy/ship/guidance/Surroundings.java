@@ -32,34 +32,50 @@ public interface Surroundings {
 
     /**
      * Where the orbit of the body whose surface is the planet world {@code dimension} lies, seen from a
-     * craft in space, or why it cannot be placed. Asked of a craft in space.
+     * craft in space, or why it cannot be placed — {@code NEEDS_A_JUMP} for a body of another system than
+     * the craft's cell. Asked of a craft in space.
      */
-    Orbit orbit(int dimension);
+    Sphere orbit(int dimension);
 
-    /** One answer of {@link #orbit}: a sphere about a body. Immutable. */
-    final class Orbit {
+    /**
+     * Where the descent shell of the body whose surface is the planet world {@code dimension} lies — the
+     * sphere a craft inside of descends onto that body — seen from a craft in space, or why it cannot be
+     * placed, as {@link #orbit} answers. Asked of a craft in space.
+     */
+    Sphere shell(int dimension);
+
+    /**
+     * Why the body whose surface is the planet world {@code dimension} cannot be flown to from the craft's
+     * world — {@code NOT_FOUND} when no body has that world for its surface, {@code NEEDS_A_JUMP} when it is
+     * a body of another system than the craft's — or {@code null} when it can: it is of the craft's own
+     * system, reached through space. Asked of a craft on a planet.
+     */
+    GuidanceTarget.Unplaced unreachable(int dimension);
+
+    /** One answer of {@link #orbit} or {@link #shell}: a sphere about a body. Immutable. */
+    final class Sphere {
 
         private final double[] centre;
         private final double radius;
         private final GuidanceTarget.Unplaced unplaced;
 
-        private Orbit(double[] centre, double radius, GuidanceTarget.Unplaced unplaced) {
+        private Sphere(double[] centre, double radius, GuidanceTarget.Unplaced unplaced) {
             this.centre = centre;
             this.radius = radius;
             this.unplaced = unplaced;
         }
 
         /** The sphere of radius {@code radius} about the body standing at {@code centre} in the craft's world. */
-        public static Orbit about(double[] centre, double radius) {
+        public static Sphere about(double[] centre, double radius) {
             if (!(radius > 0.0D)) {
-                throw new IllegalArgumentException("an orbit is a sphere of positive radius; got " + radius);
+                throw new IllegalArgumentException("a sphere about a body has a positive radius; got " + radius);
             }
-            return new Orbit(centre.clone(), radius, null);
+            return new Sphere(centre.clone(), radius, null);
         }
 
-        /** The orbit cannot be placed in the craft's world, for {@code why}. */
-        public static Orbit unplaced(GuidanceTarget.Unplaced why) {
-            return new Orbit(null, Double.NaN, why);
+        /** The sphere cannot be placed in the craft's world, for {@code why}. */
+        public static Sphere unplaced(GuidanceTarget.Unplaced why) {
+            return new Sphere(null, Double.NaN, why);
         }
 
         double[] centre() {
@@ -82,15 +98,41 @@ public interface Surroundings {
         private final double hullRadius;
         private final boolean measured;
         private final GalacticCoord cell;
+        private final boolean inSpace;
+        private final Integer planet;
         private final GuidanceTarget.Unplaced unplaced;
 
         private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
                          GuidanceTarget.Unplaced unplaced) {
+            this(position, hullRadius, measured, cell, false, null, unplaced);
+        }
+
+        private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
+                         boolean inSpace, Integer planet, GuidanceTarget.Unplaced unplaced) {
             this.position = position;
             this.hullRadius = hullRadius;
             this.measured = measured;
             this.cell = cell;
+            this.inSpace = inSpace;
+            this.planet = planet;
             this.unplaced = unplaced;
+        }
+
+        /**
+         * Seen from a craft on a planet: the ship is in space, in a cell of the craft's own system. It has
+         * no position in the craft's world; reaching it starts with the climb into space.
+         */
+        public static Sighting inSpace() {
+            return new Sighting(null, Double.NaN, false, null, true, null, null);
+        }
+
+        /**
+         * The ship is in the planet world {@code dimension}, which is not the craft's world, and that world's
+         * body is of the craft's own system. It has no position in the craft's world; reaching it goes
+         * through space and down onto that body.
+         */
+        public static Sighting onPlanet(int dimension) {
+            return new Sighting(null, Double.NaN, false, null, false, dimension, null);
         }
 
         /**
@@ -147,6 +189,16 @@ public interface Surroundings {
         /** The cell whose world the ship is in when that is not the craft's; {@code null} otherwise. */
         GalacticCoord cell() {
             return cell;
+        }
+
+        /** Whether the ship is in space while the craft is on a planet ({@link #inSpace()}). */
+        boolean isInSpace() {
+            return inSpace;
+        }
+
+        /** The planet world the ship is in when that is another world than the craft's; {@code null} otherwise. */
+        Integer planet() {
+            return planet;
         }
 
         GuidanceTarget.Unplaced unplaced() {

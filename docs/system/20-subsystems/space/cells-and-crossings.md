@@ -152,7 +152,9 @@ source dirty, dematerializes it and `ledger.remove`s the ship (`DescentControlle
 `DescentControllerTest.java:190,262,282,312`. Arrival altitude is `max(entry line − 100, 255 + 100)`
 (`VSDescentPasteResolver.java:54,71-76`) [T] `DescentControllerTest.java:401,431`; the resolver measures the hull *by
 durable name or refuses* (`VSDescentPasteResolver.java:107-116`) [V]. A procedural body gets its dimension minted by
-the flight computer at descent time (`TileAdvancedFlightComputer.java:629-635`) [V].
+the flight computer at descent time (`TileAdvancedFlightComputer.java:629-635`) [V]. This proximity condition is the
+ONE decision that descends a craft, piloted or not: an autopilot order for a point on a planet only flies the craft
+into that body's shell (ship-guidance MECH-GDN-12), and the order rides the descent in the flight computer's NBT [V].
 
 ### MECH-SPC-14 — Cell-seam carry and direct jump: one crossing, destination acquired first
 `requestCarry` runs only for a SETTLED ship and only after the cooldown; the destination is `carryDestination`
