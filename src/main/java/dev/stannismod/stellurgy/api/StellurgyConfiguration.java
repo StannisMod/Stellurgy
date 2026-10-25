@@ -248,9 +248,11 @@ public class StellurgyConfiguration {
     @ConfigProperty
     public boolean enableCustomPlanetWeather = true;
     @ConfigProperty
-    public boolean allowTimeSkipOnPlanets = false;
+    public boolean allowTimeSkipOnPlanets = true;
     @ConfigProperty
     public boolean allowTimeSkipOnOverworld = true;
+    @ConfigProperty
+    public boolean sleepSkipNeedsEveryPlayer = true;
     @ConfigProperty
     public boolean logPlanetWeatherWrapping = true;
     @ConfigProperty
@@ -953,8 +955,9 @@ public class StellurgyConfiguration {
         stellurgyConfig.forcePlayerRespawnInSpace = config.get(PLANET, "forcePlanetRespawn", false, "Allow bed respawn on planets even without breathable air. Requires 'allowPlanetRespawn=true'.").getBoolean();
         stellurgyConfig.perDimWorldInfo = config.get(PLANET, Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true, "Master switch for Stellurgy's per-dimension WorldInfo overrides on planets: per-planet weather AND per-planet time-of-day / working beds. When false, planets use the vanilla shared-overworld WorldInfo and NONE of the weather/time mixins are woven — fully classic behaviour. The sub-toggles below (enableCustomPlanetWeather) only take effect when this is true.").getBoolean();
         stellurgyConfig.enableCustomPlanetWeather = config.get(PLANET, "enableCustomPlanetWeather", true, "Sub-toggle of perDimWorldInfo (no effect when that is false): if true, each Stellurgy planet has its own weather state (rain, thunder, /weather, isRaining); if false, weather delegates to the overworld while per-dimension time-of-day still applies.").getBoolean();
-        stellurgyConfig.allowTimeSkipOnPlanets = config.get(PLANET, "allowTimeSkipOnPlanets", false, "Whether a bed or /time may SKIP a planet's time of day forward. Off by default: a planet's day is the turning of a body in an orbit, so its night is lived through rather than slept away. This does NOT stop the day cycle - a planet still turns at its own rotational period - and a bed still sets your spawn point. Turn it on to keep the classic Minecraft conveniences everywhere. Space stations and asteroid fields are governed by neither this nor allowTimeSkipOnOverworld.").getBoolean();
-        stellurgyConfig.allowTimeSkipOnOverworld = config.get(PLANET, "allowTimeSkipOnOverworld", true, "The same, for the overworld, where it is ON by default: a player who has not left home yet is still playing Minecraft, and beds and /time work the way he expects. Turn it off to hold the overworld to the same rule as the planets.").getBoolean();
+        stellurgyConfig.allowTimeSkipOnPlanets = config.get(PLANET, "allowTimeSkipOnPlanets", true, "Whether a sleep on a planet may end the night. A night that ends moves the whole universe forward - every world's time of day, every orbit, every ship in flight - so a sleep is a decision the whole server takes together (see sleepSkipNeedsEveryPlayer). Off: a bed on a planet still sets your spawn point and wakes you, the night is lived through, and in the server-wide mode a sleeper there keeps the night for everybody. Space stations and asteroid fields are governed by neither this nor allowTimeSkipOnOverworld.").getBoolean();
+        stellurgyConfig.allowTimeSkipOnOverworld = config.get(PLANET, "allowTimeSkipOnOverworld", true, "The same, for the overworld.").getBoolean();
+        stellurgyConfig.sleepSkipNeedsEveryPlayer = config.get(PLANET, "sleepSkipNeedsEveryPlayer", true, "Whether ending a night needs every player on the server asleep, in whatever world each one is (on), or only every player of one world (off). Either way the night ends for the whole universe: every world's time of day is its planet's turn, so no world can skip alone. /time is an operator's skip and is not governed by this.").getBoolean();
         stellurgyConfig.logPlanetWeatherWrapping = config.get(PLANET, "logPlanetWeatherWrapping", true, "Log an info line every time a Stellurgy planet's WorldInfo is wrapped for per-dimension weather. Useful for diagnosing weather-wrapping issues; safe to disable in production.").getBoolean();
         stellurgyConfig.forcePlanetWeatherWorldInfoWrapper = config.get(PLANET, "forcePlanetWeatherWorldInfoWrapper", false, "Force per-dimension weather wrapping on every secondary (non-overworld) dimension, including non-Stellurgy dims of other mods. Compatibility/debug flag — do NOT enable unless you know exactly what you are doing.").getBoolean();
         stellurgyConfig.minAtmosphereDensityForRain = (float) config.get(PLANET, "minAtmosphereDensityForRain", 75d, "Minimum atmosphere density (0-100 scale, same as planet atmosphereDensity) required for rain/snow and thunder on a planet. Below this, rain is suppressed regardless of the planet's weather markers, and thunder cannot occur. Thin/airless worlds stay clear.", 0d, 200d).getDouble();

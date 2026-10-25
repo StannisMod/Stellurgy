@@ -34,11 +34,12 @@ public final class PlanetEnvironment {
 
     /**
      * The environment of a body with this field — or with none, when {@code dipole} is empty — turning
-     * once every {@code rotationPeriodTicks}, at rotation angle {@code rotationPhaseRad} at tick zero.
+     * once every {@code siderealTicks} ({@link BodyRotation}: positive with its orbits), at rotation angle
+     * {@code rotationPhaseRad} at tick zero.
      */
-    public static PlanetEnvironment of(Optional<PlanetaryDipole> dipole, long rotationPeriodTicks,
+    public static PlanetEnvironment of(Optional<PlanetaryDipole> dipole, double siderealTicks,
                                        double rotationPhaseRad) {
-        return new PlanetEnvironment(dipole.orElse(null), BodyRotation.of(rotationPeriodTicks, rotationPhaseRad));
+        return new PlanetEnvironment(dipole.orElse(null), BodyRotation.of(siderealTicks, rotationPhaseRad));
     }
 
     /**

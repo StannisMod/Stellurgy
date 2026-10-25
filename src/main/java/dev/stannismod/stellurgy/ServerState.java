@@ -94,6 +94,17 @@ public final class ServerState {
     }
 
     /**
+     * The time skip: the clock's second writer (C16 CLOCK-5.2), moving the universe {@code ticks} forward at
+     * once — a sleep, or {@code /time}. Never backwards.
+     */
+    public void skipSpaceClock(long ticks) {
+        if (ticks < 0L) {
+            throw new IllegalArgumentException("the space clock never moves back: " + ticks);
+        }
+        spaceTick += ticks;
+    }
+
+    /**
      * Put the space clock at {@code tick}: the restore on server start, and a test aging the universe
      * by arithmetic instead of by waiting — which, unlike a world's counter, moves no world, so a
      * shared server's day cycle and every {@code totalTime % N} gate stay where they were.

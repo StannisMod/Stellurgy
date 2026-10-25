@@ -4,36 +4,25 @@ import net.minecraft.command.CommandTime;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
+import java.util.OptionalLong;
 
 /**
- * Keeps {@code /time set} and {@code /time add} off the worlds whose skip is locked
- * ({@link TimeSkipPolicy}).
+ * {@code /time set} and {@code /time add} move the universe (C16 CLOCK-7): an operator's time skip.
  *
- * <p><b>Why the command needs a guard of its own at all.</b> Vanilla's {@code /time} is not a
- * per-world command: {@code CommandTime.setAllWorldTimes} walks {@code server.worlds} and writes
- * every loaded one, so a player standing on the overworld moves every planet's clock with him and a
- * player standing on a planet does the same in reverse. There is no argument to say which world he
- * meant, so the policy has to be applied per world inside the loop — which means replacing the
- * loop.</p>
+ * <p>A body world's time of day is its body's turn at the space clock, so no world can be set alone: the
+ * command moves the space clock and every body follows. {@code add N} moves it N ticks; {@code set T} moves it
+ * to the next moment the sender's world — the overworld when the sender's world is no body — reads T. Never
+ * backwards. Worlds that are not bodies keep their own vanilla counter and get vanilla's write. The skip locks
+ * of {@link TimeSkipPolicy} govern a SLEEP, not this command.</p>
  *
- * <p><b>It applies, it does not refuse.</b> The command runs and does what it is allowed to do; the
- * worlds it may not touch are left alone and NAMED, in one line. A refusal would be the easier
- * implementation and the worse one: an all-worlds command that fails entirely because one of its
- * targets is locked would be a command a player cannot use at all once he has a base off-world.</p>
- *
- * <p>{@code /time query} is read-only and is never intercepted. Neither is a run in which no loaded
- * world is locked — there the vanilla command is exactly right and this handler stands aside, so the
- * common case pays nothing and behaves byte-for-byte as before.</p>
- *
- * <p>Registered on the Forge event bus beside the other world handlers; the interception seam is the
- * same one {@code /weather} already uses.</p>
+ * <p>{@code /time query} is read-only and is never intercepted; neither is an argument this guard cannot
+ * read, which vanilla answers with its own usage error.</p>
  */
 public final class TimeCommandGuard {
 
@@ -56,30 +45,28 @@ public final class TimeCommandGuard {
         if (server == null) {
             return;
         }
-
-        List<WorldServer> allowed = new ArrayList<>();
-        List<WorldServer> locked = new ArrayList<>();
-        for (WorldServer world : server.worlds) {
-            if (world == null) {
-                continue;
-            }
-            (TimeSkipPolicy.allows(world) ? allowed : locked).add(world);
-        }
-        if (locked.isEmpty()) {
-            return; // nothing to protect: let vanilla run, unchanged
-        }
-
         Integer amount = parseAmount(isSet, args[1]);
         if (amount == null) {
             return; // let vanilla produce its own usage error rather than invent one
         }
 
         event.setCanceled(true);
-        for (WorldServer world : allowed) {
-            world.setWorldTime(isSet ? (long) amount : world.getWorldTime() + (long) amount);
+        long ticks;
+        if (isSet) {
+            World here = sender.getEntityWorld();
+            World reference = TimeOfDay.isBody(here) ? here : server.getWorld(0);
+            OptionalLong until = TimeOfDay.ticksUntil(reference, amount);
+            ticks = until.isPresent() ? until.getAsLong() : 0L;
+        } else {
+            ticks = amount;
         }
-        sender.sendMessage(new TextComponentTranslation("msg.timeskip.command.partial",
-                allowed.size(), locked.size()));
+        TimeSkip.skip(server, ticks);
+        for (WorldServer world : server.worlds) {
+            if (world != null && !TimeOfDay.isBody(world)) {
+                world.setWorldTime(isSet ? (long) amount : world.getWorldTime() + (long) amount);
+            }
+        }
+        sender.sendMessage(new TextComponentTranslation("msg.timeskip.command.universe", ticks));
     }
 
     /**

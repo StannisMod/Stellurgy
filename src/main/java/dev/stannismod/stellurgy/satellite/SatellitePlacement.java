@@ -165,11 +165,11 @@ public final class SatellitePlacement {
     }
 
     /**
-     * How {@code props}' body turns: its rotational period, meridian 0 along the frame's x axis at tick
-     * zero — the convention every body-fixed reading shares.
+     * How {@code props}' body turns: the sidereal turn its solar day implies ({@link DimensionProperties#solarDay}),
+     * meridian 0 along the frame's x axis at tick zero — the convention every body-fixed reading shares.
      */
     public static BodyRotation rotationOf(DimensionProperties props) {
-        return BodyRotation.of(props.rotationalPeriod, 0d);
+        return props.solarDay().rotation();
     }
 
     /**

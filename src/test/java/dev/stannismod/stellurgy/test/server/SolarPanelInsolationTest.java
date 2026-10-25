@@ -81,8 +81,12 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                         + " stellurgy:solarGenerator"));
         assertTrue("could not place solar in dim " + dim + ": " + place,
                 Reply.of(place).bool("placed"));
-        // Make sure it's daytime + clear for both dims.
-        client().arrange("time set day");
+        // Noon in THIS world. Its time of day is its body's turn at the space clock, so the universe is moved
+        // to the moment this world reads a quarter of its day — `time set` would set the overworld's.
+        Reply here = Reply.of(ok(client().arrange("stellurgytest dim time " + dim)));
+        long day = (long) here.number("rotationalPeriod");
+        long now = (long) here.number("worldTime");
+        client().arrange("time add " + Math.floorMod(day / 4L - now, day));
         client().arrange("weather clear 100000");
 
         // The reader refuses a block with no store, which is what the `initial >= 0` check stood

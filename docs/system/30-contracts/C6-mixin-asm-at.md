@@ -82,7 +82,9 @@ refmap and can silently no-op in dev.
   `MixinPlayerList` apply iff the flag is on; `MixinWorldServer` applies iff the flag is on OR a
   time-skip policy flag (`allowTimeSkipOnPlanets`, `allowTimeSkipOnOverworld`) asks for a refusal, so a
   skip policy is never a flag that silently does nothing. Off ⇒ the gated mixin is **not woven**
-  (weave-time), not merely a no-op. Every other mixin always applies.
+  (weave-time), not merely a no-op. Every other mixin always applies — the time skip's among them
+  (`MixinWorldServerTimeSkip`, `WorldServerSleepAccessor`, and `MixinWorldProvider`'s time of day), since
+  the universe's clock does not depend on `perDimWorldInfo`.
 - The plugin reads the `.cfg` file **directly** rather than via `StellurgyConfiguration` (which
   populates in mod pre-init, after the coremod phase): `onLoad` resolves
   `config/advRocketry/stellurgy.cfg` against `Launch.minecraftHome`, falling back to the process cwd

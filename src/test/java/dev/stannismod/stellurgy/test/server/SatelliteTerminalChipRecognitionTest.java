@@ -466,18 +466,20 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         Reply place = read("stellurgytest satellite place " + satId);
         requireArranged("the satellite's body must be named with a size and a mass: " + place.raw(),
                 place.has("bodyRadiusEarths") && place.number("bodyRadiusEarths") > 0d && place.number("bodyMassEarths") > 0d);
-        int period = planetIntField(0, "rotationalPeriod");
-        requireArranged("the body must turn: rotational period " + period, period > 0);
+        requireArranged("the body must turn against the stars: " + place.raw(),
+                place.has("bodySiderealTicks") && place.number("bodySiderealTicks") != 0d);
         return new Geometry(place.number("radiusM"), place.number("inclinationRad"), place.longInteger("epoch"),
                 SatelliteOrbit.EARTH_MU_M3_S2 * place.number("bodyMassEarths"),
-                place.number("bodyRadiusEarths") * AstronomicalBodyHelper.EARTH_RADIUS_METRES, period, at[0] + 0.5d,
-                at[2] + 0.5d);
+                place.number("bodyRadiusEarths") * AstronomicalBodyHelper.EARTH_RADIUS_METRES,
+                place.number("bodySiderealTicks"), at[0] + 0.5d, at[2] + 0.5d);
     }
 
     /**
      * The contract's geometry, computed here: a circular orbit whose node lies under meridian 0 at release
-     * and which starts at its node (MECH-SAT-14), a terminal where its block falls on the turning body and
-     * a satellite seen while not below its horizon (MECH-SAT-31).
+     * and which starts at its node (MECH-SAT-14), a terminal where its block falls on the turning body — the
+     * body turning clockwise about z once per sidereal period, east lowering the angle and north being −z
+     * (INV-SAT-35, `environment` MECH-ENV-06) — and a satellite seen while not below its horizon (MECH-SAT-31).
+     * The sidereal period is the world's, read beside its radius.
      */
     private static final class Geometry {
         final double radiusM;
@@ -485,11 +487,11 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         final long epoch;
         final double mu;
         final double bodyRadiusM;
-        final long rotation;
+        final double rotation;
         final double x;
         final double z;
 
-        Geometry(double radiusM, double inclination, long epoch, double mu, double bodyRadiusM, long rotation,
+        Geometry(double radiusM, double inclination, long epoch, double mu, double bodyRadiusM, double rotation,
                  double x, double z) {
             this.radiusM = radiusM;
             this.inclination = inclination;
@@ -502,7 +504,8 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         }
 
         double turn(long tick) {
-            return 2d * Math.PI * Math.floorMod(tick, rotation) / rotation;
+            double period = Math.abs(rotation);
+            return -Math.signum(rotation) * 2d * Math.PI * (((tick % period) + period) % period) / period;
         }
 
         boolean seen(long tick) {
@@ -512,11 +515,11 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
             double sx = radiusM * (Math.cos(node) * Math.cos(u) - Math.sin(node) * Math.sin(u) * Math.cos(inclination));
             double sy = radiusM * (Math.sin(node) * Math.cos(u) + Math.cos(node) * Math.sin(u) * Math.cos(inclination));
             double sz = radiusM * Math.sin(u) * Math.sin(inclination);
-            double longitude = turn(tick) + x / bodyRadiusM;
+            double longitude = turn(tick) - x / bodyRadiusM;
             double north = -z / bodyRadiusM;
             double tx = bodyRadiusM * Math.cos(north) * Math.cos(longitude);
             double ty = bodyRadiusM * Math.cos(north) * Math.sin(longitude);
-            double tz = bodyRadiusM * Math.sin(north);
+            double tz = -bodyRadiusM * Math.sin(north);
             return (sx - tx) * tx + (sy - ty) * ty + (sz - tz) * tz >= 0d;
         }
 

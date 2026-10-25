@@ -5,28 +5,32 @@ import com.google.gson.JsonParser;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.ServerOnly;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
  * Both sides of {@code allowTimeSkipOnPlanets}, on one client: a bed on a planet must set your spawn
- * and wake you, and whether it also brings the MORNING is the flag's to decide.
+ * and wake you, and whether it also brings the MORNING is the flag's to decide (C16 CLOCK-7).
  *
  * <ul>
- *   <li><b>Locked (the shipped default).</b> The player sleeps, is TOLD this world's morning is not
- *       coming, and the planet's clock does not jump — a planet's day is the turning of a body in an
- *       orbit, and a bed does not fast-forward it.</li>
- *   <li><b>Opted back in.</b> With the arcade mechanic on, the skip must land on the PLANET's own
- *       dawn — a multiple of its {@code rotationalPeriod} — where vanilla's hard-coded rounding would
- *       put 24000, still night on a 30000-tick day. That was the original report
- *       (dercodeKoenig/AdvancedRocketry#66).</li>
+ *   <li><b>Locked.</b> The player sleeps, is TOLD this world's morning is not coming, and the planet's
+ *       time of day does not jump.</li>
+ *   <li><b>Allowed (the shipped default).</b> The sleep moves the universe: the space clock jumps, every
+ *       body's time of day with it, and the planet wakes at its OWN dawn — a multiple of its
+ *       {@code rotationalPeriod} — where vanilla's hard-coded rounding would put 24000, still night on a
+ *       30000-tick day (dercodeKoenig/AdvancedRocketry#66).</li>
  * </ul>
+ *
+ * <p>Night is staged by moving the universe ({@code time add}) until the planet reads it: a body's time of
+ * day is its turn at the space clock, so no world's counter can be set alone.</p>
  *
  * <p><b>Neither side is a witness alone</b>, which is why they belong in one class rather than two: a
  * build that ignored the flag entirely would satisfy whichever of them happened to match its
@@ -168,16 +172,16 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
      */
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
-        setFlag(false);
+        setFlag(true);
     }
 
-    // ── the shipped default: a bed does not bring a planet's morning ─────────────────────────────
+    // ── locked: a bed does not bring a planet's morning ──────────────────────────────────────────
 
-    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy#allows} at {@code return allowOnPlanets}"
-            + " allowing the skip on every planet: \"no `time_skip_decided` refusing the skip on dim 9502\". THE"
-            + " CLOCK — {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at {@code ar$tellSleepersWhenDawnIs(self); return}"
-            + " — the return after a refusal — dropped, so the refused"
-            + " skip happens anyway: \"The clock was at 20006 before the sleep and 30006 after it\".")
+    @Pins("CLOCK-7")
+    @RedWitness(verdict = "locked", member = "TimeSkip#nightEnds",
+            at = "return true; // the lock's own path: the sleepers are told when dawn is and woken, nothing moves",
+            replacedBy = "skip(world.getMinecraftServer(), TimeOfDay.ticksToDawn(world).orElse(0L)); return true;",
+            fails = "THE CONTRACT: a bed may not fast-forward a planet's day", on = "2026-10-24")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_LOCKED,"
             + " SKYLIGHT_WORLD_TICKS);",
@@ -188,27 +192,19 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
             why = "the daytime gate is recomputed on the planet world's own pass; the read is the server's world"
                     + " time.")
     public void sleepingOnAPlanetSetsSpawnAndWakesYouWithoutBringingMorning() throws Exception {
-        // The premise, MEASURED rather than seeded: this scenario is about the default, so a build
-        // whose default changed must fail here rather than quietly measure the other side.
-        String shipped = read("stellurgytest config get " + FLAG).raw();
-        scenario().requireArranged("this scenario is about the SHIPPED default of " + FLAG
-                + ", so it reads it instead of writing it: " + shipped,
-                (!Reply.of(shipped).bool("value")));
-
         arrange("gamerule doMobSpawning false");
         stageSleepingSite(DIM_LOCKED);
 
-        // Stage planet-night THROUGH the flag, then lock it again before anyone sleeps: staging needs
-        // /time set to reach the planet, which is the very thing under test.
-        setFlag(true);
-        arrange("time set " + STAGED_NIGHT);
+        // Planet-night by moving the universe — the planet's time of day is its turn at the space clock —
+        // then lock the planet's skip before anyone sleeps.
+        stageNight(DIM_LOCKED);
         setFlag(false);
         GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);
 
         long staged = dimTime(DIM_LOCKED);
         scenario().requireArranged("the staging must have reached the planet's own clock, or the"
                         + " player sleeps in daylight and nothing below is a measurement. got="
-                        + staged, staged >= STAGED_NIGHT && staged < STAGED_NIGHT + DRIFT_ALLOWANCE);
+                        + staged, Math.floorMod(staged - STAGED_NIGHT, (long) ROTATIONAL_PERIOD) < DRIFT_ALLOWANCE);
 
         // THE MARK, before the click. The assertion below used to name its own ambiguity and refuse
         // to resolve it — "either the lock did not engage or the player never actually slept" — and
@@ -255,17 +251,21 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
                 after - staged <= DRIFT_ALLOWANCE);
     }
 
-    // ── opted back in: the skip lands on the PLANET's dawn, not vanilla's ────────────────────────
+    // ── the shipped default: the sleep moves the universe to the PLANET's dawn ──────────────────
 
     /**
-     * A completed sleep on a planet whose skip is allowed wakes it at the PLANET's dawn — the next
-     * multiple of its rotational period — and leaves the overworld's clock alone.
+     * A completed sleep on a planet whose skip is allowed — the only player on the server, so the server-wide
+     * mode is met — moves the universe (C16 CLOCK-7): the space clock jumps against the other planet's age, that
+     * planet's time of day moves with it although nobody slept there, and the sleeper's planet wakes at its own
+     * dawn, the next multiple of its rotational period.
      */
-    @LegacyWitness(prose = "with {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at"
-            + " {@code self.setWorldTime(StellurgyDimensionWorldInfo.computeSleepWakeTime(self.getWorldTime(), rotationalPeriod))}"
-            + " — the planetary rounding in the per-dim branch — replaced by vanilla's"
-            + " {@code setWorldTime(vanillaRounded)}, this fails with \"sleep skip must"
-            + " land at/after the next planetary dawn (30000), got 24007\" — 2026-09-28.")
+    @Pins("CLOCK-7")
+    @RedWitness(verdict = "the universe moved", member = "TimeSkip#nightEnds",
+            at = "skip(server, skip.getAsLong());", replacedBy = "",
+            fails = "CLOCK-7: the sleep moved the universe", on = "2026-10-24")
+    @RedWitness(verdict = "dawn", member = "TimeSkip#skipFor",
+            at = "earliest = Math.min(earliest, part.dawn.getAsLong());", replacedBy = "earliest = Math.min(earliest, 24000L);",
+            fails = "sleep skip must land ON planetary dawn", on = "2026-10-24")
     @Test
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_SKIP,"
             + " SKYLIGHT_WORLD_TICKS);",
@@ -281,17 +281,18 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         arrange("gamerule doMobSpawning false").raw();
         stageSleepingSite(DIM_SKIP);
 
-        // Night on every clock: vanilla /time set writes ALL loaded worlds, and on the wrapped planet
-        // that lands in the per-dim state. Phase 20000/30000 ≈ 0.67 is night on the planet;
-        // 20000/24000 is night in the overworld.
-        arrange("time set " + STAGED_NIGHT).raw();
+        // Planet-night, by moving the universe until the planet reads it (phase 20000/30000 ≈ 0.67).
+        stageNight(DIM_SKIP);
         GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);
+        // The other world of this galaxy, where nobody sleeps: the overworld is no body here — the catalogue
+        // names no Earth — so it keeps vanilla's counter, and the world that must follow is the other planet.
+        JsonObject otherBefore = dimTimeJson(DIM_LOCKED);
 
         JsonObject before = dimTimeJson(DIM_SKIP);
         long staged = before.get("worldTime").getAsLong();
-        assertTrue("planet clock must be at the staged night time (~20000, tick drift "
-                + "tolerated): " + before, staged >= STAGED_NIGHT_TICKS
-                        && staged < STAGED_NIGHT_TICKS + STAGED_NIGHT_DRIFT_TICKS);
+        scenario().requireArranged("planet clock must be at the staged night time (~20000 within its day, tick "
+                + "drift tolerated): " + before,
+                Math.floorMod(staged - STAGED_NIGHT_TICKS, (long) ROTATIONAL_PERIOD) < STAGED_NIGHT_DRIFT_TICKS);
 
         // The real player right-clicks the bed foot (server normalizes to the head) -> production
         // trySleep -> fully asleep after 100 ticks -> the sleep skip runs WorldServer's setWorldTime
@@ -342,21 +343,33 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
                 SLEEP_VERDICT_BUDGET_TICKS);
         scenario().record("timeSkipDecision", skipped);
 
-        // Next multiple of 30000 after 20000 is exactly 30000. Vanilla's hard-coded rounding would
-        // give 24000 — mid-night on this planet — which the modulo assertion rejects.
+        // The universe moved: the space clock against that world's age — which no skip moves — jumped, and its
+        // time of day moved with the clock, staying the clock plus its constant.
+        JsonObject otherAfter = dimTimeJson(DIM_LOCKED);
+        long skip = (otherAfter.get("spaceClock").getAsLong() - otherAfter.get("totalTime").getAsLong())
+                - (otherBefore.get("spaceClock").getAsLong() - otherBefore.get("totalTime").getAsLong());
+        long apart = Math.floorMod((otherAfter.get("worldTime").getAsLong() - otherBefore.get("worldTime").getAsLong())
+                - (otherAfter.get("spaceClock").getAsLong() - otherBefore.get("spaceClock").getAsLong()), (long) ROTATIONAL_PERIOD);
+        assertTrue("CLOCK-7: the sleep moved the universe — the space clock against the other planet's age moved "
+                + skip + ": before " + otherBefore + " | after " + otherAfter, skip > 0L);
+        assertEquals("CLOCK-7: the other planet's time of day moved with the universe: before " + otherBefore
+                + " | after " + otherAfter, 0L, apart);
+
+        // Next multiple of 30000 after 20000 is exactly 30000. A skip of anything but the planet's own
+        // dawn — vanilla's 24000 among them — lands elsewhere in its day, which the modulo rejects.
         long planetTime = dimTime(DIM_SKIP);
-        assertTrue("sleep skip must land at/after the next planetary dawn (30000), got "
-                + planetTime, planetTime >= ROTATIONAL_PERIOD);
         assertTrue("sleep skip must land ON planetary dawn (multiple of " + ROTATIONAL_PERIOD
                         + ", vanilla 24000-rounding would miss it): " + planetTime,
-                planetTime % ROTATIONAL_PERIOD < PLANETARY_DAWN_TOLERANCE_TICKS);
+                Math.floorMod(planetTime, (long) ROTATIONAL_PERIOD) < PLANETARY_DAWN_TOLERANCE_TICKS);
+    }
 
-        // Per-dim isolation: the overworld's clock keeps ticking from 20000 — the planet's sleep skip
-        // must NOT touch it.
-        long overworldTime = dimTime(0);
-        assertTrue("overworld clock must be unaffected by the planet's sleep skip "
-                        + "(expected ~20000 + elapsed, got " + overworldTime + ")",
-                overworldTime >= STAGED_NIGHT_TICKS && overworldTime < VANILLA_DAY_TICKS);
+    /**
+     * Move the universe forward until {@code dim} reads {@link #STAGED_NIGHT}: its time of day is its body's
+     * turn at the space clock, so the clock is what is moved, by what this world's own read says is missing.
+     */
+    private void stageNight(int dim) throws Exception {
+        long now = dimTime(dim);
+        arrange("time add " + Math.floorMod(STAGED_NIGHT - now, (long) ROTATIONAL_PERIOD));
     }
 
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────

@@ -128,8 +128,8 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   tick standing for 3.6 s, and its position is computed in the body-centred frame whose axes do not turn
   with the body, z along the spin axis: the frame the environment is asked in. Nothing ticks. At release
   the node lies under the body's meridian 0 and the satellite is at the node; meridian 0 is where
-  `BodyRotation` puts it — the body's rotational period, angle zero at tick zero — the same rule the
-  field turns by. `SatelliteOrbit.java:46-91`, `BodyRotation.java:27-30`, `SatellitePlacement.java:141-174`.
+  `BodyRotation` puts it — the sidereal turn the body's solar day implies (`environment` MECH-ENV-07),
+  angle zero at tick zero — the same rule the field turns by. `SatelliteOrbit.java:46-91`, `BodyRotation.java:27-30`, `SatellitePlacement.java:141-174`.
   FOR: maintainer 2026-10-20, asked *"фазу считать по времени из элементов орбиты"*, answered *"этот"*.
 - **MECH-SAT-15 [V][BEH] Where it stands.** The cell's frame flies the orbit, so the satellite stands
   still in its body's cell: at the body's address displaced by its place on the orbit at release, in
@@ -477,10 +477,12 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 - **INV-SAT-35 [T][SYS] A terminal stands where its block falls on its turning body.** At the world's origin
   it stands on the equator under meridian 0; a block x metres east stands x/R further round the equator, R
   the body's radius; z metres north (−z) stands z/R up the meridian, and a walk past the pole comes down
-  the far side; and the place turns with the body, a whole turn per rotational period. REGIONS: `origin`,
-  `east`, `north`, `over the pole`, `turning`. Pinned by
+  the far side; and the place turns with the body, a whole turn per sidereal period. East is the way the
+  body turns (`environment` MECH-ENV-06: clockwise about the frame's z) and north the pole that turn looks
+  anticlockwise from, the frame's −z, so east, north and up are right-handed as the world's x, −z and y are.
+  REGIONS: `origin`, `east`, `north`, `over the pole`, `turning`. Pinned by
   `SatelliteLawsTest#aTerminalStandsWhereItsBlockFallsOnItsTurningBody`. FOR: maintainer 2026-10-21, on the
-  terminal's place, *"Блок = метр на сфере"*.
+  terminal's place, *"Блок = метр на сфере"*; 2026-10-24, bodies turn with their orbits, *"этот"*.
 - **INV-SAT-36 [T][SYS] The dish sees the terminal only above its horizon and past every body between.** A
   satellite overhead is seen, one on the terminal's horizon is seen, one below it is not; a satellite
   behind another body is not seen, one beside that body is. REGIONS: `overhead`, `on the horizon`,

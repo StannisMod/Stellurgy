@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteOrbit;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.environment.BodyRotation;
 import dev.stannismod.stellurgy.environment.MagnetosphereDerivation;
 import dev.stannismod.stellurgy.environment.PlanetEnvironment;
 import dev.stannismod.stellurgy.item.ItemSatellite;
@@ -265,10 +266,13 @@ public final class SatelliteLife {
             }
             return Optional.empty();
         }
+        BodyRotation rotation = SatellitePlacement.rotationOf(props);
+        // The dynamo is driven by the body's turn against the stars, not by its day: the sidereal period.
+        long spinTicks = Double.isInfinite(rotation.siderealTicks()) ? 0L : Math.round(Math.abs(rotation.siderealTicks()));
         progress.environment = PlanetEnvironment.of(
-                MagnetosphereDerivation.derive(body.massEarths(), body.radiusEarths(), props.rotationalPeriod,
+                MagnetosphereDerivation.derive(body.massEarths(), body.radiusEarths(), spinTicks,
                         props.isGasGiant(), props.hasAtmosphere(), distanceAu, seed),
-                props.rotationalPeriod, SatellitePlacement.rotationOf(props).angleAt(0L));
+                rotation.siderealTicks(), rotation.angleAt(0L));
         progress.environmentInputs = inputs;
         return Optional.of(progress.environment);
     }

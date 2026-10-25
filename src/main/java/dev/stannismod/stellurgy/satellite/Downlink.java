@@ -20,13 +20,16 @@ public final class Downlink {
      * Where the block at world {@code x}, {@code z} of a body's world stands at {@code tick}, metres from
      * the body's centre. A block is a metre on the sphere: {@code x} runs east along the equator from
      * meridian 0, then {@code z} runs along that meridian, north being −z, so a far enough walk goes over
-     * the pole. The block's height is not counted — a terminal stands on the surface.
+     * the pole. East is the way the body turns — clockwise about +z ({@link BodyRotation}) — so it lowers the
+     * frame angle, and north is the pole the turn looks anticlockwise from, −z: east, north and up stay a
+     * right-handed triple, as the world's own x, −z and y are. The block's height is not counted — a terminal
+     * stands on the surface.
      */
     public static Vector3d surfacePoint(double x, double z, double radiusM, BodyRotation rotation, long tick) {
-        double longitude = rotation.angleAt(tick) + x / radiusM;
+        double longitude = rotation.angleAt(tick) - x / radiusM;
         double north = -z / radiusM;
         double cosNorth = Math.cos(north);
-        return new Vector3d(cosNorth * Math.cos(longitude), cosNorth * Math.sin(longitude), Math.sin(north))
+        return new Vector3d(cosNorth * Math.cos(longitude), cosNorth * Math.sin(longitude), -Math.sin(north))
                 .mul(radiusM);
     }
 

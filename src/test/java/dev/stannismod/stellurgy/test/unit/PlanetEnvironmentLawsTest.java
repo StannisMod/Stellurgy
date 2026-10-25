@@ -1,10 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.environment.BodyRotation;
 import dev.stannismod.stellurgy.environment.LocalEnvironment;
 import dev.stannismod.stellurgy.environment.MagnetosphereDerivation;
 import dev.stannismod.stellurgy.environment.PlanetEnvironment;
 import dev.stannismod.stellurgy.environment.PlanetaryDipole;
+import dev.stannismod.stellurgy.environment.SolarDay;
 import dev.stannismod.stellurgy.environment.Trajectory;
+import dev.stannismod.stellurgy.space.BlockDelta;
+import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Regions;
@@ -14,12 +18,14 @@ import org.junit.Test;
 
 import java.util.Optional;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * The laws of the environment query (`environment`): INV-ENV-01..05.
+ * The laws of the environment query (`environment`): INV-ENV-01..06, and of a body's turn and day:
+ * MECH-ENV-06..07.
  *
  * <p>Every body here is built by this test from physical inputs it states — Earth's real eccentric dipole
  * where the law is about Earth, and bodies derived through {@link MagnetosphereDerivation} where it is
@@ -102,7 +108,8 @@ public class PlanetEnvironmentLawsTest {
             rates[t] = rate(env, p, t);
             if (rates[t] > best) {
                 best = rates[t];
-                where.set(p).rotateZ(-2d * Math.PI * t / DAY_TICKS);
+                // Body-fixed: undo the body's turn, which is clockwise (MECH-ENV-06) — its angle is −2πt/day.
+                where.set(p).rotateZ(2d * Math.PI * t / DAY_TICKS);
             }
         }
         java.util.Arrays.sort(rates);
@@ -326,5 +333,136 @@ public class PlanetEnvironmentLawsTest {
         double kradPerYear = perDay / KRAD_PER_YEAR_IN_GY_PER_DAY;
         assertTrue("INV-ENV-05: the navigation orbit takes 20-50 krad/yr; got " + kradPerYear,
                 kradPerYear >= 20d && kradPerYear <= 50d);
+    }
+
+    /**
+     * MECH-ENV-06: a body turns the way its orbit runs in the body frame. A prograde orbit is taken from the
+     * production ephemeris and carried into the body frame by the stated axes (x stays x, the cell's Z is −y);
+     * over a quarter of the turn, meridian 0 moves the same way round as that orbit, a negative period the
+     * other way, and an infinite one not at all.
+     */
+    @Pins("MECH-ENV-06")
+    @RedWitness(member = "BodyRotation#angleAt", at = "return phaseRad - Math.signum(siderealTicks) * 2d * Math.PI * turn;",
+            replacedBy = "return phaseRad + Math.signum(siderealTicks) * 2d * Math.PI * turn;",
+            fails = "MECH-ENV-06", on = "2026-10-24")
+    @Test
+    public void aBodyTurnsTheWayItsOrbitRuns() {
+        double period = 24_000d;
+        long quarter = 6_000L;
+        BodyEphemeris orbit = BodyEphemeris.orbit(1_000d, 0.4d, 0d, false, 4 * period, 1_000L);
+        double orbitSweep = signedSweep(bodyFrameAngle(orbit.offsetAt(0L)), bodyFrameAngle(orbit.offsetAt(quarter)));
+        requireArranged("the orbit must move over the quarter: " + orbitSweep, Math.abs(orbitSweep) > 0.1d);
+
+        BodyRotation with = BodyRotation.of(period, 0.7d);
+        double turnSweep = signedSweep(with.angleAt(0L), with.angleAt(quarter));
+        assertEquals("MECH-ENV-06: a positive period turns a quarter turn the way the orbit runs; orbit swept "
+                + orbitSweep + ", meridian " + turnSweep, Math.signum(orbitSweep) * Math.PI / 2d, turnSweep, 1e-9d);
+
+        BodyRotation against = BodyRotation.of(-period, 0.7d);
+        assertEquals("MECH-ENV-06: a negative period turns the other way",
+                -Math.signum(orbitSweep) * Math.PI / 2d, signedSweep(against.angleAt(0L), against.angleAt(quarter)), 1e-9d);
+
+        BodyRotation still = BodyRotation.of(Double.POSITIVE_INFINITY, 0.7d);
+        assertEquals("MECH-ENV-06: an infinite period does not turn", 0.7d, still.angleAt(quarter), 0d);
+    }
+
+    /**
+     * MECH-ENV-07: a body's day. Swept over solar days, star orbits (none, a year, a fast one; prograde and
+     * retrograde), orbit angles at tick zero, longitudes and a lock to the star: the sidereal turn is the solar
+     * rate plus the orbit's; at every sampled tick the time of day is where the star stands — the hour angle
+     * between the place's meridian (the body's own turn, east lowering the angle) and the star's azimuth π − θ,
+     * reversed and written as world time with noon at a quarter of the day; a turning body's time of day
+     * advances one per tick, a locked one's not at all; and a moon facing its planet, given the solar day
+     * MECH-ENV-07 states for it, turns once per its orbit.
+     */
+    @Pins("MECH-ENV-07")
+    @RedWitness(verdict = "sidereal", member = "SolarDay#rotation", at = "double sidereal = solarRadPerTick() + starOrbitRadPerTick;",
+            replacedBy = "double sidereal = solarRadPerTick() - starOrbitRadPerTick;", fails = "MECH-ENV-07: sidereal",
+            on = "2026-10-24")
+    @RedWitness(verdict = "where the star stands", member = "SolarDay#timeOfDayAt",
+            at = "double solarTimeAtZero = longitudeRad + Math.PI - starThetaAtZero;",
+            replacedBy = "double solarTimeAtZero = longitudeRad - starThetaAtZero;",
+            fails = "MECH-ENV-07: where the star stands", on = "2026-10-24")
+    @RedWitness(verdict = "locked", member = "SolarDay#timeOfDayAt",
+            at = "return lockedToStar ? Math.round(offset) : tick + Math.round(offset);",
+            replacedBy = "return tick + Math.round(offset);", fails = "MECH-ENV-07: locked", on = "2026-10-24")
+    @Test
+    public void aBodysDayIsItsTurnAgainstItsStar() {
+        double[] solarDays = {24_000d, 6_000d, 1_517_760d};
+        double[] starOrbits = {Double.POSITIVE_INFINITY, 48d * 24_000d, 90_000d};
+        double[] thetasAtZero = {0d, 1.3d, -2.9d};
+        double[] longitudes = {0d, 0.5d, -2.2d};
+        long[] ticks = {0L, 17L, 123_457L, 9_876_543_211L};
+        int cases = 0;
+        int locked = 0;
+        int retrograde = 0;
+        for (double day : solarDays) {
+            for (double orbitTicks : starOrbits) {
+                for (boolean retro : new boolean[]{false, true}) {
+                    for (boolean lock : new boolean[]{false, true}) {
+                        for (double theta0 : thetasAtZero) {
+                            SolarDay solar = SolarDay.of(day, lock, orbitTicks, retro, theta0);
+                            double orbitRate = Double.isInfinite(orbitTicks) ? 0d
+                                    : (retro ? -1d : 1d) * 2d * Math.PI / orbitTicks;
+                            double solarRate = lock ? 0d : 2d * Math.PI / day;
+                            BodyRotation turn = solar.rotation();
+                            String what = "day " + day + ", star orbit " + orbitTicks + (retro ? " retrograde" : "")
+                                    + (lock ? ", locked" : "") + ", θ0 " + theta0;
+                            double expectedRate = solarRate + orbitRate;
+                            assertEquals("MECH-ENV-07: sidereal — " + what, expectedRate,
+                                    Double.isInfinite(turn.siderealTicks()) ? 0d : 2d * Math.PI / turn.siderealTicks(),
+                                    1e-12d);
+                            for (double longitude : longitudes) {
+                                for (long tick : ticks) {
+                                    double theta = theta0 + orbitRate * tick;
+                                    double hourAngle = turn.angleAt(tick) - longitude - (Math.PI - theta);
+                                    double expected = day * (-hourAngle / (2d * Math.PI) + 0.25d);
+                                    double got = solar.timeOfDayAt(tick, longitude);
+                                    double apart = Math.abs(((got - expected) % day + day) % day);
+                                    assertTrue("MECH-ENV-07: where the star stands — " + what + ", λ " + longitude
+                                                    + ", tick " + tick + ": time of day " + got + ", the star puts it at "
+                                                    + expected + " (mod " + day + ")",
+                                            Math.min(apart, day - apart) <= 2d);
+                                    long later = solar.timeOfDayAt(tick + 1_000L, longitude);
+                                    assertEquals("MECH-ENV-07: " + (lock ? "locked" : "one per tick") + " — " + what,
+                                            lock ? 0L : 1_000L, later - solar.timeOfDayAt(tick, longitude));
+                                    cases++;
+                                }
+                            }
+                            if (lock) {
+                                locked++;
+                            }
+                            if (retro && !Double.isInfinite(orbitTicks)) {
+                                retrograde++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        requireArranged("the sweep must reach locked and retrograde bodies: " + cases + " cases, " + locked
+                + " locked, " + retrograde + " retrograde", cases > 1_000 && locked > 0 && retrograde > 0);
+
+        double moonOrbit = 655_680d;
+        double planetOrbit = 48d * 24_000d;
+        double moonDay = SolarDay.solarDayOfAMoonFacingItsPlanet(moonOrbit, planetOrbit);
+        assertEquals("MECH-ENV-07: a moon facing its planet turns once per its orbit",
+                moonOrbit, SolarDay.of(moonDay, false, planetOrbit, false, 0d).rotation().siderealTicks(), 1e-6d);
+    }
+
+    /** The angle of a cell-frame offset in the body frame: x stays x, the cell's Z is −y. */
+    private static double bodyFrameAngle(BlockDelta offset) {
+        return Math.atan2(-offset.dz(), offset.dx());
+    }
+
+    /** The angle swept from {@code from} to {@code to}, in (−π, π]. */
+    private static double signedSweep(double from, double to) {
+        double d = (to - from) % (2d * Math.PI);
+        if (d > Math.PI) {
+            d -= 2d * Math.PI;
+        } else if (d <= -Math.PI) {
+            d += 2d * Math.PI;
+        }
+        return d;
     }
 }

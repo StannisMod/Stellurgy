@@ -201,6 +201,12 @@ implementations (→ satellite); space-station objects (→ space-stations); the
   star with neither bodies nor a count holds its star alone (not even the outer belt), and the stock
   counts above stay. `[T]` `PlanetDefsAuthoringTest.anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse`
   (a count of 3 derives 2 planets, 1 giant, 2 moons, 2 belts in that file's world).
+- **MECH-DIM-23 — `rotationalPeriod` is the solar day.** The length of a body's day as its sky shows it; the
+  turn against the stars is derived from it and the orbit that carries the body round its star
+  (`DimensionProperties#solarDay`, `environment` MECH-ENV-07). Luna, which keeps one face to Earth, is given
+  the solar day its orbit and Earth's year make — the model's synodic month, about 63 days with the model's
+  48-day year (`DimensionManager`, the default galaxy) — so its derived turn equals its orbit and Earth stands
+  still in its sky. FOR: C16 CLOCK-6; maintainer 2026-10-24, *"ок"* to the solar day. `[V]`
 - **MECH-DIM-20 — Tidal locking is an explicit flag, not a rotational period.**
   `isTidallyLocked()`/`setTidallyLocked`. `WorldProviderPlanet.calculateCelestialAngle` returns a
   constant for a locked world, so it has **no day/night cycle at all** rather than a long day.

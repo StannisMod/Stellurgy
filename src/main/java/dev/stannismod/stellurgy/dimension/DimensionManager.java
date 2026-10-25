@@ -1073,18 +1073,6 @@ public class DimensionManager implements IGalaxy {
                     DimensionProperties dimensionProperties = new DimensionProperties(moonId);
                     dimensionProperties.realizeAtmosphere(false, 0);
                     dimensionProperties.setAverageTemp(20);
-                    // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
-                    // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
-                    // (orbitalPeriod / rotationalPeriod − 1), so a rotation equal to the orbit holds
-                    // Earth still — which is what standing on the Moon looks like.
-                    //
-                    // NOT `setTidallyLocked(true)`: that flag says a world keeps one face to its
-                    // STAR and removes the day/night cycle altogether. The Moon keeps one face to
-                    // EARTH and still has a day and a night, so the flag would describe a different
-                    // body. The period below is its own orbit — 27.32 days, 655 680 ticks.
-                    dimensionProperties.rotationalPeriod = (int) Math.round(
-                            dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH
-                                    * 24000d);
                     dimensionProperties.gravitationalMultiplier = .166f; //Actual moon value
                     // The Moon's measured bulk, in the same units: 7.342e22 kg is 0.0123 Earth
                     // masses and 1 737.4 km is 0.2727 Earth radii. The gravity above is the stated
@@ -1105,6 +1093,21 @@ public class DimensionManager implements IGalaxy {
 
                     dimensionProperties.setParentPlanet(overworldProperties);
                     dimensionProperties.setStar(this.getStar(0));
+                    // TIDALLY LOCKED TO ITS PARENT: its turn against the stars equals its orbit round
+                    // Earth, so Earth stands still in its sky. NOT `setTidallyLocked(true)`: that flag says
+                    // a world keeps one face to its STAR and has no day at all. The Moon keeps one face to
+                    // EARTH and still has a day — `rotationalPeriod` is that solar day, the model's
+                    // synodic month: its orbit against Earth's year (48 days here, not 365, so the month is
+                    // ~63 days, not the real 29.5).
+                    double lunarOrbitTicks = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.TICKS_PER_DAY
+                            * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                            dimensionProperties.orbitalDist, (float) overworldProperties.getOrbitalMass());
+                    double earthYearTicks = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.TICKS_PER_DAY
+                            * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.getOrbitalPeriod(
+                            overworldProperties.orbitalDist, this.getStar(0).getMass());
+                    dimensionProperties.rotationalPeriod = (int) Math.round(
+                            dev.stannismod.stellurgy.environment.SolarDay.solarDayOfAMoonFacingItsPlanet(
+                                    lunarOrbitTicks, earthYearTicks));
                     dimensionProperties.isNativeDimension = !Loader.isModLoaded("GalacticraftCore");
                     dimensionProperties.initDefaultAttributes();
 

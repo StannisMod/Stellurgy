@@ -65,12 +65,39 @@ planet's chunk generator an empty settings string (MECH-WGEN-28). The wrapped de
 dimension is `StellurgyPlanetWorldInfo`, not vanilla's `DerivedWorldInfo`. Mutations run
 `dirtyMarker` to schedule a save.
 
+### MECH-WGEN-31 — a body world's time of day is its body's turn
+For the overworld and every planet (`TimeSkipPolicy.isPlanet`: not a station, a slot world or an asteroid
+field), the time of day is not a counter: `MixinWorldProvider` answers Forge's `WorldProvider#getWorldTime`
+— through which `World#getWorldTime`, the celestial angle and the moon phase all read it — with
+`TimeOfDay.of(world)`, the body's local solar time at meridian 0 at the space clock (`environment`
+MECH-ENV-07, C16 CLOCK-6). Both sides: the server's clock on the server, the synced one on a client, so a
+client's sky does not wait on vanilla's time packet. The counter MECH-WGEN-19 keeps is still written (by the
+vanilla tick, the sleep rounding and `/time`) and is not read for a body; worlds that are not bodies keep it.
+A body this side has no properties for keeps vanilla's counter. `world/TimeOfDay.java`,
+`mixin/MixinWorldProvider.java`. `[V]`
+
+- **MECH-WGEN-32 [T][SYS] A sleep's decision.** `TimeSkip.skipFor` decides what a sleep completing in one world comes to, over every occupied world's part
+(all its non-spectator players asleep; its skip allowed by `TimeSkipPolicy`; its next dawn, if it has one):
+nothing unless the completing world is all asleep and allowed; with `sleepSkipNeedsEveryPlayer` (the default)
+nothing unless EVERY occupied world is, and then the universe moves to the earliest of their dawns; without
+it, the completing world alone, to its dawn. A sleep that takes no world with a dawn moves the universe to the
+overworld's next dawn. `TimeSkip.nightEnds` answers vanilla's per-world sleep check with it
+(`MixinWorldServerTimeSkip`), moves the space clock (`TimeSkip.skip`, telling every client) and wakes the other
+worlds it took; a bed in a Stellurgy world that is not a body may be slept in at any time
+(`PlanetEventHandler#sleepingTimeCheck`, Forge's `SleepingTimeCheckEvent`). The operator's skip is
+`TimeCommandGuard`: `/time add N` moves the universe N ticks, `/time set T` to the next moment the sender's
+world (the overworld when it is no body) reads T, and a world that is no body gets vanilla's write (C16
+CLOCK-7.2). Pinned by `SleepWakeTimeTest#aSleepEndsTheNightOnlyWhenItsModeIsMet`.
+FOR: C16 CLOCK-7.
+
 ### MECH-WGEN-20 — sleep wake-up rounding
 `StellurgyDimensionWorldInfo.computeSleepWakeTime(current, rotationalPeriod)` returns the
 smallest multiple of the planet's day length strictly after `current` (dawn),
 falling back to 24000 for non-positive periods
-(`StellurgyDimensionWorldInfo.java:79-85`). Used by `MixinWorldServer` at the sleep site
-so beds bring the planet's morning, not vanilla's 24000-rounded night.
+(`StellurgyDimensionWorldInfo.java:79-85`). Used by `MixinWorldServer` at the sleep site.
+Since MECH-WGEN-31 the value it writes is the stored counter, which a body's time of day no longer reads:
+on a body a sleep wakes the sleepers and brings no morning until the skip moves the space clock (C16
+CLOCK-7, not written yet). `[V]`
 
 ### MECH-WGEN-21 — the custom weather cycle
 `WorldProviderPlanet.updateWeather` fully replaces vanilla when

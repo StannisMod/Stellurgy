@@ -61,7 +61,7 @@ per-dim weather/time (`world/weather/*`, `dimension/`), FF camera
 | `MixinEntityPlayerInventoryAccess` | `@Redirect` `canInteractWith` in `EntityPlayer.onUpdate` → keep rocket GUI open |
 | `MixinEntityPlayerMPInventoryAccess` | server twin of the above (`EntityPlayerMP.onUpdate` re-checks independently) |
 | `MixinWorldSetBlockState` | `@Inject(RETURN)` `setBlockState(BlockPos,IBlockState,int)Z` → `AtmosphereHandler.onBlockChange` |
-| `MixinWorldProvider` | `@Inject(HEAD)` `setWorld` → install `StellurgyPlanetWorldInfo` before the provider caches world type / generator options. NOT gated by `perDimWorldInfo` |
+| `MixinWorldProvider` | `@Inject(HEAD)` `setWorld` → install `StellurgyPlanetWorldInfo` before the provider caches world type / generator options; `@Inject(HEAD, cancellable)` Forge's `getWorldTime` → a body world's time of day from `TimeOfDay` (C16 CLOCK-6), both sides. NOT gated by `perDimWorldInfo` |
 | `MixinWorldServerMulti` | `@Inject(RETURN)` `<init>` → swap `DerivedWorldInfo` for `StellurgyDimensionWorldInfo` |
 | `MixinWorldServer` | `@Redirect` `setWorldTime` ordinal 0 in `tick()` → round sleep-wake to `rotationalPeriod` |
 | `MixinPlayerList` | `@Redirect` the rain gate (`WorldServer.isRaining()`) + `@Inject(TAIL)` the stale-weather clear, in `updateTimeAndWeatherForPlayer`; both `require = 1`. **Never HEAD+cancel**: that form silently dropped vanilla's `SPacketSpawnPosition` and every client kept the placeholder spawn `(8,64,8)` after login and every dim transfer |

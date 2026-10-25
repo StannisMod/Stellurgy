@@ -140,6 +140,9 @@ deliberately absent from this matrix: find a flag's readers with a grep for its 
 | forcePlayerRespawnInSpace | boolean† | forcePlanetRespawn | bed respawn even without air | `false` = no (needs allowPlanetRespawn) | |
 | perDimWorldInfo | boolean | perDimWorldInfo | **master** for per-dim WorldInfo (weather+time mixins). `false` = mixins not woven (classic) | `false` = full un-weave; see Rule 4 / mixins-asm-coremod | |
 | enableCustomPlanetWeather | boolean | enableCustomPlanetWeather | per-planet weather; sub-toggle of perDimWorldInfo; also gates mixin weave (StellurgyMixinPlugin) + PlanetWeatherManager | `false` = weather delegates to overworld | |
+| allowTimeSkipOnPlanets | boolean | allowTimeSkipOnPlanets | whether a sleep on a planet may end the night (C16 CLOCK-7); default `true` | `false` = the night is lived through there, and in the server-wide mode a sleeper there keeps it for everybody | |
+| allowTimeSkipOnOverworld | boolean | allowTimeSkipOnOverworld | the same for the overworld; default `true` | `false` = the same | |
+| sleepSkipNeedsEveryPlayer | boolean | sleepSkipNeedsEveryPlayer | a night ends when every player on the server sleeps (default `true`) or every player of one world (`false`); the universe moves either way (C16 CLOCK-7, world-gen MECH-WGEN-32) | `false` = per-world sleep | |
 | logPlanetWeatherWrapping | boolean | logPlanetWeatherWrapping | diagnostic logging | `false` = quiet | |
 | forcePlanetWeatherWorldInfoWrapper | boolean | forcePlanetWeatherWorldInfoWrapper | force wrap on every secondary dim (PlanetWeatherManager) | `false` = normal | |
 | minAtmosphereDensityForRain | float† | minAtmosphereDensityForRain | rain/thunder density threshold | tunable | |

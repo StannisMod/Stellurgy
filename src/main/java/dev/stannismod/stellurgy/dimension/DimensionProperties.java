@@ -2636,6 +2636,33 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      * now. This is what lets a navigation computer aim at where a body WILL BE when the ship leaves
      * hyperspace rather than where it was when the pilot pressed the button.
      */
+    /**
+     * This body's day: its {@code rotationalPeriod} as the solar day, against the orbit that carries it round
+     * its star — its own for a planet, its planet's for a moon. A body with no star to go round has a solar
+     * day equal to its sidereal turn.
+     */
+    public dev.stannismod.stellurgy.environment.SolarDay solarDay() {
+        DimensionProperties carrier = this;
+        while (carrier.isMoon() && carrier.getParentProperties() != null) {
+            carrier = carrier.getParentProperties();
+        }
+        StellarBody host = carrier.getStar();
+        double starOrbitTicks = host == null ? Double.POSITIVE_INFINITY
+                : AstronomicalBodyHelper.TICKS_PER_DAY * AstronomicalBodyHelper.getOrbitalPeriod(carrier.orbitalDist,
+                        host.getMass());
+        return dev.stannismod.stellurgy.environment.SolarDay.of(rotationalPeriod, tidallyLocked, starOrbitTicks,
+                carrier.isRetrograde, carrier.orbitThetaAt(0L));
+    }
+
+    /**
+     * The length of this body's turn against the stars, ticks, whichever way it turns — what its
+     * {@link #solarDay()} implies; {@link Integer#MAX_VALUE} for a body that does not turn at all.
+     */
+    public int siderealPeriodTicks() {
+        double sidereal = Math.abs(solarDay().rotation().siderealTicks());
+        return sidereal >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.round(sidereal);
+    }
+
     public double orbitThetaAt(long worldTick) {
         double theta = 0d;
         if (isMoon() && getParentProperties() != null) {

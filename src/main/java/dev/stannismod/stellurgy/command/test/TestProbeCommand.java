@@ -9012,8 +9012,13 @@ public class TestProbeCommand extends CommandBase {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("dim", dim);
             map.put("worldInfoClass", world.getWorldInfo().getClass().getName());
-            map.put("worldTime", world.getWorldInfo().getWorldTime());
+            // The time of day the world READS — a body's turn at the space clock, through the provider — and the
+            // space clock and the world's age read at the same instant, so a test can tell a skip (the clock
+            // moves against the age) from ticks going by (both move together).
+            map.put("worldTime", world.getWorldTime());
+            map.put("storedWorldTime", world.getWorldInfo().getWorldTime());
             map.put("totalTime", world.getWorldInfo().getWorldTotalTime());
+            map.put("spaceClock", dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
             map.put("rotationalPeriod",
                     world.provider instanceof dev.stannismod.stellurgy.api.IPlanetaryProvider
                             ? ((dev.stannismod.stellurgy.api.IPlanetaryProvider) world.provider)
@@ -13341,6 +13346,18 @@ public class TestProbeCommand extends CommandBase {
                     .append(",\"bodyMassEarths\":").append(body.get().massEarths());
         } else {
             out.append(",\"bodyRadiusEarths\":null,\"bodyMassEarths\":null");
+        }
+        // The body's turn against the stars, as the model turns it: signed (positive with its orbits),
+        // a fact of the world for a test's geometry the way the radius is.
+        dev.stannismod.stellurgy.dimension.DimensionProperties satWorld =
+                DimensionManager.getInstance().getDimensionPropertiesOrNull(sat.getDimensionId());
+        double sidereal = satWorld != null && satWorld.rotationalPeriod > 0
+                ? dev.stannismod.stellurgy.satellite.SatellitePlacement.rotationOf(satWorld).siderealTicks()
+                : Double.NaN;
+        if (!Double.isNaN(sidereal) && !Double.isInfinite(sidereal)) {
+            out.append(",\"bodySiderealTicks\":").append(sidereal);
+        } else {
+            out.append(",\"bodySiderealTicks\":null");
         }
         java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> point =
                 dev.stannismod.stellurgy.satellite.SatellitePlacement.standingPoint(

@@ -557,7 +557,7 @@ public class RenderAsteroidSky extends IRenderHandler {
                 GL11.glPushMatrix();
 
                 float planetPositionTheta = AstronomicalBodyHelper.getParentPlanetThetaFromMoon(
-                        properties.rotationalPeriod, properties.orbitalDist, (float) parentProperties.getOrbitalMass(),
+                        properties.siderealPeriodTicks(), properties.orbitalDist, (float) parentProperties.getOrbitalMass(),
                         myTheta, properties.baseOrbitTheta);
 
                 GL11.glRotatef((float) myPhi, 0f, 0f, 1f);

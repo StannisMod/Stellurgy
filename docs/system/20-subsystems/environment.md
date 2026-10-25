@@ -17,8 +17,9 @@ give one low orbit a high-dose and a low-dose segment by geometry alone.
 
 ## Responsibility boundary
 
-Owns: the environment bundle, the planetary dipole and its belts, the dose accrued along a path, and
-the derivation of a body's dipole from its bulk, spin and seed.
+Owns: the environment bundle, the planetary dipole and its belts, the dose accrued along a path, the
+derivation of a body's dipole from its bulk, spin and seed, and a body's turn and day (how it turns, the
+sidereal turn its solar day implies, the local solar time at a place).
 Does NOT own: where a body's mass, radius, spin and seed come from (`universe`, `dimension-planets`),
 the position of anything on an orbit (whoever holds the orbit hands in a path), what a dose DOES to
 the thing that takes it (its consumer), or any reading a player holds (a measurement is the
@@ -36,6 +37,7 @@ vocabulary of `DataType`).
 | `MagnetosphereDerivation` | a body's dipole from mass, radius, spin, kind, distance from its star and seed |
 | `Trajectory` | a path about a body over time, as the dose integration consumes it |
 | `BodyRotation` | how a body turns: meridian 0's angle at a tick — the one rule the field and a satellite's release share |
+| `SolarDay` | a body's day: the sidereal turn its solar day implies, and the local solar time at a longitude and tick |
 
 ## Mechanics
 
@@ -74,6 +76,23 @@ vocabulary of `DataType`).
   `MagnetosphereDerivation.java:76-110`. FOR: maintainer 2026-10-20, asked where tilt and offset come
   from: *"Диапазон по каменным/гигантам"*; and on whether a dead dynamo is modelled: *"добавить кнч"*
   (add it, of course).
+- **MECH-ENV-06 [T][SYS] A body turns with its orbits.** In the body-centred frame (z the spin axis: the
+  cell's Y, with the cell's Z as −y) a prograde orbit runs clockwise, and a body turns the same way:
+  `BodyRotation` advances meridian 0 clockwise once every sidereal period, a negative period the other way.
+  East is the way the body turns. Pinned by `PlanetEnvironmentLawsTest#aBodyTurnsTheWayItsOrbitRuns`.
+  `BodyRotation.java`. FOR: C16 CLOCK-6; maintainer 2026-10-24, choosing to turn bodies with their orbits so
+  the day law holds and a moon can keep one face to its planet: *"этот"*.
+- **MECH-ENV-07 [T][SYS] A body's day.** A body's `rotationalPeriod` is its solar day. The star moves round
+  its sky with the orbit that carries the body round it — a planet's own, a moon's planet's — so the
+  sidereal rate is the solar rate plus that orbit's rate (a prograde body's sidereal period is shorter than
+  its day); a body locked to its star turns with its orbit and has no solar rate. Local solar time at a
+  longitude (east positive) is the angle from the star's meridian to the place's, zero at noon, and is given
+  in vanilla's world-time convention — a day of `rotationalPeriod` ticks, 0 sunrise, a quarter noon: it is the
+  space tick plus a constant of the place, the constant for a body locked to its star. A moon facing its
+  planet has the solar day its orbit and its planet's make (1/day = 1/orbit − 1/planet's orbit).
+  `SolarDay.java`. Pinned by `PlanetEnvironmentLawsTest#aBodysDayIsItsTurnAgainstItsStar`. FOR: C16 CLOCK-6,
+  which states it for a world's time of day; maintainer 2026-10-24, *"важно, чтобы игра была согласована
+  внутри себя"*, *"ок"* to `rotationalPeriod` as the solar day.
 
 ## State & persistence
 
@@ -141,7 +160,7 @@ None. The calibration constants map the model onto measured units and are not kn
 
 ## Test coverage
 
-INV-ENV-01..06 → `PlanetEnvironmentLawsTest`.
+INV-ENV-01..06, MECH-ENV-06..07 → `PlanetEnvironmentLawsTest`.
 
 ## Open questions
 

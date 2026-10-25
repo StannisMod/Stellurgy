@@ -100,6 +100,8 @@ part of surface), `aluminumClumpSize`,`generateAluminum`, `generateIridium`,`Iri
 
 **Planet** (`PLANET`, `:486-500`): `planetsMustBeDiscovered†`, `planetDiscoveryChance`,
 `canPlayerRespawnInSpace`, `forcePlayerRespawnInSpace`, `perDimWorldInfo`, `enableCustomPlanetWeather`,
+`allowTimeSkipOnPlanets`, `allowTimeSkipOnOverworld`, `sleepSkipNeedsEveryPlayer` (the time skip — C16
+CLOCK-7; the first two also read by `StellurgyMixinPlugin` before the config object exists),
 `logPlanetWeatherWrapping`, `forcePlanetWeatherWorldInfoWrapper`, `minAtmosphereDensityForRain†`,
 `acidRainDamage`, `acidRainDamageInterval`, `blackListAllVanillaBiomes`, `maxBiomesPerPlanet`,
 `minDimension`, and the telescope-survey block

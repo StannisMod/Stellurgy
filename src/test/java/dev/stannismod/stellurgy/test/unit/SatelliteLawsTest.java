@@ -86,9 +86,12 @@ public class SatelliteLawsTest {
         return 2d * Math.PI * Math.sqrt(radiusM * radiusM * radiusM / EARTH_GM) / SECONDS_PER_TICK;
     }
 
-    /** Meridian 0's angle at {@code tick}, the body turning once a day from angle zero at tick zero. */
+    /**
+     * Meridian 0's angle at {@code tick}, the body turning once a day from angle zero at tick zero, clockwise
+     * about z — the way a body turns (`environment` MECH-ENV-06).
+     */
     private static double meridianAt(long tick) {
-        return 2d * Math.PI * Math.floorMod(tick, ROTATION_TICKS) / ROTATION_TICKS;
+        return -2d * Math.PI * Math.floorMod(tick, ROTATION_TICKS) / ROTATION_TICKS;
     }
 
     /**
@@ -1031,35 +1034,35 @@ public class SatelliteLawsTest {
 
     /**
      * INV-SAT-35: the origin on the equator under meridian 0; a quarter of the circumference east, a quarter
-     * turn round; an eighth north, 45° up the meridian; past the pole by 0.3 rad, 0.3 rad down the far
-     * side; and a quarter of the rotational period later, the origin a quarter turn round. Each expected
-     * point is the test's own spherical arithmetic on a body of radius {@link #DOWNLINK_BODY_RADIUS_M} turning once
-     * in 400 ticks.
+     * turn round the way the body turns (clockwise about z, to −y); an eighth north, 45° up the meridian
+     * toward −z; past the pole by 0.3 rad, 0.3 rad down the far side; and a quarter of the sidereal period
+     * later, the origin a quarter turn round, clockwise. Each expected point is the test's own spherical
+     * arithmetic on a body of radius {@link #DOWNLINK_BODY_RADIUS_M} turning once in 400 ticks.
      */
     @Pins("INV-SAT-35")
     @Regions(of = "INV-SAT-35", value = {"origin", "east", "north", "over the pole", "turning"})
     @RedWitness(verdict = "origin", member = "Downlink#surfacePoint", at = "double cosNorth = Math.cos(north);",
             replacedBy = "double cosNorth = Math.sin(north);", fails = "INV-SAT-35: origin", on = "2026-10-21")
-    @RedWitness(verdict = "east", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) + x / radiusM",
-            replacedBy = "rotation.angleAt(tick) - x / radiusM", fails = "INV-SAT-35: east", on = "2026-10-21")
+    @RedWitness(verdict = "east", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) - x / radiusM",
+            replacedBy = "rotation.angleAt(tick) + x / radiusM", fails = "INV-SAT-35: east", on = "2026-10-24")
     @RedWitness(verdict = "north", member = "Downlink#surfacePoint", at = "double north = -z / radiusM;",
             replacedBy = "double north = z / radiusM;", fails = "INV-SAT-35: north", on = "2026-10-21")
     @RedWitness(verdict = "over the pole", member = "Downlink#surfacePoint", at = "double north = -z / radiusM;",
             replacedBy = "double north = Math.max(-Math.PI / 2d, Math.min(Math.PI / 2d, -z / radiusM));",
             fails = "INV-SAT-35: over the pole", on = "2026-10-21")
-    @RedWitness(verdict = "turning", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) + x / radiusM",
-            replacedBy = "x / radiusM", fails = "INV-SAT-35: turning", on = "2026-10-21")
+    @RedWitness(verdict = "turning", member = "Downlink#surfacePoint", at = "rotation.angleAt(tick) - x / radiusM",
+            replacedBy = "0d - x / radiusM", fails = "INV-SAT-35: turning", on = "2026-10-24")
     @Test
     public void aTerminalStandsWhereItsBlockFallsOnItsTurningBody() {
         BodyRotation day = BodyRotation.of(400L, 0d);
         double r = DOWNLINK_BODY_RADIUS_M;
         assertPlace("origin", new Vector3d(r, 0d, 0d), Downlink.surfacePoint(0d, 0d, r, day, 0L));
-        assertPlace("east", new Vector3d(0d, r, 0d), Downlink.surfacePoint(r * Math.PI / 2d, 0d, r, day, 0L));
+        assertPlace("east", new Vector3d(0d, -r, 0d), Downlink.surfacePoint(r * Math.PI / 2d, 0d, r, day, 0L));
         double half = Math.sqrt(0.5d) * r;
-        assertPlace("north", new Vector3d(half, 0d, half), Downlink.surfacePoint(0d, -r * Math.PI / 4d, r, day, 0L));
-        assertPlace("over the pole", new Vector3d(-r * Math.sin(0.3d), 0d, r * Math.cos(0.3d)),
+        assertPlace("north", new Vector3d(half, 0d, -half), Downlink.surfacePoint(0d, -r * Math.PI / 4d, r, day, 0L));
+        assertPlace("over the pole", new Vector3d(-r * Math.sin(0.3d), 0d, -r * Math.cos(0.3d)),
                 Downlink.surfacePoint(0d, -r * (Math.PI / 2d + 0.3d), r, day, 0L));
-        assertPlace("turning", new Vector3d(0d, r, 0d), Downlink.surfacePoint(0d, 0d, r, day, 100L));
+        assertPlace("turning", new Vector3d(0d, -r, 0d), Downlink.surfacePoint(0d, 0d, r, day, 100L));
     }
 
     private static void assertPlace(String region, Vector3dc expected, Vector3dc actual) {

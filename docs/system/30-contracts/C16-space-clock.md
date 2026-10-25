@@ -78,20 +78,25 @@ stands the ship off from where the target was, by the difference between the two
      the write-out happens in a `finally` so a fleet step that refuses or fails cannot take the clock
      with it.
   **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it. Pinned by `AimAndArrivalShareOneClockTest#theClockAdvancesWithoutBeingTold`, `SpaceClockIsTheSubsystemsOwnTest#neitherClockMovesTheOther`. FOR: CLOCK-2.
-- **CLOCK-6 (a world's time of day is its body's turn)** `[A][BEH]` The time of day at a place on a world
-  that is a body — the overworld included — is the LOCAL SOLAR TIME at that place's longitude (its block x
-  over the body's radius, as the space model places it) at the space clock: noon when the body's star
-  stands on that meridian, sunrise a quarter of a solar day before. A body's `rotationalPeriod` IS its
-  solar day; the space model turns the body by the sidereal period that solar day and the body's orbit
-  give (1/sidereal = 1/solar + 1/orbital). A tidally locked body's time of day stands still. No world keeps
-  a time-of-day counter of its own. Both layers follow the place: what a client draws (the sky, the sun,
-  the light) for the place its player stands, and what the server decides (the sky light a block reads,
-  daytime, spawning, the daylight sensor, a bed) for the place it is decided at. Vanilla's `doDaylightCycle`
+- **CLOCK-6 (a world's time of day is its body's turn)** `[A][BEH]` The time of day on a world that is a
+  body — the overworld included — is the LOCAL SOLAR TIME at the world's meridian 0 (block x = 0) at the
+  space clock: noon when the body's star stands on that meridian, sunrise a quarter of a solar day before.
+  A body's `rotationalPeriod` IS its solar day; the space model turns the body by the sidereal period that
+  solar day and the body's orbit give (1/sidereal = 1/solar + 1/orbital). A tidally locked body's time of
+  day stands still. No world keeps a time-of-day counter of its own. A world has ONE time of day, and both
+  layers read it: what a client draws (the sky, the sun, the light) and what the server decides (the sky
+  light a block reads, daytime, spawning, the daylight sensor, a bed), wherever in the world. The space
+  model alone places a block at its own longitude (x over the body's radius — a satellite's sight of a
+  ground terminal), so the two differ by solarDay·x / (2πR) ticks: 30 ticks 10 000 blocks from meridian 0
+  on the smallest body the universe derives (0.2 Earths, a 24 000-tick day), 6 on an Earth-sized one.
+  Vanilla's `doDaylightCycle`
   rule has no effect on a body's time of day. Vanilla's day counter (`worldTime / 24000`) keeps vanilla's
   arithmetic: it matches a body whose solar day is 24 000, the overworld's. **Player form:** the sky over a planet shows where its star really is, and two players on two
   worlds agree on how much time has passed. FOR: maintainer 2026-10-23, *"Вообще, не должно "время мира"
   расходиться с космологическим. Вот как планета повернута, такое и время"* (a world's time must not drift
-  from the cosmological one; as the planet is turned, so is the time).
+  from the cosmological one; as the planet is turned, so is the time); one time of day per world at
+  meridian 0, the place deferred, maintainer 2026-10-25 after the size above was measured: *"Сейчас бери
+  вариант 1"*.
 - **CLOCK-7 (the time skip)** `[A][BEH]` A skip moves the space clock forward (CLOCK-5.2), and with it every
   world's time of day (CLOCK-6). It happens in two ways:
   1. **Sleep.** With the server-wide mode (the default), when every non-spectator player on the server is
@@ -115,13 +120,15 @@ stands the ship off from where the target was, by the difference between the two
   относительно планеты"*), the whole universe in either mode (*"В режиме "весь мир" - стареет вся
   вселенная, да"*).
 - **CLOCK-8 (a client is told at a skip)** `[A][SYS]` At a skip every connected client is sent the new
-  clock at once, not at its next periodic sync. FOR: CLOCK-3, CLOCK-6 — a client's sky and its space clock
-  must not disagree for up to a sync period.
+  clock at once, not at its next periodic sync. FOR: CLOCK-3 — a client's space clock follows the server's;
+  maintainer 2026-10-23, accepting that a client is told at the jump rather than up to a sync period later,
+  with the rest of the design: *"согласен со всем"*.
 - **CLOCK-9 (a skip is time passing)** `[A][SYS]` Every deadline the skip carries the clock past has passed
   — a jump spool, a retry cooldown, a stored cell's age — and every lazy accrual (a satellite's life) catches
   up over the skipped span. No reader of the clock may assume it moves one tick at a time unless it
   integrates per tick by design and says so. Gates on the time of day (`getWorldTime() % N`) move to the
-  world's total time, which a skip does not touch. FOR: CLOCK-7.
+  world's total time, which a skip does not touch. FOR: maintainer 2026-10-23, accepting that what a skip
+  fires is time honestly passed and that time-of-day gates move to total time: *"согласен со всем"*.
 
 ## Witnesses
 
@@ -135,7 +142,10 @@ stands the ship off from where the target was, by the difference between the two
 | CLOCK-5.3 | `neitherClockMovesTheOther` — both directions, each with its own arrangement assertion that the clock it drove really jumped. The class owns its server: one leg hammers the overworld's counter by 20 M ticks, which is exactly the collateral this clause removes from shared servers. **Red at "the overworld jumped 20 000 000 and the space clock moved 20 000 001"** with `spaceClock()` re-pointed at the overworld |
 | CLOCK-5.4 | no restart witness: the durability half is `[V]` only — staged on save at `SpaceSubsystemEvents.java:164-169`, written and read under `spaceClock` at `ShipLedgerData.java:248,276`, restored on start at `SpaceSubsystem.java:302-303`. The unit tier pins the decisions around it: `ShipLedgerDataTest.aSaveWithNoClockInItReadsBackAsTickZero` and `.aRefusedFleetWriteDoesNotRollTheClockBack` |
 
-| CLOCK-6..9 | not built — design-stage clauses, ratified before code; the distance below |
+| CLOCK-6 | partly built: the law in `environment` (MECH-ENV-06/07, `PlanetEnvironmentLawsTest`), the time of day read from it (world-gen MECH-WGEN-31, `TimeCommandMovesTheUniverseTest`) |
+| CLOCK-7 | `/time` → `TimeCommandMovesTheUniverseTest`; sleep → `PlanetBedSleepClientGroupTest` (one player: the server-wide mode met), its decision → `SleepWakeTimeTest` (MECH-WGEN-32); the transit not yet |
+| CLOCK-8 | built (`TimeSkip#skip`), not pinned yet |
+| CLOCK-9 | not built — the distance below |
 
 ## CLOCK-6..9 — the distance from the code (design stage)
 
@@ -147,27 +157,26 @@ period (`WorldProviderPlanet#calculateCelestialAngle`); the skip locks exist (`T
 
 Not written yet:
 
-- **CLOCK-6** — a world's time of day is its own counter (`PlanetWeatherState` under `perDimWorldInfo`,
-  advanced by vanilla only while the world ticks; the overworld's is level.dat's), and its phase is not the
-  space model's: sky and model share the period, not the phase. Nothing yet computes a local solar time.
-- **CLOCK-7** — sleep is per world (vanilla `WorldServer#areAllPlayersAsleep`); the skip writes the
-  sleeping world's own counter (`MixinWorldServer`), `/time` writes every loaded world's
-  (`TimeCommandGuard`); neither touches the space clock. No server-wide sleep check and no mode config.
-- **CLOCK-8** — the client's clock is re-synced every `CLOCK_SYNC_TICKS` (200) only.
+- **CLOCK-6** — written: the law (`environment` MECH-ENV-06/07, `SolarDay`, bodies turning with their
+  orbits), the space model turning by it (`SatellitePlacement#rotationOf`), and a body world's time of day
+  read from it at meridian 0 on both sides (`world-gen` MECH-WGEN-31).
+- **CLOCK-7** — written for sleep and `/time` (`TimeSkip`, `TimeCommandGuard`, world-gen MECH-WGEN-32; the
+  locks on by default); not yet the transit carried through a skip.
+- **CLOCK-8** — written (`TimeSkip#skip` sends every player the clock at the skip).
 - **CLOCK-9** — two time-of-day gates: `TileAtmosphereDetector` (`getWorldTime() % 10`),
   `TileRocketServiceStation` (`% 20`).
 
-More not written: `allowTimeSkipOnPlanets` defaults to off; the space model turns a body by
-`rotationalPeriod` as if it were the sidereal period (`SatellitePlacement#rotationOf`, `PlanetEnvironment`,
-`SatelliteLife`); the server's sky light is one number per world (vanilla `skylightSubtracted`, read in
-`World`, `WorldServer`, `WorldProvider`, `EntityMob`, `BlockDaylightDetector`); a ship's transit is integrated
+More not written: a ship's transit is integrated
 per tick (`ShipTransitManager`) and a skip does not carry it.
 
 ## CLOCK-6..9 — edge cases of the stress-test, as ruled (2026-10-24)
 
 1. A player in a locked world — moot: the locks are on by default now (*"Раз мы вводим концепцию
    синхронизованного сна, надо поставить там по-умолчанию true"*).
-2. The place, not meridian 0 — both layers (*"Хочется нормально"*; the recommendation, *"ок"*).
+2. The place, not meridian 0 — both layers (*"Хочется нормально"*; the recommendation, *"ок"*). Restated
+   2026-10-25 once the shift was measured (30 ticks at 10 000 blocks on the smallest body): one time of day
+   per world at meridian 0 for now (*"Сейчас бери вариант 1"*); a server's sky light stays one number per
+   world (vanilla `skylightSubtracted`), as does a client's sky.
 3. `rotationalPeriod` is the solar day (*"важно, чтобы игра была согласована внутри себя"*; *"ок"*).
 4. `doDaylightCycle` has no effect, documented (*"Документируем, что это правило с модом не работает"*).
 5. A ship in transit is carried through a skip (*"Надо продвигать"*). Its design pass found that nobody in

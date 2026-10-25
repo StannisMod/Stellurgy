@@ -432,7 +432,9 @@ public class AstronomicalBodyHelper {
     /**
      * Returns the visual orbital theta for a body at a given distance around its parent planet, at this current moment, as a value from 0 - 360
      *
-     * @param rotationalPeriod    the rotational period of the moon we are rendering from
+     * @param rotationalPeriod    the SIDEREAL period of the moon we are rendering from — its turn against the
+     *                            stars ({@code DimensionProperties#solarDay}), which equals its orbit when it
+     *                            keeps one face to its planet
      * @param orbitalDistance     the distance from the parent body
      * @param parentMassEarths    the mass of the parent planet, in Earth masses
      * @param currentOrbitalTheta the orbital theta of the moon we are rendering from

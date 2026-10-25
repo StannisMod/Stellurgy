@@ -287,6 +287,21 @@ public class PlanetEventHandler {
         }
     }
 
+    /**
+     * A bed in a Stellurgy world that is not a body — a station, a slot world, hyperspace, an asteroid field —
+     * may be slept in at any time: there is no night there to wait for (C16 CLOCK-7). Vanilla asks this both
+     * when a player lies down and while he sleeps, and such a world is permanently noon on the server, so
+     * without it nobody aboard a ship in flight could sleep, and in the server-wide sleep mode nobody anywhere
+     * could while he was there.
+     */
+    @SubscribeEvent
+    public void sleepingTimeCheck(@Nonnull net.minecraftforge.event.entity.player.SleepingTimeCheckEvent event) {
+        net.minecraft.world.WorldProvider provider = event.getEntityPlayer().world.provider;
+        if (provider instanceof WorldProviderPlanet && !dev.stannismod.stellurgy.world.TimeSkipPolicy.isPlanet(provider)) {
+            event.setResult(Result.ALLOW);
+        }
+    }
+
     @SubscribeEvent
     public void sleepEvent(@Nonnull PlayerSleepInBedEvent event) {
 

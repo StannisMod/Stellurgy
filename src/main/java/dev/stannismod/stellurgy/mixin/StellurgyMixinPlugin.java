@@ -59,7 +59,7 @@ public class StellurgyMixinPlugin implements IMixinConfigPlugin {
             "dev.stannismod.stellurgy.mixin.MixinWorldServer";
 
     private boolean perDimWorldInfo = true;
-    private boolean allowTimeSkipOnPlanets = false;
+    private boolean allowTimeSkipOnPlanets = true;
     private boolean allowTimeSkipOnOverworld = true;
 
     @Override
@@ -79,8 +79,8 @@ public class StellurgyMixinPlugin implements IMixinConfigPlugin {
                                 Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true)
                         .getBoolean(true);
                 allowTimeSkipOnPlanets = cfg
-                        .get("Planet", "allowTimeSkipOnPlanets", false)
-                        .getBoolean(false);
+                        .get("Planet", "allowTimeSkipOnPlanets", true)
+                        .getBoolean(true);
                 allowTimeSkipOnOverworld = cfg
                         .get("Planet", "allowTimeSkipOnOverworld", true)
                         .getBoolean(true);
@@ -94,7 +94,7 @@ public class StellurgyMixinPlugin implements IMixinConfigPlugin {
         } catch (Throwable t) {
             // Fail-open: behave exactly as before the plugin (mixins on).
             perDimWorldInfo = true;
-            allowTimeSkipOnPlanets = false;
+            allowTimeSkipOnPlanets = true;
             allowTimeSkipOnOverworld = true;
             LOGGER.warn("Stellurgy mixin gate: could not read {} — defaulting to true, "
                             + "per-dimension WorldInfo mixins WILL be woven",

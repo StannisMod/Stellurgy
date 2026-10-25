@@ -22,7 +22,9 @@
     "MixinWorldProvider",
     "MixinWorldServer",
     "MixinWorldServerMulti",
-    "MixinWorldSetBlockState"
+    "MixinWorldServerTimeSkip",
+    "MixinWorldSetBlockState",
+    "WorldServerSleepAccessor"
   ],
   "client": [
     "MixinNetHandlerFFCameraRepin",
