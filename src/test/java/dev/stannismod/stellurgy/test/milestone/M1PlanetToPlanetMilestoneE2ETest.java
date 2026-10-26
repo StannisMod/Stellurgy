@@ -2406,10 +2406,20 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                     "the deck square he works the " + describe(targetSub) + " from");
 
             JsonObject state = client().reportState();
+            // The deck's top is taken off the pose read AFTER the walk, beside the player's read: a craft
+            // still moving while he walked carries the deck with it, and the pose read before the walk then
+            // places the deck where it no longer is.
+            double[] anchorAfterWalk = readTripleD(
+                    dim == 0 ? findSeat().raw() : findSeatAboard(dim, budget),
+                    "shipWorldX", "shipWorldY", "shipWorldZ");
+            requireArranged("the ship must still report a world pose in dim " + dim + " after his walk",
+                    anchorAfterWalk != null);
+            double[] deckAfterWalk = toWorld(dim, anchorAfterWalk, standSub, 0.5, 0.05, 0.5);
             requireArranged("he must be standing ON the deck after the walk, not beside or under it:"
-                            + " the deck's top is y=" + standWorld[1] + ", the client reports " + state,
-                    isWorldReady(state)
-                            && Math.abs(state.get("playerY").getAsDouble() - standWorld[1]) < 0.6D);
+                            + " the deck's top is y=" + (deckAfterWalk == null ? "unmapped" : deckAfterWalk[1])
+                            + " (y=" + standWorld[1] + " before the walk), the client reports " + state,
+                    isWorldReady(state) && deckAfterWalk != null
+                            && Math.abs(state.get("playerY").getAsDouble() - deckAfterWalk[1]) < 0.6D);
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
@@ -2800,9 +2810,15 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
                     "entity_mount_writes", "the client's own mounts must be observed AT ALL before an"
                             + " absent one can be read as a re-seat the client never performed");
+            // The server's side of the same window: whether IT took him off (a dismount's `by` names the
+            // caller) or removed his mount, or still held him seated while the client lost the mount.
             throw new AssertionError(never.getMessage()
                     + " | the client's own chain: mounts=" + clientEvents().since(clientMark, "mount")
-                    + " ||| dismounts=" + clientEvents().since(clientMark, "dismount"), never);
+                    + " ||| dismounts=" + clientEvents().since(clientMark, "dismount")
+                    + " | the SERVER's chain: dismounts=" + log.since(serverMark, "dismount")
+                    + " ||| mounts=" + log.since(serverMark, "mount")
+                    + " ||| removed=" + log.since(serverMark, "entity_removed")
+                    + " ||| serverRiding=" + read("stellurgytest player riding-entity").raw(), never);
         }
         JsonObject riding = client().reportRidingEntity();
         assertTrue(what + " clientRiding=" + riding
