@@ -103,7 +103,8 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   is put in, and whenever its player presses Download; a try costs 1 power. A try that reaches the satellite (MECH-SAT-31) takes the
   satellite's whole data buffer into the terminal's, as much as that holds, and the journal entries and
   dosimeter readings the satellite recorded since this terminal last read it (MECH-SAT-32). Data comes
-  only from a data satellite; a satellite of any type sends its journal and readings. Button 1 erases:
+  only from a data satellite; a satellite of any type sends its journal and readings, a silent one included
+  (INV-SAT-07). Button 1 erases:
   the satellite leaves its world's list and the chip is blanked. A wireless transceiver in extract mode
   drains the terminal's buffer. `TileSatelliteTerminal.java` (`canPerformFunction`, `tryContact`,
   `erase`, `extractData`). FOR: maintainer 2026-10-20 — the terminal receives only while the dish
@@ -237,7 +238,8 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   the triple-junction datasheet curve, carried onto our dose by the 15-year geostationary design point —
   and nothing once that reaches zero. A part that stops is journalled with its slot; it adds nothing to
   the satellite's sum but its mass. A stopped primary function is a dead satellite: it collects, reads,
-  transmits and scans nothing, and stays in its body's list and in orbit. A stopped data unit takes its
+  transmits and scans nothing but its journal — what it recorded up to and including its own failure still
+  goes out at the next contact — and stays in its body's list and in orbit. A stopped data unit takes its
   capacity with it, and the points over the new capacity are lost and journalled.
   `RadiationWear.java`, `SatelliteAccrual.java`, `SatelliteAssembly.java`, `SatelliteLife.java`
   (`functioning`). FOR: maintainer 2026-10-20, a part past its budget stops; 2026-10-21 on the
@@ -332,8 +334,10 @@ parameters (unit vectors as `Rotations`); its satellite id rides the spawn data.
 - **INV-SAT-07** [T][BEH] What the terminal's screen says is why nothing came, or that something did. A
   try comes to the first of these that holds: no satellite on the chip; no power; the satellite outside
   the terminal's planetary system; the satellite on no orbit; the terminal with no place to see from; the
-  satellite out of sight; in sight but silent, its primary function stopped; in contact with nothing new;
-  received. "Out of sight" and "silent" are different outcomes, so out of contact is never read as loss.
+  satellite out of sight; in sight but silent, its primary function stopped — it still sends its journal, so
+  the contact that finds it silent brings the failure that silenced it, and the clients are told of those rows
+  though the outcome did not change; in contact with nothing new; received. "Out of sight" and "silent" are
+  different outcomes, so out of contact is never read as loss.
   A chip put in is tried at once. Erase removes the satellite from its world's list and blanks the chip.
   REGIONS: `no satellite`, `no power`, `not in orbit`, `no place`, `silent`, `erase`. Out of sight and
   received are pinned as INV-SAT-38, out of range is INV-SAT-39. Pinned by
@@ -616,7 +620,7 @@ spawns a plain entity and nothing on its path reaches the physics substrate.
 The dose on its parts: INV-SAT-21, -23..-25, -27..-31 → `SatelliteLawsTest` (unit); INV-SAT-22, -26 →
 `SatelliteJointsTest` (integration, the joint with `environment`); INV-SAT-32, -33 → `SatelliteOnItsOrbitGroupTest`
 (server). A player's path to a failure on his terminal — built, launched, skipped, read on his client's copy — →
-`SatelliteFailureOnTheTerminalE2ETest` (milestone). Not pinned: the renewal through a window click (INV-SAT-33 enters the
+`E1SatelliteFailureOnTheTerminalExpeditionE2ETest` (expedition E1). Not pinned: the renewal through a window click (INV-SAT-33 enters the
 panel's inventory on the server).
 INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
@@ -629,7 +633,7 @@ screen and a player's path to it not pinned), INV-SAT-07, -38 →
 (server, a terminal in a world with no body) and `SatelliteOutsideItsSystemTest` (server, a satellite of
 another system); the terminal's client copy, MECH-SAT-32 →
 `SatelliteClientGroupTest` (client, the update packet's hand-off), and its state at the end of a player's own path
-→ `SatelliteFailureOnTheTerminalE2ETest` (milestone). Not pinned: the text the pages draw from that copy (render); scanning types → `ScanningSatelliteTickContractTest`,
+→ `E1SatelliteFailureOnTheTerminalExpeditionE2ETest` (expedition E1). Not pinned: the text the pages draw from that copy (render); scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
 `SatelliteLifecycleSmokeTest`, `SatelliteCoverageGapsTest`.
 

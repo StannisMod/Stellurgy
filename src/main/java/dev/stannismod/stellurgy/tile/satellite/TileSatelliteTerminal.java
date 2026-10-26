@@ -78,7 +78,7 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         NOT_IN_ORBIT,
         NO_PLACE,
         OUT_OF_SIGHT,
-        /** In sight, but the satellite's primary function has stopped: it sends nothing. */
+        /** In sight, but the satellite's primary function has stopped: it sends its journal and nothing else. */
         SILENT,
         NOTHING_NEW,
         RECEIVED
@@ -200,6 +200,13 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
                 SatellitePlacement.rotationOf(DimensionManager.getInstance().getDimensionPropertiesOrNull(sat.getDimensionId())));
         sat.bringUpToNow();
         if (!SatelliteLife.functioning(sat)) {
+            // A stopped primary sends nothing it collects, but its journal still goes out (maintainer 2026-10-26):
+            // the failure that silenced it is the row its player needs. The outcome may already be SILENT, so the
+            // watching clients are told of the rows here; once they are read, it has nothing new to send.
+            if (readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(), 0,
+                    (int) Math.round(sat.currentPowerPerTick()), 0, 0, track).broughtAnything()) {
+                tellTheClientsWatching();
+            }
             return Outcome.SILENT;
         }
         int received = 0;
@@ -223,10 +230,15 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         boolean changed = next != outcome || next == Outcome.RECEIVED;
         outcome = next;
         if (changed) {
-            markDirty();
-            IBlockState state = world.getBlockState(pos);
-            world.notifyBlockUpdate(pos, state, state, 3);
+            tellTheClientsWatching();
         }
+    }
+
+    /** Save, and send the clients watching this terminal its state. */
+    private void tellTheClientsWatching() {
+        markDirty();
+        IBlockState state = world.getBlockState(pos);
+        world.notifyBlockUpdate(pos, state, state, 3);
     }
 
     @Override

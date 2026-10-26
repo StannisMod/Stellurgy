@@ -41,16 +41,15 @@ import static org.junit.Assert.assertTrue;
  *
  * <p><b>The verdicts</b>, each on its own link: the satellite reaches his client (the server announced it to
  * him); his terminal's copy shows a contact; after the first skip a contact brings points lost aboard; after the
- * second the copy says the satellite does not answer. Every terminal verdict is read where the client applied
+ * second the copy says the satellite does not answer, and that same contact brought the parts that failed. Every terminal verdict is read where the client applied
  * the server's update ({@code terminal_copy_applied}) — the copy the screen is drawn from — never off the
  * server.</p>
  *
- * <p>What it does not see: the drawn pages (render appearance, the human's); the row of the primary's own
- * failure, which no terminal can download today (a dead primary answers silent before the journal is taken —
- * bug ledger, 2026-10-25); and the per-place sky.</p>
+ * <p>What it does not see: the drawn pages (render appearance, the human's); WHICH part each failure row names
+ * (the copy's count of failed parts is read, not the slots); and the per-place sky.</p>
  */
 @NewPath("a player builds a satellite at the builder's screen, flies it into the belt on a rocket he assembled, and after skipping the universe forward sees on his ground terminal the data it lost and then that it no longer answers")
-public class SatelliteFailureOnTheTerminalE2ETest extends AbstractPlayerE2ETest {
+public class E1SatelliteFailureOnTheTerminalExpeditionE2ETest extends AbstractPlayerE2ETest {
 
     /** A constant: the e2e player's name, which the harness gives every e2e client. */
     private static final String PLAYER = "ForgeTestClient";
@@ -115,6 +114,10 @@ public class SatelliteFailureOnTheTerminalE2ETest extends AbstractPlayerE2ETest 
             fails = "the rocket releases the satellite onto its orbit", on = "2026-10-26")
     @RedWitness(verdict = "the skip's losses", member = "TimeCommandGuard#onCommand", at = "TimeSkip.skip(server, ticks);",
             replacedBy = "", fails = "MECH-SAT-32: the contact after the skip reports more points lost", on = "2026-10-26")
+    @RedWitness(verdict = "still sends its journal", member = "TileSatelliteTerminal#tryContact",
+            at = "if (readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(), 0,",
+            replacedBy = "if (false && readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(), 0,",
+            fails = "carries the parts that failed", on = "2026-10-26")
     @Test
     public void aSatelliteInTheBeltLosesDataAndThenFallsSilentOnHisTerminal() throws Exception {
         Events.Step step = GameTicks.serverAndClient(server(), GameTicks.server(), client()::waitWorldTicks);
@@ -326,8 +329,14 @@ public class SatelliteFailureOnTheTerminalE2ETest extends AbstractPlayerE2ETest 
             throw new AssertionError(notSilent.getMessage() + "\noutcomes: " + outcomes + "\nsatellite: "
                     + server().read("stellurgytest satellite life " + satellite), notSilent);
         }
+        String silentCopy = firstAt(silent, site.terminal, "outcome", "SILENT");
         assertEquals("MECH-SAT-32: the copy says the satellite is in contact and silent: " + silent, "SILENT",
-                Events.text(firstAt(silent, site.terminal, "outcome", "SILENT"), "outcome"));
+                Events.text(silentCopy, "outcome"));
+        // The same copy: the contact that found it dead still brought its journal, the failure that silenced it
+        // among the rows — what the expedition's player reads to place the loss on the orbit.
+        assertTrue("MECH-SAT-10: a satellite whose primary stopped still sends its journal, so the copy that says"
+                        + " it is silent carries the parts that failed: " + silentCopy,
+                Integer.parseInt(Events.text(silentCopy, "partsFailed")) > 0);
     }
 
     // ---- The start ----
