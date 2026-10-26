@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
@@ -100,6 +103,79 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, SHIP_LINK_TICKS,
                 "the craft that flies the two legs");
         flyBothLegs(setup, birth);
+    }
+
+    /**
+     * Where the skip scenario's craft is built: the open-air band, a site of its own beside the legs' one.
+     */
+    private static final int SKIP_X = 7600, SKIP_Z = 7600;
+
+    /** The skip, in ticks: well under the far leg's flight at {@link #FLIGHT_SPEED}, so it lands mid-flight. */
+    private static final int SKIP_TICKS = 100;
+
+    /** Server ticks this craft's entry into space is given, as a deadline for the record that says it did. */
+    private static final int ENTRY_TICKS = 600;
+    /**
+     * C16 CLOCK-7, the transit half (space INV-SPC-21): an operator's time skip carries a ship in flight through
+     * the skipped span. The ship is a real one, flown into space and jumped to another system on the server's own
+     * transit manager; around one {@code /time add} its flight's remaining distance and the space clock are read
+     * together, twice. The skip's side moves the clock; the transit's side answers with distance. With the skip
+     * wired to the transit, the distance falls by the flight's speed times everything the clock moved — the skip
+     * and the ticks between the reads alike. Unwired, it falls only by the ticks.
+     *
+     * <p>What it does not see: a crew's online gate (no crew is aboard), and a skip that reaches the arrival.</p>
+     */
+    @Pins("INV-SPC-21")
+    @RedWitness(verdict = "C16 CLOCK-7", member = "TimeSkip#skip", at = "space.transit.carryThrough(ticks);",
+            replacedBy = "space.transit.carryThrough(0L);", fails = "the skipped ones included", on = "2026-10-26")
+    @Wait(shape = Wait.Shape.WINDOW, at = "arrange(\"time add \" + SKIP_TICKS);",
+            why = "the measurement is the change in the flight's remaining distance against the change in the space"
+                    + " clock between two reads, across one skip; each read carries both values, and their two"
+                    + " differences are the comparison")
+    @Test
+    public void aSkipCarriesAShipInFlightThroughTheSkippedSpan() throws Exception {
+        arrange("stellurgytest space entry-setup 2").requireOk();
+        String what = "the craft a skip catches in flight";
+        FixtureSite site = FixtureSite.openAir(0, SKIP_X, SKIP_Z);
+        buildMark = events.mark();
+        Reply fixture = AssembledCraft.lay(site, c -> arrange(c).raw(), "with-pilot-seat", 6, 16, what);
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        builtDurable = craft.durable;
+
+        // Into space the way a ship gets there: above the entry ceiling, handed back to physics.
+        ShipInfo onThePad = ShipInfo.byId(c -> read(c).raw(), 0, craft.physicsId);
+        // A hull put above the entry ceiling is taken into space by the entry on-ramp from where it stands — the
+        // crossing begins on the teleport itself (measured: `entry_decided` and `cell_crossing_begun` follow
+        // `ship_pose_teleported` with the craft still parked), so the mark precedes the teleport.
+        long entryMark = events.mark();
+        arrange("stellurgytest vs teleport-ship-by-id 0 " + craft.physicsId + " " + onThePad.x + " "
+                + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + onThePad.z).requireOk();
+        WorldCommandFixtures.awaitEnteredSpace(events, entryMark, craft.durable, what + " must enter space",
+                ENTRY_TICKS, null);
+        EntryStatus inSpace = EntryStatus.forShip(c -> read(c).raw(), craft.durable);
+        dev.stannismod.stellurgy.space.GalacticCoord origin =
+                dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(inSpace.cellKey);
+        requireArranged(what + " — its ledger row must name a cell: " + inSpace.raw(), origin != null);
+
+        Reply jump = act("stellurgytest space jump id " + craft.durable + " "
+                + (origin.sectorX() + INTERSTELLAR_SECTORS) + " " + origin.sectorY() + " " + origin.sectorZ() + " "
+                + inSpace.slotDim + " " + FLIGHT_SPEED);
+        requireArranged(what + " — the jump must begin: " + jump, jump.bool("began"));
+
+        Reply before = read("stellurgytest space transit-progress " + craft.durable).requireOk();
+        requireArranged(what + " — it must be in flight with more than the skip left to fly: " + before,
+                before.bool("inTransit") && before.number("remaining") > (double) FLIGHT_SPEED * SKIP_TICKS * 2);
+        arrange("time add " + SKIP_TICKS);
+        Reply after = read("stellurgytest space transit-progress " + craft.durable).requireOk();
+        requireArranged(what + " — it must still be in flight after the skip: " + after, after.bool("inTransit"));
+
+        long clockMoved = after.longInteger("spaceClock") - before.longInteger("spaceClock");
+        double flown = before.number("remaining") - after.number("remaining");
+        assertTrue("the skip must move the space clock by at least its own span: before=" + before + " after=" + after,
+                clockMoved >= SKIP_TICKS);
+        assertEquals("C16 CLOCK-7: a ship in flight is carried through the skip — it flies its speed for every tick the"
+                        + " space clock moved, the skipped ones included; before=" + before + " after=" + after,
+                (double) FLIGHT_SPEED * clockMoved, flown, 0.0);
     }
 
     /** The mark taken before this scenario's build, and the durable name of the craft it built. */

@@ -6312,6 +6312,23 @@ public class TestProbeCommand extends CommandBase {
             sendTransitReport(sender);
             return;
         }
+        // transit-progress <durableShipId>: one LIVE flight's progress and the space clock, in one answer —
+        // whether the server's own transit manager holds the ship in flight, the blocks it has left, and the
+        // clock the flight is priced on. Read-only. The two are read together because a skip moves both at
+        // once, and a comparison of them is only about one instant if they come from one read.
+        if (args.length >= 2 && "transit-progress".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.SpaceSubsystem progressStack = liveStack();
+            if (progressStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.ShipTransitManager progressTm = progressStack.transit;
+            send(sender, "{\"ok\":true,\"shipId\":\"" + escapeJson(args[1]) + "\""
+                    + ",\"inTransit\":" + progressTm.isInTransit(args[1])
+                    + ",\"remaining\":" + progressTm.remainingDistance(args[1])
+                    + ",\"spaceClock\":" + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() + "}");
+            return;
+        }
         // transit-tick: advance the transit, then report exactly what `transit-status` reports.
         //
         // An ACCELERATOR, no longer the thing that moves a jump: the server ticks the transit like

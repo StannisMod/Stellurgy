@@ -391,6 +391,7 @@ enum ProbeVerbKind {
             case "space nebulae":
             case "space subsystem-status":
             case "space transit-export":
+            case "space transit-progress":
             case "space yard-afc":
             case "space yard-blocks":
             case "space zone-membership":
