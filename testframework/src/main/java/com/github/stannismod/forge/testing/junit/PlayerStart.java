@@ -170,8 +170,9 @@ public final class PlayerStart {
     /**
      * The server's operator list naming {@code name} alone, at level 4, by the id an offline-mode server gives
      * him (vanilla's {@code EntityPlayer#getOfflineUUID}: a name-based UUID of {@code "OfflinePlayer:" + name}).
+     * Public for the one other start that names an operator, a mechanics test's typed start.
      */
-    private static String opsFileFor(String name) {
+    public static String opsFileFor(String name) {
         UUID id = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return "[{\"uuid\":\"" + id + "\",\"name\":\"" + name + "\",\"level\":4,\"bypassesPlayerLimit\":false}]";
     }

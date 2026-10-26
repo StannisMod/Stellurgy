@@ -53,7 +53,9 @@ import static org.junit.Assert.assertTrue;
  * carries, the client's by the {@code refusedCommand} / {@code refusedKind} of its reply. And a refused
  * command arriving through the server's CONSOLE is refused without crashing the server: its refusal is
  * the gate's published record ({@code command_refused}, from the server's own event log), and the server
- * answers the next command.</p>
+ * answers the next command. And the one act the gate admits by its SENDER: a time skip is refused from the
+ * bridge and admitted when the player — the server's operator, as an e2e's start makes him — types it into his
+ * own chat; the admission is read as the space clock moving past the overworld's own ticking.</p>
  *
  * <p><b>What it does not see.</b> Whether a READ row of the probe's table writes nothing (a claim checked
  * against its handler when the row is added); whether a BUILD lays only what the player's start holds
@@ -116,6 +118,30 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     /** Three presses of one key in one call: one more than a hand makes in a client tick (2). */
     private static final String THREE_PRESSES_OF_ONE_KEY = "aaa";
 
+    /**
+     * The time skip asked of the gate, in ticks, from the bridge and from the player. Any positive amount: the
+     * verdict compares the space clock with the overworld's total time, which both advance once per server tick
+     * and which the skip leaves apart by exactly what it moved, so a refused skip reads 0 however long the
+     * window took.
+     */
+    private static final int SKIP_TICKS = 1200;
+
+    /** The probe's read of the space clock and the overworld's total time, in one answer. */
+    private static final String SPACE_CLOCK = "stellurgytest space clock";
+
+    /** The screen vanilla's chat key opens. */
+    private static final String CHAT_SCREEN = "net.minecraft.client.gui.GuiChat";
+
+    /** The sender class of a command a player typed, as the server's event log names it. */
+    private static final String PLAYER_SENDER = "net.minecraft.entity.player.EntityPlayerMP";
+
+    /**
+     * How long a command the player typed is given to reach the server's command handler, in server ticks. A
+     * deadline for a discrete arrival, not a settle: the chat packet is run at the server's next tick. An
+     * expiry means the command never arrived.
+     */
+    private static final int TYPED_COMMAND_JUDGED_TICKS = 200;
+
     /** A constant of the test, held outside any method body, as one planted bypass held its command. */
     private static final String SPAWN_A_ZOMBIE = "summon minecraft:zombie 300 85 300";
 
@@ -135,7 +161,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
                 Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue("Client harness disabled",
                 Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
-        server = RealDedicatedServerHarness.startE2E(harnessBootInE2EMode(), ServerRoot.fresh("forge-e2e-mode-"));
+        // The player is the server's operator, as an e2e's start makes him: his own `/time` must reach the gate.
+        server = RealDedicatedServerHarness.startE2E(harnessBootInE2EMode(),
+                ServerRoot.fresh("forge-e2e-mode-").seed(new GameDirSeed().theClientAsOperator()));
         try {
             client = RealClientHarness.startE2E(harnessBootInE2EMode(), server);
         } catch (Exception startFailed) {
@@ -233,6 +261,12 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the console", member = "E2EModeGate#refuse",
             at = "CONSOLE_JUDGED + \"refused \"", replacedBy = "CONSOLE_JUDGED + \"admitted \"",
             fails = "a command the e2e gate refuses at the CONSOLE must reach the test as a refusal too", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#refusalOf",
+            at = "return sender instanceof net.minecraft.entity.player.EntityPlayerMP ? null", replacedBy = "return true ? null",
+            fails = "these were not: [`time add 1200` RAN]", on = "2026-10-26")
+    @RedWitness(verdict = "the time skip the PLAYER types must be admitted", member = "E2EModeGate#refusalOf",
+            at = "return sender instanceof net.minecraft.entity.player.EntityPlayerMP ? null", replacedBy = "return false ? null",
+            fails = "it moved 0 (0 is the gate's refusal)", on = "2026-10-26")
     @Test
     public void everyActAnE2EMayNotPerformIsRefusedAtTheCallAndEveryReadItIsMadeOfIsAnswered() throws Exception {
         ClientBot bot = client.bot();
@@ -299,6 +333,8 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "execute @a ~ ~ ~ tp @s 0 100 0", "COMMAND");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy goto 5", "COMMAND");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "forge tps", "COMMAND");
+        // The time skip from the bridge: the test aging the universe for the player. His own is admitted, below.
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "time add " + SKIP_TICKS, "COMMAND");
 
         // ---- the client: the verbs that name their target or write what input would have produced ----
         expectClientRefusal(notRefused, "interact_block", "BYPASS", () -> bot.interactBlock(1, 2, 3));
@@ -418,6 +454,29 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         assertTrue("...and the server must still be running and answering after it: alive="
                         + server.client().isAlive() + " clock=" + afterConsole,
                 server.client().isAlive() && Reply.of("stellurgytest clock", afterConsole).has("tick"));
+
+        // ---- the player's own time skip: typed in his chat, as the server's operator, it is admitted ----
+        bot.input().pressScreenKey(Keyboard.KEY_T);
+        String screen = bot.reads().reportState().get("screen").getAsString();
+        assertTrue("the chat key must open the chat before the player types his command into it; screen=" + screen,
+                CHAT_SCREEN.equals(screen));
+        Reply before = Reply.answering(SPACE_CLOCK, server.client().read(SPACE_CLOCK)).requireOk();
+        long beforeTyping = serverLog.mark();
+        bot.input().pressEnterAfterTyping("/time add " + SKIP_TICKS);
+        // Judged either way: the gate cancels a refused `time`, and the time guard cancels vanilla's own run.
+        serverLog.awaitMatching(beforeTyping, "command_refused",
+                reply -> Events.anyRecordHasAll(reply, "command", "time", "sender", PLAYER_SENDER),
+                "carrying command = time and sender = the player",
+                "the `/time` the player typed must reach the server's command handler as HIS command — no record"
+                        + " means it never arrived (the chat did not send it, or he is no operator)",
+                TYPED_COMMAND_JUDGED_TICKS);
+        Reply after = Reply.answering(SPACE_CLOCK, server.client().read(SPACE_CLOCK)).requireOk();
+        long skipped = (after.longInteger("spaceClock") - after.longInteger("overworld"))
+                - (before.longInteger("spaceClock") - before.longInteger("overworld"));
+        assertTrue("the time skip the PLAYER types must be admitted in e2e mode and move the universe "
+                        + SKIP_TICKS + " ticks past the overworld's own ticking; it moved " + skipped
+                        + " (0 is the gate's refusal). before=" + before + " after=" + after,
+                skipped >= SKIP_TICKS);
     }
 
     /** The eviction announcements made for this test's own logs: its server lives no longer than it. */

@@ -47,6 +47,7 @@ public final class GameDirSeed implements StartFiles {
     private String planetDefsDeclaredBy;
     private String thermalTable;
     private String thermalTableDeclaredBy;
+    private String operator;
 
     /**
      * The seed every shared harness world starts from: fuel is not required to fly
@@ -122,8 +123,19 @@ public final class GameDirSeed implements StartFiles {
         return this;
     }
 
+    /**
+     * The harness client's player as the server's operator ({@code ops.json}), so the commands vanilla keeps for
+     * an operator reach the {@code CommandEvent} at all: {@code CommandHandler#executeCommand} checks the
+     * permission BEFORE it posts the event. For a class whose subject is what a judge on that event decides about
+     * a player's own command.
+     */
+    public GameDirSeed theClientAsOperator() {
+        operator = com.github.stannismod.forge.testing.client.RealClientHarness.CLIENT_USERNAME;
+        return this;
+    }
+
     public boolean isEmpty() {
-        return config.isEmpty() && planetDefs == null && thermalTable == null;
+        return config.isEmpty() && planetDefs == null && thermalTable == null && operator == null;
     }
 
     /**
@@ -153,6 +165,9 @@ public final class GameDirSeed implements StartFiles {
         if (thermalTable != null) {
             files.put(CONFIG_DIR + "thermalMaterials.json", thermalTable);
         }
+        if (operator != null) {
+            files.put("ops.json", com.github.stannismod.forge.testing.junit.PlayerStart.opsFileFor(operator));
+        }
         return files;
     }
 
@@ -171,6 +186,9 @@ public final class GameDirSeed implements StartFiles {
         }
         if (thermalTable != null) {
             described.append(" thermalMaterials.json(").append(thermalTableDeclaredBy).append(')');
+        }
+        if (operator != null) {
+            described.append(" ops.json(").append(operator).append(')');
         }
         return described.toString();
     }
