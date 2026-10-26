@@ -21,7 +21,7 @@ public final class RealClientHarness implements AutoCloseable {
      *  entry point. Multi-client tests use the {@link #start(RealDedicatedServerHarness, String)}
      *  overload to supply distinct usernames per client — the server's PlayerList
      *  keys on username, so two clients sharing this constant would collide. */
-    private static final String CLIENT_USERNAME = "ForgeTestClient";
+    public static final String CLIENT_USERNAME = "ForgeTestClient";
     /**
      * A constant: a final {@code boolean} read once from {@code os.name}, which a running JVM does not
      * change.

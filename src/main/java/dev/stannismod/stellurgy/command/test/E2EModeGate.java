@@ -611,9 +611,15 @@ final class E2EModeGate {
                 return vanillaFillPlace(name, args, sender);
             case "stop":
                 return null;
+            case "time":
+                // The operator's skip is the PLAYER's act: typed in his own chat, as the owner of the server he
+                // plays on (his start makes him its operator). From the console or the harness's bridge it would
+                // be the test moving the universe, so there it stays refused.
+                return sender instanceof net.minecraft.entity.player.EntityPlayerMP ? null
+                        : refusal(name, name, "COMMAND", "the time skip is a player's act, typed in his own chat");
             default:
                 return refusal(name, name, "COMMAND",
-                        "an e2e sends only the probe's admitted verbs and give, clear and fill");
+                        "an e2e sends only the probe's admitted verbs, give, clear and fill, and the player's own time skip");
         }
     }
 

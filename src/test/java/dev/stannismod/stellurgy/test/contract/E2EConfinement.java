@@ -961,7 +961,7 @@ final class E2EConfinement {
                 }
             case "junit/PlayerStart":
                 return "<class>".equals(member) || "asShipped".equals(member) || "config".equals(member)
-                        || "harvested".equals(member);
+                        || "harvested".equals(member) || "asTheServersOperator".equals(member);
             case "junit/PlayerStart$XmlInsertion":
                 return "<class>".equals(member) || "under".equals(member);
             case "server/ServerCommandFailed":

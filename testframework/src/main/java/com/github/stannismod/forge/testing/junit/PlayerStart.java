@@ -13,13 +13,15 @@ import java.util.*;
  * What an e2e's player starts with beyond the game as it ships, TYPED — the only way anything reaches an
  * e2e's game directory before its server boots ({@link AbstractPlayerE2ETest#playerStart()}).
  *
- * <p>Two kinds of entry, and nothing else:</p>
+ * <p>Three kinds of entry, and nothing else:</p>
  * <ul>
  *   <li>a CONFIG SETTING — a file under {@code config/}, a category, a key and a value. The base writes it
  *       in Forge's configuration syntax, with the type the allowlist gives the key;</li>
  *   <li>a HARVESTED FILE — a file a server booted on the game as it ships writes into its world, copied by
  *       the base under {@code config/} with ONE typed XML insertion: a child element added to the one
- *       element whose attribute has a given value. The base boots that throwaway server itself.</li>
+ *       element whose attribute has a given value. The base boots that throwaway server itself;</li>
+ *   <li>THE OPERATOR — the e2e's player is the server's operator, as the owner who plays on his own server
+ *       is. The base writes the server's {@code ops.json} naming him, and nobody else.</li>
  * </ul>
  *
  * <p><b>The allowlist</b> is {@link #grants()} — CODE, so the test JVM cannot rewrite it before the boot (it
@@ -36,22 +38,24 @@ public final class PlayerStart {
 
     private final List<String[]> settings;
     private final List<Harvest> harvests;
+    private final boolean operator;
 
-    private PlayerStart(List<String[]> settings, List<Harvest> harvests) {
+    private PlayerStart(List<String[]> settings, List<Harvest> harvests, boolean operator) {
         this.settings = settings;
         this.harvests = harvests;
+        this.operator = operator;
     }
 
     /** The game as it ships: nothing written before the boot. */
     public static PlayerStart asShipped() {
-        return new PlayerStart(Collections.<String[]>emptyList(), Collections.<Harvest>emptyList());
+        return new PlayerStart(Collections.<String[]>emptyList(), Collections.<Harvest>emptyList(), false);
     }
 
     /** This start with {@code key} of {@code category} in {@code config/<file>} set to {@code value}. */
     public PlayerStart config(String file, String category, String key, String value) {
         List<String[]> more = new ArrayList<>(settings);
         more.add(new String[]{file, category, key, value});
-        return new PlayerStart(Collections.unmodifiableList(more), harvests);
+        return new PlayerStart(Collections.unmodifiableList(more), harvests, operator);
     }
 
     /**
@@ -61,7 +65,12 @@ public final class PlayerStart {
     public PlayerStart harvested(String worldFile, XmlInsertion insertion) {
         List<Harvest> more = new ArrayList<>(harvests);
         more.add(new Harvest(worldFile, insertion));
-        return new PlayerStart(settings, Collections.unmodifiableList(more));
+        return new PlayerStart(settings, Collections.unmodifiableList(more), operator);
+    }
+
+    /** This start with its player as the server's operator. */
+    public PlayerStart asTheServersOperator() {
+        return new PlayerStart(settings, harvests, true);
     }
 
     /**
@@ -112,8 +121,9 @@ public final class PlayerStart {
     }
 
     /**
-     * Check every entry against the project's allowlist, and answer the config settings as files of the game
-     * directory. Refuses, before anything is booted, an entry the list does not grant.
+     * Check every entry against the project's allowlist, and answer the config settings — and the operator
+     * list, when the start makes him one — as files of the game directory. Refuses, before anything is booted,
+     * an entry the list does not grant.
      */
     Map<String, String> settingFiles() throws IOException {
         Map<String, String> out = new LinkedHashMap<>();
@@ -147,7 +157,32 @@ public final class PlayerStart {
             }
             out.put(underConfig(file.getKey()), text.toString());
         }
+        if (operator) {
+            if (!operatorGranted(allowed)) {
+                throw new IllegalArgumentException("REFUSED: the player's start may not make him the server's operator"
+                        + " -- the grants are " + describe(allowed));
+            }
+            out.put("ops.json", opsFileFor(com.github.stannismod.forge.testing.client.RealClientHarness.CLIENT_USERNAME));
+        }
         return out;
+    }
+
+    /**
+     * The server's operator list naming {@code name} alone, at level 4, by the id an offline-mode server gives
+     * him (vanilla's {@code EntityPlayer#getOfflineUUID}: a name-based UUID of {@code "OfflinePlayer:" + name}).
+     */
+    private static String opsFileFor(String name) {
+        UUID id = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return "[{\"uuid\":\"" + id + "\",\"name\":\"" + name + "\",\"level\":4,\"bypassesPlayerLimit\":false}]";
+    }
+
+    private static boolean operatorGranted(List<Grant> grants) {
+        for (Grant g : grants) {
+            if (g.operator) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -240,6 +275,8 @@ public final class PlayerStart {
      * it is inserted under, the child, the text it may carry), each with its reason.
      */
     static final class Grant {
+        /** The player as the server's operator; no file, key or value of its own. */
+        final boolean operator;
         final boolean config;
         final String file;
         final String target;
@@ -253,6 +290,12 @@ public final class PlayerStart {
 
         private Grant(boolean config, String file, String target, String category, String type, String key,
                       String attribute, String attributeValue, List<String> values, String why) {
+            this(false, config, file, target, category, type, key, attribute, attributeValue, values, why);
+        }
+
+        private Grant(boolean operator, boolean config, String file, String target, String category, String type,
+                      String key, String attribute, String attributeValue, List<String> values, String why) {
+            this.operator = operator;
             this.config = config;
             this.file = file;
             this.target = target;
@@ -265,8 +308,17 @@ public final class PlayerStart {
             this.why = why;
         }
 
+        /** The player as the server's operator, with its reason. */
+        static Grant theOperator(String why) {
+            return new Grant(true, false, "ops.json", null, null, null, null, null, null,
+                    Collections.<String>emptyList(), why);
+        }
+
         @Override
         public String toString() {
+            if (operator) {
+                return "the player as the server's operator";
+            }
             return config ? "config/" + file + " " + category + "." + type + ":" + key + " in " + values
                     : file + " -> config/" + target + " <" + key + "> under <" + category + " " + attribute + "=\""
                     + attributeValue + "\"> in " + values;
@@ -294,6 +346,10 @@ public final class PlayerStart {
                 "orbitHeight", "DIMID", "0",
                 Collections.singletonList(Integer.toString(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y)),
                 "the home world's orbit line, at the lowest line production accepts, and on no other planet"));
+        // The owner who plays on his own server is its operator, and an operator's commands (`/time add`, the
+        // universe's skip) are his acts. Ruled 2026-10-25 for the satellite path, whose dose takes days of game
+        // time: "Игрок — оператор".
+        out.add(Grant.theOperator("the owner who plays on his own server is its operator"));
         return out;
     }
 
@@ -310,7 +366,7 @@ public final class PlayerStart {
     private static Grant harvestGrant(List<Grant> grants, Harvest h) {
         XmlInsertion in = h.insertion;
         for (Grant g : grants) {
-            if (!g.config && g.file.equals(h.worldFile) && g.category.equals(in.element)
+            if (!g.config && !g.operator && g.file.equals(h.worldFile) && g.category.equals(in.element)
                     && g.attribute.equals(in.attribute) && g.key.equals(in.child)) {
                 if (!g.attributeValue.equals(in.value) || !g.values.contains(in.text)) {
                     throw new IllegalArgumentException("REFUSED: the player's start may take " + h.worldFile + " only"

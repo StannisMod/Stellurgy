@@ -2830,6 +2830,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 setError("error.rocket.cannotGetThere");
                 return;
             }
+            // A satellite flight names no destination. Crewed, it comes back to the world it left: that is the
+            // destination the start gate below and the arrival at the orbit line both need, and without it the
+            // flight counted down and then silently stayed on the pad.
+            if (destinationDimId == Constants.INVALID_PLANET && stats.hasSeat()) {
+                destinationDimId = this.world.provider.getDimension();
+            }
 
             boolean destinationIsSpaceStation = false;
             int finalDest = destinationDimId;

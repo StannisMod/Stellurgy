@@ -130,6 +130,14 @@ persists `destDimId`, `landingx/y/z`, `stationMapping` (list of `pos` int[3] + `
 - **INV-RKT-03 [V][BEH]** An unreachable destination aborts the launch with
   `setError("error.rocket.cannotGetThere")` before flight begins
   `EntityRocket.java:2723`.
+- **INV-RKT-26 [T][BEH]** A satellite flight with no destination — a rocket with a satellite hatch and a
+  guidance computer naming no planet, which the destination gate admits — flies: crewed, its destination is
+  the world it left, so it climbs to the orbit line, releases its satellites there and holds over that world
+  for its pilot as any crewed arrival does; uncrewed, it flies the unmanned way. Before this, a crewed one
+  counted down and then did nothing, with no error (`EntityRocket#launch`). Pinned by
+  `SatelliteFailureOnTheTerminalE2ETest#aSatelliteInTheBeltLosesDataAndThenFallsSilentOnHisTerminal` (a survival
+  player's own launch). FOR: maintainer 2026-10-26,
+  *"Чинить второй шлюз"* — the satellite release a player flies himself.
 - **INV-RKT-04 [T][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
   save with no `flightMode` key loads onto this path `RocketFlightMode.java:20`;
   pinned by `RocketFlightModeNbtTest` (missing-key → DEFAULT)

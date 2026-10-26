@@ -615,7 +615,8 @@ and the guidance computer's screen fields. "Never a physics ship" holds by const
 spawns a plain entity and nothing on its path reaches the physics substrate.
 The dose on its parts: INV-SAT-21, -23..-25, -27..-31 → `SatelliteLawsTest` (unit); INV-SAT-22, -26 →
 `SatelliteJointsTest` (integration, the joint with `environment`); INV-SAT-32, -33 → `SatelliteOnItsOrbitGroupTest`
-(server). Not pinned: a player's path to seeing a failure on the terminal's screen; and the renewal through a window click (INV-SAT-33 enters the
+(server). A player's path to a failure on his terminal — built, launched, skipped, read on his client's copy — →
+`SatelliteFailureOnTheTerminalE2ETest` (milestone). Not pinned: the renewal through a window click (INV-SAT-33 enters the
 panel's inventory on the server).
 INV-SAT-03/04 are storage round trips, read in code, not tested;
 INV-SAT-05/06 → `SatelliteBuilderPressBuildContractTest`; INV-SAT-07 → `SatelliteTerminalChipRecognitionTest`;
@@ -627,8 +628,8 @@ screen and a player's path to it not pinned), INV-SAT-07, -38 →
 `SatelliteTerminalChipRecognitionTest` (server); INV-SAT-39 → `SatelliteTerminalChipRecognitionTest`
 (server, a terminal in a world with no body) and `SatelliteOutsideItsSystemTest` (server, a satellite of
 another system); the terminal's client copy, MECH-SAT-32 →
-`SatelliteClientGroupTest` (client, the update packet's hand-off). Not pinned: the text the pages draw from
-that copy, and a player's path to seeing a failure — the client harness has no reader of a screen's text; scanning types → `ScanningSatelliteTickContractTest`,
+`SatelliteClientGroupTest` (client, the update packet's hand-off), and its state at the end of a player's own path
+→ `SatelliteFailureOnTheTerminalE2ETest` (milestone). Not pinned: the text the pages draw from that copy (render); scanning types → `ScanningSatelliteTickContractTest`,
 `SatelliteTypeBehaviourTest`, `ScanningSatelliteContractTest`; lifecycle →
 `SatelliteLifecycleSmokeTest`, `SatelliteCoverageGapsTest`.
 
