@@ -147,7 +147,7 @@ stands the ship off from where the target was, by the difference between the two
 | CLOCK-6 | built: the law in `environment` (MECH-ENV-06/07, `PlanetEnvironmentLawsTest`), the time of day read from it (world-gen MECH-WGEN-31, `TimeCommandMovesTheUniverseTest`) |
 | CLOCK-7 | `/time` → `TimeCommandMovesTheUniverseTest`; sleep → `PlanetBedSleepClientGroupTest` (one player: the server-wide mode met), its decision → `SleepWakeTimeTest` (MECH-WGEN-32); the transit → space INV-SPC-21 (`ShipTransitTest`, `ShipTransitManagerTest`), the law and the gate; its wiring from a skip is unwitnessed |
 | CLOCK-8 | `E1SatelliteFailureOnTheTerminalExpeditionE2ETest` — at each of the player's own `/time add`, his client takes the skipped clock before the chat line telling him of it (expedition E1) |
-| CLOCK-9 | built (the two time-of-day gates read total time), not pinned yet |
+| CLOCK-9 | the two time-of-day gates on total time → `AtmosphereDetectorWatchesAStatementTest#theDetectorSamplesOnTotalTimeWhereTheTimeOfDayStandsStill`, `RocketServiceStationLinkAndStateTest#theStationsGateOpensOnTotalTimeWhereTheTimeOfDayStandsStill` (a body locked to its star for the window: even openings of total time); the deadlines and lazy accruals a skip carries past, not pinned |
 
 ## CLOCK-6..9 — the distance from the code (design stage)
 

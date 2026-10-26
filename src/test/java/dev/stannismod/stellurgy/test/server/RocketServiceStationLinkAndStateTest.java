@@ -1,12 +1,18 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PeriodicGateWindow;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ScenarioRockets;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -107,6 +113,55 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         assertEquals("freshly-assembled rocket must have zero worn parts: "
                         + state,
                 0, extract(state, PARTS_COUNT));
+    }
+
+    /**
+     * The world ticks this many times while the station is watched: long enough for at least three openings of a
+     * gate whose period is up to a quarter of it, which is the evidence an even spacing needs.
+     */
+    private static final int WATCHED_TICKS = 100;
+
+    /**
+     * C16 CLOCK-9 on the service station: its work gate counts the world's TOTAL time, so on a world whose time of
+     * day stands still — the overworld's body locked to its star for the window — it still opens, at one even
+     * spacing of total time. A gate on the time of day would there open never, or on every tick.
+     */
+    @Pins("CLOCK-9")
+    @RedWitness(verdict = "C16 CLOCK-9", member = "TileRocketServiceStation#canPerformFunction",
+            at = "if (world.isRemote || world.getTotalWorldTime() % 20 != 0) {",
+            replacedBy = "if (world.isRemote || world.getWorldTime() % 20 != 0) {",
+            fails = "at one even spacing of total time longer than a tick", on = "2026-10-26")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, WATCHED_TICKS);",
+            why = "the measurement is the spacing of the gate's openings over an interval of the world's own ticks;"
+                    + " no single record says a gate opens evenly, only the openings recorded across the window do")
+    @Test
+    public void theStationsGateOpensOnTotalTimeWhereTheTimeOfDayStandsStill() throws Exception {
+        FixtureSite site = clearedSite(0, 2, "a lone service station on a world whose time of day stands still");
+        int x = site.x;
+        int y = site.y + 1;
+        int z = site.z;
+        arrange("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:serviceStation").requireOk();
+        arrange("stellurgytest chunk forceload 0 " + (x >> 4) + " " + (z >> 4)).requireOk();
+        arrange("stellurgytest arrange tidal-lock 0 true").requireOk();
+        try {
+            Events events = new Events(command -> String.join("\n", client().read(command)),
+                    ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            long mark = events.markInstrumented();
+            GameTicks.advanceWorld(client(), 0, WATCHED_TICKS);
+            String reply = events.since(mark, "periodic_gate_opened");
+            Events.assertInstrumentRan(reply, "periodic_gate_events", "the station's update must be watched before"
+                    + " an absent opening can mean its gate stayed shut");
+            PeriodicGateWindow window = PeriodicGateWindow.of(reply, "rocket_service_station", 0, x, y, z);
+            requireArranged("the overworld's time of day must stand still while its body is locked: " + window,
+                    window.timeOfDayStoodStill());
+            assertTrue("C16 CLOCK-9: on a world whose time of day stands still the station's gate still opens, at"
+                            + " one even spacing of total time longer than a tick; openings: " + window,
+                    window.openings.size() >= 3 && window.evenSpacing() > 1);
+        } finally {
+            arrange("stellurgytest arrange tidal-lock 0 false").requireOk();
+            arrange("stellurgytest chunk release 0 " + (x >> 4) + " " + (z >> 4)).requireOk();
+            arrange("stellurgytest place 0 " + x + " " + y + " " + z + " minecraft:air").requireOk();
+        }
     }
 
     private static int extract(String src, String field) {

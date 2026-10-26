@@ -12,6 +12,8 @@
     "MixinTileMultiBlockFormationEvents",
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",
+    "MixinAtmosphereDetectorGateEvents",
+    "MixinServiceStationGateEvents",
     "MixinWorldFlightComputerTickCensus",
     "MixinWorldServerAlwaysTicks",
     "MixinEntityPositionWriters",

@@ -15598,7 +15598,10 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code charged-item <player> <item> <energy>} — one {@code item} charged through its Forge Energy
      *       capability ({@code receiveEnergy}, what a charger calls), into the player's inventory;</li>
      *   <li>{@code held-target <dim> <x> <y> <z> <uuidMost> <uuidLeast>} — a zombie with no AI that takes no
-     *       damage, of the given uuid, through the entity's own setters, spawned at that point.</li>
+     *       damage, of the given uuid, through the entity's own setters, spawned at that point;</li>
+     *   <li>{@code tidal-lock <dim> <true|false>} — the body of {@code dim} locked to its star or released,
+     *       through {@code DimensionProperties#setTidallyLocked}, so its time of day stands still (a mechanics
+     *       test's way to a world whose time of day does not move; restore it after).</li>
      * </ul>
      */
     private void handleTypedArrangement(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -15670,8 +15673,20 @@ public class TestProbeCommand extends CommandBase {
                     send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
                     return;
                 }
+                case "tidal-lock": {
+                    int dim = Integer.parseInt(args[1]);
+                    dev.stannismod.stellurgy.dimension.DimensionProperties props =
+                            DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+                    if (props == null) {
+                        send(sender, "{\"error\":\"no body properties for dim " + dim + "\"}");
+                        return;
+                    }
+                    props.setTidallyLocked(Boolean.parseBoolean(args[2]));
+                    send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"locked\":" + props.isTidallyLocked() + "}");
+                    return;
+                }
                 default:
-                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target …\"}");
+                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target|tidal-lock …\"}");
             }
         } catch (NumberFormatException | ArrayIndexOutOfBoundsException badArguments) {
             send(sender, "{\"error\":\"arrange " + escapeJson(sub) + ": bad arguments (" + escapeJson(String.valueOf(badArguments)) + ")\"}");

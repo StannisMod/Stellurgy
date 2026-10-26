@@ -473,6 +473,7 @@ enum ProbeVerbKind {
             case "arrange charged-item":
             case "arrange coded-item":
             case "arrange held-target":
+            case "arrange tidal-lock":
             case "arrange wheel-momentum":
             case "atmosphere detector-set-mode":
             case "atmosphere set-density":

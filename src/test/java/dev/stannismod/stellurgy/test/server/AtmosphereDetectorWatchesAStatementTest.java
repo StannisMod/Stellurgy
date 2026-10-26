@@ -1,9 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PeriodicGateWindow;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
@@ -199,7 +203,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         requireArranged("the room must still be a sealed zone when the detector is asked about it: "
                 + air, air.has("gases"));
         // MADE to sample, not waited for. Production gates the detector's sample on
-        // `world.getWorldTime() % 10`, so what it reports is whatever it decided the last time that
+        // `world.getTotalWorldTime() % 10`, so what it reports is whatever it decided the last time that
         // gate happened to fire — which, right after the air was changed, is about the OLD air.
         // `detector-force-sample` runs the same sample loop and the same setState production runs,
         // once, on demand. One call, one read, and no budget anywhere: the answer does not depend
@@ -208,5 +212,54 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
                 + (cx + 1) + " " + airY() + " " + cz).requireOk();
         Reply out = output(cx);
         assertEquals(why + " (after a forced sample): " + out, expected, out.bool("powered"));
+    }
+
+    /**
+     * The world ticks this many times while the detector is watched: long enough for at least three openings of a
+     * gate whose period is up to a quarter of it, which is the evidence an even spacing needs.
+     */
+    private static final int WATCHED_TICKS = 100;
+
+    /**
+     * C16 CLOCK-9 on the detector: its sampling gate counts the world's TOTAL time, so on a world whose time of day
+     * stands still — the overworld's body locked to its star for the window — it still samples, at one even spacing
+     * of total time. A gate on the time of day would there open never, or on every tick.
+     */
+    @Pins("CLOCK-9")
+    @RedWitness(verdict = "C16 CLOCK-9", member = "TileAtmosphereDetector#update",
+            at = "if (!world.isRemote && world.getTotalWorldTime() % 10 == 0) {",
+            replacedBy = "if (!world.isRemote && world.getWorldTime() % 10 == 0) {",
+            fails = "at one even spacing of total time longer than a tick", on = "2026-10-26")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, WATCHED_TICKS);",
+            why = "the measurement is the spacing of the gate's openings over an interval of the world's own ticks;"
+                    + " no single record says a gate opens evenly, only the openings recorded across the window do")
+    @Test
+    public void theDetectorSamplesOnTotalTimeWhereTheTimeOfDayStandsStill() throws Exception {
+        FixtureSite site = clearedSite(0, 2, "a lone detector on a world whose time of day stands still");
+        int x = site.x;
+        int y = site.y + 1;
+        int z = site.z;
+        arrange("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:oxygenDetection").requireOk();
+        arrange("stellurgytest chunk forceload 0 " + (x >> 4) + " " + (z >> 4)).requireOk();
+        arrange("stellurgytest arrange tidal-lock 0 true").requireOk();
+        try {
+            Events events = new Events(command -> String.join("\n", client().read(command)),
+                    ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            long mark = events.markInstrumented();
+            GameTicks.advanceWorld(client(), 0, WATCHED_TICKS);
+            String reply = events.since(mark, "periodic_gate_opened");
+            Events.assertInstrumentRan(reply, "periodic_gate_events", "the detector's update must be watched before"
+                    + " an absent opening can mean its gate stayed shut");
+            PeriodicGateWindow window = PeriodicGateWindow.of(reply, "atmosphere_detector", 0, x, y, z);
+            requireArranged("the overworld's time of day must stand still while its body is locked: " + window,
+                    window.timeOfDayStoodStill());
+            assertTrue("C16 CLOCK-9: on a world whose time of day stands still the detector's gate still opens, at"
+                            + " one even spacing of total time longer than a tick; openings: " + window,
+                    window.openings.size() >= 3 && window.evenSpacing() > 1);
+        } finally {
+            arrange("stellurgytest arrange tidal-lock 0 false").requireOk();
+            arrange("stellurgytest chunk release 0 " + (x >> 4) + " " + (z >> 4)).requireOk();
+            arrange("stellurgytest place 0 " + x + " " + y + " " + z + " minecraft:air").requireOk();
+        }
     }
 }
