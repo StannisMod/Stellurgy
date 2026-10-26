@@ -108,7 +108,7 @@ public class E1SatelliteFailureOnTheTerminalExpeditionE2ETest extends AbstractPl
                 .asTheServersOperator();
     }
 
-    @Pins({"MECH-SAT-32", "INV-RKT-26"})
+    @Pins({"MECH-SAT-32", "INV-RKT-26", "CLOCK-8"})
     @RedWitness(verdict = "the release", member = "EntityRocket#launch",
             at = "destinationDimId = this.world.provider.getDimension();", replacedBy = "",
             fails = "the rocket releases the satellite onto its orbit", on = "2026-10-26")
@@ -118,6 +118,9 @@ public class E1SatelliteFailureOnTheTerminalExpeditionE2ETest extends AbstractPl
             at = "if (readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(), 0,",
             replacedBy = "if (false && readout.take(sat.getId(), sat.lifeProgress().journal(), sat.doseReadings(), 0,",
             fails = "carries the parts that failed", on = "2026-10-26")
+    @RedWitness(verdict = "C16 CLOCK-8", member = "TimeSkip#skip",
+            at = "PacketHandler.sendToPlayer(PacketSpaceClockSync.current(), player);", replacedBy = "",
+            fails = "his client takes the skipped clock", on = "2026-10-26")
     @Test
     public void aSatelliteInTheBeltLosesDataAndThenFallsSilentOnHisTerminal() throws Exception {
         Events.Step step = GameTicks.serverAndClient(server(), GameTicks.server(), client()::waitWorldTicks);
@@ -597,11 +600,13 @@ public class E1SatelliteFailureOnTheTerminalExpeditionE2ETest extends AbstractPl
      * every later verdict reading the belt's ordinary losses, so it is a link of its own.
      */
     private void skipTheUniverse(Events clientLog, int ticks) throws Exception {
+        long before = reply(server().read("stellurgytest space clock")).get("spaceClock").getAsLong();
         long mark = clientLog.mark();
         typeInChat(clientLog, "/time add " + ticks);
         String told = "The universe moved " + ticks + " tick(s) forward";
+        String chat;
         try {
-            clientLog.awaitMatching(mark, "client_chat_received", r -> {
+            chat = clientLog.awaitMatching(mark, "client_chat_received", r -> {
                 for (String record : Events.records(r)) {
                     String text = Events.text(record, "text");
                     if (text != null && text.contains(told)) {
@@ -614,6 +619,27 @@ public class E1SatelliteFailureOnTheTerminalExpeditionE2ETest extends AbstractPl
             throw new AssertionError(notTold.getMessage() + "\nhis chat: "
                     + clientLog.since(mark, "client_chat_received"), notTold);
         }
+        // His client is told the new clock AT the skip: the server sends it before the chat line, over the same
+        // connection, so the baseline carrying the jumped clock is applied before the line arrives. A client left
+        // to its periodic sync would take it only after.
+        double toldAt = Double.NaN;
+        for (String record : Events.records(chat)) {
+            String text = Events.text(record, "text");
+            if (text != null && text.contains(told)) {
+                toldAt = Events.number(record, "seq");
+                break;
+            }
+        }
+        String synced = clientLog.since(mark, "space_clock_synced");
+        boolean clockFirst = false;
+        for (String record : Events.records(synced)) {
+            if (Events.number(record, "serverTick") >= before + ticks && Events.number(record, "seq") < toldAt) {
+                clockFirst = true;
+                break;
+            }
+        }
+        assertTrue("C16 CLOCK-8: his client takes the skipped clock (at least " + (before + ticks) + ") before the"
+                + " chat line telling him of the skip arrives; synced: " + synced + "\nchat: " + chat, clockFirst);
     }
 
     /**

@@ -119,8 +119,10 @@ stands the ship off from where the target was, by the difference between the two
   По-умолчанию первое"*), `/time add` too (*"да"*), the amount the skipped world's own (*"да, давай
   относительно планеты"*), the whole universe in either mode (*"В режиме "весь мир" - стареет вся
   вселенная, да"*).
-- **CLOCK-8 (a client is told at a skip)** `[A][SYS]` At a skip every connected client is sent the new
-  clock at once, not at its next periodic sync. FOR: CLOCK-3 — a client's space clock follows the server's;
+- **CLOCK-8 (a client is told at a skip)** `[T][SYS]` At a skip every connected client is sent the new
+  clock at once, not at its next periodic sync. Pinned by
+  `E1SatelliteFailureOnTheTerminalExpeditionE2ETest#aSatelliteInTheBeltLosesDataAndThenFallsSilentOnHisTerminal`.
+  FOR: CLOCK-3 — a client's space clock follows the server's;
   maintainer 2026-10-23, accepting that a client is told at the jump rather than up to a sync period later,
   with the rest of the design: *"согласен со всем"*.
 - **CLOCK-9 (a skip is time passing)** `[A][SYS]` Every deadline the skip carries the clock past has passed
@@ -144,7 +146,7 @@ stands the ship off from where the target was, by the difference between the two
 
 | CLOCK-6 | built: the law in `environment` (MECH-ENV-06/07, `PlanetEnvironmentLawsTest`), the time of day read from it (world-gen MECH-WGEN-31, `TimeCommandMovesTheUniverseTest`) |
 | CLOCK-7 | `/time` → `TimeCommandMovesTheUniverseTest`; sleep → `PlanetBedSleepClientGroupTest` (one player: the server-wide mode met), its decision → `SleepWakeTimeTest` (MECH-WGEN-32); the transit → space INV-SPC-21 (`ShipTransitTest`, `ShipTransitManagerTest`), the law and the gate; its wiring from a skip is unwitnessed |
-| CLOCK-8 | built (`TimeSkip#skip`), not pinned yet |
+| CLOCK-8 | `E1SatelliteFailureOnTheTerminalExpeditionE2ETest` — at each of the player's own `/time add`, his client takes the skipped clock before the chat line telling him of it (expedition E1) |
 | CLOCK-9 | built (the two time-of-day gates read total time), not pinned yet |
 
 ## CLOCK-6..9 — the distance from the code (design stage)
