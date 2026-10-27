@@ -155,8 +155,7 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   would be carried by the PARENT and left behind by the moon — measured over 20 000 ticks as
   **7 066 blocks becoming 294 996**, against a descent shell of 7 066
   (a one-off measurement, not kept as a test). Carrying such a craft is not an option: the game's Luna moves
-  14.75 blocks/tick and the physics substrate freezes a ship above 223.6 blocks/s
-  (`PhysicsCalculations.isPhysicsBroken`, `lengthSquared > 50000`), i.e. 11.18 blocks/tick. The
+  14.75 blocks/tick, so a craft carried with its parent would have to make up that motion every tick. The
   speed is not a modelling error — the period is right (27.29 game days against a real 27.32); a game
   day is 24 000 ticks, so time runs 72× and every honest period is 72× faster in blocks per tick than
   physical intuition suggests. Pinned by `SystemRetinueTest#moonsExistAndGetTheirOwnCellsInsideTheirParentsZone`, `SystemRetinueTest#aMoonIsSomewhereElseThanItsParentAndKeepsMoving`, `SystemBodyTest#onlyBodiesWithMassDefineACellsFrame`, `ZoneScaleTest#everyRealMoonGetsACellOfItsOwn`. FOR: ADDR-11.

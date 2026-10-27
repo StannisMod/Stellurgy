@@ -1,0 +1,27 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:cube",
+        "textures": {
+            "particle": "libvulpes:blocks/machinegeneric",
+            "down": "stellurgy:blocks/omnithrusternozzle",
+            "up": "stellurgy:blocks/omnithrusternozzle",
+            "north": "stellurgy:blocks/omnithrusternozzle",
+            "south": "stellurgy:blocks/omnithrusternozzle",
+            "west": "stellurgy:blocks/omnithrusternozzle",
+            "east": "stellurgy:blocks/omnithrusternozzle"
+        }
+    },
+    "variants": {
+        "mount": {
+            "down": { "textures": { "down": "libvulpes:blocks/machinegeneric" } },
+            "up": { "textures": { "up": "libvulpes:blocks/machinegeneric" } },
+            "north": { "textures": { "north": "libvulpes:blocks/machinegeneric" } },
+            "south": { "textures": { "south": "libvulpes:blocks/machinegeneric" } },
+            "west": { "textures": { "west": "libvulpes:blocks/machinegeneric" } },
+            "east": { "textures": { "east": "libvulpes:blocks/machinegeneric" } }
+        },
+        "inventory": [{ "textures": { "down": "libvulpes:blocks/machinegeneric" } }]
+    }
+}

@@ -93,6 +93,11 @@ public final class Actuator {
         return maxForce;
     }
 
+    /** Where a point force is applied, in the frame it was built in; the origin for a pure torque. */
+    public Vector3dc position() {
+        return new Vector3d(position);
+    }
+
     /**
      * The six-component wrench per unit throttle about {@code centre}: force, then torque. The
      * torque of a point force is its lever arm crossed with it, which is the whole reason a hull's

@@ -628,18 +628,20 @@ public final class FreeFlightPhysics {
      *       the pilot has ramped with {@link #shipRampSetpoint} (the deadbeat cancels gravity).
      *       Releasing the throttle keeps cruising; only cut (X) or brake (Shift) - which zero the
      *       setpoint - bring it to a hover.</li>
-     *   <li><b>FA off</b> (Newtonian): holding a throttle commands a velocity in that direction so
-     *       the ship accelerates toward it; brake (Shift) commands a stop; cut (X) or releasing
-     *       everything returns {@code null} so no force is applied and the ship coasts (gravity
-     *       still acts). The setpoint is ignored.</li>
+     *   <li><b>FA off</b> (Newtonian): no velocity is held at all. Brake (Shift) commands a stop; a
+     *       held throttle is a PUSH with no speed in it ({@link #shipThrust}), so this answers
+     *       {@code null} for it, as for cut (X) or releasing everything, where nothing pushes and the
+     *       ship coasts (gravity still acts). The setpoint is ignored.</li>
      * </ul>
      *
      * @param in         pilot intent ({@code null} treated as idle)
      * @param attitude   the (target) body&rarr;world attitude the command maps through
      * @param flightAssist whether Flight Assist is on
      * @param setpoint   body-frame velocity setpoint {forward, right, up} (blocks/s); FA on only
-     * @param maxSpeed   ship cruise speed (blocks/s) at full throttle
-     * @return world-frame velocity {@code {x,y,z}} (blocks/s), or {@code null} to coast
+     * @param maxSpeed   not read: the setpoint already carries the assist's ceiling
+     *                   ({@link #shipRampSetpoint}), and with the assist off there is no speed to
+     *                   bound. Left in the signature because removing it is a signature change
+     * @return world-frame velocity {@code {x,y,z}} (blocks/s), or {@code null} when no velocity is held
      */
     public static double[] shipVelocityCommand(FreeFlightInput in, Quat attitude,
                                                boolean flightAssist, double[] setpoint,
@@ -652,17 +654,28 @@ public final class FreeFlightPhysics {
             return bodyToWorldQ(sane(sp[0]), sane(sp[1]), sane(sp[2]), attitude);
         }
 
-        // Flight Assist off (Newtonian).
-        boolean thrusting = in.throttleForward != 0f
-                || in.strafeInput != 0f
-                || in.throttleVertical != 0f;
+        // Flight Assist off (Newtonian): only a brake holds a velocity, and that velocity is rest.
         if (in.brakeInput > 0f) {
             return new double[]{0.0, 0.0, 0.0}; // deadbeat decelerate
         }
-        if (in.cutActive || !thrusting) {
-            return null; // no linear force -> coast on momentum
+        return null;
+    }
+
+    /**
+     * The body-frame throttle {@code {forward, right, up}} a tier-2 ship pushes with this tick, or
+     * {@code null} when it pushes with none: with Flight Assist off, a held throttle that neither
+     * brake nor cut overrides. The push has no speed in it — the controller asks the hull for its
+     * authority in the held directions ({@code ShipThrust}) — so a held throttle accelerates the ship
+     * for as long as it is held.
+     */
+    public static double[] shipThrust(FreeFlightInput in, boolean flightAssist) {
+        if (in == null || flightAssist || in.brakeInput > 0f || in.cutActive) {
+            return null;
         }
-        return shipThrottleVelocity(in, attitude, maxSpeed); // accelerate toward the command
+        if (in.throttleForward == 0f && in.strafeInput == 0f && in.throttleVertical == 0f) {
+            return null;
+        }
+        return new double[]{in.throttleForward, in.strafeInput, in.throttleVertical};
     }
 
     /**
@@ -678,15 +691,6 @@ public final class FreeFlightPhysics {
      */
     public static double[] shipGravityDelta(double g, double[] shipDown) {
         return new double[]{g * shipDown[0], g * (shipDown[1] + 1.0), g * shipDown[2]};
-    }
-
-    /** The throttle channels mapped to a world-frame velocity via the attitude. */
-    private static double[] shipThrottleVelocity(FreeFlightInput in, Quat attitude, double maxSpeed) {
-        return bodyToWorldQ(
-                in.throttleForward * maxSpeed,
-                in.strafeInput * maxSpeed,
-                in.throttleVertical * maxSpeed,
-                attitude);
     }
 
     /**

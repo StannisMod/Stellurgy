@@ -40,6 +40,7 @@ public class StellurgyCommandRoot extends CommandTreeBase {
         addSubcommand(new FillDataCommand());
         addSubcommand(new UniverseCommand());
         addSubcommand(new DevCommand());
+        addSubcommand(new FixtureCommand());
 
         addSubcommand(new CommandTreeHelp(this));
     }

@@ -648,6 +648,7 @@ tile.jumpCapacitor.name=Конденсатор прыжка
 tile.jumpCapacitorCell.name=Ячейка конденсатора
 tile.jumpHeatSink.name=Радиатор конденсатора
 tile.reactionWheel.name=Маховик ориентации
+tile.omniThruster.name=Всенаправленный маневровый двигатель
 msg.ship.readout.none=Данных пока нет
 msg.rocketbuilder.shiptwr=Тяговооружённость корабля
 msg.rocketbuilder.lowtwr.gui=Не удержится здесь - нажмите Собрать дважды

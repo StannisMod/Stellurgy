@@ -132,8 +132,13 @@ public class PhysicsCalculations {
 
     // If the ship is moving at these speeds, its likely something in the physics
     // broke. This method helps detect that.
+    /**
+     * Whether this step's motion is one the integrator cannot carry: a non-finite velocity, or a spin
+     * past 223.6 rad/s. Linear speed is not bounded here — a craft may go as fast as it was pushed, and
+     * what bounds it near solid ground is the collider's own reach per step, not this guard.
+     */
     private boolean isPhysicsBroken() {
-        if (getAngularVelocity().lengthSquared() > 50000 || getLinearVelocity().lengthSquared() > 50000 || !getAngularVelocity().isFinite() || !getLinearVelocity().isFinite()) {
+        if (getAngularVelocity().lengthSquared() > 50000 || !getAngularVelocity().isFinite() || !getLinearVelocity().isFinite()) {
             System.out.println("Ship tried moving too fast; freezing it and reseting velocities");
             return true;
         }

@@ -9,14 +9,21 @@ import dev.stannismod.stellurgy.test.CleanCommandLaw;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Regions;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.Vec3i;
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.*;
@@ -1040,5 +1047,190 @@ public class ShipMotionLawsTest {
                 new double[]{0.25D, 0.0D, -0.5D}, published.angularVelocity(), 0.0D);
         assertArrayEquals("INV-SFM-15: the attitude a step flies is the one published",
                 new double[]{0.5D, 0.5D, -0.5D, 0.5D}, published.attitude(), 0.0D);
+    }
+
+    /**
+     * INV-SFM-19: a held throttle asks for the hull's own sustained authority in each held signed
+     * direction, scaled by the deflection, and nothing on an axis not held; it reads no velocity, so no
+     * speed can enter it. Swept over 300 generated hulls, the symmetric hull, the wheel-only hull and the
+     * bare hull, each under every combination of the deflections below on the three axes. The expected
+     * acceleration is computed from the clause alone, off the hull's live readout — the figures the
+     * clause names — and the helm frame the readout's directions are laid out in.
+     *
+     * <p>Regions, counted at the call: {@code nothing held} (all three deflections zero), {@code one axis
+     * held}, {@code three axes held}, {@code a held direction with no sustained authority} (its readout
+     * figure is zero: the wheel-only and bare hulls, and many generated ones), {@code past full
+     * deflection} (a deflection outside [-1, 1], which is full). Liveness: the count of calls that asked
+     * for a non-zero acceleration has a minimum.</p>
+     */
+    @Test
+    @Pins("INV-SFM-19")
+    @RedWitness(member = "ShipThrust#add", at = "ControlDirection.of(axis, held > 0.0D)",
+            replacedBy = "ControlDirection.of(axis, true)", fails = "INV-SFM-19", on = "2026-10-27")
+    public void aHeldThrottleAsksForTheHullsAuthorityAndNoSpeed() {
+        List<ShipMotionCases.Hull> hulls = new ArrayList<>();
+        Random rng = new Random(19L);
+        for (int i = 0; i < 300; i++) {
+            hulls.add(ShipMotionCases.randomHull(rng, "random hull " + i));
+        }
+        hulls.add(ShipMotionCases.symmetricHull());
+        hulls.add(ShipMotionCases.wheelOnlyHull());
+        hulls.add(ShipMotionCases.bareHull());
+        double[] deflections = {0.0D, 1.0D, -1.0D, 0.35D, -0.6D, 1.7D, -2.0D};
+        ControlAxis[] axes = {ControlAxis.SURGE, ControlAxis.SWAY, ControlAxis.HEAVE};
+        int nothingHeld = 0;
+        int oneAxis = 0;
+        int threeAxes = 0;
+        int noAuthority = 0;
+        int pastFull = 0;
+        int asked = 0;
+        for (ShipMotionCases.Hull hull : hulls) {
+            ShipReadout readout = ShipFlightModel.solve(1L, hull.mass, hull.actuators, hull.actuators,
+                    ShipMotionCases.HELM).readout(ShipMotionCases.G);
+            for (double f : deflections) {
+                for (double r : deflections) {
+                    for (double u : deflections) {
+                        double[] throttle = {f, r, u};
+                        Vector3d expected = new Vector3d();
+                        int held = 0;
+                        for (int i = 0; i < 3; i++) {
+                            double d = throttle[i];
+                            if (d == 0.0D) {
+                                continue;
+                            }
+                            held++;
+                            if (Math.abs(d) > 1.0D) {
+                                pastFull++;
+                            }
+                            double full = d > 0.0D ? 1.0D : -1.0D;
+                            double scaled = Math.abs(d) > 1.0D ? full : d;
+                            double figure = readout.acceleration(ShipReadout.View.LIVE,
+                                    ControlDirection.of(axes[i], d > 0.0D), Endurance.SUSTAINED);
+                            if (figure == 0.0D) {
+                                noAuthority++;
+                            }
+                            expected.fma(scaled * figure, ShipMotionCases.HELM.axis(axes[i]));
+                        }
+                        if (held == 0) {
+                            nothingHeld++;
+                        } else if (held == 1) {
+                            oneAxis++;
+                        } else if (held == 3) {
+                            threeAxes++;
+                        }
+                        Vector3d got = ShipThrust.wanted(throttle, readout, ShipMotionCases.HELM);
+                        if (got.lengthSquared() > 0.0D) {
+                            asked++;
+                        }
+                        // The liveness half, judged by the symmetric hull's geometry rather than its readout:
+                        // opposed motor pairs on every axis give it sustained authority in all six translations.
+                        if (hull.name.equals("symmetric hull") && held > 0) {
+                            assertTrue("INV-SFM-19: a held throttle on a hull that can push every way asks for"
+                                    + " something — throttle " + java.util.Arrays.toString(throttle) + ", got " + got,
+                                    got.lengthSquared() > 0.0D);
+                        }
+                        double tolerance = 1e-12D * Math.max(1.0D, expected.length());
+                        assertTrue("INV-SFM-19: a held throttle asks for the hull's sustained authority in the held"
+                                        + " directions and nothing else — " + hull.name + ", throttle "
+                                        + java.util.Arrays.toString(throttle) + ": expected " + expected + ", got " + got,
+                                got.distance(expected) <= tolerance);
+                    }
+                }
+            }
+        }
+        int perHull = deflections.length * deflections.length * deflections.length;
+        requireArranged("the sweep must hold nothing once per hull: " + nothingHeld, nothingHeld >= hulls.size());
+        requireArranged("the sweep must hold one axis on every hull: " + oneAxis, oneAxis >= hulls.size());
+        requireArranged("the sweep must hold three axes on every hull: " + threeAxes, threeAxes >= hulls.size());
+        requireArranged("the sweep must hold a direction with no sustained authority: " + noAuthority,
+                noAuthority >= 2 * perHull);
+        requireArranged("the sweep must deflect past full on every hull: " + pastFull, pastFull >= hulls.size());
+        requireArranged("the sweep must ask for something at least on the symmetric hull's held calls: " + asked,
+                asked >= perHull - 1);
+    }
+
+    /**
+     * INV-SFM-17, over its whole domain: every mounting face against every set of faces the world could
+     * call free (6 × 64 cases), each at a block drawn anywhere a ship can stand, both signs included. The
+     * expected forces come from the clause alone — one per listed face but the mounting one, along the
+     * face's own direction reversed, at the block's centre, of the rated thrust.
+     *
+     * <p>Regions, counted at the call: {@code no free nozzle} (nothing listed, or only the mounting face),
+     * {@code every face free} (all six listed — the mounting face among them), {@code the mounting face
+     * listed free} (any set that holds it). Each is visited by every mounting face, so at least 6 times.</p>
+     */
+    @Test
+    @Pins("INV-SFM-17")
+    @RedWitness(member = "OmniThruster#at", at = "nozzle == mount || ", replacedBy = "",
+            fails = "INV-SFM-17: one force per free nozzle, the mounting face never", on = "2026-10-26")
+    @Regions(of = "INV-SFM-17", value = {"no free nozzle", "every face free", "the mounting face listed free"})
+    public void anOmniThrusterPushesAwayFromEachFreeNozzleOnly() {
+        EnumFacing[] faces = EnumFacing.VALUES;
+        Random draw = new Random(17L);
+        int noneFree = 0;
+        int allFree = 0;
+        int mountListed = 0;
+        for (EnumFacing mount : faces) {
+            for (int mask = 0; mask < 64; mask++) {
+                Set<EnumFacing> listed = EnumSet.noneOf(EnumFacing.class);
+                for (EnumFacing face : faces) {
+                    if ((mask & (1 << face.getIndex())) != 0) {
+                        listed.add(face);
+                    }
+                }
+                int x = draw.nextInt(60_000_001) - 30_000_000;
+                int y = draw.nextInt(512) - 64;
+                int z = draw.nextInt(60_000_001) - 30_000_000;
+                String where = "mount " + mount + ", listed " + listed + ", block (" + x + ", " + y + ", " + z + ")";
+
+                Set<EnumFacing> pushing = EnumSet.noneOf(EnumFacing.class);
+                pushing.addAll(listed);
+                pushing.remove(mount);
+                if (pushing.isEmpty()) {
+                    noneFree++;
+                }
+                if (listed.size() == faces.length) {
+                    allFree++;
+                }
+                if (listed.contains(mount)) {
+                    mountListed++;
+                }
+
+                List<Actuator> forces = OmniThruster.at(x, y, z, mount, listed);
+                assertEquals("INV-SFM-17: one force per free nozzle, the mounting face never — " + where,
+                        pushing.size(), forces.size());
+                Set<ActuatorId> ids = new HashSet<>();
+                Set<EnumFacing> seen = EnumSet.noneOf(EnumFacing.class);
+                for (Actuator force : forces) {
+                    assertTrue("INV-SFM-17: no two forces share an identity — " + where + ", " + force.id(),
+                            ids.add(force.id()));
+                    assertEquals("INV-SFM-17: a nozzle only pushes — " + where, 0.0D, force.minThrottle(), 0.0D);
+                    Vector3dc at = force.position();
+                    assertEquals("INV-SFM-17: applied at the block's centre (x) — " + where, x + 0.5D, at.x(), 0.0D);
+                    assertEquals("INV-SFM-17: applied at the block's centre (y) — " + where, y + 0.5D, at.y(), 0.0D);
+                    assertEquals("INV-SFM-17: applied at the block's centre (z) — " + where, z + 0.5D, at.z(), 0.0D);
+                    Vector3dc push = force.maxForce();
+                    EnumFacing nozzle = null;
+                    for (EnumFacing face : pushing) {
+                        Vec3i d = face.getDirectionVec();
+                        if (push.x() == -d.getX() * OmniThruster.THRUST_PER_NOZZLE_N
+                                && push.y() == -d.getY() * OmniThruster.THRUST_PER_NOZZLE_N
+                                && push.z() == -d.getZ() * OmniThruster.THRUST_PER_NOZZLE_N) {
+                            nozzle = face;
+                        }
+                    }
+                    assertNotNull("INV-SFM-17: every force is a free nozzle's rated push away from it — " + where
+                            + ", got " + push, nozzle);
+                    assertTrue("INV-SFM-17: one force per nozzle — " + where + ", " + nozzle + " twice",
+                            seen.add(nozzle));
+                }
+            }
+        }
+        requireArranged("the sweep must visit a thruster with no free nozzle from every mount: " + noneFree,
+                noneFree >= faces.length);
+        requireArranged("the sweep must visit every face free from every mount: " + allFree,
+                allFree >= faces.length);
+        requireArranged("the sweep must list the mounting face free from every mount: " + mountListed,
+                mountListed >= faces.length);
     }
 }

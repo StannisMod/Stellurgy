@@ -207,11 +207,11 @@ public class TileAdvancedFlightComputer extends TileEntity
      * constant is what that calculation replaces. Until then it is a flat number chosen for how long
      * a climb to orbit takes, not for physical plausibility.</p>
      *
-     * <p>The physics mod's own "moving too fast" freeze is not the binding constraint it was once
-     * assumed to be: it trips at {@code |v|² > 50000}, i.e. ~223 blocks/s
-     * ({@code PhysicsCalculations.isPhysicsBroken}), so this leaves a factor of five in hand. What
-     * does scale with it is collision: the ship advances {@code SHIP_MAX_SPEED/20} blocks per tick,
-     * so a cap raised far beyond this starts stepping whole blocks between physics steps.</p>
+     * <p>It bounds the Flight-Assist cruise and nothing else: with the assist off a held throttle
+     * pushes at the hull's authority with no speed in it, and the physics mod's guard refuses only a
+     * non-finite motion or a runaway spin ({@code PhysicsCalculations.isPhysicsBroken}). Near solid
+     * ground the collider samples overlap once per physics step, so a craft much faster than
+     * {@code 60·(L+6)} blocks/s, {@code L} its length along its velocity, can step past a wall.</p>
      */
     public static final double SHIP_MAX_SPEED = 40.0;
 
@@ -814,11 +814,17 @@ public class TileAdvancedFlightComputer extends TileEntity
         // is an attitude target PLUS the rate that target is turning at: the rate is the feed-forward,
         // since a proportional law chasing a moving reference settles at a standing error of rate/gain,
         // and without it the ship visibly lags the pilot's hand.
-        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
-                FreeFlightPhysics.shipVelocityCommand(in, target, flightAssistEnabled, velocitySetpoint,
-                        SHIP_MAX_SPEED),
-                FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate),
-                new double[]{target.w, target.x, target.y, target.z});
+        // With the assist off a held throttle is a push, not a velocity: it carries no speed, so nothing
+        // bounds how fast the craft goes but how long it is held.
+        double[] omega = FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate);
+        double[] att = new double[]{target.w, target.x, target.y, target.z};
+        double[] thrust = FreeFlightPhysics.shipThrust(in, flightAssistEnabled);
+        flightCommand = thrust != null
+                ? dev.stannismod.stellurgy.ship.control.FlightCommand.pushing(thrust, omega, att)
+                : dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                        FreeFlightPhysics.shipVelocityCommand(in, target, flightAssistEnabled, velocitySetpoint,
+                                SHIP_MAX_SPEED),
+                        omega, att);
     }
 
     /**
@@ -1772,6 +1778,7 @@ public class TileAdvancedFlightComputer extends TileEntity
             return;
         }
         double[] vCmd = flying.velocity();
+        double[] thrustCmd = flying.thrust();
         double[] wCmd = flying.angularVelocity();
         double[] attCmd = flying.attitude();
 
@@ -1853,7 +1860,7 @@ public class TileAdvancedFlightComputer extends TileEntity
         // engine's units, is what is applied. The scheme reports when it delivered less than asked.
         Vector3d force = new Vector3d();
         Vector3d torque = new Vector3d();
-        boolean asked = wantLinear != null || angAccel != null;
+        boolean asked = wantLinear != null || thrustCmd != null || angAccel != null;
         boolean saturated = asked && model == null;
         if (asked && model != null) {
             double k = dev.stannismod.stellurgy.integration.vs.PhysicsUnits.ACCELERATION;
@@ -1862,6 +1869,11 @@ public class TileAdvancedFlightComputer extends TileEntity
             Vector3d alpha = angAccel == null ? new Vector3d()
                     : new Vector3d(angAccel[0], angAccel[1], angAccel[2]).div(k);
             physicsPose.transformDirection(a, TransformType.GLOBAL_TO_SUBSPACE);
+            if (thrustCmd != null) {
+                // Already in the ship's own frame and in SI: what the hull can hold in the held directions.
+                a.add(dev.stannismod.stellurgy.ship.control.ShipThrust.wanted(thrustCmd, model.readout(0.0D),
+                        dev.stannismod.stellurgy.ship.control.ControlFrame.HELM));
+            }
             physicsPose.transformDirection(alpha, TransformType.GLOBAL_TO_SUBSPACE);
             dev.stannismod.stellurgy.ship.control.ActuatorCommand command = scheme.allocate(model.live(), a,
                     alpha, momentum, dt * dev.stannismod.stellurgy.integration.vs.PhysicsUnits.SECONDS);

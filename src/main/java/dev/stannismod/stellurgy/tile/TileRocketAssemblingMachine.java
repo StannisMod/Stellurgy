@@ -807,6 +807,24 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     }
 
 
+    /**
+     * Assemble what stands on the pad now, for {@code requester}, skipping the build's progress and
+     * its energy: the press of an operator's fixture, not a player's. Answers whether a craft was built;
+     * false when there is no pad, the scan refuses, or the low-thrust warning held the press back.
+     */
+    public boolean assembleImmediately(EntityPlayer requester) {
+        if (world.isRemote) {
+            return false;
+        }
+        scanRequester = requester == null ? null : requester.getUniqueID();
+        bbCache = getRocketPadBounds(world, pos);
+        if (bbCache == null) {
+            return false;
+        }
+        assembleRocket();
+        return status == ErrorCodes.FINISHED;
+    }
+
     public void assembleRocket() {
         // server only + need a pad cache
         if (world.isRemote || bbCache == null) return;

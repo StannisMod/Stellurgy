@@ -2336,6 +2336,66 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return ShipInfo.byId(c -> read(c).raw(), craft.dim, craft.id).y;
     }
 
+    /**
+     * A covered nozzle puts no force into the craft, and a free one puts its rated push (ship-flight-model
+     * INV-SFM-18) — the world's half of the thruster, whose kernel law INV-SFM-17 is pinned in the unit tier.
+     *
+     * <p>The hull is {@code wheel-only-hull}: its only device is the reaction wheel, so before the thruster
+     * it has no force on any axis, and in the BURST endurance the wheel cancels the torque of one off-centre
+     * force — which makes the burst authority of each translation exactly the push of the one nozzle that
+     * pushes that way, if it is free. One thruster is placed against the stern-side end tank of the fixture's
+     * tank row (mounted on its WEST face, the tank's east face), and one iron block against its SOUTH nozzle,
+     * both before the press. Expected, from the clause and the helm frame alone (surge +Z, sway +X, heave
+     * +Y; a nozzle pushes against its own direction): the free nozzles NORTH, EAST, UP, DOWN give
+     * {@code SURGE_POSITIVE}, {@code SWAY_NEGATIVE}, {@code HEAVE_NEGATIVE}, {@code HEAVE_POSITIVE} the rated
+     * push each; the covered SOUTH nozzle leaves {@code SURGE_NEGATIVE} at zero. The free verdicts come
+     * first, and they are also the positive the zero is read against: they say the thruster is aboard and
+     * surveyed.</p>
+     *
+     * <p>Tolerance: the clean solve's own residual bound, {@code AllocationTolerances} — 1e-6 of the largest
+     * column, here the nozzle's push.</p>
+     *
+     * <p>What it does not see: the mounting face (the unit tier's), a nozzle covered by a block that is not
+     * part of the craft, and a cover added after assembly.</p>
+     */
+    @Test
+    @Pins("INV-SFM-18")
+    @RedWitness(verdict = "covered", member = "BlockOmniThruster#addActuators",
+            at = "world.isAirBlock(pos.offset(nozzle))", replacedBy = "true",
+            fails = "INV-SFM-18: the covered nozzle", on = "2026-10-27")
+    @RedWitness(verdict = "free", member = "BlockOmniThruster#addActuators", at = "free.add(nozzle);",
+            replacedBy = "", fails = "INV-SFM-18: a free nozzle", on = "2026-10-27")
+    public void aCoveredNozzlePutsNoForceIntoTheCraft() throws Exception {
+        String what = "a wheel-only hull with one omnidirectional thruster, one nozzle covered";
+        FixtureSite site = site();
+        Reply fixture = lay(site, "wheel-only-hull", what);
+        // The fixture's tank row runs along x at the craft's centre line, two courses up from the pad;
+        // its east end is site.x + 4, so the thruster stands just past it.
+        int x = site.x + 5;
+        int y = site.y + 2;
+        int z = site.z + 3;
+        Reply thruster = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z
+                + " stellurgy:omniThruster " + net.minecraft.util.EnumFacing.WEST.getIndex());
+        requireArranged(what + " — the thruster must be placed: " + thruster,
+                thruster.ok() && thruster.bool("placed"));
+        Reply cover = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + (z + 1)
+                + " minecraft:iron_block");
+        requireArranged(what + " — the block covering its south nozzle must be placed: " + cover,
+                cover.ok() && cover.bool("placed"));
+
+        AssembledCraft craft = assembleLaid(site, fixture, what);
+        Reply model = readout(craft, what);
+
+        double push = dev.stannismod.stellurgy.ship.control.OmniThruster.THRUST_PER_NOZZLE_N;
+        double tolerance = 1e-6 * push;
+        for (String free : new String[]{"SURGE_POSITIVE", "SWAY_NEGATIVE", "HEAVE_POSITIVE", "HEAVE_NEGATIVE"}) {
+            assertEquals("INV-SFM-18: a free nozzle puts its rated push into the craft — " + free + " "
+                    + live(model, free), push, live(model, free).number("burst"), tolerance);
+        }
+        assertEquals("INV-SFM-18: the covered nozzle puts no force into the craft — SURGE_NEGATIVE "
+                + live(model, "SURGE_NEGATIVE"), 0.0D, live(model, "SURGE_NEGATIVE").number("burst"), tolerance);
+    }
+
     /** A craft the gravity family holds and releases: its world and its identity, nothing nearer. */
     private static final class Released {
         final int dim;

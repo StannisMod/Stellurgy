@@ -41,6 +41,7 @@ they only *drive* other subsystems' seams.
 | `GoToDimensionCommand` / `GoToStationCommand` / `FetchCommand` | teleport self to dim/station / pull a player to you |
 | `WeatherCommand` (redirect) | overrides vanilla `/ar weather` for `WorldProviderPlanet` with revert-aware refusal |
 | `AddSealantCommand` / `AddTorchCommand` / `SetGravityCommand` / `FillDataCommand` / `ReloadRecipesCommand` | config/item/recipe operator verbs |
+| `FixtureCommand` | builds and assembles a fully equipped creative-powered ship in front of the operator |
 | `UniverseCommand` | intermediate group node — the world model a save was generated under |
 | `UniverseStatusCommand` / `UniverseUpgradeCommand` | report the schema + configuration stamp / freeze what has been seen and move the world on |
 | `DumpBiomesCommand` / `RunTestsCommand` | dev-only helpers under `/ar dev` |
@@ -101,6 +102,18 @@ they only *drive* other subsystems' seams.
   persisted whitelist; `setGravity` drives `gravityManager`; `fillData` writes item
   `DataStorage`; `reloadRecipes` refreshes machine + XML recipes (NOT auto-genned — frozen
   registry). `AddSealantCommand.java:33-46`, `SetGravityCommand.java:31-49`, `FillDataCommand.java:46-100`, `ReloadRecipesCommand.java:34-60`. [V]
+- **MECH-CMD-12 ship fixture.** `/stellurgy fixture ship-1` clears a box ahead of the operator, lays a
+  pad, a structure tower, a creative-powered assembler and Ship 1 on the pad — lift and aft motors,
+  omnidirectional thrusters at every deck corner, a reaction wheel, a glazed cockpit with pilot seat,
+  flight and navigation computers, two beam guns joined by a weapon console, a shield generator with two
+  emitters and its console, and a jump drive with its bank, sinks and hull emitter, every consumer fed by
+  a creative source — then presses the assembler through `TileRocketAssemblingMachine#assembleImmediately`
+  (the player's scan and assembly, without the build's progress or energy) and puts the operator on the
+  cockpit floor. A press the assembler refuses is reported as a `CommandException`, never as success.
+  An operator's tool: it destroys whatever stood in the box. `FixtureCommand.java:63-87`. [V] What it
+  promises is INV-CMD-09..11; where its parts stand, relative to its flight computer, it publishes itself
+  (`FixtureCommand.Ship1#partsFromComputer`), so a reader of the assembled ship asks the fixture rather
+  than re-deriving its layout.
 
 ## State & persistence
 
@@ -136,6 +149,25 @@ No NBT owned. Command-driven persistence is delegated:
   registered (guarded by `isDimensionCreated`/`getStar != null`); unloaded worlds are not
   re-created by get/set (unlike goto/create which init the dim). Inferred from guards, not
   a dedicated test. `PlanetSetCommand.java:60-61`, `PlanetGetCommand.java:49-50`, `StarSetCommand.java:40-42`, `StarGetCommand.java:33-35`; `GoToDimensionCommand.java:38-39` initialises the dimension.
+
+The three clauses below are what Ship 1 promises, from the maintainer's request, 2026-10-26: *"хороший
+корабль с творческими источниками энергии, способный на все передвижения, включая гиперпространственные.
+С щитами и оружием. И с хорошей кабиной"* (a good ship with creative energy sources, capable of every
+motion, hyperspace included; with shields and weapons; and with a good cockpit). Each is read on the ship
+the command built, located by the point it put its operator at.
+
+- **INV-CMD-09 [T][BEH]** `/stellurgy fixture ship-1`, typed by a player, leaves him aboard an assembled
+  ship: a ship is named after the command whose box holds the point the command put him at. Pinned by
+  `WorldCommandClientGroupTest#shipOneIsBuiltAroundItsOperatorAndCanMakeEveryMove`.
+- **INV-CMD-10 [T][BEH]** Ship 1 can make every move: its live flight model has burst authority in each of
+  the twelve directions and can hover in the world it was built in; and its jump drive can open a window:
+  a bank and a hull emitter aboard, no block of the hull outside the window, and a bank its own source
+  fills — drained, its charge rises across a window of ticks. Pinned by
+  `WorldCommandClientGroupTest#shipOneIsBuiltAroundItsOperatorAndCanMakeEveryMove`.
+- **INV-CMD-11 [T][BEH]** Ship 1 is armed and shielded: each of its guns is operable and the weapon
+  console commands both; each shield emitter is fed from the ship's own generator and source — drained,
+  its stored shield rises across a window of ticks. Pinned by
+  `WorldCommandClientGroupTest#shipOneIsArmedAndShielded`.
 
 ## Failure modes & edge cases
 

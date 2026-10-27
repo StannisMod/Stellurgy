@@ -1,6 +1,6 @@
 ---
 id: ship-flight-model
-owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/ChemicalMotorActuators.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
+owns: [ship/, api/IShipActuatorBlock.java, block/BlockReactionWheel.java, block/BlockOmniThruster.java, block/ChemicalMotorActuators.java, integration/vs/HullSurvey.java, integration/vs/PhysicsUnits.java, integration/vs/ShipHullMass.java, integration/vs/ShipInertiaWriter.java, integration/vs/ShipMassTrigger.java, integration/vs/StellurgyBlockMass.java, integration/vs/StellurgyWorldGravity.java, tile/TileReactionWheel.java]
 entrypoints: [TileAdvancedFlightComputer#update→tickFlightModel, TileAdvancedFlightComputer#onPhysicsTick, ShipMassTrigger.Hooks#onShipNamed, TileRocketAssemblingMachine#scanRocket (tier-2 readout)]
 depends-on: [util-core (WeightEngine), dimension-planets, network-wire, rocket-assembly]
 depended-by: [hyperdrive, client-render (HUD lines)]
@@ -60,8 +60,12 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   feeding tank) and it works unless worn to its last stage — the two things the world tells it
   (`block/ChemicalMotorActuators.java`) `[V]`. A reaction wheel is three pure torques (`TORQUE`,
   `MOMENTUM_CAPACITY`, `tunable`) (`ship/control/ReactionWheel.java`) `[T]`; its block only places it
-  (`block/BlockReactionWheel.java`). The device definitions live in the physics system,
-  so the kernel is tested with production's own devices and no world.
+  (`block/BlockReactionWheel.java`). An omnidirectional thruster is up to five forces at its block
+  centre, one per free nozzle, each pushing away from its nozzle at `THRUST_PER_NOZZLE_N` (`tunable`);
+  the face it is mounted on is never a nozzle (`ship/control/OmniThruster.java`) `[T]`. Which nozzles
+  are free is the world's: the face it was placed against is its support, and every other face whose
+  neighbour cell is air is free (`block/BlockOmniThruster.java`) `[V]`. The device definitions live in
+  the physics system, so the kernel is tested with production's own devices and no world.
 - **MECH-SFM-05 — clean authority.** Per signed direction and endurance: maximise `s` subject to
   `W u = s t` (t = unit force, or `I·axis` for a rotation), each throttle in range; sustained solves
   over sustained devices only; burst over all, and IS the sustained recipe when no better
@@ -77,7 +81,10 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   (coalesced to `SURVEY_MIN_TICKS`, `tunable`), on the load round, or when it has no model; posts
   `FlightModelChangedEvent`; seeds wheel momentum from wheel tiles once and writes it back every tick
   (`tile/TileAdvancedFlightComputer.java:1304-1360`, `ShipDataMethods.java:39`) `[V]`.
-- **MECH-SFM-08 — the controller.** Wanted linear accel (deadbeat + gravity feed-forward, uncapped)
+- **MECH-SFM-08 — the controller.** With Flight Assist off and a throttle held, the command carries a
+  body-frame thrust instead of a velocity, and the wanted linear accel is the hull's own authority in the
+  held directions (INV-SFM-19, `ship/control/ShipThrust.java`) `[T]`; otherwise it is a velocity, and
+  wanted linear accel (deadbeat + gravity feed-forward, uncapped)
   and angular accel (attitude law, rate capped at `min(old cap, max(sqrt(2·α·angle), |ff|))`) →
   SI ÷ `PhysicsUnits.ACCELERATION` → ship frame → `scheme.allocate(live, …)` → wrench ×
   factor → world → applied (`TileAdvancedFlightComputer.java:1725-1850,1891`) `[V]`. No model ⇒ no
@@ -182,6 +189,30 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   after publishing, or books a wheel absent from its model, breaks it. FOR: INV-SFM-11 (a wheel's
   momentum is conserved — given back, never invented or lost). Not pinned: no tier can play the seed
   against a step today; it needs a seam into the survey.
+- **INV-SFM-17** `[T][SYS]` An omnidirectional thruster pushes away from each free nozzle it is given and
+  from nothing else: one force per free nozzle, at its block's centre, against that nozzle's direction, of
+  `THRUST_PER_NOZZLE_N`; its mounting face never pushes, even when it is listed free; and no two of its
+  forces share an identity.
+  REGIONS: `no free nozzle`, `every face free`, `the mounting face listed free`. FOR: maintainer 2026-10-26, *"Он ставится одной стороной на блок корабля и даёт доступную тягу
+  по всем направлениям, кроме опорного, где сопло не заслонено блоком."* (it is mounted by one side on a
+  ship block and gives thrust in every direction but the supporting one, where the nozzle is not covered
+  by a block). Pinned by `test/unit/ShipMotionLawsTest#anOmniThrusterPushesAwayFromEachFreeNozzleOnly`.
+- **INV-SFM-18** `[T][BEH]` On an assembled craft, a thruster's nozzle covered by a block of the hull puts
+  no force into the craft, and each nozzle in open air puts its rated push: the live authority in the
+  direction the covered nozzle would push carries none of that thruster's thrust, while the direction of
+  every free nozzle carries `THRUST_PER_NOZZLE_N` of it. The decision is the world's
+  (`block/BlockOmniThruster.java`, `addActuators`: free is an air neighbour); the kernel only takes what
+  it is handed. Pinned by
+  `test/server/TierTwoCraftFlightModelGroupTest#aCoveredNozzlePutsNoForceIntoTheCraft`.
+- **INV-SFM-19** `[T][SYS]` With Flight Assist off, a held throttle asks the hull for its live SUSTAINED
+  authority in each held signed direction of the ship's own frame, scaled by the deflection — surge by
+  the forward throttle, sway by the strafe, heave by the vertical — and for nothing on an axis not held;
+  no velocity is held, gravity is not fed forward, and no speed bounds it: the craft accelerates for as
+  long as the throttle is held. A direction with no sustained authority is asked for nothing.
+  FOR: maintainer 2026-08-15, *"полет без flight assist должен не иметь предела абсолютной скорости — мы
+  имеем только максимальное ускорение, которое может выдать корабль"* (flight without flight assist must
+  have no limit on absolute speed — we only have the maximum acceleration the ship can deliver).
+  Pinned by `test/unit/ShipMotionLawsTest#aHeldThrottleAsksForTheHullsAuthorityAndNoSpeed`.
 
 ## Failure modes & edge cases
 

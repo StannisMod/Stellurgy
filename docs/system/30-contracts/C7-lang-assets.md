@@ -224,6 +224,7 @@ through any other wrapper, is invisible to it.
 | lang keys | where |
 |---|---|
 | `tile.reactionWheel.name` | the reaction wheel block |
+| `tile.omniThruster.name` | the omnidirectional manoeuvring thruster block |
 | `msg.ship.readout.*`, `msg.ship.dir.*` (twelve), `msg.ship.warn.{no_authority,burst_only,cannot_hover}` | the flight computer's console (`client/ShipReadoutText#console`) `[V]` |
 | `msg.ship.hud.{mass,accel,saturated,wheel}` | the pilot's HUD flight slice (`ShipReadoutText#hud`, appended in `KeyBindings.freeFlightHudLines`) `[V]` |
 | `msg.rocketbuilder.shiptwr`, `msg.rocketbuilder.lowtwr.gui`, `msg.rocketbuilder.lowtwr` | the assembler's tier-2 readout and the TWR < 1 warning (GUI line and chat) `[V]` |

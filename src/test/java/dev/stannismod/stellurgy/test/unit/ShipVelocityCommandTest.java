@@ -127,9 +127,14 @@ public class ShipVelocityCommandTest {
 
     @Test
     public void faOffForwardThrottleAccelerates() {
-        double[] v = newtonianCommand(input(1f, 0f, 0f, 0f, false));
-        assertNotNull(v);
-        assertArrayEquals(new double[]{0.0, 0.0, MAX}, v, DELTA);
+        // A held throttle is a push with no speed in it: no velocity is held, and the push is the throttle.
+        FreeFlightInput forward = input(1f, 0f, 0f, 0f, false);
+        assertNull("FA off holds no velocity under a held throttle", newtonianCommand(forward));
+        assertArrayEquals(new double[]{1.0, 0.0, 0.0}, FreeFlightPhysics.shipThrust(forward, false), DELTA);
+        assertNull("FA on pushes with nothing: the setpoint carries the cruise",
+                FreeFlightPhysics.shipThrust(forward, true));
+        assertNull("a brake pushes with nothing", FreeFlightPhysics.shipThrust(input(1f, 0f, 0f, 1f, false), false));
+        assertNull("a cut pushes with nothing", FreeFlightPhysics.shipThrust(input(1f, 0f, 0f, 0f, true), false));
     }
 
     @Test

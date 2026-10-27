@@ -55,6 +55,8 @@ public class StellurgyBlocks {
     public static Block blockAdvancedFlightComputer;
     /** Turns a ship about any axis without pushing it; see {@code BlockReactionWheel}. */
     public static Block blockReactionWheel;
+    /** Pushes a ship along any direction a free nozzle faces; see {@code BlockOmniThruster}. */
+    public static Block blockOmniThruster;
     public static Block blockNavigationComputer;
     /**
      * The gun family: a controller, and the parts a gun's numbers are derived from. A turret is
