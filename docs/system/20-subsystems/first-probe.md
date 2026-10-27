@@ -233,7 +233,7 @@ past them (C4). The probe itself is not switchable — maintainer 2026-10-26, *"
 
 INV-PRB-01, -03, -04, -11..-14 → `ProbeLawsTest` (unit); INV-PRB-02, -15 → `ProbeJointsTest` (integration,
 the joints with `environment` and with the terminal's table); INV-PRB-05, -06, -09 and -10 →
-`FirstProbeFallTest` (client, own boot). INV-PRB-07 and -08 are owed their client tests.
+`FirstProbeFallTest` (client, own boot). INV-PRB-07 and -08 carry no harness test: they are verified by reading the code only.
 
 ## Open questions
 
