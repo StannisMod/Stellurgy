@@ -203,7 +203,7 @@ the `armed` flag (per-ship, NBT) and **re-aiming always disarms**. The helm's ke
 press during the wind-up aborts. At the end of the spool `JumpTrigger.commit` re-asks the gate (a spool
 is long enough for the world to change under it), resolves the ledger entry, then fires the burst — the
 **commit point** — then `beginTransit`, then disarms. Nothing that can refuse runs after the burst, so a
-failure past it is a paid refusal by construction. [T] `JumpTrigger.java:90-176`, `HyperdriveTest`
+failure past it is a paid refusal by construction. [T] `JumpTrigger.java:112-270`, `HyperdriveTest`
 (`aRefusedJumpNeverSpendsTheCharge`, `pressingAgainDuringTheWindUpAbortsItAndCostsNothing`).
 
 ### MECH-HYP-13 — A warning must be read to be answered
@@ -216,13 +216,21 @@ A motion order whose leg is the jump (ship-guidance MECH-GDN-13) has the flight 
 would, and through nothing of its own: it points the navigation computer at the leg's destination by the
 console's own `setTargetBody` (a body, followed and predicted; or a bare place) — re-aiming only when the
 aim differs, never during a wind-up — arms it, and presses the helm's key UNATTENDED
-(`JumpTrigger.pressUnattended`, `hyperdrive/JumpTrigger.java:110`): the same gate and wind-up as a press,
-except that an ADVISORY verdict is a refusal (nobody saw the warning, so nobody accepted it) and a press
-during the wind-up is the same ask again, not an abort. The commit at the wind-up's end is the helm's
-own (`TileAdvancedFlightComputer#tickJumpSpool`). What declines the jump — the verdict's first message,
-or how a commit FAILED (which the order then does not retry) — is what the order is refused with,
-through guidance's common window. A pilot's input taking the craft back stops a wind-up the order
-started; it costs nothing, the burst firing only at its end. [V] `tile/TileAdvancedFlightComputer.java:1632-1710`.
+(`JumpTrigger.pressUnattended`, `hyperdrive/JumpTrigger.java:127`): the same gate and wind-up as a press,
+and the same path past an ADVISORY verdict as a pilot's confirming press — the gate rules none of its
+advisories a veto (`navigation/JumpGate.java:332`, `:349`, `:400`), so the order goes on where a pilot
+may. The one difference is that there is nobody to raise the warning to first (MECH-HYP-13): the
+unattended press that meets advisories begins the wind-up at once and names them
+(`JumpTrigger.Result#advisoriesGoneThrough`, `JumpTrigger.java:159-168`), and the flight computer reports
+them in the pilot's stead — the seated pilot is told, `ShipEvent.MotionIntentJumpAdvisedEvent` is posted,
+and the motion slot keeps them in its reading (ship-guidance MECH-GDN-13). A press during the wind-up is
+the same ask again, not an abort. The commit at the wind-up's end is the helm's own
+(`TileAdvancedFlightComputer#tickJumpSpool`), which re-asks the gate for HARD objections only, as for a
+pilot. What declines the jump — the verdict's first HARD message, or how a commit FAILED (which the order
+then does not retry) — is what the order is refused with, through guidance's common window. A pilot's input taking the craft back stops a wind-up the order
+started; it costs nothing, the burst firing only at its end. The helm's own key pressed during that
+wind-up stops it as any press does and is itself such an input: the order is taken back and asks again
+for nothing (C9 SHIPCTL-23). [V] `tile/TileAdvancedFlightComputer.java:401-425,1624-1676,1684-1744`.
 
 ### MECH-HYP-14 — Dampeners: tier absorbs, coverage decides who
 `DampenerField.residualSpeed` protects a body only if a powered dampener is within radius, then
@@ -299,8 +307,8 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
 - **INV-HYP-01 [T][BEH]** Asking the gate is free and side-effect free; a refusal never costs the pilot
   charge. `HyperdriveTest#aRefusedJumpNeverSpendsTheCharge`.
 - **INV-HYP-02 [V][BEH]** The capacitor burst is the FIRST and ONLY thing spent: every check that can
-  refuse a jump sits above the commit line (`JumpTrigger.java:207`). A departure the transit manager
-  refuses after the burst is a paid refusal, answered `FAILED` and logged (`:208-222`).
+  refuse a jump sits above the commit line (`JumpTrigger.java:252`). A departure the transit manager
+  refuses after the burst is a paid refusal, answered `FAILED` and logged (`:253-268`).
 - **INV-HYP-03** — retired: the bank holds real energy fed by the ship, so time away is not time
   charging (see INV-HYP-07).
 - **INV-HYP-04 [T][BEH]** A machine belongs to exactly one ship; a neighbour can never lend one.

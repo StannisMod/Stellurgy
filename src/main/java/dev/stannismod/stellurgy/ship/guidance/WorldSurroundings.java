@@ -35,19 +35,16 @@ import java.util.UUID;
  * frames at the space clock's tick — the vector from the craft cell's centre (its world's origin) to the
  * ship — and answered as a ship in ANOTHER cell's world, whose hull is not measured from here, whether or
  * not that world is loaded: the hull the craft will meet is measured once the craft shares its world. Seen
- * from a planet it is answered as a ship in space. A ship the ledger holds in transit is in hyperspace.
- * Otherwise every loaded world is asked: a ship in a space cell's world is placed as a settled one is, from
- * its cell and its pose there; a ship in a planet world is answered as on that planet. One found nowhere is
- * not found.</p>
+ * from a planet it is answered as a ship in space. A ship the ledger holds in transit is on its way, and is
+ * waited for. Otherwise every loaded world is asked: a ship in a space cell's world is placed as a settled
+ * one is, from its cell and its pose there; a ship in the hyperspace world is on its way; a ship in a planet
+ * world is answered as on that planet. One found nowhere is not found.</p>
  *
- * <p><b>The system.</b> A ship in space of another system than the craft's is answered as in another
- * system, with its address and its hull — read in the slot world its cell is bound to, when that world is
- * loaded; a body of another system, with the jump to it, aimed at the body. A place's system is the anchor
- * of the system whose neighbourhood holds its cell ({@link UniverseRegistry#anchorForCell}): the craft
- * cell's, in space; on a planet, that of the address its body is entered from — the address the entry
- * crossing puts the craft beside, the origin when it has none, as the entry does. A cell no system's
- * neighbourhood holds — the void — is a SYSTEM OF ITS OWN: a place there and a place in any other cell are
- * of two systems, and getting from one to the other is a jump, not years of flying cell to cell.</p>
+ * <p><b>How far.</b> A ship in space whose cell is farther from the craft's than the next one
+ * ({@link GuidanceTarget#flownBetween}) is answered far off, with its address and the hull it last measured
+ * itself — the ledger's, written by its own flight computer in its own world, so it is known whether or not
+ * that world is loaded now; a body there, with the jump to it, aimed at the body. Which system either cell
+ * is of, the void included, does not enter into it.</p>
  *
  * <p><b>The ground</b> is the highest solid or liquid block top in the square asked, read through
  * {@link TerrainHeightFinder#terrainTopOfFootprint}, which loads the chunks it reads.</p>
@@ -67,7 +64,7 @@ public final class WorldSurroundings implements Surroundings {
     private final WorldServer world;
     private final GalacticCoord cell;
     private final java.util.OptionalInt orbitLine;
-    private final java.util.function.Function<JumpDestination, String> drive;
+    private final java.util.function.Function<JumpDestination, JumpAnswer> drive;
 
     /**
      * @param world     the world the craft is in
@@ -77,7 +74,7 @@ public final class WorldSurroundings implements Surroundings {
      * @param drive     the craft's flight computer asking its own jump drive, as {@link #jump} is asked
      */
     public WorldSurroundings(WorldServer world, GalacticCoord cell, java.util.OptionalInt orbitLine,
-                             java.util.function.Function<JumpDestination, String> drive) {
+                             java.util.function.Function<JumpDestination, JumpAnswer> drive) {
         this.world = world;
         this.cell = cell;
         this.orbitLine = orbitLine;
@@ -85,7 +82,7 @@ public final class WorldSurroundings implements Surroundings {
     }
 
     @Override
-    public String jump(JumpDestination destination) {
+    public JumpAnswer jump(JumpDestination destination) {
         return drive.apply(destination);
     }
 
@@ -100,16 +97,16 @@ public final class WorldSurroundings implements Surroundings {
         ShipLedger.Entry entry = space == null ? null : space.ledger.get(shipId);
         if (entry != null) {
             if (entry.state != ShipLedger.State.SETTLED || entry.coord == null) {
-                return Sighting.unplaced(GuidanceTarget.Unplaced.IN_HYPERSPACE);
+                return Sighting.arriving();
             }
-            return inSpaceAt(shipId, entry.coord);
+            return inSpaceAt(entry.coord, entry.hullRadius);
         }
         for (WorldServer other : DimensionManager.getWorlds()) {
             if (other == world || VSIntegration.registeredShipUuid(other, shipId) == null) {
                 continue;
             }
             if (HyperspaceWorld.isHyperspace(other)) {
-                return Sighting.unplaced(GuidanceTarget.Unplaced.IN_HYPERSPACE);
+                return Sighting.arriving();
             }
             int dim = other.provider.getDimension();
             if (other.provider instanceof WorldProviderSpaceSlot) {
@@ -118,7 +115,10 @@ public final class WorldSurroundings implements Surroundings {
                 if (itsCell == null || pose == null) {
                     return Sighting.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
                 }
-                return inSpaceAt(shipId, CellWorldMapper.coordOfPoseWithin(itsCell, pose[0], pose[1], pose[2]));
+                // A ship no ledger row holds is measured where it is, in this world that is loaded now.
+                double[] hull = VSIntegration.hullAboutPosition(other, shipId);
+                return inSpaceAt(CellWorldMapper.coordOfPoseWithin(itsCell, pose[0], pose[1], pose[2]),
+                        hull == null ? Double.NaN : hull[0]);
             }
             GuidanceTarget.Unplaced why = unreachable(dim);
             return why != null ? Sighting.unplaced(why) : Sighting.onPlanet(dim);
@@ -126,17 +126,19 @@ public final class WorldSurroundings implements Surroundings {
         return Sighting.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
     }
 
-    /** The ship {@code shipId}, settled in space at {@code at}, as seen from the craft. */
-    private Sighting inSpaceAt(UUID shipId, GalacticCoord at) {
-        Boolean same = sameSystem(at);
-        if (same == null) {
-            return Sighting.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
-        }
-        if (!same) {
-            return Sighting.inAnotherSystem(at, hullWhereItIs(shipId, at));
-        }
+    /**
+     * A ship settled in space at {@code at}, whose hull last measured {@code hullRadius} (NaN when it has
+     * not measured itself there yet), as seen from the craft.
+     */
+    private Sighting inSpaceAt(GalacticCoord at, double hullRadius) {
         if (cell == null) {
             return Sighting.inSpace();
+        }
+        if (!GuidanceTarget.flownBetween(cell, at)) {
+            // Its own size is what the jump comes out beside. A ship that has not measured itself yet has
+            // just come into space — settled by an entry or a jump's arrival, its own flight computer's
+            // first report still to come on its next tick in its cell — and is waited for, not guessed at.
+            return Double.isNaN(hullRadius) ? Sighting.arriving() : Sighting.farOff(at, hullRadius);
         }
         if (!cell.knowsItsLattice() || !at.knowsItsLattice()) {
             return Sighting.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
@@ -151,19 +153,6 @@ public final class WorldSurroundings implements Surroundings {
         double[] origin = CellWorldMapper.poseWorldOf(cell.cellCentre());
         double[] there = {origin[0] + fromHere.dx(), origin[1] + fromHere.dy(), origin[2] + fromHere.dz()};
         return Sighting.inAnotherCell(there, at);
-    }
-
-    /**
-     * The reach of the hull of the ship {@code shipId} about its position, read in the slot world the
-     * cell of {@code at} is bound to; NaN when that cell is bound to none, its world is not loaded, or the
-     * world's registry holds no blocks for the ship.
-     */
-    private static double hullWhereItIs(UUID shipId, GalacticCoord at) {
-        SpaceSubsystem space = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
-        int dim = space == null ? SpaceManager.UNBOUND_SLOT : space.manager.slotDimOf(at);
-        WorldServer itsWorld = dim == SpaceManager.UNBOUND_SLOT ? null : DimensionManager.getWorld(dim);
-        double[] hull = itsWorld == null ? null : VSIntegration.hullAboutPosition(itsWorld, shipId);
-        return hull == null ? Double.NaN : hull[0];
     }
 
     @Override
@@ -251,12 +240,8 @@ public final class WorldSurroundings implements Surroundings {
             return Sphere.unplaced(GuidanceTarget.Unplaced.NOT_FOUND);
         }
         long clock = SpaceSubsystem.spaceClock();
-        Boolean same = sameSystem(body.get().name());
-        if (same == null) {
-            return Sphere.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
-        }
-        if (!same) {
-            return Sphere.inAnotherSystem(JumpDestination.toBody(dimension, body.get().addressAt(clock)));
+        if (!GuidanceTarget.flownBetween(cell, body.get().name())) {
+            return Sphere.farOff(JumpDestination.toBody(dimension, body.get().addressAt(clock)));
         }
         if (!cell.knowsItsLattice()) {
             return Sphere.unplaced(GuidanceTarget.Unplaced.NO_FRAME);
@@ -271,35 +256,5 @@ public final class WorldSurroundings implements Surroundings {
         double[] origin = CellWorldMapper.poseWorldOf(cell.cellCentre());
         return Sphere.about(new double[]{origin[0] + fromHere.dx(), origin[1] + fromHere.dy(), origin[2] + fromHere.dz()},
                 shell ? DescentShell.radiusAround(body.get()) : ShipEntryController.entryRingAround(body.get()));
-    }
-
-    /**
-     * Whether {@code there} is of the craft's own system; {@code null} when the universe cannot be asked
-     * which system a place is in.
-     */
-    private Boolean sameSystem(GalacticCoord there) {
-        UniverseRegistry reg = UniverseRegistry.get(world.getMinecraftServer());
-        if (reg == null) {
-            return null;
-        }
-        return systemOf(reg, there).equals(systemOf(reg, here()));
-    }
-
-    /** The place the craft's own system is asked of: its cell, in space; on a planet, its body's entry address. */
-    private GalacticCoord here() {
-        if (cell != null) {
-            return cell;
-        }
-        GalacticCoord address = SpaceSubsystem.launchBodyAddress(world.provider.getDimension());
-        return address == null ? GalacticCoord.ORIGIN : address;
-    }
-
-    /**
-     * The system {@code at} is of, as a name: the anchor of the system whose neighbourhood holds its cell,
-     * or, in the void, that cell itself — a system of its own.
-     */
-    private static String systemOf(UniverseRegistry reg, GalacticCoord at) {
-        Optional<GalacticCoord> anchor = reg.anchorForCell(at);
-        return anchor.isPresent() ? "system " + anchor.get().cellKey() : "void " + at.cellKey();
     }
 }

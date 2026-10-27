@@ -14,16 +14,69 @@ import java.util.UUID;
 public interface Surroundings {
 
     /**
-     * Ask the craft's jump drive to take it to {@code destination}, the way the leg to another system
-     * needs: the destination armed at the craft's navigation computer as a pilot arms it, and the jump
-     * committed as the helm's key commits it — the ask being one nobody can confirm, so anything that
-     * would have stopped a pilot's press declines it. Asked on every tick of that leg until the jump
-     * carries the craft off; asking again while it winds up is not a second press.
-     *
-     * @return {@code null} while the jump is under way — winding up, or committed; else the lang key of
-     *         what declines it this tick: the jump gate's clause, or how the last commit failed
+     * Ask the craft's jump drive to take it to {@code destination}, the way the jump leg needs: the
+     * destination armed at the craft's navigation computer as a pilot arms it, and the jump committed as
+     * the helm's key commits it — through every advisory the jump gate raises, as a pilot who confirms
+     * it goes through it, and declined only by what would have stopped that pilot. Asked on every tick of
+     * that leg until the jump carries the craft off; asking again while it winds up is not a second press.
      */
-    String jump(JumpDestination destination);
+    JumpAnswer jump(JumpDestination destination);
+
+    /** What the craft's drive answered one ask for the jump. */
+    final class JumpAnswer {
+        private final String declinedBy;
+        private final java.util.List<String> advisoriesGoneThrough;
+
+        private JumpAnswer(String declinedBy, java.util.List<String> advisoriesGoneThrough) {
+            this.declinedBy = declinedBy;
+            this.advisoriesGoneThrough = advisoriesGoneThrough;
+        }
+
+        /** The jump is under way — winding up, or committed — and this ask began nothing. */
+        public static JumpAnswer underWay() {
+            return new JumpAnswer(null, null);
+        }
+
+        /**
+         * This ask began the jump's wind-up, going through {@code advisories} — the lang keys of the jump
+         * gate's advisory objections, in its order; empty when the gate raised none.
+         */
+        public static JumpAnswer began(java.util.List<String> advisories) {
+            if (advisories == null) {
+                throw new IllegalArgumentException("a wind-up begun through no advisory goes through an empty list");
+            }
+            return new JumpAnswer(null, java.util.Collections.unmodifiableList(new java.util.ArrayList<>(advisories)));
+        }
+
+        /** The jump is declined this tick, by the lang key {@code by}: the gate's clause, or how a commit failed. */
+        public static JumpAnswer declined(String by) {
+            if (by == null) {
+                throw new IllegalArgumentException("a declined jump names what declined it");
+            }
+            return new JumpAnswer(by, null);
+        }
+
+        /** What declines the jump this tick; {@code null} while it is under way. */
+        public String declinedBy() {
+            return declinedBy;
+        }
+
+        /** Whether this ask began the wind-up. */
+        public boolean began() {
+            return advisoriesGoneThrough != null;
+        }
+
+        /** For an ask that {@link #began}, the advisories it went through; else {@code null}. */
+        public java.util.List<String> advisoriesGoneThrough() {
+            return advisoriesGoneThrough;
+        }
+
+        @Override
+        public String toString() {
+            return declinedBy != null ? "declined " + declinedBy
+                    : began() ? "began through " + advisoriesGoneThrough : "under way";
+        }
+    }
 
     /** Where the ship whose durable id is {@code shipId} stands as seen from the craft, or why not. */
     Sighting ship(UUID shipId);
@@ -45,8 +98,8 @@ public interface Surroundings {
 
     /**
      * Where the orbit of the body whose surface is the planet world {@code dimension} lies, seen from a
-     * craft in space; or, for a body of another system than the craft's cell, where the jump to it is
-     * aimed ({@link Sphere#inAnotherSystem}); or why it cannot be placed. Asked of a craft in space.
+     * craft in space; or, for a body whose cell is farther from the craft's than the next one, where the
+     * jump to it is aimed ({@link Sphere#farOff}); or why it cannot be placed. Asked of a craft in space.
      */
     Sphere orbit(int dimension);
 
@@ -67,8 +120,8 @@ public interface Surroundings {
 
     /**
      * {@code NOT_FOUND} when no body has the planet world {@code dimension} for its surface, so it cannot
-     * be flown to from the craft's world; {@code null} when one has — in the craft's system or another,
-     * either way reached through space. Asked of a craft on a planet.
+     * be flown to from the craft's world; {@code null} when one has — wherever it is, it is reached through
+     * space. Asked of a craft on a planet.
      */
     GuidanceTarget.Unplaced unreachable(int dimension);
 
@@ -96,12 +149,12 @@ public interface Surroundings {
         }
 
         /**
-         * The body is of another system than the craft's cell, so nothing about it can be placed in the
-         * craft's world: reaching it is a jump, aimed at {@code destination}.
+         * The body's cell is farther from the craft's than the next one, so nothing about it is placed in
+         * the craft's world: reaching it is a jump, aimed at {@code destination}.
          */
-        public static Sphere inAnotherSystem(JumpDestination destination) {
+        public static Sphere farOff(JumpDestination destination) {
             if (destination == null) {
-                throw new IllegalArgumentException("a body of another system is jumped to somewhere");
+                throw new IllegalArgumentException("a far-off body is jumped to somewhere");
             }
             return new Sphere(null, Double.NaN, destination, null);
         }
@@ -119,7 +172,7 @@ public interface Surroundings {
             return radius;
         }
 
-        /** Where the jump to a body of another system is aimed; {@code null} for a body placed here. */
+        /** Where the jump to a far-off body is aimed; {@code null} for a body placed here. */
         JumpDestination elsewhere() {
             return elsewhere;
         }
@@ -140,6 +193,7 @@ public interface Surroundings {
         private final Integer planet;
         private final GalacticCoord elsewhere;
         private final GuidanceTarget.Unplaced unplaced;
+        private final boolean arriving;
 
         private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
                          GuidanceTarget.Unplaced unplaced) {
@@ -148,6 +202,12 @@ public interface Surroundings {
 
         private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
                          boolean inSpace, Integer planet, GalacticCoord elsewhere, GuidanceTarget.Unplaced unplaced) {
+            this(position, hullRadius, measured, cell, inSpace, planet, elsewhere, unplaced, false);
+        }
+
+        private Sighting(double[] position, double hullRadius, boolean measured, GalacticCoord cell,
+                         boolean inSpace, Integer planet, GalacticCoord elsewhere, GuidanceTarget.Unplaced unplaced,
+                         boolean arriving) {
             this.position = position;
             this.hullRadius = hullRadius;
             this.measured = measured;
@@ -156,11 +216,12 @@ public interface Surroundings {
             this.planet = planet;
             this.elsewhere = elsewhere;
             this.unplaced = unplaced;
+            this.arriving = arriving;
         }
 
         /**
-         * Seen from a craft on a planet: the ship is in space, in a cell of the craft's own system. It has
-         * no position in the craft's world; reaching it starts with the climb into space.
+         * Seen from a craft on a planet: the ship is in space, settled in a cell. It has no position in the
+         * craft's world; reaching it starts with the climb into space.
          */
         public static Sighting inSpace() {
             return new Sighting(null, Double.NaN, false, null, true, null, null, null);
@@ -169,23 +230,36 @@ public interface Surroundings {
         /**
          * The ship is in the planet world {@code dimension}, which is not the craft's world, and some body
          * has that world for its surface. It has no position in the craft's world; reaching it goes through
-         * space — and a jump, when that body is of another system — and down onto that body.
+         * space — and a jump, when that body's cell is beyond the next one — and down onto that body.
          */
         public static Sighting onPlanet(int dimension) {
             return new Sighting(null, Double.NaN, false, null, false, dimension, null, null);
         }
 
         /**
-         * The ship is in space, settled at {@code address}, in a cell of ANOTHER system than the craft's
-         * world — or in the void, where every cell is a system of its own — and its hull reaches
-         * {@code hullRadius} about its position there (NaN when its world holds no hull to measure). It has
-         * no position in the craft's world; reaching it takes a jump.
+         * Seen from a craft in space: the ship is in space, settled at {@code address}, in a cell farther
+         * from the craft's than the next one, and its hull reaches {@code hullRadius} about its position
+         * there, as it last measured itself. It has no position in the craft's world; reaching it takes a
+         * jump.
          */
-        public static Sighting inAnotherSystem(GalacticCoord address, double hullRadius) {
+        public static Sighting farOff(GalacticCoord address, double hullRadius) {
             if (address == null) {
-                throw new IllegalArgumentException("a ship in another system is settled somewhere");
+                throw new IllegalArgumentException("a far-off ship is settled somewhere");
             }
-            return new Sighting(null, hullRadius, !Double.isNaN(hullRadius), null, false, null, address, null);
+            if (!(hullRadius >= 0.0D)) {
+                throw new IllegalArgumentException("a far-off ship is jumped to beside its measured hull; got "
+                        + hullRadius + " (one not measured yet is arriving)");
+            }
+            return new Sighting(null, hullRadius, true, null, false, null, address, null);
+        }
+
+        /**
+         * The ship is on its way to a place it can be aimed at: in hyperspace, mid-jump — it is nowhere
+         * until the jump ends — or come into space beyond the next cell and not yet measured there, which
+         * it is on its own first tick in its cell. Reaching it starts when it gets there.
+         */
+        public static Sighting arriving() {
+            return new Sighting(null, Double.NaN, false, null, false, null, null, null, true);
         }
 
         /**
@@ -230,8 +304,8 @@ public interface Surroundings {
             return position.clone();
         }
 
-        /** The hull's measured reach about {@link #position} — about its address, for a ship in another
-         *  system; NaN when not {@link #measured}. */
+        /** The hull's measured reach about {@link #position} — about its address, for a far-off ship; NaN
+         *  when not {@link #measured}. */
         double hullRadius() {
             return hullRadius;
         }
@@ -255,9 +329,14 @@ public interface Surroundings {
             return planet;
         }
 
-        /** Where the ship is settled when that is a cell of another system ({@link #inAnotherSystem}); else {@code null}. */
+        /** Where the ship is settled when that is a cell beyond the next one ({@link #farOff}); else {@code null}. */
         GalacticCoord elsewhere() {
             return elsewhere;
+        }
+
+        /** Whether the ship is on its way to a place it can be aimed at ({@link #arriving}). */
+        boolean isArriving() {
+            return arriving;
         }
 
         GuidanceTarget.Unplaced unplaced() {

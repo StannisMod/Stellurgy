@@ -1,7 +1,7 @@
 ---
 id: space/hyperspace-and-persistence
 parent: space/00-overview.md
-covers: MECH-SPC-09, 10, 15..19 · INV-SPC-03, 05, 07, 08, 09, 11, 12, 13, 14, 18
+covers: MECH-SPC-09, 10, 15..19 · INV-SPC-03, 05, 07, 08, 09, 11, 12, 13, 14, 18, 20
 ---
 
 # space — hyperspace, the ledger, the crew and a restart
@@ -15,13 +15,20 @@ pool and the in-galaxy crossings are in [cells-and-crossings](cells-and-crossing
 
 ### MECH-SPC-09 — The ledger: where a ship is, never which world
 `ShipLedger` maps the **durable** ship id (the flight computer's UUID, never the physics mod's) to `{coord,
-SETTLED|IN_TRANSIT, positionKnown}` (`ShipLedger.java:35-68`) [V]. A SETTLED ship owns one occupant refcount on
+SETTLED|IN_TRANSIT, positionKnown, hullRadius}` (`ShipLedger.java:35-75`) [V]. A SETTLED ship owns one occupant refcount on
 its cell; whoever moves it releases that and re-settles (`ShipLedger.java:23-26`; for example
 `CellCrossingController.java:260,338,348`) [V]. `updatePosition` is the flight computer's per-tick self-report and
-is a no-op unless SETTLED (`ShipLedger.java:94-100`; caller `TileAdvancedFlightComputer.java:529-530`) [V][T]
-`ShipLedgerTest.java:54`. No slot dimension is stored anywhere (`ShipLedgerDataTest.java:96`) [T].
+is a no-op unless SETTLED (`ShipLedger.java:97-110`; caller `TileAdvancedFlightComputer.java:524-535`) [V][T]
+`ShipLedgerTest.java:54`. The self-report carries the HULL too — the radius of the smallest sphere about the
+ship's position holding its block box (`VSIntegration#hullAboutPosition`), measured in the ship's own world,
+the one place it always is; a tick whose record holds no blocks to measure (between a crossing's cut and its
+settle) keeps the radius last measured. `settle` and `beginTransit` carry the radius unchanged — a crossing
+or a jump moves a hull, it does not change it — so it is known while the ship's world is not loaded; a ship
+that came into space from a planet has none until its first tick in its cell (`ShipLedger.java:80-125`) [V].
+No slot dimension is stored anywhere (`ShipLedgerDataTest.java:96`) [T].
 `ShipLedgerData` is a `WorldSavedData` named `stellurgy_shipledger` on the overworld map storage; keys
-`ships[{shipId,galacticCoord}]`, `transits[]`, `cellVisits[{cell,visit}]`, `spaceClock`, `version`
+`ships[{shipId,galacticCoord,hullRadius}]` (`hullRadius` only for a ship that has measured itself; absent
+reads back as never measured), `transits[]`, `cellVisits[{cell,visit}]`, `spaceClock`, `version`
 (`ShipLedgerData.java:43-48,73-99,227-288`) [V]. Only SETTLED ships are in `ships`; a flying one is carried by its
 `TransitRecord`, and `replaceAll` **refuses** (returns the ship ids, touches nothing) a snapshot that would store a
 flying ship nowhere (`ShipLedgerData.java:127-169`) [T] `ShipLedgerDataTest.java:118,150`. Save point: dim-0
@@ -138,7 +145,7 @@ returner is re-seated by a retry of up to 200 ticks (`SpaceEventHandler.java:384
 
 | key / location | owner | notes |
 |---|---|---|
-| `stellurgy_shipledger` (MapStorage, overworld): `ships[]`, `transits[]`, `cellVisits[]`, `spaceClock`, `version` | `ShipLedgerData` | `ShipLedgerData.java:43-48,227-288`; `positionKnown` is **not** stored, `version` is written and never read (Open question 6) |
+| `stellurgy_shipledger` (MapStorage, overworld): `ships[]` (each `shipId`, `galacticCoord`, `hullRadius` when measured), `transits[]`, `cellVisits[]`, `spaceClock`, `version` | `ShipLedgerData` | `ShipLedgerData.java:43-54,233-305`; `positionKnown` is **not** stored, `version` is written and never read (Open question 6) |
 | `TransitRecord`: `shipId arrivalTick lastTicked speed distance travelled org tgt crew snapshot lane hyperAnchor` | `TransitRecord` | `lane`/`hyperAnchor` absent when none (`TransitRecord.java:113-120`) |
 | player capability: `stellurgyShipAboard` | `ShipAboardTag` via `IPlayerBindings` | survives death; shape in MECH-SPC-19 |
 | `<world>/advRocketry/spacepool/cell_<key>/`, `…/hyperspace/`, `…/spacepool/slot<dim>/` | `SpaceSlotPool`, `WorldProviderSpaceSlot` | the first two are durable by *name*, the last is scratch (`SpaceSlotPool.java:389-405,435-439`) |
@@ -170,6 +177,15 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 - **INV-SPC-18** [V] Statics here are effectively final and written once by the mod in pre-init (`SpaceSlotPool.java:69`,
   `HyperspaceWorld.java:35`); every other per-server fact lives in `SpaceSubsystem` / `ServerState` and dies with the
   server (`SlotBindings.java:17`; `SpaceSubsystemOwnershipTest.java:58,86`).
+- **INV-SPC-20** `[T][SYS]` The hull radius the ledger holds for a ship is the last one the ship measured: a
+  self-report carrying a measurement replaces it, one that measured nothing keeps it, a settle and a transit
+  carry it unchanged, a ship that has never measured itself holds none (NaN), and the radius comes back
+  from a save as it went in. FOR: the decision of 2026-10-25, proposed with the guidance's jump leg and
+  taken forward on *"Коммить и продолжай"* without objection — accepted by continuing, not ruled
+  explicitly: the ship ledger stores each ship's measured hull radius, so a target in an unloaded cell has a
+  measured standoff, not a stand-in. Pinned by
+  `test/unit/ShipLedgerTest#theHullAShipMeasuredIsTheLedgersUntilItMeasuresAnother`,
+  `test/unit/ShipLedgerDataTest#aMeasuredHullComesBackFromTheSaveAndAnUnmeasuredOneStaysUnmeasured`.
 
 ## Failure modes & edge cases
 
@@ -188,7 +204,8 @@ Pre-0.1.0: no migration anywhere in this root; a changed format changes in place
 `INV-SPC-03` ShipTransitManagerTest.java:679 · `-05` ShipLedgerDataTest.java:96 · `-07` ShipLedgerDataTest.java:242,
 SpaceClockIsTheSubsystemsOwnTest.java:132,184 · `-08` ShipLedgerDataTest.java:150, SpaceRestartPersistenceTest.java:275,354 ·
 `-09` ShipTransitManagerTest.java:1057 · `-11` ShipTransitManagerTest.java:1134 · `-13` LoginRestoreTest.java:270 · `-14`
-HyperspaceSurvivesARestartTest.java:201 · `-18` SpaceSubsystemOwnershipTest.java:58,71,86 · `-12` is `[V]` only.
+HyperspaceSurvivesARestartTest.java:201 · `-18` SpaceSubsystemOwnershipTest.java:58,71,86 · `-20`
+ShipLedgerTest, ShipLedgerDataTest · `-12` is `[V]` only.
 
 **What the corpus does not hold, or holds only behind `@Ignore`:**
 - `HyperspaceVoid`: the only scenario (`VSTransitCrewGroupTest.java:1096`) is in a class `@Ignore`d at

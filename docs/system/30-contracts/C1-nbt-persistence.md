@@ -417,7 +417,13 @@ same writer and reader, which is how a transponder put in before assembly is abo
 | Key | Where | What |
 |---|---|---|
 | `storedMomentumX`, `storedMomentumY`, `storedMomentumZ` | `TileReactionWheel` | N·m·s the wheel has given the hull about each ship axis (`tile/TileReactionWheel.java:37-49`) `[V]`. Durable (C10 STAT-3): a full wheel stays full across a save, an unload and a crossing, or a relog would be a free desaturation. Absent reads as 0. The flight model, recipes and readout are derived and have NO key. |
-| `motionSlot` {`state`, `refusal`, `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship` (durable id), or `surface` + `dim`, `x`, `z`}}} | `TileAdvancedFlightComputer` | the craft's motion slot (ship-guidance MECH-GDN-01): the one intent it flies, its state and refusal. Rides tile NBT through every crossing, so an order outlives the cut and paste; a target is a THING named by identity (a ship) or by its world and column (a surface point), so the crossing does not change what it names. Absent = an empty slot; a slot that does not read back loads EMPTY and is logged `[V]`. |
+| `motionSlot` {`state`, `refusal`, `declinedBy`, `advisoriesGoneThrough` (string list, absent when empty), `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship` (durable id), or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | the craft's motion slot (ship-guidance MECH-GDN-01): the one intent it flies, its state and refusal, what declined its jump (JUMP_DECLINED only) and the jump gate's advisories its latest jump went through (MECH-GDN-13). Rides tile NBT through every crossing, so an order outlives the cut and paste; a target is a THING named by identity (a ship) or by its world and column (a surface point), so the crossing does not change what it names. Absent = an empty slot; a slot that does not read back loads EMPTY and is logged `[V]`. |
+
+## Ship ledger keys
+
+| Key | Where | What |
+|---|---|---|
+| `hullRadius` | `stellurgy_shipledger` (`ShipLedgerData`, overworld MapStorage), in each `ships[]` compound | double, blocks: the radius of the smallest sphere about the ship's position holding its hull, as the ship last measured itself in its own world (space/hyperspace-and-persistence MECH-SPC-09). Written only for a ship that has measured itself; absent reads back as never measured, NaN. What a craft sent to that ship from beyond the next cell jumps out beside, whether or not the ship's world is loaded (ship-guidance MECH-GDN-08) `[V]`. |
 
 ## Weapon-order keys
 

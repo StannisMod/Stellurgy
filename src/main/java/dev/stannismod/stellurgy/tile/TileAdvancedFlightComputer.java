@@ -527,8 +527,13 @@ public class TileAdvancedFlightComputer extends TileEntity
                     // is bound to and the ledger row that protects that cell from collection, and none
                     // of those follow a pose over a cell face on their own. So a pose outside the local
                     // range is saturated - wrong by the overshoot, but naming a cell that exists.
+                    // The hull is measured here, in the ship's own world, the one place it always is: a
+                    // craft sent to this ship from beyond the next cell reads the size it keeps clear of
+                    // off the ledger, whether or not this world is loaded then.
+                    double[] hull = VSIntegration.hullAboutPosition(world, shipId);
                     stack.ledger.updatePosition(shipId, dev.stannismod.stellurgy.space.CellWorldMapper
-                            .coordOfPoseWithin(cell, pose[0], pose[1], pose[2]));
+                            .coordOfPoseWithin(cell, pose[0], pose[1], pose[2]),
+                            hull == null ? Double.NaN : hull[0]);
                     // Only a SETTLED ship can be at its cell's edge by flying there. A ship mid-crossing
                     // sits in the paste band — far below the cell's own pose range — for the few ticks
                     // between the paste and the settle, which reads as an escape on every single
@@ -1610,16 +1615,29 @@ public class TileAdvancedFlightComputer extends TileEntity
     /**
      * One press of the helm's jump key. Free in every branch — it refuses, warns, winds up or stops
      * winding up, and none of those spend anything.
+     *
+     * <p>Pressed during a wind-up the motion slot's order started, it stops that wind-up as any press
+     * mid-wind-up does, and it is the pilot's hand on the controls: like any input of his
+     * ({@link #setPilotInput}) it takes the craft back — the slot empties, and the order does not ask for
+     * the jump again.</p>
      */
     public void onJumpKey() {
         if (world == null || world.isRemote) {
             return;
         }
+        boolean theOrdersWindUp = guidanceSpooled;
         dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Result result =
                 dev.stannismod.stellurgy.hyperdrive.JumpTrigger.press(world, getPos(),
                         shipIdOrNull(), jumpSpool,
                         dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
         messageSeatedPilot(result.langKey());
+        if (theOrdersWindUp) {
+            // The press met the order's wind-up and stopped it; the order is the pilot's to take back.
+            motion.reclaim();
+            guidanceSpooled = false;
+            markDirty();
+            return;
+        }
         if (result.outcome() == dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Outcome.WARNED) {
             // An ADVISORY is a question, and a question the game never asks reads as a refusal: the
             // pilot is told "the window does not enclose the whole hull" and nothing says the press
@@ -1670,11 +1688,15 @@ public class TileAdvancedFlightComputer extends TileEntity
      * ({@link dev.stannismod.stellurgy.hyperdrive.JumpTrigger#pressUnattended}). While the wind-up runs the
      * aim is left alone; the commit at its end is the helm's own ({@link #tickJumpSpool}).
      *
-     * @return {@code null} while the jump winds up; else the lang key of what declined it
+     * <p>A press that begins the wind-up through the gate's advisories reports each of them where a pilot
+     * would have read it — to a seated pilot, as the helm shows a warning — and posts
+     * {@link dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentJumpAdvisedEvent}; the slot keeps
+     * them in its reading from the answer.</p>
      */
-    private String jumpForGuidance(dev.stannismod.stellurgy.ship.guidance.JumpDestination destination) {
+    private dev.stannismod.stellurgy.ship.guidance.Surroundings.JumpAnswer jumpForGuidance(
+            dev.stannismod.stellurgy.ship.guidance.JumpDestination destination) {
         if (lastJumpFailure != null) {
-            return lastJumpFailure;
+            return dev.stannismod.stellurgy.ship.guidance.Surroundings.JumpAnswer.declined(lastJumpFailure);
         }
         long now = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
         if (!jumpSpool.spooling(now)) {
@@ -1697,14 +1719,29 @@ public class TileAdvancedFlightComputer extends TileEntity
                 dev.stannismod.stellurgy.hyperdrive.JumpTrigger.pressUnattended(world, getPos(),
                         shipIdOrNull(), jumpSpool, now);
         if (pressed.outcome() == dev.stannismod.stellurgy.hyperdrive.JumpTrigger.Outcome.SPOOLING) {
-            if (!guidanceSpooled) {
-                guidanceSpooled = true;
-                messageSeatedPilot(pressed.langKey());
+            if (guidanceSpooled) {
+                return dev.stannismod.stellurgy.ship.guidance.Surroundings.JumpAnswer.underWay();
             }
-            return null;
+            guidanceSpooled = true;
+            messageSeatedPilot(pressed.langKey());
+            java.util.List<String> advisories = pressed.advisoriesGoneThrough();
+            if (!advisories.isEmpty()) {
+                messageSeatedPilot(MSG_JUMP_ADVISED);
+                for (String advisory : advisories) {
+                    messageSeatedPilot(advisory);
+                }
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                        new dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentJumpAdvisedEvent(world,
+                                shipId == null ? null : shipId.toString(), getPos(), motion.reading().intent(),
+                                advisories));
+            }
+            return dev.stannismod.stellurgy.ship.guidance.Surroundings.JumpAnswer.began(advisories);
         }
-        return pressed.langKey();
+        return dev.stannismod.stellurgy.ship.guidance.Surroundings.JumpAnswer.declined(pressed.langKey());
     }
+
+    /** What a seated pilot reads before the advisories the autopilot's jump went past. */
+    private static final String MSG_JUMP_ADVISED = "msg.guidance.jumpadvised";
 
     // ─── The hull's own size ───────────────────────────────────────────────────
 

@@ -572,6 +572,35 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A craft's motion intent began its jump THROUGH the jump gate's advisories — {@code motion_jump_advised},
+     * off production's own {@code ShipEvent.MotionIntentJumpAdvisedEvent}: the fields of
+     * {@code motion_arrived}, and {@code advisories}, a JSON array of the lang keys gone through, in the
+     * gate's order.
+     */
+    @SubscribeEvent
+    public static void onMotionIntentJumpAdvised(
+            dev.stannismod.stellurgy.api.event.ShipEvent.MotionIntentJumpAdvisedEvent event) {
+        World world = event.world;
+        instrument(world, "server_bus_motion_jump_advised");
+        if (world == null || event.intent == null) {
+            return;
+        }
+        BlockPos p = event.pos;
+        StringBuilder keys = new StringBuilder("[");
+        for (int i = 0; i < event.advisories.size(); i++) {
+            keys.append(i == 0 ? "" : ",").append('"').append(str(event.advisories.get(i))).append('"');
+        }
+        keys.append(']');
+        record(world, "motion_jump_advised",
+                "\"ship\":\"" + str(event.shipId) + "\""
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
+                        + ",\"kind\":\"" + event.intent.kind().name() + "\""
+                        + ",\"target\":\"" + event.intent.target() + "\""
+                        + ",\"advisories\":" + keys);
+    }
+
+    /**
      * A craft's motion intent was REFUSED — {@code motion_refused}, off production's own
      * {@code ShipEvent.MotionIntentRefusedEvent}: the fields of {@code motion_arrived}, {@code reason}, the
      * refusal's own name, and {@code declinedBy}, the lang key of what declined a jump (JSON null for every

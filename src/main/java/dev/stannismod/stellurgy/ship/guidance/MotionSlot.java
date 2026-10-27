@@ -91,13 +91,6 @@ public final class MotionSlot {
          * would have stopped a pilot with, read off {@link Reading#declinedBy} — or the commit failed.
          */
         JUMP_DECLINED,
-        /**
-         * The target ship is in another system and its hull cannot be measured where it is, so no point
-         * beside it can be named for the jump to come out at.
-         */
-        JUMP_TARGET_NOT_MEASURED,
-        /** The target ship is mid-jump, in hyperspace: it is in no system until its jump ends. */
-        TARGET_IN_HYPERSPACE,
         /** The target is nowhere: no craft by its name, or no body with its planet world for a surface. */
         TARGET_NOT_FOUND,
         /** The target names this craft. */
@@ -125,10 +118,15 @@ public final class MotionSlot {
         /** Flying into the descent shell of the body whose world the target is in, to be descended onto it. */
         INTO_THE_SHELL,
         /**
-         * The jump to the target's system: held still while the jump is armed and wound up, then carried
-         * through it — the flight computer commits it, guidance only names where it is aimed.
+         * The jump to a target beyond the next cell: held still while the jump is armed and wound up, then
+         * carried through it — the flight computer commits it, guidance only names where it is aimed.
          */
-        JUMP
+        JUMP,
+        /**
+         * The target ship is on its way — mid-jump, or come into space far off and not yet measured there:
+         * held still, neither refused nor arrived, until it gets there and the leg toward it is flown.
+         */
+        WAITING_FOR_THE_TARGET
     }
 
     /** What one tick of guidance did that somebody outside should hear about. */
@@ -228,6 +226,7 @@ public final class MotionSlot {
     private static final String NBT_ARRIVED = "arrived";
     private static final String NBT_INTENT = "intent";
     private static final String NBT_DECLINED_BY = "declinedBy";
+    private static final String NBT_ADVISORIES_GONE_THROUGH = "advisoriesGoneThrough";
 
     private MotionIntent intent = null;
     private State state = State.EMPTY;
@@ -235,6 +234,9 @@ public final class MotionSlot {
     /** The lang key of the jump gate's clause that declined the jump, or of the failed commit; {@code null}
      *  unless the refusal is {@link Refusal#JUMP_DECLINED}. */
     private String declinedBy = null;
+    /** The lang keys of the jump gate's advisories the order's latest jump wind-up was begun through, in the
+     *  gate's order; empty when it raised none, or the order began no jump. */
+    private java.util.List<String> advisoriesGoneThrough = java.util.Collections.emptyList();
     private boolean arrived = false;
     /** Consecutive guidance ticks the intent has been unflyable. Not persisted: a reload restarts the
      *  window, which delays a refusal by at most one window and never invents one. */
@@ -255,6 +257,7 @@ public final class MotionSlot {
         this.state = State.ACTIVE;
         this.refusal = null;
         this.declinedBy = null;
+        this.advisoriesGoneThrough = java.util.Collections.emptyList();
         this.arrived = false;
         this.shortTicks = 0;
         this.held = null;
@@ -272,6 +275,7 @@ public final class MotionSlot {
         state = State.EMPTY;
         refusal = null;
         declinedBy = null;
+        advisoriesGoneThrough = java.util.Collections.emptyList();
         arrived = false;
         shortTicks = 0;
         held = null;
@@ -289,7 +293,7 @@ public final class MotionSlot {
 
     /** What the slot holds right now. */
     public Reading reading() {
-        return new Reading(state, intent, refusal, declinedBy, arrived, leg);
+        return new Reading(state, intent, refusal, declinedBy, advisoriesGoneThrough, arrived, leg);
     }
 
     /**
@@ -336,12 +340,21 @@ public final class MotionSlot {
             // The jump: the craft's drive is asked to take it there, and is held where it is while the jump
             // is armed and wound up. A jump declined is a short tick, refused through the same window.
             leg = Leg.JUMP;
-            declining = around.jump(placed.jump());
+            Surroundings.JumpAnswer answer = around.jump(placed.jump());
+            declining = answer.declinedBy();
+            if (answer.began()) {
+                advisoriesGoneThrough = answer.advisoriesGoneThrough();
+            }
             if (declining != null) {
                 shortBy = Refusal.JUMP_DECLINED;
             } else {
                 command = hover(craft.attitude);
             }
+        } else if (placed.leg() == Leg.WAITING_FOR_THE_TARGET) {
+            // The target is on its way: the craft holds where it is, and the tick is flown, not short — the
+            // order is waiting, not failing. The tick the target gets there places it, and the leg is flown.
+            leg = Leg.WAITING_FOR_THE_TARGET;
+            command = hover(craft.attitude);
         } else {
             leg = placed.leg();
             // With no hull measured there is no shell to aim at, for a GO_TO or a HOLD: the craft makes for
@@ -529,10 +542,6 @@ public final class MotionSlot {
 
     private static Refusal refusalFor(GuidanceTarget.Unplaced why) {
         switch (why) {
-            case JUMP_TARGET_NOT_MEASURED:
-                return Refusal.JUMP_TARGET_NOT_MEASURED;
-            case IN_HYPERSPACE:
-                return Refusal.TARGET_IN_HYPERSPACE;
             case NOT_FOUND:
                 return Refusal.TARGET_NOT_FOUND;
             case IS_THE_CRAFT:
@@ -1153,6 +1162,13 @@ public final class MotionSlot {
         if (declinedBy != null) {
             nbt.setString(NBT_DECLINED_BY, declinedBy);
         }
+        if (!advisoriesGoneThrough.isEmpty()) {
+            net.minecraft.nbt.NBTTagList keys = new net.minecraft.nbt.NBTTagList();
+            for (String key : advisoriesGoneThrough) {
+                keys.appendTag(new net.minecraft.nbt.NBTTagString(key));
+            }
+            nbt.setTag(NBT_ADVISORIES_GONE_THROUGH, keys);
+        }
         if (intent != null) {
             NBTTagCompound i = new NBTTagCompound();
             intent.writeToNBT(i);
@@ -1194,6 +1210,13 @@ public final class MotionSlot {
         state = stored;
         refusal = why;
         declinedBy = why == Refusal.JUMP_DECLINED && nbt.hasKey(NBT_DECLINED_BY) ? nbt.getString(NBT_DECLINED_BY) : null;
+        net.minecraft.nbt.NBTTagList keys = nbt.getTagList(NBT_ADVISORIES_GONE_THROUGH,
+                net.minecraftforge.common.util.Constants.NBT.TAG_STRING);
+        java.util.List<String> gone = new java.util.ArrayList<>();
+        for (int k = 0; k < keys.tagCount(); k++) {
+            gone.add(keys.getStringTagAt(k));
+        }
+        advisoriesGoneThrough = java.util.Collections.unmodifiableList(gone);
         arrived = nbt.getBoolean(NBT_ARRIVED);
         return true;
     }
@@ -1278,14 +1301,17 @@ public final class MotionSlot {
         private final MotionIntent intent;
         private final Refusal refusal;
         private final String declinedBy;
+        private final java.util.List<String> advisoriesGoneThrough;
         private final boolean arrived;
         private final Leg leg;
 
-        Reading(State state, MotionIntent intent, Refusal refusal, String declinedBy, boolean arrived, Leg leg) {
+        Reading(State state, MotionIntent intent, Refusal refusal, String declinedBy,
+                java.util.List<String> advisoriesGoneThrough, boolean arrived, Leg leg) {
             this.state = state;
             this.intent = intent;
             this.refusal = refusal;
             this.declinedBy = declinedBy;
+            this.advisoriesGoneThrough = advisoriesGoneThrough;
             this.arrived = arrived;
             this.leg = leg;
         }
@@ -1296,6 +1322,16 @@ public final class MotionSlot {
          */
         public String declinedBy() {
             return declinedBy;
+        }
+
+        /**
+         * The lang keys of the jump gate's advisories the intent's latest jump was begun through — what the
+         * autopilot went on past, as a pilot who confirms them does — in the gate's order; empty when the
+         * gate raised none, or the intent began no jump. Kept across the jump and a reload, until the slot
+         * is given another intent or taken back.
+         */
+        public java.util.List<String> advisoriesGoneThrough() {
+            return advisoriesGoneThrough;
         }
 
         /**

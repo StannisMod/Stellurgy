@@ -49,15 +49,20 @@ public final class ShipLedger {
          * and re-localization always succeeds eventually, so this can never strand a ship forever.
          */
         public final boolean positionKnown;
+        /**
+         * The radius of the smallest sphere about the ship's position that holds its whole hull, blocks, as
+         * the ship last measured it in its own world ({@link #updatePosition}); NaN while it has not measured
+         * itself since it came into space. Carried unchanged through a crossing and a jump: they move the
+         * hull, they do not change it. What lets a ship whose world is not loaded be approached outside its
+         * hull.
+         */
+        public final double hullRadius;
 
-        Entry(GalacticCoord coord, State state) {
-            this(coord, state, true);
-        }
-
-        Entry(GalacticCoord coord, State state, boolean positionKnown) {
+        Entry(GalacticCoord coord, State state, boolean positionKnown, double hullRadius) {
             this.coord = coord;
             this.state = state;
             this.positionKnown = positionKnown;
+            this.hullRadius = hullRadius;
         }
 
         public String cellKey() {
@@ -74,7 +79,7 @@ public final class ShipLedger {
      * and is right even after the pool has re-shuffled its ids.
      */
     public void settle(UUID shipId, GalacticCoord coord) {
-        ships.put(shipId, new Entry(coord, State.SETTLED));
+        ships.put(shipId, new Entry(coord, State.SETTLED, true, hullRadiusOf(shipId)));
     }
 
     /**
@@ -83,20 +88,37 @@ public final class ShipLedger {
      * stays with the transit machinery; the ledger answers "where is/will be this ship".
      */
     public void beginTransit(UUID shipId, GalacticCoord target) {
-        ships.put(shipId, new Entry(target, State.IN_TRANSIT));
+        ships.put(shipId, new Entry(target, State.IN_TRANSIT, true, hullRadiusOf(shipId)));
     }
 
     /**
-     * Refresh a SETTLED ship's coordinate from its live pose (the flight computer's per-tick
-     * self-report). A no-op for a ship that is not settled — a parked ship's coordinate is owned
-     * by the transit integrator, not by a stale pose.
+     * Refresh a SETTLED ship's coordinate from its live pose, and its hull's radius from the measurement
+     * taken with it (the flight computer's per-tick self-report). A no-op for a ship that is not settled —
+     * a parked ship's coordinate is owned by the transit integrator, not by a stale pose. A NaN
+     * {@code hullRadius} — a tick on which the hull's record held no blocks to measure, between a
+     * crossing's cut and its settle — keeps the radius last measured.
      */
-    public void updatePosition(UUID shipId, GalacticCoord coord) {
+    public void updatePosition(UUID shipId, GalacticCoord coord, double hullRadius) {
         Entry e = ships.get(shipId);
         if (e == null || e.state != State.SETTLED) {
             return;
         }
-        ships.put(shipId, new Entry(coord, State.SETTLED));
+        ships.put(shipId, new Entry(coord, State.SETTLED, true,
+                Double.isNaN(hullRadius) ? e.hullRadius : hullRadius));
+    }
+
+    /**
+     * Put back a SETTLED ship as a save recorded it — where it was and the hull it last measured. The
+     * restart's one writer ({@link ShipLedgerData#loadInto}).
+     */
+    void restoreSettled(UUID shipId, GalacticCoord coord, double hullRadius) {
+        ships.put(shipId, new Entry(coord, State.SETTLED, true, hullRadius));
+    }
+
+    /** The hull radius {@code shipId} last measured, NaN when it is unknown here or never measured. */
+    private double hullRadiusOf(UUID shipId) {
+        Entry e = ships.get(shipId);
+        return e == null ? Double.NaN : e.hullRadius;
     }
 
     /** The ledger record for {@code shipId}, or {@code null} if unknown. */
@@ -107,7 +129,7 @@ public final class ShipLedger {
     public void setPositionKnown(UUID shipId, boolean known) {
         Entry entry = ships.get(shipId);
         if (entry != null) {
-            ships.put(shipId, new Entry(entry.coord, entry.state, known));
+            ships.put(shipId, new Entry(entry.coord, entry.state, known, entry.hullRadius));
         }
     }
 

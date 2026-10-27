@@ -125,6 +125,35 @@ public class ShipEvent extends Event {
     }
 
     /**
+     * The motion intent a ship's flight computer is flying has begun the jump its leg needs THROUGH one or
+     * more of the jump gate's advisories — the warnings a pilot is shown and may confirm, which the
+     * autopilot goes on past as he would. Posted once per wind-up begun so, server side, from the flight
+     * computer, which has also told a seated pilot what it went past.
+     *
+     * <p>An event because an advisory is a cost somebody accepted on the craft's behalf — a flight that may
+     * end short, a hull that may not all come along — and that acceptance must be visible to whoever
+     * delegated the order, not silent.</p>
+     */
+    public static class MotionIntentJumpAdvisedEvent extends ShipEvent {
+
+        /** Where the flight computer sits. */
+        public final net.minecraft.util.math.BlockPos pos;
+        /** The intent whose jump this is; it stays in the slot and goes on. */
+        public final dev.stannismod.stellurgy.ship.guidance.MotionIntent intent;
+        /** The lang keys of the advisories gone through, in the jump gate's order; never empty. */
+        public final java.util.List<String> advisories;
+
+        public MotionIntentJumpAdvisedEvent(World world, String shipId, BlockPos pos,
+                                            dev.stannismod.stellurgy.ship.guidance.MotionIntent intent,
+                                            java.util.List<String> advisories) {
+            super(world, shipId);
+            this.pos = pos;
+            this.intent = intent;
+            this.advisories = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(advisories));
+        }
+    }
+
+    /**
      * The motion intent a ship's flight computer was flying has been REFUSED: for a sustained window it
      * could not be flown, and the slot now holds it marked refused, with the reason. Posted once per
      * refusal, server side, from the flight computer, which has also told a seated pilot why.

@@ -4,6 +4,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.ShipLedgerData;
 import dev.stannismod.stellurgy.space.TransitRecord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.*;
 
 /**
@@ -322,5 +325,46 @@ public class ShipLedgerDataTest {
         assertEquals(crew, r.crew.get(0));
         assertNotNull("the block snapshot survives (so the persisted transit can rematerialize)", r.snapshot);
         assertEquals("snapshot payload survives", 27, r.snapshot.getInteger("blocks"));
+    }
+
+    /**
+     * INV-SPC-20, across a save: through the store's production writer and reader — the live ledger's
+     * snapshot into {@code replaceAll}, {@code writeToNBT}, a fresh store's {@code readFromNBT}, and
+     * {@code loadInto} a fresh ledger, the path a world save and the next start take — a ship that measured
+     * its hull comes back with that radius, and one that never did comes back with none. The radius is an
+     * input, any finite number.
+     */
+    @Test
+    @Pins("INV-SPC-20")
+    @RedWitness(verdict = "comes back", member = "ShipLedgerData#loadInto",
+            at = "live.restoreSettled(e.getKey(), en.coord, en.hullRadius);",
+            replacedBy = "live.restoreSettled(e.getKey(), en.coord, Double.NaN);",
+            fails = "INV-SPC-20 comes back", on = "2026-10-25")
+    @RedWitness(verdict = "stays unmeasured", member = "ShipLedgerData#readFromNBT",
+            at = "c.hasKey(KEY_HULL_RADIUS) ? c.getDouble(KEY_HULL_RADIUS) : Double.NaN",
+            replacedBy = "c.getDouble(KEY_HULL_RADIUS)",
+            fails = "INV-SPC-20 stays unmeasured", on = "2026-10-25")
+    public void aMeasuredHullComesBackFromTheSaveAndAnUnmeasuredOneStaysUnmeasured() {
+        double radius = 7.25D;
+        UUID measured = UUID.randomUUID();
+        UUID never = UUID.randomUUID();
+        ShipLedger before = new ShipLedger();
+        before.settle(measured, coord(3, 0, -1, 100, 0, 50));
+        before.updatePosition(measured, coord(3, 0, -1, 110, 0, 50), radius);
+        before.settle(never, coord(-7, 2, 0, 0, -40, 0));
+        ShipLedgerData saved = new ShipLedgerData();
+        requireArranged("the snapshot must be applied", store(saved, before).isEmpty());
+
+        ShipLedgerData loaded = new ShipLedgerData();
+        loaded.readFromNBT(saved.writeToNBT(new NBTTagCompound()));
+        ShipLedger after = new ShipLedger();
+        loaded.loadInto(after);
+
+        requireArranged("both ships must come back from the save: " + after.snapshot(),
+                after.get(measured) != null && after.get(never) != null);
+        assertEquals("INV-SPC-20 comes back: the radius the ship measured", radius, after.get(measured).hullRadius,
+                0.0D);
+        assertTrue("INV-SPC-20 stays unmeasured: a ship that never measured itself, read back as "
+                + after.get(never).hullRadius, Double.isNaN(after.get(never).hullRadius));
     }
 }

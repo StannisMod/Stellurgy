@@ -210,7 +210,7 @@ a rolled-back clock.
   Contradictions). **Writers of entries besides seeding**: the observatory survey (`TelescopeScan.entryFor`
   `:429-447`) through `ItemMemoryCrystal.record` (`:81`). **Readers**: console, observatory
   (`TileObservatory.java:1246`), `UniverseUpgradeCommand.java:85`.
-- **Gate**: `JumpTrigger` builds a `ShipNavigation` per press/commit (`JumpTrigger.java:113,152`);
+- **Gate**: `JumpTrigger` builds a `ShipNavigation` per press/commit (`JumpTrigger.java:146,198`);
   `TileAdvancedFlightComputer.java:950` builds one too.
 - **Clock**: stamps and aims read `SpaceSubsystem.spaceClock()` ([C16](../30-contracts/C16-space-clock.md)).
 

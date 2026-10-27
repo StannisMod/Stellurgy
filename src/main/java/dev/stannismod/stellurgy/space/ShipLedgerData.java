@@ -13,8 +13,8 @@ import java.util.*;
 
 /**
  * Durable backing for the wave-1 {@link ShipLedger}: persists, per ship UUID, WHERE a settled tier-2
- * ship is — its {@link GalacticCoord}, and nothing else about its whereabouts — together with the
- * subsystem's own clock, which is WHEN everything else in here was true.
+ * ship is — its {@link GalacticCoord}, and nothing else about its whereabouts — and the radius its hull
+ * last measured, together with the subsystem's own clock, which is WHEN everything else in here was true.
  *
  * <p>The slot dimension is deliberately NOT persisted. Slot ids are minted in registration order each
  * start and re-used as cells come and go, so an id written on one boot names a different cell (or no
@@ -37,6 +37,12 @@ public final class ShipLedgerData extends WorldSavedData {
 
     /** NBT key of the persisted space clock — a save-schema constant. */
     private static final String KEY_CLOCK = "spaceClock";
+
+    /**
+     * NBT key, per ship, of the radius its hull last measured — a save-schema constant. Written only for a
+     * ship that has measured itself; absent reads back as never measured.
+     */
+    private static final String KEY_HULL_RADIUS = "hullRadius";
 
     private static final int NBT_VERSION = 1;
 
@@ -168,7 +174,7 @@ public final class ShipLedgerData extends WorldSavedData {
     public void loadInto(ShipLedger live) {
         for (Map.Entry<UUID, ShipLedger.Entry> e : entries.entrySet()) {
             ShipLedger.Entry en = e.getValue();
-            live.settle(e.getKey(), en.coord);
+            live.restoreSettled(e.getKey(), en.coord, en.hullRadius);
         }
     }
 
@@ -229,7 +235,8 @@ public final class ShipLedgerData extends WorldSavedData {
                 continue; // corrupt id: drop the entry rather than crash the load
             }
             GalacticCoord coord = GalacticCoord.readFromNBT(c); // reads the "galacticCoord" sub-tag
-            entries.put(id, new ShipLedger.Entry(coord, ShipLedger.State.SETTLED));
+            double hull = c.hasKey(KEY_HULL_RADIUS) ? c.getDouble(KEY_HULL_RADIUS) : Double.NaN;
+            entries.put(id, new ShipLedger.Entry(coord, ShipLedger.State.SETTLED, true, hull));
         }
         transits.clear();
         NBTTagList transitList = nbt.getTagList("transits", 10);
@@ -258,6 +265,9 @@ public final class ShipLedgerData extends WorldSavedData {
             NBTTagCompound c = new NBTTagCompound();
             c.setString("shipId", e.getKey().toString());
             e.getValue().coord.writeToNBT(c); // writes the "galacticCoord" sub-tag
+            if (!Double.isNaN(e.getValue().hullRadius)) {
+                c.setDouble(KEY_HULL_RADIUS, e.getValue().hullRadius);
+            }
             list.appendTag(c);
         }
         nbt.setTag("ships", list);

@@ -39,7 +39,7 @@ import static org.junit.Assert.assertTrue;
  * The LAWS of ship-guidance, one class for the owner: what a motion slot commands from where the craft
  * is (INV-GDN-04), when an intent it cannot fly is refused and what a refused craft is commanded
  * (INV-GDN-05), where a target puts the aim (INV-GDN-11), which leg a target in another world is flown as
- * (INV-GDN-19), and the flight computer's own decision that a
+ * (INV-GDN-19), that a ship on its way is waited for (INV-GDN-27), and the flight computer's own decision that a
  * pilot's input takes the craft back (C9 SHIPCTL-21).
  *
  * <p>Every hull here is built from production's own devices through {@link ShipMotionCases}, and
@@ -600,27 +600,68 @@ public class MotionGuidanceLawsTest {
     }
 
     /**
-     * INV-GDN-19's refusing half: a ship mid-jump is refused for being in hyperspace, from space and from a
-     * planet alike. Whether a ship IS in hyperspace is the world's answer ({@code WorldSurroundings}), an
-     * input here.
+     * INV-GDN-27: a ship the world answers as on its way is waited for — from space and from a planet alike,
+     * for one tick more than the refusal window: every tick commands no speed and posts nothing, the slot
+     * stays ACTIVE and reads WAITING_FOR_THE_TARGET, and the drive is asked for no jump. Then the world
+     * places the ship in the craft's own world, and on that very tick the order flies to it: the leg reads
+     * TO_THE_TARGET and the craft is sent toward the ship. Whether a ship IS on its way is the world's answer
+     * ({@code WorldSurroundings}), an input here: an {@link Afar} stating it.
      */
     @Test
-    @Pins("INV-GDN-19")
-    @RedWitness(verdict = "a ship in hyperspace", member = "MotionSlot#refusalFor",
-            at = "return Refusal.TARGET_IN_HYPERSPACE;", replacedBy = "return Refusal.TARGET_NOT_FOUND;",
-            fails = "INV-GDN-19 in hyperspace", on = "2026-10-25")
-    public void aShipInHyperspaceIsRefusedForBeingThere() {
+    @Pins("INV-GDN-27")
+    @RedWitness(verdict = "waited for", member = "GuidanceTarget#placeIn",
+            at = "return Placement.waiting();", replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
+            fails = "INV-GDN-27 waited for", on = "2026-10-25")
+    @RedWitness(verdict = "held still", member = "MotionSlot#fly",
+            at = "leg = Leg.WAITING_FOR_THE_TARGET;",
+            replacedBy = "leg = Leg.WAITING_FOR_THE_TARGET; if (true) { command = FlightCommand.of(new double[]{1.0D, 0.0D, 0.0D}, zeroRate(), quatArray(craft.attitude)); } else",
+            fails = "INV-GDN-27 held still", on = "2026-10-25")
+    @RedWitness(verdict = "the leg read", member = "MotionSlot#fly",
+            at = "leg = Leg.WAITING_FOR_THE_TARGET;", replacedBy = "",
+            fails = "INV-GDN-27 the leg read", on = "2026-10-25")
+    @RedWitness(verdict = "no jump asked", member = "MotionSlot#fly",
+            at = "leg = Leg.WAITING_FOR_THE_TARGET;",
+            replacedBy = "leg = Leg.WAITING_FOR_THE_TARGET; around.jump(null);",
+            fails = "INV-GDN-27 no jump asked", on = "2026-10-25")
+    @RedWitness(verdict = "goes on", member = "GuidanceTarget#placeIn",
+            at = "if (seen.isArriving()) {", replacedBy = "if (true) {",
+            fails = "INV-GDN-27 goes on", on = "2026-10-25")
+    public void aShipOnItsWayIsWaitedForAndTheOrderGoesOnWhenItGetsThere() {
         ShipCapability live = solve(ShipMotionCases.symmetricHull());
-        double[] away = back(new double[]{200.0D, 30.0D, -40.0D}, new double[]{0.6D, 0.0D, 0.8D}, 60.0D);
+        double[] ship = {200.0D, 30.0D, -40.0D};
+        double[] u = {0.6D, 0.0D, 0.8D};
+        double[] away = back(ship, u, 60.0D);
         double depth = 2.75D;
         double[] landed = {12.5D, 71.0D + depth, -7.5D};
+        String[] from = {"from space", "from a planet"};
+        MotionSlot.Craft[] crafts = {inCell(live, away, GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L)),
+                onSurface(live, landed, depth, PLANET_DIM, null)};
+        for (int i = 0; i < from.length; i++) {
+            String what = "INV-GDN-27 " + from[i];
+            Afar onItsWay = Afar.ship(Surroundings.Sighting.arriving(), "the drive must not be asked");
+            MotionSlot slot = goToShip();
+            for (int tick = 0; tick <= MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
+                MotionSlot.Step step = slot.fly(crafts[i], onItsWay);
+                assertEquals("INV-GDN-27 waited for: " + from[i] + ", tick " + tick + " posts nothing",
+                        MotionSlot.Event.NONE, step.event());
+                assertEquals("INV-GDN-27 held still: " + from[i] + ", tick " + tick + " commands no speed", 0.0D,
+                        speedOf(step.command()), 0.0D);
+            }
+            assertEquals("INV-GDN-27 waited for: " + from[i] + ", still flown after the refusal window",
+                    MotionSlot.State.ACTIVE, slot.reading().state());
+            assertEquals("INV-GDN-27 the leg read: " + from[i], MotionSlot.Leg.WAITING_FOR_THE_TARGET,
+                    slot.reading().leg());
+            assertEquals("INV-GDN-27 no jump asked: " + from[i], 0, onItsWay.asks);
 
-        assertRefusedFor("INV-GDN-19 in hyperspace: a ship the world says is mid-jump, asked from space",
-                GuidanceTarget.ship(OTHER), inCell(live, away, GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L)),
-                new Fixed(GuidanceTarget.Unplaced.IN_HYPERSPACE), MotionSlot.Refusal.TARGET_IN_HYPERSPACE);
-        assertRefusedFor("INV-GDN-19 in hyperspace: a ship the world says is mid-jump, asked from a planet",
-                GuidanceTarget.ship(OTHER), onSurface(live, landed, depth, PLANET_DIM, null),
-                new Fixed(GuidanceTarget.Unplaced.IN_HYPERSPACE), MotionSlot.Refusal.TARGET_IN_HYPERSPACE);
+            // The ship gets there: placed in the craft's own world, it is flown to on that same tick.
+            MotionSlot.Step there = slot.fly(crafts[i],
+                    i == 0 ? Afar.shipAt(ship, java.util.Collections.<Integer, Surroundings.Sphere>emptyMap())
+                            : Afar.ship(Surroundings.Sighting.inSpace(), null));
+            assertEquals("INV-GDN-27 goes on: " + what + ", the leg toward the ship once it is there",
+                    i == 0 ? MotionSlot.Leg.TO_THE_TARGET : MotionSlot.Leg.CLIMB_TO_SPACE, slot.reading().leg());
+            assertPointsAlong("INV-GDN-27 goes on: " + what + ", sent toward it", there.command(),
+                    i == 0 ? u : new double[]{0.0D, 1.0D, 0.0D});
+        }
     }
 
     /**
@@ -764,33 +805,29 @@ public class MotionGuidanceLawsTest {
     }
 
     /**
-     * INV-GDN-22's law: from space a target in another system is the JUMP. A ship there — its hull measured
-     * where it is — has the craft's drive asked, on every tick, to take it to a place in the ship's own cell
-     * farther off the ship than the arrival radius beyond the standoff (the two hulls plus the arrival
-     * radius), so the arrival is flown; the craft is held still, reads JUMP, is never arrived, and is never
-     * refused while the drive answers that the jump is under way. A drive that declines for the window
-     * refuses the order as JUMP_DECLINED, naming what declined it. A ship there whose hull cannot be measured
-     * is refused as JUMP_TARGET_NOT_MEASURED. A surface point or the orbit of a body of another system has
-     * the drive asked to take the craft where the world says the jump to that body is aimed. From a planet
-     * the same ship is the climb, and no jump is asked. The world is an {@link Afar}: where the ship is,
-     * what the bodies are and what the drive answers are inputs.
+     * INV-GDN-22's law: from space a target the world answers far off is the JUMP. A ship there — with the
+     * hull it last measured — has the craft's drive asked, on every tick, to take it to a place in the ship's
+     * own cell farther off the ship than the arrival radius beyond the standoff (the two hulls plus the
+     * arrival radius), so the arrival is flown; the craft is held still, reads JUMP, is never arrived, and is
+     * never refused while the drive answers that the jump is under way. A drive that declines for the window
+     * refuses the order as JUMP_DECLINED, naming what declined it. A surface point or the orbit of a far-off
+     * body has the drive asked to take the craft where the world says the jump to that body is aimed. The
+     * world is an {@link Afar}: where the ship is, what the bodies are and what the drive answers are inputs.
      */
     @Test
     @Pins("INV-GDN-22")
     @RedWitness(verdict = "the jump asked", member = "GuidanceTarget#placeIn",
-            at = "return craft.cell != null ? jumpBeside(seen, craft) : climb(craft, around);",
+            at = "return jumpBeside(seen, craft);",
             replacedBy = "return climb(craft, around);",
-            fails = "INV-GDN-22 a ship of another system: leg", on = "2026-10-25")
-    @RedWitness(verdict = "from a planet", member = "GuidanceTarget#placeIn",
-            at = "return craft.cell != null ? jumpBeside(seen, craft) : climb(craft, around);",
-            replacedBy = "return jumpBeside(seen, craft);",
-            fails = "INV-GDN-22 from a planet: the climb", on = "2026-10-25")
+            fails = "INV-GDN-22 a far-off ship: leg", on = "2026-10-25")
     @RedWitness(verdict = "under way", member = "MotionSlot#fly",
-            at = "command = hover(craft.attitude);", replacedBy = "shortBy = Refusal.JUMP_DECLINED;",
-            fails = "INV-GDN-22 a ship of another system: flown past the window", on = "2026-10-25")
+            at = "} else {\n                command = hover(craft.attitude);",
+            replacedBy = "} else {\n                shortBy = Refusal.JUMP_DECLINED;",
+            fails = "INV-GDN-22 a far-off ship: flown past the window", on = "2026-10-25")
     @RedWitness(verdict = "the drive asked", member = "MotionSlot#fly",
-            at = "declining = around.jump(placed.jump());", replacedBy = "declining = null;",
-            fails = "INV-GDN-22 the drive asked on every tick", on = "2026-10-25")
+            at = "Surroundings.JumpAnswer answer = around.jump(placed.jump());",
+            replacedBy = "Surroundings.JumpAnswer answer = Surroundings.JumpAnswer.underWay();",
+            fails = "INV-GDN-22 the drive asked on every tick", on = "2026-10-26")
     @RedWitness(verdict = "a place", member = "GuidanceTarget#jumpBeside",
             at = "return Placement.jump(JumpDestination.toPlace(", replacedBy = "return Placement.jump(JumpDestination.toBody(1, ",
             fails = "INV-GDN-22 beside the ship: a place, not a body", on = "2026-10-25")
@@ -805,8 +842,8 @@ public class MotionGuidanceLawsTest {
             at = "+ OUT_OF_THE_JUMP_PAST_THE_STANDOFF);", replacedBy = ");",
             fails = "INV-GDN-22 beside the ship", on = "2026-10-25")
     @RedWitness(verdict = "held still", member = "MotionSlot#fly",
-            at = "command = hover(craft.attitude);",
-            replacedBy = "command = FlightCommand.of(new double[]{1.0D, 0.0D, 0.0D}, zeroRate(), quatArray(craft.attitude));",
+            at = "} else {\n                command = hover(craft.attitude);",
+            replacedBy = "} else {\n                command = FlightCommand.of(new double[]{1.0D, 0.0D, 0.0D}, zeroRate(), quatArray(craft.attitude));",
             fails = "INV-GDN-22 held still", on = "2026-10-25")
     @RedWitness(verdict = "not before the window", member = "MotionSlot#fly",
             at = "shortTicks >= REFUSAL_WINDOW_TICKS", replacedBy = "shortTicks >= 1",
@@ -824,18 +861,14 @@ public class MotionGuidanceLawsTest {
     @RedWitness(verdict = "naming what declined it", member = "MotionSlot#fly",
             at = "declinedBy = shortBy == Refusal.JUMP_DECLINED ? declining : null;", replacedBy = "declinedBy = null;",
             fails = "INV-GDN-22 naming what declined it", on = "2026-10-25")
-    @RedWitness(verdict = "not measured", member = "GuidanceTarget#jumpBeside",
-            at = "return Placement.unplaced(Unplaced.JUMP_TARGET_NOT_MEASURED);",
-            replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
-            fails = "INV-GDN-22 not measured", on = "2026-10-25")
-    @RedWitness(verdict = "a body of another system", member = "GuidanceTarget#intoTheShell",
+    @RedWitness(verdict = "a far-off body", member = "GuidanceTarget#intoTheShell",
             at = "return Placement.jump(shell.elsewhere());",
             replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
-            fails = "INV-GDN-22 a surface point of a body of another system", on = "2026-10-25")
-    @RedWitness(verdict = "the orbit of a body of another system", member = "GuidanceTarget#orbitIn",
+            fails = "INV-GDN-22 a surface point of a far-off body", on = "2026-10-25")
+    @RedWitness(verdict = "the orbit of a far-off body", member = "GuidanceTarget#orbitIn",
             at = "return Placement.jump(seen.elsewhere());",
             replacedBy = "return Placement.unplaced(Unplaced.NOT_FOUND);",
-            fails = "INV-GDN-22 the orbit of a body of another system", on = "2026-10-25")
+            fails = "INV-GDN-22 the orbit of a far-off body", on = "2026-10-25")
     public void aTargetInAnotherSystemIsTheJumpFromSpaceAndTheClimbFromAPlanet() {
         ShipCapability live = solve(ShipMotionCases.symmetricHull());
         GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);
@@ -844,14 +877,14 @@ public class MotionGuidanceLawsTest {
         double[] away = {200.0D, 30.0D, -40.0D};
         String clause = "a clause of the gate";
 
-        Afar underWay = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), null);
+        Afar underWay = Afar.ship(Surroundings.Sighting.farOff(there, targetHull), null);
         MotionSlot slot = goToShip();
         MotionSlot.Step step = null;
         for (int tick = 0; tick <= MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
             step = slot.fly(inCell(live, away, cell), underWay);
         }
-        assertEquals("INV-GDN-22 a ship of another system: leg", MotionSlot.Leg.JUMP, slot.reading().leg());
-        assertEquals("INV-GDN-22 a ship of another system: flown past the window while the jump is under way",
+        assertEquals("INV-GDN-22 a far-off ship: leg", MotionSlot.Leg.JUMP, slot.reading().leg());
+        assertEquals("INV-GDN-22 a far-off ship: flown past the window while the jump is under way",
                 MotionSlot.State.ACTIVE, slot.reading().state());
         assertEquals("INV-GDN-22 held still: commanded no speed", 0.0D, speedOf(step.command()), 0.0D);
         assertEquals("INV-GDN-22 the drive asked on every tick", MotionSlot.REFUSAL_WINDOW_TICKS + 1, underWay.asks);
@@ -864,7 +897,7 @@ public class MotionGuidanceLawsTest {
         assertTrue("INV-GDN-22 beside the ship: " + off + " blocks off it, not beyond the arrival radius past the"
                 + " standoff " + standoff, off - standoff > ARRIVAL_RADIUS);
 
-        Afar declining = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), clause);
+        Afar declining = Afar.ship(Surroundings.Sighting.farOff(there, targetHull), clause);
         MotionSlot declined = goToShip();
         for (int tick = 1; tick < MotionSlot.REFUSAL_WINDOW_TICKS; tick++) {
             assertEquals("INV-GDN-22 declined: not before the window, tick " + tick, MotionSlot.Event.NONE,
@@ -875,27 +908,16 @@ public class MotionGuidanceLawsTest {
         assertEquals("INV-GDN-22 declined: for the jump", MotionSlot.Refusal.JUMP_DECLINED, declined.reading().refusal());
         assertEquals("INV-GDN-22 naming what declined it", clause, declined.reading().declinedBy());
 
-        assertRefusedFor("INV-GDN-22 not measured", GuidanceTarget.ship(OTHER), inCell(live, away, cell),
-                Afar.ship(Surroundings.Sighting.inAnotherSystem(there, Double.NaN), null),
-                MotionSlot.Refusal.JUMP_TARGET_NOT_MEASURED);
-
         JumpDestination toBody = JumpDestination.toBody(PLANET_DIM + 1, there);
-        String[] bodyNames = {"a surface point of a body of another system", "the orbit of a body of another system"};
+        String[] bodyNames = {"a surface point of a far-off body", "the orbit of a far-off body"};
         GuidanceTarget[] ofBody = {GuidanceTarget.surface(PLANET_DIM + 1, 30.0D, 40.0D), GuidanceTarget.orbit(PLANET_DIM + 1)};
         for (int i = 0; i < ofBody.length; i++) {
-            Afar elsewhere = Afar.body(Surroundings.Sphere.inAnotherSystem(toBody));
+            Afar elsewhere = Afar.body(Surroundings.Sphere.farOff(toBody));
             MotionSlot toIt = goTo(ofBody[i]);
             toIt.fly(inCell(live, away, cell), elsewhere);
             assertEquals("INV-GDN-22 " + bodyNames[i] + ": leg", MotionSlot.Leg.JUMP, toIt.reading().leg());
             assertEquals("INV-GDN-22 " + bodyNames[i] + ": where the world aims the jump to it", toBody, elsewhere.asked);
         }
-
-        double depth = 2.75D;
-        double[] grounded = {12.5D, 70.0D, -7.5D};
-        Afar fromAPlanet = Afar.ship(Surroundings.Sighting.inAnotherSystem(there, targetHull), null);
-        MotionSlot climbing = goToShip();
-        climbing.fly(onSurface(live, grounded, depth, PLANET_DIM, null), fromAPlanet);
-        assertEquals("INV-GDN-22 from a planet: the climb", MotionSlot.Leg.CLIMB_TO_SPACE, climbing.reading().leg());
     }
 
     /**
@@ -1003,7 +1025,7 @@ public class MotionGuidanceLawsTest {
     /**
      * The world as INV-GDN-22 and -23 are written over, every answer an input: the target ship seen as stated;
      * the body of every planet world asked, from space, answered as stated (its shell and orbit placed here, or
-     * of another system); every descent shell in the craft's world by its planet world; the craft's world's
+     * far off); every descent shell in the craft's world by its planet world; the craft's world's
      * orbit line with its column open; and the craft's drive answering every jump asked of it as stated —
      * {@code null}, under way, or what declines it — remembering the last destination and how many asks.
      */
@@ -1046,10 +1068,10 @@ public class MotionGuidanceLawsTest {
         }
 
         @Override
-        public String jump(JumpDestination destination) {
+        public Surroundings.JumpAnswer jump(JumpDestination destination) {
             asked = destination;
             asks++;
-            return declines;
+            return declines == null ? Surroundings.JumpAnswer.underWay() : Surroundings.JumpAnswer.declined(declines);
         }
 
         @Override
@@ -1227,7 +1249,7 @@ public class MotionGuidanceLawsTest {
             at = "if (!seen.measured()) {", replacedBy = "if (true) {",
             fails = "INV-GDN-13 measured", on = "2026-10-22")
     @RedWitness(verdict = "gone", member = "MotionSlot#refusalFor",
-            at = "return Refusal.TARGET_NOT_FOUND;", replacedBy = "return Refusal.TARGET_IN_HYPERSPACE;",
+            at = "return Refusal.TARGET_NOT_FOUND;", replacedBy = "return Refusal.TARGET_HAS_NO_FRAME;",
             fails = "INV-GDN-13 gone", on = "2026-10-25")
     public void aShipWhoseHullCannotBeMeasuredIsMadeForNotRefusedAndNeverArrivedAt() {
         ShipCapability live = solve(ShipMotionCases.symmetricHull());
@@ -1447,7 +1469,7 @@ public class MotionGuidanceLawsTest {
         }
 
         @Override
-        public String jump(JumpDestination destination) {
+        public Surroundings.JumpAnswer jump(JumpDestination destination) {
             throw new UnsupportedOperationException("this world states no jump drive");
         }
     }
@@ -1542,7 +1564,7 @@ public class MotionGuidanceLawsTest {
         }
 
         @Override
-        public String jump(JumpDestination destination) {
+        public Surroundings.JumpAnswer jump(JumpDestination destination) {
             throw new UnsupportedOperationException("this world states no jump drive");
         }
     }
@@ -1632,7 +1654,7 @@ public class MotionGuidanceLawsTest {
         }
 
         @Override
-        public String jump(JumpDestination destination) {
+        public Surroundings.JumpAnswer jump(JumpDestination destination) {
             throw new UnsupportedOperationException("this world states no jump drive");
         }
     }

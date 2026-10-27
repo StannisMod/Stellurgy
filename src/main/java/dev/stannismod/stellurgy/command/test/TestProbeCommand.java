@@ -2913,8 +2913,8 @@ public class TestProbeCommand extends CommandBase {
         // `afcResolved:false` = no computer for that name here; a target id that is not a uuid is refused
         // before anything is issued (`error`).
         // motion-read-by-id <dim> <shipId> — what that slot holds: `state` (EMPTY / ACTIVE / REFUSED),
-        // `kind`, `refusal`, `arrived` and `leg` (TO_THE_TARGET / CLIMB_TO_SPACE / INTO_THE_SHELL: which
-        // link of the way to a target in another world the craft is on), each `null` where it does not
+        // `kind`, `refusal`, `arrived` and `leg` (TO_THE_TARGET / CLIMB_TO_SPACE / INTO_THE_SHELL / JUMP /
+        // WAITING_FOR_THE_TARGET: which link of the way to its target the craft is on), each `null` where it does not
         // apply, and `target` as the intent names it. Every form answers `worldTick`, the craft's world clock at the moment of the
         // reply — the clock the craft's own records are stamped on.
         boolean motionGoToShip = args.length >= 4 && "motion-go-to-ship-by-id".equalsIgnoreCase(args[0]);
@@ -2972,6 +2972,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("target", held.intent() == null ? null : held.intent().target().toString());
             info.put("refusal", held.refusal() == null ? null : held.refusal().name());
             info.put("declinedBy", held.declinedBy());
+            info.put("advisoriesGoneThrough", held.advisoriesGoneThrough());
             info.put("arrived", held.intent() == null ? null : held.arrived());
             info.put("leg", held.leg() == null ? null : held.leg().name());
             info.put("worldTick", world.getTotalWorldTime());
@@ -4984,8 +4985,18 @@ public class TestProbeCommand extends CommandBase {
             }
             dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer computer =
                     (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe;
+            // What the press MET, read on the same server tick as the press itself: whether a wind-up was
+            // running and what the motion slot held then — so a caller can tell a press during the order's
+            // wind-up from one that came after it ended, without a second round trip between them.
+            boolean spoolingBefore = computer.isSpooling();
+            dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading before = computer.motionReading();
             computer.onJumpKey();
-            send(sender, "{\"ok\":true,\"spooling\":" + computer.isSpooling() + "}");
+            dev.stannismod.stellurgy.ship.guidance.MotionSlot.Reading after = computer.motionReading();
+            send(sender, "{\"ok\":true,\"spooling\":" + computer.isSpooling()
+                    + ",\"spoolingBefore\":" + spoolingBefore
+                    + ",\"stateBefore\":\"" + before.state().name() + "\""
+                    + ",\"legBefore\":" + (before.leg() == null ? "null" : "\"" + before.leg().name() + "\"")
+                    + ",\"state\":\"" + after.state().name() + "\"}");
             return;
         }
         if ("info".equalsIgnoreCase(verb) || observe) {

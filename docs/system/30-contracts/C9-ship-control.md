@@ -25,10 +25,12 @@ P1 = world-frame right-click (`BlockPilotSeat.onBlockActivated`) `[V]`; P2 = pro
 bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA SETTING** =
 {flight-assist mode, cruise setpoint} — see SHIPCTL-18. The craft's motion slot (ship-guidance) is
 neither: it is an ORDER the pilot hands over and takes back (SHIPCTL-21, SHIPCTL-22) — one that may
-carry the craft across worlds, up through the entry, through a jump to another system and down through a
+carry the craft across worlds, up through the entry, through a jump to a place beyond the next cell and down through a
 descent, with nobody at the controls (ship-guidance MECH-GDN-12, -13); the crossings themselves are
 decided as for any craft, and the jump is committed through the same gate and key a pilot uses
-(hyperdrive MECH-HYP-20). Taking the craft back also stops a jump wind-up the order started.
+(hyperdrive MECH-HYP-20) — going through the gate's advisories as a pilot who confirms them does, and
+telling a seated pilot each one it went through. Taking the craft back also stops a jump wind-up the order started, and the
+pilot's own jump key pressed during that wind-up takes the craft back (SHIPCTL-23).
 
 ## Clauses
 
@@ -194,6 +196,15 @@ decided as for any craft, and the jump is committed through the same gate and ke
   GO_TO(орбита) - да. Так это изначально и думалось"* (auto-takeoff is GO_TO(orbit), yes; that is how it
   was meant from the start). Pinned by
   `test/server/VSShipAutoTakeoffTest#theTakeoffKeyClimbsTheCraftIntoSpaceWhereItHoldsInOrbit`.
+- **SHIPCTL-23** `[T][BEH]` The jump key pressed during a jump wind-up the motion slot's order started
+  (ship-guidance MECH-GDN-13, hyperdrive MECH-HYP-20) stops the wind-up, as any press during a wind-up
+  does, and takes the craft back as a pilot input does (SHIPCTL-21): the slot empties, and the order asks
+  for no jump again (`TileAdvancedFlightComputer#onJumpKey`). FOR: the decision of 2026-10-25, proposed with
+  the jump leg and taken forward on *"Коммить и продолжай"* without objection — accepted by continuing,
+  not ruled explicitly: the pilot's jump key during an order's spool reclaims the slot like any pilot
+  input, and the order does not press again; resting on SHIPCTL-21's ruling of 2026-09-04 that the pilot
+  who writes a system the AI was handed takes it back. Pinned by
+  `test/server/MotionIntentGroupTest#thePilotsJumpKeyDuringTheOrdersWindUpTakesTheCraftBack`.
 
 ## Rulings index (R1-R22, all maintainer, 2026-07-19 / 2026-07-20)
 

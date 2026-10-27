@@ -29,24 +29,26 @@ import java.util.UUID;
  * <h2>A target in another world: the legs</h2>
  *
  * <p>A target in another world than the craft's is reached by flying the crossings between, along ONE
- * fixed chain — up out of a planet's world, a jump if the target is in another system, through space,
+ * fixed chain — up out of a planet's world, a jump if the target is beyond the next cell, through space,
  * down into a planet's world — and which link of it the craft is on is derived afresh on every tick from
  * where the craft is against where the target is, never stored: the order itself rides every crossing
  * unchanged, and the leg after a crossing is simply what the new world answers.</p>
  * <ul>
- *   <li>On a planet, a target that is not in the planet's world — in space, on another body, in another
- *       system — is the CLIMB: straight up past the world's orbit line, as for the body's own orbit, where
- *       the entry crossing takes the craft into space.</li>
- *   <li>In space, a target in another system — a place in the void outside every system's surroundings
- *       being a system of its own — is the JUMP: the leg names where the jump is aimed, and the flight
- *       computer arms and commits it. A ship is jumped to beside it, the standoff an arrival keeps (the two
- *       hulls and the arrival radius) off its address; a body, at the body, which a jump's arrival stands
- *       off by itself. After the arrival the target is in the craft's system.</li>
+ *   <li>On a planet, a target that is not in the planet's world — in space, on another body — is the
+ *       CLIMB: straight up past the world's orbit line, as for the body's own orbit, where the entry
+ *       crossing takes the craft into space.</li>
+ *   <li>In space, a target in a cell farther from the craft's than the next one ({@link #flownBetween}) is
+ *       the JUMP, whatever system either cell is of, the void included: the leg names where the jump is
+ *       aimed, and the flight computer arms and commits it. A ship is jumped to beside it, the standoff an
+ *       arrival keeps (the two hulls and the arrival radius) off its address; a body, at the body, which a
+ *       jump's arrival stands off by itself. A target in the craft's own cell or the next one is flown
+ *       to.</li>
  *   <li>In space, a target in a planet's world — a point of its surface, a ship standing there — is the
  *       way INTO THE SHELL: the craft is sent to just inside that body's descent shell. It is never sent
  *       down: entering a body's shell is what descends ANY craft onto it, and that one condition decides
  *       the descent here as it does for a pilot. After the descent the target is in the craft's world.</li>
- *   <li>A ship in the middle of a jump is refused as being in hyperspace.</li>
+ *   <li>A ship on its way — mid-jump, or come into space far off and not yet measured there — is WAITED
+ *       FOR: the craft holds where it is, and the order goes on as soon as the ship gets there.</li>
  * </ul>
  *
  * <p>Immutable.</p>
@@ -55,13 +57,6 @@ public final class GuidanceTarget {
 
     /** Why a target cannot be placed in the world the craft is flying in right now. */
     public enum Unplaced {
-        /** The target ship is in hyperspace, mid-jump: it is in no system until its jump ends. */
-        IN_HYPERSPACE,
-        /**
-         * The target ship is in another system and its hull cannot be measured where it is, so no point
-         * beside it — outside both hulls — can be named for the jump to come out at.
-         */
-        JUMP_TARGET_NOT_MEASURED,
         /**
          * The target is nowhere: no craft by that name is in this world, in space, or in any loaded world
          * that is a body's surface; or no body of the universe has that planet world for its surface.
@@ -197,9 +192,9 @@ public final class GuidanceTarget {
      * the real keep-out takes over on that tick.</p>
      *
      * <p>A target in another world is placed as the leg toward it (the class comment): from a planet the
-     * climb ({@link #climb}); from space, in another system the jump ({@link #jumpBeside}, or the body's
+     * climb ({@link #climb}); from space, beyond the next cell the jump ({@link #jumpBeside}, or the body's
      * own jump), in a planet's world the way into the shell of the body whose world it is in
-     * ({@link #intoTheShell}).</p>
+     * ({@link #intoTheShell}). A ship on its way is waited for ({@link Placement#waiting}).</p>
      */
     Placement placeIn(MotionSlot.Craft craft, Surroundings around) {
         if (kind == Kind.ORBIT) {
@@ -213,8 +208,11 @@ public final class GuidanceTarget {
             if (seen.unplaced() != null) {
                 return Placement.unplaced(seen.unplaced());
             }
+            if (seen.isArriving()) {
+                return Placement.waiting();
+            }
             if (seen.elsewhere() != null) {
-                return craft.cell != null ? jumpBeside(seen, craft) : climb(craft, around);
+                return jumpBeside(seen, craft);
             }
             if (seen.isInSpace()) {
                 return climb(craft, around);
@@ -252,8 +250,7 @@ public final class GuidanceTarget {
 
     /**
      * Where this orbit stands as seen from {@code craft}. In space: the sphere {@link Surroundings#orbit}
-     * answers, which the craft is sent to the nearest point of — or, for a body of another system, the
-     * jump to it. On a planet — the body's own, or another — the climb ({@link #climb}).
+     * answers, which the craft is sent to the nearest point of — or, for a far-off body, the jump to it. On a planet — the body's own, or another — the climb ({@link #climb}).
      */
     private Placement orbitIn(MotionSlot.Craft craft, Surroundings around) {
         if (craft.cell != null) {
@@ -274,8 +271,8 @@ public final class GuidanceTarget {
 
     /**
      * From a planet, the way to the body whose surface is the planet world {@code target}: the climb
-     * ({@link #climb}) — in the craft's system or another, the way to it starts in space — unless no body
-     * has that world for its surface.
+     * ({@link #climb}) — however far off the body is, the way to it starts in space — unless no body has
+     * that world for its surface.
      */
     private static Placement outOfThisWorldFor(int target, MotionSlot.Craft craft, Surroundings around) {
         Unplaced why = around.unreachable(target);
@@ -283,20 +280,16 @@ public final class GuidanceTarget {
     }
 
     /**
-     * From space, the JUMP to a ship of another system: aimed beside it, at a point of its own cell off its
-     * address on a bearing the craft's name picks ({@link StandoffRing#pointAround}) — the standoff a GO_TO
-     * a ship arrives at (the two hulls' radii plus the arrival radius) and
-     * {@link #OUT_OF_THE_JUMP_PAST_THE_STANDOFF} beyond, rounded up to the whole block an address holds — so
-     * the craft comes out of the jump near the ship, never inside its hull, and flies the last of the way.
-     * The craft's own hull and the ship's must be measured for that; when either cannot be, no such point
-     * can be named.
+     * From space, the JUMP to a far-off ship: aimed beside it, at a point of its own cell off its address on
+     * a bearing the craft's name picks ({@link StandoffRing#pointAround}) — the standoff a GO_TO a ship
+     * arrives at (the two hulls' radii plus the arrival radius) and {@link #OUT_OF_THE_JUMP_PAST_THE_STANDOFF}
+     * beyond, rounded up to the whole block an address holds — so the craft comes out of the jump near the
+     * ship, never inside its hull, and flies the last of the way. The ship's hull is the one it last
+     * measured itself ({@link Surroundings.Sighting#farOff}); the craft's own must be measurable here.
      */
     private static Placement jumpBeside(Surroundings.Sighting seen, MotionSlot.Craft craft) {
         if (!(craft.hullRadius >= 0.0D)) {
             return Placement.unplaced(Unplaced.NOT_MEASURED);
-        }
-        if (!seen.measured()) {
-            return Placement.unplaced(Unplaced.JUMP_TARGET_NOT_MEASURED);
         }
         long ring = (long) Math.ceil(craft.hullRadius + seen.hullRadius() + MotionSlot.ARRIVAL_RADIUS
                 + OUT_OF_THE_JUMP_PAST_THE_STANDOFF);
@@ -328,8 +321,7 @@ public final class GuidanceTarget {
      * From space, the way INTO THE SHELL of the body whose surface is the planet world {@code target}: the
      * point {@link #INTO_THE_SHELL} inside the shell {@link Surroundings#shell} answers, nearest the craft —
      * made for, never arrived at, since inside the shell the descent takes the craft on. A craft already
-     * that deep is held where it is, for the descent to take it. For a body of another system, the jump to
-     * it.
+     * that deep is held where it is, for the descent to take it. For a far-off body, the jump to it.
      */
     private static Placement intoTheShell(int target, MotionSlot.Craft craft, Surroundings around) {
         Surroundings.Sphere shell = around.shell(target);
@@ -348,6 +340,27 @@ public final class GuidanceTarget {
         double[] aim = d <= inside ? craft.position.clone()
                 : new double[]{c[0] + dx * inside / d, c[1] + dy * inside / d, c[2] + dz * inside / d};
         return Placement.intoTheShellOf(target, aim);
+    }
+
+    /**
+     * Whether a craft in the cell {@code from} reaches a place in the cell {@code to} by FLYING: the same
+     * cell, or the next one — in one lattice, a cell whose sector triple is at most one off on every axis
+     * (one face, edge or corner away, each crossed by the seam); across lattices, a zone's cell and the cell
+     * that zone is nested in, which one crossing of the zone's sphere joins. Anything farther is jumped to,
+     * whatever system either cell is of — the void's cells as much as any system's: flying across a cell
+     * is the most a craft is sent to do.
+     */
+    static boolean flownBetween(GalacticCoord from, GalacticCoord to) {
+        if (java.util.Objects.equals(from.zone(), to.zone())) {
+            return nextTo(from.sectorX(), to.sectorX()) && nextTo(from.sectorY(), to.sectorY())
+                    && nextTo(from.sectorZ(), to.sectorZ());
+        }
+        return from.cellKey().equals(to.zone()) || to.cellKey().equals(from.zone());
+    }
+
+    /** Whether two sector indices are equal or one apart, with no overflow at the ends of the range. */
+    private static boolean nextTo(long a, long b) {
+        return a == b || (a > b ? a - b == 1L : b - a == 1L);
     }
 
     /**
@@ -496,7 +509,16 @@ public final class GuidanceTarget {
                     java.util.OptionalInt.of(body), null, null);
         }
 
-        /** The jump to another system, aimed at {@code destination}: nothing in the craft's world to fly to. */
+        /**
+         * A ship on its way to where it can be aimed at: nothing in the craft's world to fly to yet, so the
+         * craft holds where it is — made for nowhere, never arrived at.
+         */
+        static Placement waiting() {
+            return new Placement(null, 0.0D, false, true, null, MotionSlot.Leg.WAITING_FOR_THE_TARGET,
+                    java.util.OptionalInt.empty(), null, null);
+        }
+
+        /** The jump to a far-off target, aimed at {@code destination}: nothing in the craft's world to fly to. */
         static Placement jump(JumpDestination destination) {
             return new Placement(null, 0.0D, false, true, null, MotionSlot.Leg.JUMP, java.util.OptionalInt.empty(),
                     destination, null);
@@ -540,7 +562,8 @@ public final class GuidanceTarget {
             return provisional;
         }
 
-        /** World frame, blocks; {@code null} when the target could not be placed, and on the jump. */
+        /** World frame, blocks; {@code null} when the target could not be placed, on the jump, and while it
+         *  is waited for. */
         double[] position() {
             return position == null ? null : position.clone();
         }

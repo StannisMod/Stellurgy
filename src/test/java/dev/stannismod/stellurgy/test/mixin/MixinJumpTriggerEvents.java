@@ -54,6 +54,27 @@ public abstract class MixinJumpTriggerEvents {
         stellurgyTest$record("commit", world, flightComputerPos, shipId, cir.getReturnValue());
     }
 
+    /**
+     * {@code jump_spool_began}: a press — the helm's, or the autopilot's unattended one — started a
+     * wind-up. Once per wind-up, where {@code press} records every ask: the autopilot asks on every tick of
+     * its jump leg, and a record per ask would bury the one moment a scenario needs, the start.
+     * {@code attended} says whose press it was.
+     */
+    // NO-READER-YET: MotionIntentGroupTest#thePilotsJumpKeyDuringTheOrdersWindUpTakesTheCraftBack, the next edit.
+    @Inject(method = "press(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;Ljava/util/UUID;"
+            + "Ldev/stannismod/stellurgy/hyperdrive/JumpSpool;JZ)"
+            + "Ldev/stannismod/stellurgy/hyperdrive/JumpTrigger$Result;",
+            at = @At(value = "INVOKE", target = "Ldev/stannismod/stellurgy/hyperdrive/JumpSpool;begin(J)V"),
+            remap = false)
+    private static void stellurgyTest$spoolBegan(World world, BlockPos flightComputerPos, UUID shipId,
+                                                 JumpSpool spool, long now, boolean attended,
+                                                 CallbackInfoReturnable<JumpTrigger.Result> cir) {
+        TestTrace.instrumentHere("jump_spool_events");
+        TestTrace.recordHere("jump_spool_began", "\"ship\":\"" + shipId + "\""
+                + ",\"attended\":" + attended
+                + ",\"dim\":" + (world == null ? Integer.MIN_VALUE : world.provider.getDimension()));
+    }
+
     private static void stellurgyTest$record(String phase, World world, BlockPos pos, UUID shipId,
                                       JumpTrigger.Result result) {
         TestTrace.instrumentHere(INSTRUMENT);

@@ -49,10 +49,16 @@ public final class JumpTrigger {
     public static final class Result {
         private final Outcome outcome;
         private final String langKey;
+        private final java.util.List<String> advisoriesGoneThrough;
 
         Result(Outcome outcome, String langKey) {
+            this(outcome, langKey, java.util.Collections.<String>emptyList());
+        }
+
+        Result(Outcome outcome, String langKey, java.util.List<String> advisoriesGoneThrough) {
             this.outcome = outcome;
             this.langKey = langKey;
+            this.advisoriesGoneThrough = java.util.Collections.unmodifiableList(advisoriesGoneThrough);
         }
 
         public Outcome outcome() {
@@ -63,9 +69,17 @@ public final class JumpTrigger {
             return langKey;
         }
 
+        /**
+         * The lang keys of the gate's ADVISORY objections this press began the wind-up through, in the gate's
+         * stage order; empty for every press that did not begin one, and for one the gate raised nothing to.
+         */
+        public java.util.List<String> advisoriesGoneThrough() {
+            return advisoriesGoneThrough;
+        }
+
         @Override
         public String toString() {
-            return outcome + ":" + langKey;
+            return outcome + ":" + langKey + (advisoriesGoneThrough.isEmpty() ? "" : advisoriesGoneThrough);
         }
     }
 
@@ -102,10 +116,13 @@ public final class JumpTrigger {
 
     /**
      * A press nobody is at the helm to confirm: the autopilot's, committing the jump a motion intent's
-     * leg to another system needs. The same gate and the same wind-up as {@link #press} — but an advisory
-     * verdict, which a pilot is shown and may press through, is a refusal here, since a warning nobody can
-     * see is not one anybody has accepted; and a press during the wind-up is not a change of mind but the
-     * same ask again, answered {@link Outcome#SPOOLING}. Free in every branch, as {@link #press} is.
+     * leg to another system needs. The same gate and the same wind-up as {@link #press}, and an advisory
+     * verdict is gone through exactly as a pilot's confirming press goes through it — the gate rules none
+     * of its advisories a veto, so an order is not entitled to stop where a pilot may go on. What differs
+     * is only that there is nobody to raise the warning to first: the press that meets advisories begins
+     * the wind-up at once and names them ({@link Result#advisoriesGoneThrough}), and whoever made it owes
+     * the report a pilot's eyes would have been. A press during the wind-up is not a change of mind but
+     * the same ask again, answered {@link Outcome#SPOOLING}. Free in every branch, as {@link #press} is.
      */
     public static Result pressUnattended(World world, BlockPos flightComputerPos, UUID shipId,
                                          JumpSpool spool, long now) {
@@ -139,17 +156,27 @@ public final class JumpTrigger {
             spool.clearWarning();
             return new Result(Outcome.REFUSED, verdict.firstMessage());
         }
-        if (verdict.needsConfirmation() && !attended) {
-            return new Result(Outcome.REFUSED, verdict.firstMessage());
-        }
-        if (verdict.needsConfirmation() && !spool.confirming(now)) {
+        if (verdict.needsConfirmation() && attended && !spool.confirming(now)) {
             // The press that meets a warning is the press that RAISES it. A pilot never confirms
             // something he has not been shown.
             spool.warn(now);
             return new Result(Outcome.WARNED, verdict.firstMessage());
         }
+        // Past here every advisory is gone through: by the pilot's second press inside the confirm window,
+        // or by the autopilot, which has no one to raise it to and reports what it went through instead.
         spool.begin(now);
-        return new Result(Outcome.SPOOLING, MSG_SPOOLING);
+        return new Result(Outcome.SPOOLING, MSG_SPOOLING, advisoriesOf(verdict));
+    }
+
+    /** The lang keys of {@code verdict}'s ADVISORY objections, in its stage order. */
+    private static java.util.List<String> advisoriesOf(JumpGate.Verdict verdict) {
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        for (JumpGate.Objection objection : verdict.objections()) {
+            if (objection.severity() == JumpGate.Severity.ADVISORY) {
+                keys.add(objection.langKey());
+            }
+        }
+        return keys;
     }
 
     /**

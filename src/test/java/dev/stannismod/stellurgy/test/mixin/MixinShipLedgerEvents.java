@@ -44,4 +44,24 @@ public abstract class MixinShipLedgerEvents {
         TestTrace.instrumentHere(INSTRUMENT);
         TestTrace.recordServer("ledger_removed", "\"ship\":\"" + shipId + "\"");
     }
+
+    /**
+     * {@code ledger_hull_measured}: a settled ship's self-report brought the ledger a hull radius that
+     * differs from the one it held — the first measurement after it came into space, or a hull that
+     * changed. The self-report runs every tick of every settled ship, so this is filtered to the EDGE:
+     * the record says when the ledger's knowledge of a hull changed, which is what a scenario waits on
+     * before it lets the ship's world go. Its own instrument name, since it is its own hook.
+     */
+    @Inject(method = "updatePosition", at = @At("HEAD"))
+    private void stellurgyTest$hullMeasured(UUID shipId, GalacticCoord coord, double hullRadius,
+                                            CallbackInfo ci) {
+        TestTrace.instrumentHere("ledger_hull_events");
+        ShipLedger.Entry held = ((ShipLedger) (Object) this).get(shipId);
+        if (held == null || held.state != ShipLedger.State.SETTLED || Double.isNaN(hullRadius)
+                || Double.compare(held.hullRadius, hullRadius) == 0) {
+            return;
+        }
+        TestTrace.recordServer("ledger_hull_measured", "\"ship\":\"" + shipId + "\",\"hullRadius\":"
+                + hullRadius);
+    }
 }

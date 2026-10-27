@@ -13,8 +13,9 @@ Flies a tier-2 craft to what an ORDER names, with nobody at the stick: a motion 
 computer holds one motion intent, and guidance turns it, tick by tick, into the same `FlightCommand`
 every other producer on that computer publishes. An order names a THING — a ship, a point on the
 surface of a planet, or a body's orbit — never a bare point of space; a thing in another world is
-reached by flying the legs of one fixed chain between (MECH-GDN-12), a jump among them when it is in
-another system (MECH-GDN-13). The one order a
+reached by flying the legs of one fixed chain between (MECH-GDN-12), a jump among them when it is
+farther than the next cell (MECH-GDN-13); a ship on its way there is waited for (MECH-GDN-15). The one
+order a
 player issues today is take-off: the pilot's auto-takeoff key hands the slot `GO_TO` the orbit of the body
 the craft stands on (C9 SHIPCTL-22); everything else fills the slot through the flight computer's own entry.
 
@@ -30,8 +31,8 @@ can do (C10), pilot input delivery (C9), cell crossings (they carry the slot; th
 substrate's ship records (C11; read through the port), the orbit line (the flight computer's
 `entryCeiling`, handed in), and what decides to issue an intent. The crossings themselves are not
 guidance's: it flies a craft UP to the entry line and INTO a body's descent shell, and the entry and the
-descent — each decided by its own one condition, for any craft — take it on. The jump to another
-system is the hyperdrive's (`hyperdrive`): guidance names where it is aimed and asks for it; the flight
+descent — each decided by its own one condition, for any craft — take it on. The jump is the
+hyperdrive's (`hyperdrive`): guidance names where it is aimed and asks for it; the flight
 computer aims and arms the navigation computer and presses the helm's key unattended, through the one
 jump gate (hyperdrive MECH-HYP-20).
 
@@ -44,8 +45,8 @@ jump gate (hyperdrive MECH-HYP-20).
 | `MotionSlot` | at most one intent, its state (EMPTY / ACTIVE / REFUSED), the leg it flies (`Leg`), and the per-tick law (`fly`) |
 | `MotionSlot.Craft` | the craft as guidance reads it on one tick, all in its world's frame, with its hull's reach and the attitude law's gain and slew cap |
 | `JumpDestination` | where a jump leg is aimed: a body (its planet world and last-seen address) or a bare place — the pair the navigation computer is pointed at |
-| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands (or that it is in space, on another planet, or in another system), how high the ground is, where its world's orbit line is and whether the column above is open, where a body's orbit and descent shell lie (or where the jump to it is aimed), every descent shell about the craft; and the one act besides flying — asking the craft's drive to jump |
-| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames, the loaded worlds, the ground, the flight computer's orbit line and its jump, the universe's bodies and systems |
+| `Surroundings` | what guidance may ask of the world around the craft: where a ship stands (or that it is in space, on another planet, far off, or on its way), how high the ground is, where its world's orbit line is and whether the column above is open, where a body's orbit and descent shell lie (or where the jump to it is aimed), every descent shell about the craft; and the one act besides flying — asking the craft's drive to jump |
+| `WorldSurroundings` | `Surroundings` in a running game: the craft's world's ship registry, the ship ledger through the cell frames (and the hull each ship last measured), the loaded worlds, the ground, the flight computer's orbit line and its jump, the universe's bodies |
 | `AutoTakeoffPlanner` (`space/`) | the take-off corridor: whether a column of blocks holds anything solid, every block asked |
 
 ## Mechanics
@@ -59,7 +60,7 @@ jump gate (hyperdrive MECH-HYP-20).
   its initial ticks or its surrounding chunks (`VSIntegration#shipPhysicsSteps`) — the slot holds the craft
   and is not flown: nothing is judged against a hull that reads at rest wherever it was put, so no
   arrival and no shortfall, and nothing else takes the craft (`TileAdvancedFlightComputer.java:1068`) `[V]`.
-  Persisted in the computer's NBT (`motionSlot`, `:1727`, `:1761`); a slot that cannot be read back loads
+  Persisted in the computer's NBT (`motionSlot`, `:1804`, `:1838`); a slot that cannot be read back loads
   EMPTY and is logged `[V]`.
 - **MECH-GDN-02** — retired: a space point of a cell name plus offset is no longer a target kind;
   MECH-GDN-08 places targets.
@@ -72,7 +73,7 @@ jump gate (hyperdrive MECH-HYP-20).
 - **MECH-GDN-04 — the approach.** Beyond the arrival radius guidance picks two attitudes — one to close
   in, one to brake in — each the candidate whose signed translation axis delivers most along the way
   (toward the aim, or away from it), holding the weight; equal reaches go to the smaller turn
-  (`ship/guidance/MotionSlot.java:528`). Candidates: in space, each of the six signed axes turned onto
+  (`ship/guidance/MotionSlot.java:538`). Candidates: in space, each of the six signed axes turned onto
   the way by the shortest arc; in a field, the LEVEL attitude — the axis up now turned straight up, or
   the nearest other axis that can hold the weight (`:721`) — turned about the vertical so an axis
   across it lies along the horizontal part of the way. Only a candidate the hull can turn into counts;
@@ -97,16 +98,17 @@ jump gate (hyperdrive MECH-HYP-20).
   with what declined the jump, `Reading#declinedBy`, a lang key — the seated pilot is told
   (`msg.guidance.refused.<reason>`, then that key), and `ShipEvent.MotionIntentRefusedEvent` is posted,
   carrying it too
-  (`ship/guidance/MotionSlot.java:313`, `tile/TileAdvancedFlightComputer.java:1141-1147`) `[V]`. From
+  (`ship/guidance/MotionSlot.java:319`, `tile/TileAdvancedFlightComputer.java:1141-1147`) `[V]`. From
   then on the craft HOVERS — zero velocity, in the attitude it was refused in — until a pilot takes it
-  back; it never falls to the unmanned hold and its retained cruise (`MotionSlot.java:262`) `[V]`.
+  back; it never falls to the unmanned hold and its retained cruise (`MotionSlot.java:267`) `[V]`.
 - **MECH-GDN-06 — arrival.** Within `ARRIVAL_RADIUS` of the aim (a landing: let down, and within
   `TOUCHDOWN`, `ARRIVAL_SPEED / POSITION_GAIN`, of its height — MECH-GDN-09) and slower than
   `ARRIVAL_SPEED`, once per intent,
   `ShipEvent.MotionIntentArrivedEvent` is posted — never against a PROVISIONAL placement: a ship whose
   hull nobody measured (MECH-GDN-08), the climb to an orbit, which the entry crossing takes the craft on
-  from (MECH-GDN-11), or a leg a crossing takes over (MECH-GDN-12, -13); and never at a waypoint around a
-  shell (MECH-GDN-14) (`ship/guidance/MotionSlot.java:388`) `[V]`.
+  from (MECH-GDN-11), or a leg a crossing takes over (MECH-GDN-12, -13); never while the target is waited
+  for (MECH-GDN-15); and never at a waypoint around a shell (MECH-GDN-14)
+  (`ship/guidance/MotionSlot.java:412`) `[V]`.
 - **MECH-GDN-07 — reclaim.** C9 SHIPCTL-21.
 - **MECH-GDN-08 — placing a target.** A SHIP is looked for in the craft's world's ship registry first
   (exact position, and its hull's reach about it); then in the ship ledger, whose SETTLED address is,
@@ -114,17 +116,18 @@ jump gate (hyperdrive MECH-HYP-20).
   ship in ANOTHER cell's world, whose hull is not measured from the craft's — loaded or not — and, from a
   planet, answered as IN SPACE; then in every loaded world — a space cell's world placed as a settled
   ship is, from its cell and its pose there; a planet world answered as ON THAT PLANET
-  (`ship/guidance/WorldSurroundings.java:93-157`). A ship in space of another system than the craft's
-  answers its address and its hull's reach, read in the slot world its cell is bound to (NaN when that
-  world is not loaded) — placed as the jump (MECH-GDN-13); one the ledger holds in transit, or in the
-  hyperspace world, TARGET_IN_HYPERSPACE; one
-  found nowhere, TARGET_NOT_FOUND; the craft itself, TARGET_IS_THIS_CRAFT. A ship in space seen from a
-  planet, or on another planet, is placed as its leg (MECH-GDN-12). Its keep-out is the sum of the two hulls' radii — each the smallest sphere about
+  (`ship/guidance/WorldSurroundings.java:90-160`). A ship in space whose cell is farther from the craft's
+  than the next one (MECH-GDN-12) answers its address and the hull it last measured itself — the
+  ledger's, so it is known whether or not its world is loaded (space/hyperspace-and-persistence
+  MECH-SPC-09); a ship no ledger row holds, measured where it is — placed as the jump (MECH-GDN-13). One
+  the ledger holds in transit, or in the hyperspace world, or far off and never measured yet, is waited
+  for (MECH-GDN-15); one found nowhere, TARGET_NOT_FOUND; the craft itself, TARGET_IS_THIS_CRAFT. A ship
+  in space seen from a planet, or on another planet, is placed as its leg (MECH-GDN-12). Its keep-out is the sum of the two hulls' radii — each the smallest sphere about
   the ship's position holding its block box, read off the registry (`integration/vs/VSBridge.java:899`).
   A ship whose hull cannot be measured — in another cell's world, or in the craft's own with a record
   holding no blocks — is placed PROVISIONALLY, with no keep-out, since none of its hull is in the
   craft's world: the craft makes for the placed point itself, for a `GO_TO` and a `HOLD` alike
-  (`ship/guidance/MotionSlot.java:281`). A ship in another cell of the same lattice is made for THROUGH
+  (`ship/guidance/MotionSlot.java:287`). A ship in another cell of the same lattice is made for THROUGH
   THE SEAM: on each axis along which its cell lies beyond the craft's, the aim is taken at least to the
   first whole-block offset the seam carries a craft from, `HALF_CELL + CARRY_MARGIN + 1`
   (`ship/guidance/GuidanceTarget.java:160`), so reaching the aim carries the craft into the ship's
@@ -142,15 +145,15 @@ jump gate (hyperdrive MECH-HYP-20).
   across from the column (in X and Z, the column's own frame) than half the arrival radius, its aim is
   the point over the column where the sphere holding its hull just clears the ground, so no attitude
   puts the hull into the ground while it closes across; nearer, it is let down, the other half of the
-  radius left for what it drifts on the way (`ship/guidance/MotionSlot.java:283-295`,
+  radius left for what it drifts on the way (`ship/guidance/MotionSlot.java:289-301`,
   `GuidanceTarget.java:147`). It has landed when, let down, it is within `TOUCHDOWN` of its aim's
   HEIGHT and slower than `ARRIVAL_SPEED` — across, a landing is judged by the arrival radius like any
-  arrival (`MotionSlot.java:322`) `[V]`. A `GO_TO` a surface point that arrives releases the craft: from then the
+  arrival (`MotionSlot.java:328`) `[V]`. A `GO_TO` a surface point that arrives releases the craft: from then the
   computer commands no velocity, only the attitude it landed in, so it lies on the ground under its own
-  weight (`ship/guidance/MotionSlot.java:265,325-330`) `[V]`.
+  weight (`ship/guidance/MotionSlot.java:270,331-336`) `[V]`.
 - **MECH-GDN-10 — leaning.** In a field, when no level approach exists (MECH-GDN-04) and the axis the
   level attitude holds up — the LIFTING axis — pushes harder than the weight, the hull leans
-  (`ship/guidance/MotionSlot.java:595`). On every tick the acceleration the craft lacks is
+  (`ship/guidance/MotionSlot.java:605`). On every tick the acceleration the craft lacks is
   `K·(v_cmd − v)`, `K` a quarter of the attitude law's gain — critical damping of a lean loop that the
   attitude law lags; the lifting axis is laid along that acceleration plus the field's cancelled pull,
   turned from the level attitude about the horizontal axis square to the lean, and never further from
@@ -181,8 +184,8 @@ jump gate (hyperdrive MECH-HYP-20).
   it stands at the space clock's tick (its position, not its address) against where the craft's cell
   centre stands — of the body's own entry ring (`ShipEntryController.entryRingAround(SystemBody)`)
   (`WorldSurroundings.java:165`): a craft on it at rest has arrived and holds, and the same order from
-  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND; one of another
-  system is the jump to it (MECH-GDN-13) `[V]`. The entry puts a
+  far off sends the craft to the body. A body nobody can find is TARGET_NOT_FOUND; one whose cell is
+  farther than the next one is the jump to it (MECH-GDN-13) `[V]`. The entry puts a
   craft on that ring, about the body placed in the same cell's frame by the same function
   (`CellFrames.positionInCell`; space/cells-and-crossings INV-SPC-19), so a taken-off craft has arrived as
   it comes to rest there `[T]`.
@@ -190,13 +193,13 @@ jump gate (hyperdrive MECH-HYP-20).
   flies that very order it empties the slot, and anywhere else it does nothing
   (`tile/TileAdvancedFlightComputer.java:1017`) `[V]`.
 - **MECH-GDN-12 — the legs: a target in another world.** One fixed chain of worlds — up out of a
-  planet's world, a jump when the target is in another system (MECH-GDN-13), through space, down into a
-  planet's world — and the LEG the craft flies is derived on
+  planet's world, a jump when the target is farther than the next cell (MECH-GDN-13), through space, down
+  into a planet's world — and the LEG the craft flies is derived on
   every tick from where the craft is against where the target is (`ship/guidance/GuidanceTarget.java:195`);
   nothing of it is stored, so the order rides each crossing unchanged in the computer's NBT and the leg
   after a crossing is what the new world answers. On a planet, a target outside the planet's world — a
-  ship in space, the orbit or a surface point of another body, a ship on another planet, anything of
-  another system — is the CLIMB:
+  ship in space, the orbit or a surface point of another body, a ship on another planet, however far off
+  — is the CLIMB:
   MECH-GDN-11's placement straight up past the world's orbit line, refused as it is
   (`GuidanceTarget.java:255-275`). In space, a target in a planet's world — a surface point, a ship
   standing there — is the way INTO THE SHELL: the point `INTO_THE_SHELL` (the arrival radius plus two
@@ -207,32 +210,44 @@ jump gate (hyperdrive MECH-HYP-20).
   descent inside the shell, which is the one proximity condition every craft descends by
   (space/cells-and-crossings MECH-SPC-13), not an act of guidance; so ANY order that brings a craft inside a body's shell
   descends it, and orbits lie outside every shell. After the descent the target is in the craft's world
-  and is flown as such. A place's SYSTEM is the anchor whose neighbourhood holds its cell
-  (`UniverseRegistry.anchorForCell`) — the craft cell's in space; on a planet, its body's entry address's
-  (the origin where it has none, as the entry does); and a cell no neighbourhood holds — the VOID — is a
-  system of its own, so a place there and a place in any other cell are of two systems
-  (`ship/guidance/WorldSurroundings.java:280-304`); where the universe cannot be asked, the tick is short
-  for TARGET_HAS_NO_FRAME. The leg flown is readable: `MotionSlot.Reading#leg` (`TO_THE_TARGET` /
-  `CLIMB_TO_SPACE` / `INTO_THE_SHELL` / `JUMP`), the leg of the last tick the target could be placed
-  (`ship/guidance/MotionSlot.java:338,368`) `[V]`.
-- **MECH-GDN-13 — the jump: a target in another system.** In space a target of another system is the
-  JUMP leg: no point of the craft's world, a DESTINATION — a ship: a place of its own cell
+  and is flown as such. In space, how far a place is is counted in CELLS, never in systems: a place in the
+  craft's own cell or the NEXT one is flown to, anything farther is jumped to — within the craft's system,
+  across systems and across the void's cells alike. In one lattice the next cell is one whose sector
+  triple is at most one off on every axis (a face, an edge or a corner away, each crossed by the seam);
+  across lattices it is a zone's cell and the cell that zone is nested in, which one crossing of the
+  zone's sphere joins; a body's cell is its name (`ship/guidance/GuidanceTarget.java:353-365`,
+  `WorldSurroundings.java:137-141,243`). The leg flown is readable: `MotionSlot.Reading#leg`
+  (`TO_THE_TARGET` / `CLIMB_TO_SPACE` / `INTO_THE_SHELL` / `JUMP` / `WAITING_FOR_THE_TARGET`), the leg of
+  the last tick the target could be placed (`ship/guidance/MotionSlot.java:342,356,359`) `[V]`.
+- **MECH-GDN-13 — the jump: a target beyond the next cell.** In space a target farther than the next
+  cell (MECH-GDN-12) is the JUMP leg: no point of the craft's world, a DESTINATION — a ship: a place of its
+  own cell
   `⌈craft hull + ship hull + ARRIVAL_RADIUS + OUT_OF_THE_JUMP_PAST_THE_STANDOFF⌉` off its address on a
   bearing the craft's name picks (`space/StandoffRing.pointAround`) — the standoff and three arrival radii
   beyond it, past the arrival radius about the aim, a ring point's rounding and the measured offset of a
   pasted hull's pose from its placement — so the craft comes out near the ship, never in its hull, and its
   arrival is FLOWN, never declared on the tick it comes out (`ship/guidance/GuidanceTarget.java:292`); a surface point or orbit of a body: the body, its planet world
   and address, which the navigation computer follows and a jump's arrival stands off by itself
-  (`WorldSurroundings.java:244`). A ship whose hull cannot be measured where it is answers
-  JUMP_TARGET_NOT_MEASURED, and the craft's own, CRAFT_NOT_MEASURED. On every tick of the leg guidance
-  asks the craft's drive to make the jump (`Surroundings#jump`, `MotionSlot.java:339`) and holds the craft
+  (`WorldSurroundings.java:243`). The ship's hull is the one it last measured itself (MECH-GDN-08); a
+  craft whose own hull cannot be measured answers CRAFT_NOT_MEASURED. On every tick of the leg guidance
+  asks the craft's drive to make the jump (`Surroundings#jump`, `MotionSlot.java:343`) and holds the craft
   still — zero velocity, the attitude it has; the flight computer aims, arms and presses unattended
-  (hyperdrive MECH-HYP-20). A tick the drive answers with what declines the jump is SHORT for
-  JUMP_DECLINED and refuses through the common window (MECH-GDN-05) naming it; a tick it answers "under
-  way" is flown. Never arrived. Mid-jump, in hyperspace, the order is flown nothing, reads JUMP and
+  (hyperdrive MECH-HYP-20), going through the gate's ADVISORY objections as a pilot who confirms them
+  does — only what would have stopped that pilot declines the jump. The drive answers each ask
+  (`Surroundings.JumpAnswer`): declined, naming what declines it; under way; or BEGUN — this ask started the
+  wind-up — with the advisories it went through. A tick the drive answers with what declines the jump is
+  SHORT for JUMP_DECLINED and refuses through the common window (MECH-GDN-05) naming it; a tick it answers
+  under way or begun is flown, and a begun answer sets the slot's `Reading#advisoriesGoneThrough` to the
+  advisories it carries (empty for none), kept across the jump and in NBT until the slot is given another
+  intent or taken back (`ship/guidance/MotionSlot.java:343-352`). The flight computer reports each
+  advisory it went through where a pilot would have read it: a seated pilot is told
+  (`msg.guidance.jumpadvised`, then each advisory's own key, as the helm shows a warning), and
+  `ShipEvent.MotionIntentJumpAdvisedEvent` is posted with them (`tile/TileAdvancedFlightComputer.java:1721-1738`)
+  — never silent `[V]`. Never arrived. Mid-jump, in hyperspace, the order is flown nothing, reads JUMP and
   refuses nothing (`MotionSlot#carriedByAJump`, called from the computer's hyperspace branch,
   `tile/TileAdvancedFlightComputer.java:489`); after the arrival the same order is flown in the
-  destination's world. A ship TARGET mid-jump is still TARGET_IN_HYPERSPACE `[V]`.
+  destination's world. The pilot's own jump key pressed during a wind-up the order started stops it and
+  takes the craft back (C9 SHIPCTL-23) `[V]`.
 - **MECH-GDN-14 — around the shells.** In space guidance never sends a craft into the descent shell of a
   body the order does not lead into — every shell about the craft (`Surroundings#shellsBut`, the bodies
   `UniverseRegistry.skyBodiesAt` lists for its cell that a craft can descend to, placed as MECH-GDN-11
@@ -241,16 +256,25 @@ jump gate (hyperdrive MECH-HYP-20).
   past the √3 the ledger's position can lie off the pose) and nearer than the craft is now, the aim is
   replaced by a waypoint as far off as the aim along the line from the craft that grazes that widened
   shell on the aim's side — its tangent; from inside the widened shell, along the shell's surface; the
-  first shell met is rounded first, at most once per shell (`ship/guidance/MotionSlot.java:458-530`). A
+  first shell met is rounded first, at most once per shell (`ship/guidance/MotionSlot.java:468-540`). A
   craft within the widening and leaving it is not held back. Re-chosen every tick, so the craft rounds the
   shell and is sent straight on once nothing stands in the way. The descent condition itself is untouched
   (space/cells-and-crossings MECH-SPC-13) `[V]`.
+- **MECH-GDN-15 — waiting for a ship on its way.** A ship target that is on its way to somewhere it can
+  be aimed at — held IN TRANSIT by the ledger, standing in the hyperspace world, or settled farther than
+  the next cell without a hull measured yet (an entry or a jump's arrival settles it; its own flight
+  computer measures it on its first tick in its cell) — is WAITED FOR: the leg reads
+  `WAITING_FOR_THE_TARGET`, the craft is commanded no speed in the attitude it has, the tick is flown —
+  never short, so no refusal comes of it however long it lasts — no jump is asked, and nothing is arrived
+  at (`ship/guidance/WorldSurroundings.java:100,109,137-141`, `GuidanceTarget.java:211-212`,
+  `MotionSlot.java:353-357`). Nothing of the wait is stored: the first tick the ship can be placed again
+  places it, and the leg toward where it now is is flown — a jump, when it came out far off `[V]`.
 
 ## State & persistence
 
 | key | owner | note |
 |---|---|---|
-| `motionSlot` {`state`, `refusal`, `declinedBy` (JUMP_DECLINED only), `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing, a jump included; the refusal window's count, the held hover/landing attitude and the leg (derived per tick) are not saved, nor are the computer's own notes of a wind-up the order started and of a commit that failed |
+| `motionSlot` {`state`, `refusal`, `declinedBy` (JUMP_DECLINED only), `advisoriesGoneThrough` (a list of lang keys, absent when empty), `arrived`, `intent` {`kind`, `range`, `target` {`kind` `ship` + `ship`, or `surface` + `dim`, `x`, `z`, or `orbit` + `dim`}}} | `TileAdvancedFlightComputer` | rides tile NBT through every crossing, a jump included; the refusal window's count, the held hover/landing attitude and the leg (derived per tick) are not saved, nor are the computer's own notes of a wind-up the order started and of a commit that failed |
 
 ## Invariants
 
@@ -303,9 +327,8 @@ jump gate (hyperdrive MECH-HYP-20).
   10 s as JUMP_DECLINED, naming the clause the jump gate itself declines that ship's jump with; its slot
   reads REFUSED; and it then hovers — slower than 0.2 blocks/s — although its pilot left it a cruise.
   FOR: the acceptance of the jump leg stated before the work (2026-10-23, *"по рекомендациям"*): "a jump
-  the gate declines is reported with the declining clause; the slot reads refused"; the ruling of
-  2026-10-23 that the advisory verdict the helm shows becomes the leg's refusal with its reason;
-  and *"Да, пусть зависает"* (yes, let it hover), 2026-10-21. Pinned by
+  the gate declines is reported with the declining clause; the slot reads refused" — a HARD objection,
+  as an uncharged bank's is (an ADVISORY one is gone through, INV-GDN-31); and *"Да, пусть зависает"* (yes, let it hover), 2026-10-21. Pinned by
   `test/server/MotionIntentGroupTest#aJumpTheGateDeclinesRefusesTheOrderNamingTheClauseAndTheCraftHovers`.
 - **INV-GDN-10** `[T][BEH]` On a planet, a craft told `GO_TO` a point of the surface ends resting on the
   ground there: its lowest point within half a block of the ground's top, its position within 2 blocks
@@ -393,16 +416,14 @@ jump gate (hyperdrive MECH-HYP-20).
   or the orbit of another body — the craft is sent straight up, reads `CLIMB_TO_SPACE`, and is never
   arrived there; from space — a surface point of a body, a ship on a planet — it is sent toward the
   point `INTO_THE_SHELL` inside that body's descent shell along the line from the body, reads
-  `INTO_THE_SHELL`, is never arrived there, and once that deep is held where it is; a ship mid-jump is
-  refused as TARGET_IN_HYPERSPACE, from space and from a planet; and a target
+  `INTO_THE_SHELL`, is never arrived there, and once that deep is held where it is; and a target
   in the craft's world reads `TO_THE_TARGET`. FOR: the maintainer's rulings of 2026-10-23 (*"по
   рекомендациям"*): a fixed chain of legs — climb, jump to another system, fly through cells, descend
   onto a planet — not a search; and of 2026-10-24, *"GO_TO не может скомандовать спуск на планету, а он
   и не должен. Он должен вести к планете. Спуском продолжает управлять одно условие"* (a GO_TO cannot
   command a descent, nor should it: it must lead to the planet; one condition goes on governing the
   descent). Pinned by `test/unit/MotionGuidanceLawsTest#aTargetInAnotherWorldOfTheSystemIsClimbedToFromAPlanet`,
-  `test/unit/MotionGuidanceLawsTest#aTargetOnAPlanetIsFlownIntoItsBodysShellFromSpace`,
-  `test/unit/MotionGuidanceLawsTest#aShipInHyperspaceIsRefusedForBeingThere`.
+  `test/unit/MotionGuidanceLawsTest#aTargetOnAPlanetIsFlownIntoItsBodysShellFromSpace`.
 - **INV-GDN-20** `[T][BEH]` A craft on the overworld told `GO_TO` a ship in space of its system climbs,
   enters space with the order in its slot, and arrives alongside the ship as INV-GDN-01 measures it —
   with no pilot input anywhere on the way. FOR: the acceptance of the crossing legs, stated before the
@@ -417,17 +438,16 @@ jump gate (hyperdrive MECH-HYP-20).
   вести к планете. Спуском продолжает управлять одно условие"* (a GO_TO must lead to the planet; one
   condition goes on governing the descent). Pinned by
   `test/server/MotionIntentGroupTest#aCraftInSpaceToldToGoToAPointOfAPlanetDescendsAndLandsThere`.
-- **INV-GDN-22** `[T][SYS]` From space a target in another system is the JUMP leg: for a ship there whose
-  hull is measured, the craft's drive is asked on every tick to take it to a place in the ship's own cell
-  farther off it than the arrival radius beyond the standoff, so its arrival is flown; the craft is
-  commanded no speed, reads `JUMP`, and is flown past the refusal window while the drive answers that the
-  jump is under way; a drive that declines for the window refuses the order as JUMP_DECLINED on exactly
-  the window-th tick, naming what declined it; such a ship whose hull cannot be measured is refused as
-  JUMP_TARGET_NOT_MEASURED; a surface point or the orbit of a body of another system has the drive asked
-  for the destination the world aims the jump to that body at; and from a planet the same ship is the
-  climb. FOR: the rulings of 2026-10-23 (*"по рекомендациям"*): the fixed chain — climb, jump to another
-  system, fly through cells, descend — and that the autopilot commits the jump itself, the advisory
-  verdict becoming the leg's refusal with its reason; and the maintainer's of 2026-10-21, *"цель в другом
+- **INV-GDN-22** `[T][SYS]` From space a target the world answers far off is the JUMP leg: for a ship
+  there, with the hull it last measured, the craft's drive is asked on every tick to take it to a place in
+  the ship's own cell farther off it than the arrival radius beyond the standoff, so its arrival is flown;
+  the craft is commanded no speed, reads `JUMP`, and is flown past the refusal window while the drive
+  answers that the jump is under way; a drive that declines for the window refuses the order as
+  JUMP_DECLINED on exactly the window-th tick, naming what declined it; and a surface point or the orbit
+  of a far-off body has the drive asked for the destination the world aims the jump to that body at. FOR:
+  the rulings of 2026-10-23 (*"по рекомендациям"*): the fixed chain — climb, jump to another
+  system, fly through cells, descend — and that the autopilot commits the jump itself, what would have
+  stopped a pilot becoming the leg's refusal with its reason; and the maintainer's of 2026-10-21, *"цель в другом
   мире - это же запрос на гиперпрыжок. ИИ должен это уметь"* (a target in another world is a request for a
   jump; the AI must be able to do it). Pinned by
   `test/unit/MotionGuidanceLawsTest#aTargetInAnotherSystemIsTheJumpFromSpaceAndTheClimbFromAPlanet`.
@@ -441,36 +461,81 @@ jump gate (hyperdrive MECH-HYP-20).
   the one descent condition untouched; the craft is simply never led into a shell that is not its
   target's. Pinned by
   `test/unit/MotionGuidanceLawsTest#aWayThroughTheShellOfABodyTheOrderDoesNotLeadIntoGoesAroundIt`.
-- **INV-GDN-24** `[T][BEH]` A craft told `GO_TO` a ship in another system jumps there with no pilot input
-  and arrives alongside the ship as INV-GDN-01 measures it. FOR: the acceptance stated before the work: "a
-  craft given `GO_TO` a ship in another system jumps (no pilot input) and arrives (outside both hulls ± 2
-  blocks, < 0.2 blocks/s)". Pinned by
-  `test/server/MotionIntentGroupTest#aCraftToldToGoToAShipInAnotherSystemJumpsThereAndArrives` (from the
-  last cell of the overworld's system into the first of its neighbour's).
-- **INV-GDN-26** `[T][BEH]` A craft in the void told `GO_TO` a ship in the next cell of the void jumps
-  there and arrives alongside it, as INV-GDN-24 measures it: each cell of the void is a system of its own.
-  FOR: the ruling of 2026-10-25 (*"Берем (б)"*): a point in the void, outside every system's surroundings,
-  is a system of its own, reached by a jump, not by flying cell to cell for years. Pinned by
-  `test/server/MotionIntentGroupTest#aCraftInTheVoidToldToGoToAShipInTheNextVoidCellJumpsThereAndArrives`.
+- **INV-GDN-24** `[T][BEH]` A craft told `GO_TO` a ship two cells off, in the craft's OWN system, jumps
+  there with no pilot input and arrives alongside the ship as INV-GDN-01 measures it. FOR: the acceptance
+  stated before the work: "a craft given `GO_TO` a ship in another system jumps (no pilot input) and
+  arrives (outside both hulls ± 2 blocks, < 0.2 blocks/s)"; and the decision of 2026-10-25, proposed with
+  part two and taken forward on *"Коммить и продолжай"* without objection — accepted by continuing, not
+  ruled explicitly — that anything farther than the next cell is jumped to, within the system too. Pinned
+  by `test/server/MotionIntentGroupTest#aCraftToldToGoToAShipTwoCellsOffInItsOwnSystemJumpsThereAndArrives`.
+- **INV-GDN-26** — retired: a cell of the void is no longer a system of its own; how far a place is is
+  counted in cells (MECH-GDN-12), and INV-GDN-30 states the void's case.
+- **INV-GDN-27** `[T][SYS]` A ship target the world answers as on its way is waited for: from space and
+  from a planet alike, the craft is commanded no speed, reads `WAITING_FOR_THE_TARGET`, is flown past the
+  refusal window and never refused for it, asks the drive for no jump, and is never arrived; and on the
+  first tick the world places the ship again, the order flies the leg toward it. FOR: the decision of
+  2026-10-25, proposed with part two and taken forward on *"Коммить и продолжай"* without objection —
+  accepted by continuing, not ruled explicitly: a ship target that is itself in hyperspace is WAITED FOR,
+  the craft holds, the leg reads "waiting for the target", the order resumes when the target arrives; no
+  refusal. Pinned by `test/unit/MotionGuidanceLawsTest#aShipOnItsWayIsWaitedForAndTheOrderGoesOnWhenItGetsThere`.
+- **INV-GDN-28** `[T][BEH]` A craft told `GO_TO` a ship that then jumps two cells away is not refused
+  while that ship is in hyperspace, and once it has come out the order goes on toward where it now is —
+  the jump leg, which a craft with no drive is refused on as JUMP_DECLINED after the ship's arrival and
+  never before it. FOR: the decision of 2026-10-25, proposed with part two and taken forward on *"Коммить
+  и продолжай"* without objection — accepted by continuing, not ruled explicitly: a ship target that is
+  itself in hyperspace is WAITED FOR, and the order resumes when the target arrives; no refusal. Pinned by
+  `test/server/MotionIntentGroupTest#aCraftWhoseShipJumpsAwayWaitsForItAndThenGoesOnTowardWhereItCameOut`.
+- **INV-GDN-29** `[T][BEH]` A craft told `GO_TO` a ship two cells off whose cell's world is not loaded
+  jumps there, beside the hull the ship last measured itself, and arrives alongside it as INV-GDN-01
+  measures it. FOR: the decision of 2026-10-25, proposed with part two and taken forward on *"Коммить и
+  продолжай"* without objection — accepted by continuing, not ruled explicitly: the ship ledger stores
+  each ship's measured hull radius, so a target in an unloaded cell has a measured standoff, not a
+  stand-in. Pinned by
+  `test/server/MotionIntentGroupTest#aCraftToldToGoToAShipTwoCellsOffInItsOwnSystemJumpsThereAndArrives`.
+- **INV-GDN-30** `[T][BEH]` A craft in the void told `GO_TO` a ship two cells of the void off jumps there
+  and arrives alongside it, as INV-GDN-24 measures it. FOR: the decision of 2026-10-25, proposed with part two
+  and taken forward on *"Коммить и продолжай"* without objection — accepted by continuing, not ruled
+  explicitly — that anything farther than the next cell is jumped to, across void cells alike, which replaced the letter of
+  the ruling of the same day (*"Берем (б)"*) that a point in the void is reached by a jump, not by flying
+  cell to cell for years. Pinned by
+  `test/server/MotionIntentGroupTest#aCraftInTheVoidToldToGoToAShipTwoVoidCellsOffJumpsThereAndArrives`.
 - **INV-GDN-25** `[T][BEH]` A craft in space told `GO_TO` a ship whose straight way from it dips into the
   descent shell of a body the order does not lead into goes around that shell, is never descended onto
   the body, and arrives alongside the ship in space as INV-GDN-01 measures it. FOR: the acceptance stated
   before the work: "a craft whose straight line crosses a non-target body's shell arrives without
   descending"; and the decision INV-GDN-23 cites. Pinned by
   `test/server/MotionIntentGroupTest#aCraftWhoseWayCrossesAnotherBodysShellGoesAroundItAndArrives`.
+- **INV-GDN-31** `[T][BEH]` A craft whose stored energy is below what the flight of its order's jump costs
+  — the jump gate's SUPPLY advisory — jumps all the same with no pilot input, and says so: the order's
+  `ShipEvent.MotionIntentJumpAdvisedEvent` names that advisory, and so does the slot's
+  `Reading#advisoriesGoneThrough`, read in the world the jump carried the craft to. FOR: the maintainer's
+  ruling of 2026-10-26, *"сделай предупреждения"* (make them warnings): an unattended commit goes through
+  the gate's advisories as a pilot who confirms them does, each reported, never silent — matching the
+  gate's own rulings that none of its advisories is a veto (`navigation/JumpGate.java:332`, `:349`,
+  `:400`). Pinned by
+  `test/server/MotionIntentGroupTest#aCraftShortOfTheEnergyItsJumpCostsJumpsAllTheSameAndSaysSo`.
 
 ## Failure modes & edge cases
 
 A take-off issued while the post-descent entry latch holds (the craft above the line, not yet below it
 since its descent) climbs to its aim and hovers there: the entry does not fire until the latch clears.
 
-A jump leg aimed at a ship in the void's next cell is a jump although the ship may be a few hundred
-blocks past the face: every void cell is a system of its own. A ship target that sits inside the
+A ship two cells off is jumped to although it may be a few hundred blocks past the far face of the
+next cell, and a ship in the next cell is flown to although it may be nearly two cells' width away: the
+measure is the cell, not the distance. A ship target that sits inside the
 clearance of another body's shell, or whose standoff does, is never reached: the craft is kept outside
 that clearance and rounds the shell. A jump destination beside a ship near its cell's face is held inside
 that cell, so it may lie nearer the ship than intended, when the face cuts the ring short. A commit that FAILED is not retried by the order: it declines every later
 ask until the order is refused for it or replaced. The pilot's own jump key during a wind-up the order
-started stops it as his press always does, and the order asks again on its next tick.
+started stops it and takes the craft back (C9 SHIPCTL-23); pressed while the order is on its jump leg but
+not winding up — the gate declining, inside the refusal window — it is an ordinary press, and a wind-up it
+starts is taken up by the order on its next ask.
+
+A ship the craft waits for is waited for as long as it is on its way: a transit that never ends, or an
+entry whose settle the crossing gave up on and whose ship never ticks in its cell again, holds the craft
+until its pilot takes it back. A ship far off that has never measured itself is waited for, not jumped
+to beside a hull nobody measured; the ledger keeps the last measurement across a save, so this is the
+state of a ship in its first tick in space, not of one whose world is unloaded.
 
 A craft held deep inside a body's shell for a descent that does not come — refused and cooling down, or
 the craft not yet settled in the ledger — hovers there and is not refused: the leg stays placed. A ship
@@ -501,15 +566,15 @@ left INV-GDN-14 unlanded in about one run in six.
 
 ## Integration seams
 
-Events posted: `ShipEvent.MotionIntentArrivedEvent`, `ShipEvent.MotionIntentRefusedEvent` (C5). Lang:
-`msg.guidance.refused.*` (C7). Port: `VSIntegration#hullAboutPosition`, `#shipPhysicsSteps` (C11). The seam's constants
+Events posted: `ShipEvent.MotionIntentArrivedEvent`, `ShipEvent.MotionIntentRefusedEvent`,
+`ShipEvent.MotionIntentJumpAdvisedEvent` (C5). Lang: `msg.guidance.refused.*`, `msg.guidance.jumpadvised` (C7). Port: `VSIntegration#hullAboutPosition`, `#shipPhysicsSteps` (C11). The seam's constants
 `GalacticCoord.HALF_CELL`, `CellSeam.CARRY_MARGIN` (space). Probe:
 `vs motion-go-to-ship-by-id`, `vs motion-hold-ship-by-id`, `vs motion-go-to-surface-by-id`,
 `vs motion-read-by-id`, `space auto-takeoff` (the take-off key). Space: `SpaceSubsystem.launchBody` and
 `launchBodyAddress`, `ShipEntryController.entryRingAround` and `PHYSICS_CLAMP_ENTRY_MARGIN`,
-`DescentShell.radiusAround`, the ship ledger, `SpaceSlotPool.cellCoordFor`, `SpaceManager.slotDimOf`,
-`StandoffRing.pointAround`, `HyperspaceWorld`; universe: `UniverseRegistry.anchorForCell` and
-`skyBodiesAt`; the flight computer's `entryCeiling` and its jump (`JumpTrigger.pressUnattended`,
+`DescentShell.radiusAround`, the ship ledger (its rows and the hull each ship last measured,
+`ShipLedger.Entry#hullRadius`), `SpaceSlotPool.cellCoordFor`, `StandoffRing.pointAround`, `HyperspaceWorld`;
+universe: `UniverseRegistry.skyBodiesAt`; the flight computer's `entryCeiling` and its jump (`JumpTrigger.pressUnattended`,
 `TileNavigationComputer#setTargetBody` / `arm`, hyperdrive MECH-HYP-20). Key: `key.autoTakeoffToggle` → `TilePilotSeat.PACKET_AUTO_TAKEOFF_TOGGLE` (C9 SHIPCTL-22).
 
 ## Config surface
@@ -518,12 +583,14 @@ None.
 
 ## Test coverage
 
-`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, -19, -22, -23, SHIPCTL-21);
+`test/unit/MotionGuidanceLawsTest` (the laws: INV-GDN-04, -05, -11..13, -15, -16, -19, -22, -23, -27, SHIPCTL-21);
 `test/unit/AutoTakeoffPlannerTest` (the corridor);
 `test/server/MotionIntentGroupTest` (the in-world flights: INV-GDN-01, -03, -07..10, -14; across worlds:
 -20 up to a ship in space, -21 down to a point of the overworld — each with the target, or the craft, moved
-in space by the test across a distance no scenario affords; -24 a jump from one system into the next,
--26 one between two cells of the void, -25 a way around the overworld's shell);
+in space by the test across a distance no scenario affords; -24 and -29 a jump two cells along within the
+overworld's system to a ship whose world was unloaded, -30 one two cells along the void, -28 an order
+waiting for its ship through that ship's own jump, -25 a way around the overworld's shell; SHIPCTL-23 the
+jump key during the order's wind-up);
 `test/server/VSShipAutoTakeoffTest` (take-off: INV-GDN-17 — arrival at the orbit it was entered onto —
 -18, SHIPCTL-21 mid-climb, SHIPCTL-22). Not seen in a running game: an orbit flown to from far off in
 space (INV-GDN-16 pins it on the law), and a MOON's orbit — a moon moves
@@ -531,9 +598,13 @@ inside the cell it shares with its parent, so a craft held on its ring follows i
 arrived while that is faster than the arrival speed. Not seen
 in a running game: a ship parked inside the carry band past a face, and a ship record with no blocks
 (INV-GDN-13 and -15 are pinned on the law alone); the order reading `JUMP` while the craft is in
-hyperspace (INV-GDN-24 and -26 jump through it, and see only the arrival), and a jump short enough to be
-crossed directly; a jump to a body of another system; a jump refused on a DRIVE or SUPPLY clause, or for a failed commit (INV-GDN-09 is
-refused on the POWER clause). That the substrate turns a hull at a slow rate,
+hyperspace (INV-GDN-24, -29 and -30 jump through it, and see only the arrival), and a jump short enough to
+be crossed directly; a jump to a far-off body; a jump refused on a DRIVE clause, or for a failed commit (INV-GDN-09 is
+refused on the POWER clause); the DESTINATION_FULL and WINDOW_UNDERSIZED advisories gone through
+(INV-GDN-31 goes through SUPPLY's), and what a seated pilot is told of one; a ship in the next cell across a system's border or into the void, flown to
+(INV-GDN-03 flies to the next cell within one system); a zone's cell and the cell it is nested in, which
+count as next to each other; and the wait for a ship that came into space far off and has not measured
+itself yet (INV-GDN-27 pins it on the law). That the substrate turns a hull at a slow rate,
 which INV-GDN-14 rests on, is pinned on the substrate's side (valkyrienskies INV-VSK-14).
 
 ## Open questions
@@ -544,15 +615,12 @@ which INV-GDN-14 rests on, is pinned on the substrate's side (valkyrienskies INV
 - A lean is planned on the hull's BURST angular authority, as a turnover is, but held for as long as
   the craft leans: a hull that can turn about an axis only for its wheel's seconds leans along it and
   then drifts, rather than being refused for want of a sustained turn. Unruled.
-- A ship TARGET mid-jump is refused as TARGET_IN_HYPERSPACE although it still exists and its arrival is
-  known (the ledger holds its destination): wait for it to arrive, jump for its destination, or refuse —
-  unruled; the refusal stands.
-- A ship target in ANOTHER system is jumped to beside its own address; within a system the order flies
-  cell to cell, so a ship of the craft's own system many cells off is flown to for as long as that takes.
-  Whether a far target of the same system should be jumped to as well is unruled.
-- A ship of another system whose hull cannot be measured where it is (its cell's world not loaded) is
-  refused as JUMP_TARGET_NOT_MEASURED rather than jumped to by a hull size nobody measured. Unruled
-  whether to load that world to measure it, record a hull with the ledger, or come out of the jump farther
-  off.
-- Every cell of the void is a system of its own, so a ship just past the face into the next void cell is
-  jumped to, not flown to.
+- Which cells are NEXT to each other across lattices: a zone's cell and the cell the zone is nested in
+  are (one crossing of the zone's sphere joins them); a zone's cell and a neighbour of that outer cell are
+  not, although the zone's sphere may reach past its own cell. Chosen from the code, not ruled.
+- A wait has no end of its own: a ship that never comes out of its transit, or never ticks in its cell
+  again after an entry the crossing gave up on, holds the waiting craft until its pilot takes it back.
+  Whether such a wait should ever turn into a refusal is unruled.
+- The jump key pressed while the order is on its jump leg but no wind-up runs (the gate declining) is an
+  ordinary press; a wind-up it starts is taken up by the order. Whether that press, too, should take the
+  craft back is unruled — the decision of 2026-10-25 names a press DURING the order's wind-up.
