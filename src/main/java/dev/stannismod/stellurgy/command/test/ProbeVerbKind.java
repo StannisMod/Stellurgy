@@ -219,6 +219,7 @@ enum ProbeVerbKind {
             case "beacon list":
             case "block at":
             case "block biome-at":
+            case "block biomes-around":
             case "chunk list":
             case "chunk loaded":
             case "client entity-state":

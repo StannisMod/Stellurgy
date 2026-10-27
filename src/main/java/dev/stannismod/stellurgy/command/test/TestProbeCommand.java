@@ -26176,6 +26176,49 @@ public class TestProbeCommand extends CommandBase {
      * mutation) without going through a tile entity.
      */
     private void handleBlock(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /stellurgytest block biomes-around <dim> <x> <z> <inner> <outer> <rings> <perRing> — the biome
+        // dictionary types at points spread over the band between two radii about a column: `rings` circles
+        // at the middles of equal steps of radius, `perRing` points evenly round each. Read through the
+        // world's biome lookup, which for a chunk nobody generated asks the biome provider and generates
+        // nothing, so a test can look for a coast across thousands of blocks without loading them.
+        if (args.length >= 8 && "biomes-around".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], 0));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + args[1] + "}");
+                return;
+            }
+            double cx = parseDoubleOr(args[2], 0);
+            double cz = parseDoubleOr(args[3], 0);
+            double inner = parseDoubleOr(args[4], 0);
+            double outer = parseDoubleOr(args[5], 0);
+            int rings = Math.max(1, parseIntOr(args[6], 1));
+            int perRing = Math.max(1, parseIntOr(args[7], 1));
+            java.util.List<Object> points = new java.util.ArrayList<>();
+            for (int ring = 0; ring < rings; ring++) {
+                double r = inner + (outer - inner) * (ring + 0.5d) / rings;
+                for (int i = 0; i < perRing; i++) {
+                    double angle = 2d * Math.PI * i / perRing;
+                    BlockPos column = new BlockPos(cx + r * Math.cos(angle), 0, cz + r * Math.sin(angle));
+                    net.minecraft.world.biome.Biome biome = world.getBiome(column);
+                    java.util.List<Object> types = new java.util.ArrayList<>();
+                    for (net.minecraftforge.common.BiomeDictionary.Type type
+                            : net.minecraftforge.common.BiomeDictionary.getTypes(biome)) {
+                        types.add(type.getName());
+                    }
+                    Map<String, Object> point = new LinkedHashMap<>();
+                    point.put("x", column.getX());
+                    point.put("z", column.getZ());
+                    point.put("biome", String.valueOf(biome.getRegistryName()));
+                    point.put("types", types);
+                    points.add(point);
+                }
+            }
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("points", points);
+            send(sender, jsonMap(out));
+            return;
+        }
         // /stellurgytest block activate <dim> <x> <y> <z> [sneak] — drive the block's own
         // onBlockActivated with a player, exactly as a right-click does. `sneak` (default false)
         // sets isSneaking first, which is how a block tells "open me" from "toggle me".

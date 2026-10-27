@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.probe.FirstProbe;
 import dev.stannismod.stellurgy.test.EvictionReports;
@@ -85,6 +86,17 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
      */
     private static final int WRECK_SEARCH_DEPTH = 6;
 
+    /**
+     * The coast search: candidates every {@link #COAST_SEARCH_STRIDE} blocks out to this many strides along
+     * each axis. A stride of the band's width moves the band onto new ground each step; twelve of them reach
+     * about twelve thousand blocks, far enough for a vanilla overworld to put an ocean's shore in reach.
+     */
+    private static final int COAST_SEARCH_STEPS = 12;
+    private static final int COAST_SEARCH_STRIDE = 1024;
+
+    /** The height the player is stood at on the coast: above any ground, he falls onto whatever is there. */
+    private static final int COAST_STAND_Y = 150;
+
     private final EvictionReports evictions = new EvictionReports();
 
     @Test
@@ -127,10 +139,10 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
     }
 
     /**
-     * The band and the place only. The third half of the clause, dry land where any is drawn, is not judged
-     * here: around this world's spawn the draws are dry, so the choice of dry land has nothing to choose
-     * between — inverting it to prefer water left the landing dry (2026-10-27). Judging it needs a player
-     * standing where the band holds water and land both.
+     * The band and the place. The third half of the clause, dry land where any is drawn, is
+     * {@link #whereTheBandHoldsWaterAndLandItLandsOnDryLand}'s: around this world's spawn every draw is dry,
+     * so the choice has nothing to choose between here — inverting it to prefer water left the landing dry
+     * (2026-10-27).
      */
     @Test
     @Pins("INV-PRB-06")
@@ -182,6 +194,78 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
             }
         }
         assertEquals("the wreck lies in the landing's own column, once — the column below it: " + column, 1, wrecks);
+    }
+
+    /**
+     * The dry-land half of the clause, where it has something to choose between: the player is stood on a
+     * coast — a place whose band holds water and land both, found by reading the biomes of candidate places
+     * without generating them — and the probe lets in around him lands on dry land.
+     */
+    @Test
+    @Pins("INV-PRB-06")
+    @RedWitness(verdict = "on dry land", member = "ProbeFallDriver#fallAround",
+            at = "if (!wetBiome && !world.getBlockState(top).getMaterial().isLiquid()) {",
+            replacedBy = "if (wetBiome || world.getBlockState(top).getMaterial().isLiquid()) {",
+            fails = "where the band holds water and land, it lands on dry land", on = "2026-10-27")
+    public void whereTheBandHoldsWaterAndLandItLandsOnDryLand() throws Exception {
+        Events events = events(bothSides());
+        long mark = events.markInstrumented();
+
+        String player = RealClientHarness.CLIENT_USERNAME;
+        String whereCommand = "stellurgytest player position-of " + player;
+        Reply spawn = Reply.answering(whereCommand, serverClient().read(whereCommand)).requireOk(whereCommand);
+        double[] coast = aCoastNear(spawn.number("playerPosX"), spawn.number("playerPosZ"));
+        requireArranged("no place within " + COAST_SEARCH_STEPS * COAST_SEARCH_STRIDE + " blocks of spawn has a"
+                + " band of mixed water and land, so the dry-land choice cannot be staged", coast != null);
+        arrange("tp " + player + " " + coast[0] + " " + COAST_STAND_Y + " " + coast[1]);
+
+        String entry = letTheProbeIn(events, mark);
+        requireArranged("the probe must have fallen around the player where he was stood: " + entry,
+                Math.abs(Events.number(entry, "playerX") - coast[0]) < 2d
+                        && Math.abs(Events.number(entry, "playerZ") - coast[1]) < 2d);
+        assertTrue("where the band holds water and land, it lands on dry land: not on a liquid, not in an ocean"
+                        + " or a river — " + entry,
+                !Boolean.parseBoolean(Events.text(entry, "landingLiquid"))
+                        && !Events.text(entry, "biomeTypes").contains("\"OCEAN\"")
+                        && !Events.text(entry, "biomeTypes").contains("\"RIVER\""));
+    }
+
+    /**
+     * A place on a straight line out of {@code (x, z)} along one of the four axes, at a multiple of
+     * {@link #COAST_SEARCH_STRIDE}, whose landing band reads between a quarter and three quarters water —
+     * the nearest such, or {@code null}. Every candidate is read before one is chosen.
+     */
+    private double[] aCoastNear(double x, double z) throws Exception {
+        double[][] axes = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        double[][] candidates = new double[COAST_SEARCH_STEPS * axes.length][];
+        double[] wet = new double[candidates.length];
+        int n = 0;
+        for (int step = 1; step <= COAST_SEARCH_STEPS; step++) {
+            for (double[] axis : axes) {
+                double cx = x + axis[0] * step * COAST_SEARCH_STRIDE;
+                double cz = z + axis[1] * step * COAST_SEARCH_STRIDE;
+                String command = "stellurgytest block biomes-around 0 " + cx + " " + cz + " "
+                        + FirstProbe.LANDING_MIN_BLOCKS + " " + FirstProbe.LANDING_MAX_BLOCKS + " 3 16";
+                Reply[] points = Reply.answering(command, serverClient().read(command)).requireOk(command)
+                        .elements("points");
+                int water = 0;
+                for (Reply point : points) {
+                    java.util.List<String> types = java.util.Arrays.asList(point.textArray("types"));
+                    if (types.contains("OCEAN") || types.contains("RIVER")) {
+                        water++;
+                    }
+                }
+                candidates[n] = new double[]{cx, cz};
+                wet[n] = (double) water / points.length;
+                n++;
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            if (wet[i] >= 0.25d && wet[i] <= 0.75d) {
+                return candidates[i];
+            }
+        }
+        return null;
     }
 
     /** Lets the probe in at the save's first night and answers its admitted entry record. A class instrument:

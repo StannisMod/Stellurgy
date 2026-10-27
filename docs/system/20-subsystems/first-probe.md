@@ -147,9 +147,10 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
   (`ProbeFallDriver.java:102`, INV-PRB-13), and the point is drawn in the band (INV-PRB-12) and tried for dry
   land (`ProbeFallDriver.java:171`). Pinned by `FirstProbeFallTest#itLandsWhereItsFallEndsInTheBandAroundThePlayer`
   (client tier, own boot): the crater is laid on the block the fall ended on, the wreck in that block's
-  column, the block in the band around where the player stood at the entry. Owed: the dry-land half — around
-  the test world's spawn every draw is dry, so preferring water still lands dry and the choice is not seen;
-  it needs a player standing where the band holds water and land both.
+  column, the block in the band around where the player stood at the entry; and by
+  `#whereTheBandHoldsWaterAndLandItLandsOnDryLand`, the player stood on a coast whose band reads a quarter to
+  three quarters water: the landing is not a liquid nor in an ocean or river biome. Not visited: a band with
+  no dry land at all, where it lands in the water at the first point drawn.
 - **INV-PRB-07 [V][BEH] A client in the fall's world draws it at every tick of the fall, whatever its chunks
   and render distance.** Its placement is by direction inside the far plane (`ClientProbeFall.java:67`). Owed:
   a client e2e on a test record of each sky point drawn.
@@ -220,8 +221,7 @@ past them (C4). The probe itself is not switchable — maintainer 2026-10-26, *"
 ## Test coverage
 
 INV-PRB-01, -03, -04, -11..-14 → `ProbeLawsTest` (unit); INV-PRB-02, -15 → `ProbeJointsTest` (integration,
-the joints with `environment` and with the terminal's table); INV-PRB-05 and -06 (but its dry-land half) →
-`FirstProbeFallTest` (client, own boot). INV-PRB-07..-10 are owed their server and client tests.
+the joints with `environment` and with the terminal's table); INV-PRB-05 and -06 → `FirstProbeFallTest` (client, own boot). INV-PRB-07..-10 are owed their server and client tests.
 
 ## Open questions
 
