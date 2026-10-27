@@ -79,7 +79,17 @@ public abstract class AbstractOwnBootClientTest {
     }
 
     // No hook hands this class's subclasses the raw game directory: a start that differs from the game as
-    // it ships is typed (the shared client base's GameDirSeed; an e2e's PlayerStart), never a Path.
+    // it ships is typed (startFiles below; the shared client base's GameDirSeed; an e2e's PlayerStart),
+    // never a Path.
+
+    /**
+     * What this test's game directory holds before its server boots, as typed files; {@code null} by default,
+     * a bare directory as a fresh game has. Asked once per test, before the boot, on the test's own instance,
+     * so a class whose methods need different starts answers per method.
+     */
+    protected com.github.stannismod.forge.testing.server.StartFiles startFiles() {
+        return null;
+    }
 
     @Before
     public final void startBoth() throws Exception {
@@ -90,8 +100,14 @@ public abstract class AbstractOwnBootClientTest {
                 "Client harness disabled — set -D" + PROP_CLIENT_ENABLED + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(PROP_CLIENT_ENABLED, "false")));
 
+        com.github.stannismod.forge.testing.server.ServerRoot root =
+                com.github.stannismod.forge.testing.server.ServerRoot.fresh("forge-client-own-boot-");
+        com.github.stannismod.forge.testing.server.StartFiles start = startFiles();
+        if (start != null) {
+            root.seed(start);
+        }
         serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS),
-                com.github.stannismod.forge.testing.server.ServerRoot.fresh("forge-client-own-boot-"), /*cleanupOnClose=*/true);
+                root, /*cleanupOnClose=*/true);
         try {
             clientHarness = requiresFramebufferAtLaunch()
                     ? RealClientHarness.startWithFramebuffer(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), serverHarness)

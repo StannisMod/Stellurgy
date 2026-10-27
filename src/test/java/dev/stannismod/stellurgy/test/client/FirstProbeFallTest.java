@@ -12,7 +12,10 @@ import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Wait;
+import com.github.stannismod.forge.testing.server.StartFiles;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -377,6 +380,78 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
             }
         }
         return false;
+    }
+
+    /** The pack a pack-carrying method's world starts with: two notes and three readings, a well-formed file. */
+    private static final String PACK = "{\"notes\": [\"A probe nobody launched.\", \"Its maker's mark is gone.\"],"
+            + " \"readings\": [{\"tick\": -3000, \"gyPerS\": 1.0e-5}, {\"tick\": -2000, \"gyPerS\": 2.0e-5},"
+            + " {\"tick\": -1000, \"gyPerS\": 3.0e-5}]}";
+    private static final int PACK_NOTES = 2;
+    private static final int PACK_READINGS = 3;
+
+    /** A pack file that is not JSON at all. */
+    private static final String UNREADABLE_PACK = "{ this is not a pack";
+
+    @Rule
+    public final TestName method = new TestName();
+
+    /** The pack methods' worlds start with their pack file; every other method's with none. */
+    @Override
+    protected StartFiles startFiles() {
+        if ("aPackFileAddsItsNotesAndReadingsToTheRecord".equals(method.getMethodName())) {
+            return new GameDirSeed().probePack(PACK, FirstProbeFallTest.class);
+        }
+        if ("anUnreadablePackAddsNothingAndTheRecordIsWhole".equals(method.getMethodName())) {
+            return new GameDirSeed().probePack(UNREADABLE_PACK, FirstProbeFallTest.class);
+        }
+        return null;
+    }
+
+    @Test
+    @Pins("INV-PRB-10")
+    @RedWitness(verdict = "a pack adds", member = "ProbeFallDriver#packAdditions",
+            at = "return ProbePack.parse(in);", replacedBy = "return ProbePack.NONE;",
+            fails = "the pack file's notes and readings ride with the record", on = "2026-10-27")
+    public void aPackFileAddsItsNotesAndReadingsToTheRecord() throws Exception {
+        Events events = events(bothSides());
+        long mark = events.markInstrumented();
+        letTheProbeIn(events, mark);
+        Reply record = Reply.of(Reply.of(fallState().object("fall")).object("record"));
+        assertEquals("the pack file's notes and readings ride with the record, all of them — " + record,
+                PACK_NOTES + " notes, " + PACK_READINGS + " readings",
+                record.integer("packNotes") + " notes, " + record.integer("packReadings") + " readings");
+        assertTrue("beside the pack, the record still carries its own readings — " + record,
+                record.integer("readings") > 0);
+    }
+
+    @Test
+    @Pins("INV-PRB-10")
+    public void withNoPackTheRecordIsWholeAndCarriesNoAdditions() throws Exception {
+        Events events = events(bothSides());
+        long mark = events.markInstrumented();
+        letTheProbeIn(events, mark);
+        Reply record = Reply.of(Reply.of(fallState().object("fall")).object("record"));
+        assertEquals("with no pack file, nothing is added — " + record, "0 notes, 0 readings",
+                record.integer("packNotes") + " notes, " + record.integer("packReadings") + " readings");
+        assertTrue("with no pack file, the record still carries its own readings — " + record,
+                record.integer("readings") > 0);
+    }
+
+    @Test
+    @Pins("INV-PRB-10")
+    @RedWitness(verdict = "an unreadable pack leaves the record whole", member = "ProbeFallDriver#packAdditions",
+            at = "file, unreadable.getMessage()); return ProbePack.NONE;",
+            replacedBy = "file, unreadable.getMessage()); return ProbePack.parse(new java.io.StringReader(\"{\\\"notes\\\": [\\\"unread\\\"]}\"));",
+            fails = "an unreadable pack file adds nothing", on = "2026-10-27")
+    public void anUnreadablePackAddsNothingAndTheRecordIsWhole() throws Exception {
+        Events events = events(bothSides());
+        long mark = events.markInstrumented();
+        letTheProbeIn(events, mark);
+        Reply record = Reply.of(Reply.of(fallState().object("fall")).object("record"));
+        assertEquals("an unreadable pack file adds nothing — " + record, "0 notes, 0 readings",
+                record.integer("packNotes") + " notes, " + record.integer("packReadings") + " readings");
+        assertTrue("an unreadable pack file leaves the record its own readings — " + record,
+                record.integer("readings") > 0);
     }
 
     /** Lets the probe in at the save's first night and answers its admitted entry record. A class instrument:

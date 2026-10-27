@@ -47,7 +47,12 @@ public final class GameDirSeed implements StartFiles {
     private String planetDefsDeclaredBy;
     private String thermalTable;
     private String thermalTableDeclaredBy;
+    private String probePack;
+    private String probePackDeclaredBy;
     private String operator;
+
+    /** The first-probe pack file's name, the one the probe driver reads. */
+    private static final String PROBE_PACK = dev.stannismod.stellurgy.probe.ProbePack.FILE;
 
     /**
      * The seed every shared harness world starts from: fuel is not required to fly
@@ -129,20 +134,35 @@ public final class GameDirSeed implements StartFiles {
      * permission BEFORE it posts the event. For a class whose subject is what a judge on that event decides about
      * a player's own command.
      */
+    /**
+     * The whole first-probe pack file a pack ships ({@code firstProbe.json} in the mod's config folder), read
+     * when the probe enters. Its text is written as given, so a test can also seed one that does not parse.
+     */
+    public GameDirSeed probePack(String json, Class<?> declarer) {
+        if (probePack != null && !probePack.equals(json)) {
+            throw new IllegalStateException("two declarations disagree about " + PROBE_PACK + ": "
+                    + probePackDeclaredBy + " and " + declarer.getName() + " each state a whole pack");
+        }
+        probePack = json;
+        probePackDeclaredBy = declarer.getName();
+        return this;
+    }
+
     public GameDirSeed theClientAsOperator() {
         operator = com.github.stannismod.forge.testing.client.RealClientHarness.CLIENT_USERNAME;
         return this;
     }
 
     public boolean isEmpty() {
-        return config.isEmpty() && planetDefs == null && thermalTable == null && operator == null;
+        return config.isEmpty() && planetDefs == null && thermalTable == null && probePack == null && operator == null;
     }
 
     /**
      * What was declared, as the files the harness writes before the first boot
      * ({@code ServerRoot#seed}): {@code config/advRocketry/stellurgy.cfg} for the keys,
      * {@code config/advRocketry/planetDefs.xml} for the catalogue,
-     * {@code config/advRocketry/thermalMaterials.json} for the thermal table — each only when declared.
+     * {@code config/advRocketry/thermalMaterials.json} for the thermal table, {@code firstProbe.json} beside
+     * them for a probe pack — each only when declared.
      */
     @Override
     public Map<String, String> files() {
@@ -165,6 +185,9 @@ public final class GameDirSeed implements StartFiles {
         if (thermalTable != null) {
             files.put(CONFIG_DIR + "thermalMaterials.json", thermalTable);
         }
+        if (probePack != null) {
+            files.put(CONFIG_DIR + PROBE_PACK, probePack);
+        }
         if (operator != null) {
             files.put("ops.json", com.github.stannismod.forge.testing.junit.PlayerStart.opsFileFor(operator));
         }
@@ -186,6 +209,9 @@ public final class GameDirSeed implements StartFiles {
         }
         if (thermalTable != null) {
             described.append(" thermalMaterials.json(").append(thermalTableDeclaredBy).append(')');
+        }
+        if (probePack != null) {
+            described.append(' ').append(PROBE_PACK).append('(').append(probePackDeclaredBy).append(')');
         }
         if (operator != null) {
             described.append(" ops.json(").append(operator).append(')');

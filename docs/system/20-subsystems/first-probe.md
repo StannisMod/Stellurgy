@@ -166,9 +166,14 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
   the player's own clicks in the screen put the recorder in and take it out; the update the terminal sends
   carries one row an entry of the record, then none. Not visited: a terminal whose satellite has rows of its
   own, so "beside" is seen only as the probe's rows coming and going.
-- **INV-PRB-10 [V][BEH] A pack only adds, and the probe is whole without one.** A missing or unreadable pack
+- **INV-PRB-10 [T][BEH] A pack only adds, and the probe is whole without one.** A missing or unreadable pack
   file gives no additions (`ProbeFallDriver.java:251`, `:258`); what one adds is kept beside the core
-  (INV-PRB-15). Owed: a server mechanics test with a pack file present and absent.
+  (INV-PRB-15). Pinned by `FirstProbeFallTest#aPackFileAddsItsNotesAndReadingsToTheRecord`,
+  `#withNoPackTheRecordIsWholeAndCarriesNoAdditions` and `#anUnreadablePackAddsNothingAndTheRecordIsWhole`
+  (client tier, own boot; the world starts with the file as a pack ships it): a file's notes and readings all
+  ride with the record beside its own readings; none, or one that does not parse, adds nothing and leaves the
+  record its readings. REGIONS: `pack`, `no pack`, `unreadable`. That the core is the SAME with and without a
+  pack is INV-PRB-15's, on the terminal's table.
 - **INV-PRB-11 [T][SYS] It falls at night, after the delay.** The probe is due exactly when somebody has
   logged in, the delay has passed since the first login, and the sun stands more than six degrees below the
   horizon. REGIONS: `nobody logged in`, `before the delay`, `day`, `twilight`, `night`. Pinned by
@@ -227,8 +232,8 @@ past them (C4). The probe itself is not switchable — maintainer 2026-10-26, *"
 ## Test coverage
 
 INV-PRB-01, -03, -04, -11..-14 → `ProbeLawsTest` (unit); INV-PRB-02, -15 → `ProbeJointsTest` (integration,
-the joints with `environment` and with the terminal's table); INV-PRB-05, -06 and -09 → `FirstProbeFallTest` (client, own boot). INV-PRB-07, -08 and -10 are owed their
-server and client tests.
+the joints with `environment` and with the terminal's table); INV-PRB-05, -06, -09 and -10 →
+`FirstProbeFallTest` (client, own boot). INV-PRB-07 and -08 are owed their client tests.
 
 ## Open questions
 

@@ -9249,7 +9249,8 @@ public class TestProbeCommand extends CommandBase {
      * overworld time of the first login ({@code firstLoginTick}, negative while nobody has logged in), whether
      * the crater is {@code laid}, and from the entry on the {@code fall}'s world, entry tick, landing block,
      * player, length in ticks and the {@code record} it carries, counted: whether it has its {@code orbit},
-     * its {@code readings} and {@code journal} entries, and the {@code packReadings} a pack added. Read through the storage's own load, never {@code ProbeFall.get}, which
+     * its {@code readings} and {@code journal} entries, and the {@code packReadings} and {@code packNotes} a
+     * pack added. Read through the storage's own load, never {@code ProbeFall.get}, which
      * creates the data when it is absent; a save with none answers {@code stored:false}.
      */
     private void handleFirstProbe(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -9284,10 +9285,12 @@ public class TestProbeCommand extends CommandBase {
                 r.put("orbit", record.orbit().isPresent());
                 r.put("readings", record.readings().readings().size());
                 r.put("journal", record.journal().entries().size());
-                r.put("packReadings", nbt.hasKey(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY)
+                dev.stannismod.stellurgy.probe.ProbePack pack = nbt.hasKey(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY)
                         ? dev.stannismod.stellurgy.probe.ProbePack.readFromNBT(
-                                nbt.getCompoundTag(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY)).readings().size()
-                        : 0);
+                                nbt.getCompoundTag(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY))
+                        : dev.stannismod.stellurgy.probe.ProbePack.NONE;
+                r.put("packReadings", pack.readings().size());
+                r.put("packNotes", pack.notes().size());
                 f.put("record", r);
                 out.put("fall", f);
             }
