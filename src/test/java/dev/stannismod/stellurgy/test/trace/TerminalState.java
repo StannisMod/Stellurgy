@@ -7,7 +7,8 @@ import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
  * What a satellite terminal's screen is drawn from, as one record payload: the {@code outcome} it shows,
  * what its last contact brought ({@code received}, {@code lostAboard}, {@code partsFailed}, {@code readings},
  * {@code missed}, {@code powerPerTick}, {@code aboard}, {@code capacity}), the points in its own buffer
- * ({@code terminalData}), the rows it holds ({@code rows}) and a digest of their content ({@code rowsDigest}).
+ * ({@code terminalData}), the rows it holds ({@code rows}, of which {@code probeRows} are a flight recorder's)
+ * and a digest of their content ({@code rowsDigest}).
  *
  * <p>One payload for both sides — the server's {@code terminal_try} and the client's
  * {@code terminal_copy_applied} — so a test compares the two field by field: each side's payload is read off
@@ -30,7 +31,19 @@ public final class TerminalState {
                 + ",\"aboard\":" + last.aboard + ",\"capacity\":" + last.capacity
                 + ",\"terminalData\":" + terminal.getDataObject().getData()
                 + ",\"rows\":" + readout.rows().size()
+                + ",\"probeRows\":" + probeRows(readout)
                 + ",\"rowsDigest\":" + rowsDigest(readout);
+    }
+
+    /** How many of the rows are the first probe's, from a flight recorder in the data slot. */
+    private static int probeRows(TerminalReadout readout) {
+        int n = 0;
+        for (TerminalReadout.Row row : readout.rows()) {
+            if (row.fromProbe) {
+                n++;
+            }
+        }
+        return n;
     }
 
     /**

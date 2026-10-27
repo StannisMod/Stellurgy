@@ -70,8 +70,17 @@ public class ModuleData extends ModuleBase implements IButtonInventory {
 
     @Override
     public List<Slot> getSlots(Container container) {
-        slotList.add(new SlotData(chipStorage, slot, offsetX + 10, offsetY + 16));
+        slotList.add(dataSlot(chipStorage, slot, offsetX + 10, offsetY + 16));
         return slotList;
+    }
+
+    /**
+     * The slot the player puts a chip in: a {@link SlotData}, which takes data items only. A machine whose slot
+     * takes more than a data item overrides this with a slot that asks its own inventory, so the screen admits
+     * what the machine reads and nothing else.
+     */
+    protected Slot dataSlot(IDataInventory inventory, int index, int x, int y) {
+        return new SlotData(inventory, index, x, y);
     }
 
     @Override

@@ -97,6 +97,12 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
     /** The height the player is stood at on the coast: above any ground, he falls onto whatever is there. */
     private static final int COAST_STAND_Y = 150;
 
+    /** The satellite terminal's registry name. */
+    private static final String TERMINAL_BLOCK = "stellurgy:satellitecontrolcenter";
+
+    /** The terminal's data slot, by its index in the terminal's own inventory: where a recorder is read. */
+    private static final int TERMINAL_DATA_SLOT = 1;
+
     private final EvictionReports evictions = new EvictionReports();
 
     @Test
@@ -266,6 +272,111 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
             }
         }
         return null;
+    }
+
+    /**
+     * The flight recorder in a satellite terminal's data slot, put in and taken out by the player's own
+     * clicks in the terminal's screen. The recorder is the item the wreck gives up, handed over holding the
+     * save's own record ({@code arrange flight-recorder}); the breaking of the wreck is not this test's.
+     *
+     * <p>Not visited: a terminal whose own satellite has rows, so "beside the satellite's rows" is seen only
+     * as the probe's rows appearing and going; the screen's drawing of them (the update the client is sent
+     * is what is read).</p>
+     */
+    @Test
+    @Pins("INV-PRB-09")
+    @RedWitness(verdict = "the player can put it in", member = "TileSatelliteTerminal#getModules",
+            at = "inventory.isItemValidForSlot(index, stack)",
+            replacedBy = "stack.getItem() instanceof dev.stannismod.stellurgy.item.IDataItem",
+            fails = "the player's two clicks put the recorder in the terminal's data slot", on = "2026-10-27")
+    @RedWitness(verdict = "it shows the record", member = "TileSatelliteTerminal#recorderChanged",
+            at = "readout.holdRecord(ItemFlightRecorder.recordOf(held), ItemFlightRecorder.packOf(held));",
+            replacedBy = "readout.holdRecord(java.util.Optional.empty(), ItemFlightRecorder.packOf(held));",
+            fails = "the recorder put in the data slot puts the probe's record on the terminal", on = "2026-10-27")
+    @RedWitness(verdict = "taken out, it takes it away", member = "TileSatelliteTerminal#recorderChanged",
+            at = "readout.holdRecord(ItemFlightRecorder.recordOf(held), ItemFlightRecorder.packOf(held));",
+            replacedBy = "if (!held.isEmpty()) readout.holdRecord(ItemFlightRecorder.recordOf(held), ItemFlightRecorder.packOf(held));",
+            fails = "the recorder taken out takes the probe's record away", on = "2026-10-27")
+    public void aFlightRecorderInATerminalShowsTheRecordAndTakenOutTakesItAway() throws Exception {
+        Events.Step bothSides = bothSides();
+        Events events = events(bothSides);
+        Events client = ClientEvents.of(bot(), bothSides, evictions);
+        long mark = events.markInstrumented();
+        letTheProbeIn(events, mark);
+
+        Reply record = Reply.of(Reply.of(fallState().object("fall")).object("record"));
+        requireArranged("the probe's record must be placed on its orbit, which the terminal's rows are read on: "
+                + record, record.bool("orbit") && record.integer("readings") > 0);
+        int recorded = record.integer("readings") + record.integer("journal") + record.integer("packReadings");
+
+        String player = RealClientHarness.CLIENT_USERNAME;
+        String whereCommand = "stellurgytest player position-of " + player;
+        Reply where = Reply.answering(whereCommand, serverClient().read(whereCommand)).requireOk(whereCommand);
+        int tx = (int) Math.floor(where.number("playerPosX")) + 2;
+        int ty = (int) Math.floor(where.number("playerPosY"));
+        int tz = (int) Math.floor(where.number("playerPosZ"));
+        arrange("stellurgytest place 0 " + tx + " " + ty + " " + tz + " " + TERMINAL_BLOCK);
+        String flightRecorder = Reply.answering("stellurgytest arrange flight-recorder " + player,
+                serverClient().arrange("stellurgytest arrange flight-recorder " + player))
+                .requireOk("the recorder handed over").text("item");
+
+        long opened = client.mark();
+        bot().interactBlock(tx, ty, tz);
+        client.awaitMatching(opened, "client_gui_opened",
+                reply -> Events.records(reply).size() > Events.recordsWhere(reply, "gui", "none").size(),
+                "opening a screen", "the player's click on the terminal opens its screen", LINK_TICKS);
+        int recorderSlot = -1;
+        int dataSlot = -1;
+        for (Reply slot : Reply.of(bot().reportSlots().toString()).elements("slots")) {
+            if (slot.bool("playerSlot") && flightRecorder.equals(slot.text("item"))) {
+                recorderSlot = slot.integer("slot");
+            } else if (!slot.bool("playerSlot") && slot.integer("index") == TERMINAL_DATA_SLOT) {
+                dataSlot = slot.integer("slot");
+            }
+        }
+        requireArranged("the screen must show the recorder in the player's inventory and the terminal's data slot"
+                + " (recorder " + recorderSlot + ", data " + dataSlot + "): " + bot().reportSlots(),
+                recorderSlot >= 0 && dataSlot >= 0);
+
+        long putIn = events.mark();
+        bot().clickSlot(recorderSlot, 0, "PICKUP");
+        bot().clickSlot(dataSlot, 0, "PICKUP");
+        assertTrue("the player's two clicks put the recorder in the terminal's data slot: " + bot().reportSlots(),
+                holds(dataSlot, flightRecorder));
+        String shown = events.awaitMatching(putIn, "terminal_update_sent",
+                reply -> anyAtWithProbeRows(reply, tx, ty, tz, true),
+                "carrying probe rows", "the recorder put in the data slot puts the probe's record on the terminal",
+                LINK_TICKS);
+        assertEquals("the terminal shows the probe's whole record, one row an entry of it — " + shown, recorded,
+                (int) Events.number(Events.lastRecord(shown), "probeRows"));
+
+        long takenOut = events.mark();
+        bot().clickSlot(dataSlot, 0, "PICKUP");
+        bot().clickSlot(recorderSlot, 0, "PICKUP");
+        events.awaitMatching(takenOut, "terminal_update_sent",
+                reply -> anyAtWithProbeRows(reply, tx, ty, tz, false),
+                "carrying no probe rows", "the recorder taken out takes the probe's record away", LINK_TICKS);
+    }
+
+    /** Whether the open screen's container slot {@code slot} holds {@code item}, as the client sees it. */
+    private boolean holds(int slot, String item) throws Exception {
+        for (Reply each : Reply.of(bot().reportSlots().toString()).elements("slots")) {
+            if (each.integer("slot") == slot) {
+                return item.equals(each.text("item"));
+            }
+        }
+        return false;
+    }
+
+    /** Whether an update of the terminal at that place carries probe rows ({@code some}) or none. */
+    private static boolean anyAtWithProbeRows(String reply, int x, int y, int z, boolean some) {
+        for (String update : Events.recordsWhereAll(reply, "x", String.valueOf(x), "y", String.valueOf(y),
+                "z", String.valueOf(z))) {
+            if ((Events.number(update, "probeRows") > 0) == some) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Lets the probe in at the save's first night and answers its admitted entry record. A class instrument:

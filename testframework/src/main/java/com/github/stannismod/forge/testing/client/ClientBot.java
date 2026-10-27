@@ -225,7 +225,8 @@ public final class ClientBot implements Closeable, ClientReads {
 
     /**
      * Lists every slot of the open {@link net.minecraft.client.gui.inventory.GuiContainer}:
-     * each entry carries {@code slot} (the container slot number), {@code x}/
+     * each entry carries {@code slot} (the container slot number), {@code index} (the slot's index in its
+     * own inventory, {@code Slot#getSlotIndex}), {@code x}/
      * {@code y}, {@code playerSlot} (true for the player-inventory portion),
      * {@code hasStack}, {@code item} (registry name) and {@code count}.
      */

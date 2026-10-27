@@ -660,6 +660,7 @@ public final class ForgeTestClientBootstrap {
                     for (Slot slot : container.inventorySlots) {
                         JsonObject entry = new JsonObject();
                         entry.addProperty("slot", slot.slotNumber);
+                        entry.addProperty("index", slot.getSlotIndex());
                         entry.addProperty("x", slot.xPos);
                         entry.addProperty("y", slot.yPos);
                         entry.addProperty("playerSlot",

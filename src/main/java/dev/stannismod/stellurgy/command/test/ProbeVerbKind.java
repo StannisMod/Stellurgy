@@ -475,6 +475,7 @@ enum ProbeVerbKind {
                 return BUILD;
             case "arrange charged-item":
             case "arrange coded-item":
+            case "arrange flight-recorder":
             case "arrange held-target":
             case "arrange tidal-lock":
             case "arrange wheel-momentum":

@@ -95,7 +95,8 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
   transmitter.
 - **MECH-PRB-07 The record on a terminal, and a pack's additions.** A flight recorder in a satellite
   terminal's data slot puts the record — and what a pack added — beside the satellite's rows
-  (`TileSatelliteTerminal.java:339`, `TerminalReadout.java:192`; satellite owns the table). A pack's file,
+  (`TileSatelliteTerminal.java:336`, `TerminalReadout.java:192`; satellite owns the table) — put there by
+  the player in the terminal's screen, whose data slot asks the terminal (`TileSatelliteTerminal.java:388`). A pack's file,
   `firstProbe.json` in the mod's config folder, is read at the entry and stored beside the core record under
   its own key (`ProbeFallDriver.java:240`); a missing or unreadable file adds nothing, the second logged.
 
@@ -157,9 +158,14 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
 - **INV-PRB-08 [V][BEH] The radio points at the wreck from anywhere in its world, and a broken wreck no
   longer transmits.** The wreck's point is a transmitter from touchdown (`ProbeFallDriver.java:102`) until
   it is broken (`BlockProbeWreck.java:39`). Owed: a client e2e of the needle's bearing.
-- **INV-PRB-09 [V][BEH] The flight recorder in a satellite terminal's data slot shows the probe's record
-  beside the terminal's own satellite's, and taken out, takes it away** (`TileSatelliteTerminal.java:339`).
-  Owed: a server mechanics test through the terminal's slot.
+- **INV-PRB-09 [T][BEH] The flight recorder in a satellite terminal's data slot shows the probe's record
+  beside the terminal's own satellite's, and taken out, takes it away** (`TileSatelliteTerminal.java:336`).
+  The screen's data slot asks the terminal what it takes, so a player can put the recorder in
+  (`TileSatelliteTerminal.java:388`). Pinned by
+  `FirstProbeFallTest#aFlightRecorderInATerminalShowsTheRecordAndTakenOutTakesItAway` (client tier, own boot):
+  the player's own clicks in the screen put the recorder in and take it out; the update the terminal sends
+  carries one row an entry of the record, then none. Not visited: a terminal whose satellite has rows of its
+  own, so "beside" is seen only as the probe's rows coming and going.
 - **INV-PRB-10 [V][BEH] A pack only adds, and the probe is whole without one.** A missing or unreadable pack
   file gives no additions (`ProbeFallDriver.java:251`, `:258`); what one adds is kept beside the core
   (INV-PRB-15). Owed: a server mechanics test with a pack file present and absent.
@@ -221,7 +227,8 @@ past them (C4). The probe itself is not switchable — maintainer 2026-10-26, *"
 ## Test coverage
 
 INV-PRB-01, -03, -04, -11..-14 → `ProbeLawsTest` (unit); INV-PRB-02, -15 → `ProbeJointsTest` (integration,
-the joints with `environment` and with the terminal's table); INV-PRB-05 and -06 → `FirstProbeFallTest` (client, own boot). INV-PRB-07..-10 are owed their server and client tests.
+the joints with `environment` and with the terminal's table); INV-PRB-05, -06 and -09 → `FirstProbeFallTest` (client, own boot). INV-PRB-07, -08 and -10 are owed their
+server and client tests.
 
 ## Open questions
 

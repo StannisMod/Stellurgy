@@ -381,6 +381,18 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
 
         modules.add(new ModuleData(28, 20, 1, this, data) {
             @Override public int numberOfChangesToSend() { return 2; }
+
+            // The data slot also takes the first probe's flight recorder: the slot asks the terminal, whose
+            // isItemValidForSlot is the one list of what slot 1 reads.
+            @Override
+            protected net.minecraft.inventory.Slot dataSlot(IDataInventory inventory, int index, int x, int y) {
+                return new dev.stannismod.stellurgy.inventory.modules.SlotData(inventory, index, x, y) {
+                    @Override
+                    public boolean isItemValid(@Nonnull ItemStack stack) {
+                        return !stack.isEmpty() && inventory.isItemValidForSlot(index, stack);
+                    }
+                };
+            }
         });
 
         modules.add(new ModuleSatellite(152, 10, this, 0) {

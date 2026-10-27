@@ -9248,7 +9248,8 @@ public class TestProbeCommand extends CommandBase {
      * {@code first-probe fall} — the save's one fall as its global storage holds it: {@code phase}, the
      * overworld time of the first login ({@code firstLoginTick}, negative while nobody has logged in), whether
      * the crater is {@code laid}, and from the entry on the {@code fall}'s world, entry tick, landing block,
-     * player and length in ticks. Read through the storage's own load, never {@code ProbeFall.get}, which
+     * player, length in ticks and the {@code record} it carries, counted: whether it has its {@code orbit},
+     * its {@code readings} and {@code journal} entries, and the {@code packReadings} a pack added. Read through the storage's own load, never {@code ProbeFall.get}, which
      * creates the data when it is absent; a save with none answers {@code stored:false}.
      */
     private void handleFirstProbe(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -9277,6 +9278,17 @@ public class TestProbeCommand extends CommandBase {
                 f.put("z", fall.landing.getZ());
                 f.put("player", fall.player);
                 f.put("ticks", fall.placement().ticks());
+                net.minecraft.nbt.NBTTagCompound nbt = fall.record();
+                dev.stannismod.stellurgy.probe.ProbeRecord record = dev.stannismod.stellurgy.probe.ProbeRecord.readFromNBT(nbt);
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("orbit", record.orbit().isPresent());
+                r.put("readings", record.readings().readings().size());
+                r.put("journal", record.journal().entries().size());
+                r.put("packReadings", nbt.hasKey(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY)
+                        ? dev.stannismod.stellurgy.probe.ProbePack.readFromNBT(
+                                nbt.getCompoundTag(dev.stannismod.stellurgy.probe.ProbeRecord.PACK_KEY)).readings().size()
+                        : 0);
+                f.put("record", r);
                 out.put("fall", f);
             }
         }
@@ -15664,6 +15676,9 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code tidal-lock <dim> <true|false>} — the body of {@code dim} locked to its star or released,
      *       through {@code DimensionProperties#setTidallyLocked}, so its time of day stands still (a mechanics
      *       test's way to a world whose time of day does not move; restore it after).</li>
+     *   <li>{@code flight-recorder <player>} — a flight recorder holding the save's first-probe record, the one
+     *       its wreck holds, through {@code ItemFlightRecorder#holding}, into the player's inventory: the item
+     *       the wreck drops when broken, without the breaking.</li>
      * </ul>
      */
     private void handleTypedArrangement(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -15733,6 +15748,23 @@ public class TestProbeCommand extends CommandBase {
                     zombie.setUniqueId(new java.util.UUID(Long.parseLong(args[5]), Long.parseLong(args[6])));
                     boolean spawned = world.spawnEntity(zombie);
                     send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
+                    return;
+                }
+                case "flight-recorder": {
+                    EntityPlayerMP player = server.getPlayerList().getPlayerByUsername(args[1]);
+                    WorldServer overworld = server.getWorld(0);
+                    dev.stannismod.stellurgy.probe.ProbeFall data = overworld == null ? null
+                            : (dev.stannismod.stellurgy.probe.ProbeFall) overworld.getMapStorage().getOrLoadData(
+                                    dev.stannismod.stellurgy.probe.ProbeFall.class,
+                                    dev.stannismod.stellurgy.probe.ProbeFall.DATA_NAME);
+                    if (player == null || data == null || !data.fall().isPresent()) {
+                        send(sender, "{\"error\":\"no player " + escapeJson(args[1]) + " or no fall in this save\"}");
+                        return;
+                    }
+                    net.minecraft.item.ItemStack stack =
+                            ((dev.stannismod.stellurgy.probe.ItemFlightRecorder) dev.stannismod.stellurgy.api.StellurgyItems.itemFlightRecorder)
+                                    .holding(data.fall().get().record());
+                    handOver(sender, player, stack, "\"item\":\"" + stack.getItem().getRegistryName() + "\"");
                     return;
                 }
                 case "tidal-lock": {
