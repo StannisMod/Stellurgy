@@ -208,6 +208,17 @@ through any other wrapper, is invisible to it.
 
 `en_US` only.
 
+## First probe
+
+| lang keys | where |
+|---|---|
+| `tile.probeWreck.name` | the first probe's wreck block |
+| `item.flightRecorder.name`, `item.flightRecorder.readings`, `item.flightRecorder.empty` | the flight recorder and its tooltip (`probe/ItemFlightRecorder`) `[V]` |
+| `item.radio.name`, `msg.radio.signal`, `msg.radio.silent` | the direction-finding radio and the strength it reports on use (`probe/ItemRadio`) `[V]` |
+| `msg.satctrlcenter.row.probe` | the mark on a probe row in a satellite terminal's journal (`ModuleSatelliteReadout`) `[V]` |
+
+`en_US` and `ru_RU`.
+
 ## Ship flight model
 
 | lang keys | where |

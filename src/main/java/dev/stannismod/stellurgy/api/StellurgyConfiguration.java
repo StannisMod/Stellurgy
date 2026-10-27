@@ -235,6 +235,9 @@ public class StellurgyConfiguration {
     /** How much faster than the physical rate the dose wears a satellite's parts; 1 is the physical rate. */
     @ConfigProperty
     public double satelliteRadiationWearScale;
+    /** Ticks after the save's first login before the first probe may fall, on the first night past them. */
+    @ConfigProperty
+    public int firstProbeDelayTicks;
     @ConfigProperty
     public boolean blackListAllVanillaBiomes;
     @ConfigProperty
@@ -934,7 +937,8 @@ public class StellurgyConfiguration {
         stellurgyConfig.microwaveRecieverMulitplier = (float) config.get(ENERGY, "MicrowaveRecieverMultiplier", 1f, "Multiplier for microwave receiver power output.").getDouble();
         stellurgyConfig.satelliteRadiationWear = config.get(SATELLITE, "satelliteRadiationWear", true, "A satellite on its orbit takes the dose of the radiation belts it passes through: its electronics stop past their budget, its solar panels give less power, and memory upsets destroy buffered data points, each recorded in its failure journal. Off: no part wears, no data is lost and nothing of the kind is journalled. THIS ALSO REMOVES PART OF THE GAMEPLAY: a satellite that loses data in one part of its orbit, the failures that reveal the region, and the shield part, the detour and the expedition that answer it all exist only with this on. Power, eclipses and a dosimeter's readings are unaffected.").getBoolean();
         stellurgyConfig.satelliteRadiationWearScale = config.get(SATELLITE, "satelliteRadiationWearScale", 1d, "How much faster than the physical rate the dose acts on a satellite's parts and data. 1 is the measured rate: on a low orbit nothing dies and only data is lost, in the part of the orbit where the inner belt dips lowest; in the belts unscreened electronics stop within hours of play. Has no effect while satelliteRadiationWear is off.", 0d, 1e6d).getDouble();
-        stellurgyConfig.defaultItemTimeBlackHole = config.get(ENERGY, "defaultBurnTime", 500, "Burn time in ticks for items not listed in blackHoleTimings.").getInt();
+        stellurgyConfig.firstProbeDelayTicks = config.get(SATELLITE, "firstProbeDelayTicks", 24000, "How long after the first player first logs into a world the first probe may fall, in ticks; it falls on the first night after that, around a player standing on a planet. The probe itself cannot be switched off: it is the start of the game's story.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.defaultItemTimeBlackHole =config.get(ENERGY, "defaultBurnTime", 500, "Burn time in ticks for items not listed in blackHoleTimings.").getInt();
         stellurgyConfig.blackHolePowerMultiplier = config.get(ENERGY, "blackHoleGeneratorMultiplier", 1, "Multiplier for black hole generator power output.").getInt();
         blackHoleGeneratorTiming = config.get(ENERGY, "blackHoleTimings", new String[]{"minecraft:stone;1", "minecraft:dirt;1", "minecraft:netherrack;1", "minecraft:cobblestone;1"}, "List of blocks and burn times for the black hole generator. Format: modid:block:meta;ticks where meta is optional").getStringList();
 

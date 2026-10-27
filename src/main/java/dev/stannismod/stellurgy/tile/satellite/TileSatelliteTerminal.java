@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.inventory.modules.ModuleSatellite;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSatelliteReadout;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSatelliteTerminal;
 import dev.stannismod.stellurgy.item.IDataItem;
+import dev.stannismod.stellurgy.probe.ItemFlightRecorder;
 import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
@@ -126,7 +127,7 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
     public boolean isItemValidForSlot(int slot, @Nonnull ItemStack stack) {
         if (stack.isEmpty()) return true;
         if (slot == 0) return stack.getItem() instanceof ItemSatelliteIdentificationChip;
-        if (slot == 1) return stack.getItem() instanceof IDataItem;
+        if (slot == 1) return stack.getItem() instanceof IDataItem || stack.getItem() instanceof ItemFlightRecorder;
         return false;
     }
 
@@ -311,6 +312,32 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
             } else {
                 contactNow();
             }
+        }
+        recorderChanged(slot);
+    }
+
+    @Override
+    @Nonnull
+    public ItemStack decrStackSize(int slot, int amount) {
+        ItemStack taken = super.decrStackSize(slot, amount);
+        recorderChanged(slot);
+        return taken;
+    }
+
+    @Override
+    @Nonnull
+    public ItemStack removeStackFromSlot(int slot) {
+        ItemStack taken = super.removeStackFromSlot(slot);
+        recorderChanged(slot);
+        return taken;
+    }
+
+    /** A flight recorder in the data slot puts the first probe's record beside the satellite's rows; taken out, it goes. */
+    private void recorderChanged(int slot) {
+        if (slot == 1 && world != null && !world.isRemote) {
+            ItemStack held = getStackInSlot(1);
+            readout.holdRecord(ItemFlightRecorder.recordOf(held), ItemFlightRecorder.packOf(held));
+            tellTheClientsWatching();
         }
     }
 

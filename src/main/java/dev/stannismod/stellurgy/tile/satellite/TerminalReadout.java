@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.tile.satellite;
 
 import dev.stannismod.stellurgy.api.satellite.SatelliteOrbit;
 import dev.stannismod.stellurgy.environment.BodyRotation;
+import dev.stannismod.stellurgy.probe.ProbePack;
+import dev.stannismod.stellurgy.probe.ProbeRecord;
 import dev.stannismod.stellurgy.satellite.DoseReadings;
 import dev.stannismod.stellurgy.satellite.Downlink;
 import dev.stannismod.stellurgy.satellite.FailureJournal;
@@ -51,12 +53,14 @@ public final class TerminalReadout {
         public final int count;
         /** The chassis slot of a failed part; -1 otherwise. */
         public final int slot;
+        /** Whether the row is the first probe's, read off its flight recorder, rather than the satellite's. */
+        public final boolean fromProbe;
         private final double gyPerS;
         private final double northRad;
         private final double eastRad;
 
         Row(long tick, double phaseRad, Kind kind, int count, int slot, double gyPerS, double northRad,
-            double eastRad) {
+            double eastRad, boolean fromProbe) {
             this.tick = tick;
             this.phaseRad = phaseRad;
             this.kind = kind;
@@ -65,6 +69,7 @@ public final class TerminalReadout {
             this.gyPerS = gyPerS;
             this.northRad = northRad;
             this.eastRad = eastRad;
+            this.fromProbe = fromProbe;
         }
 
         /** A reading's dose rate, Gy/s; empty for a failure, and for a reading that found none here. */
@@ -123,6 +128,8 @@ public final class TerminalReadout {
     }
 
     private final Deque<Row> rows = new ArrayDeque<>();
+    /** The first probe's record, from the flight recorder in the data slot; empty while none is there. */
+    private final Deque<Row> probeRows = new ArrayDeque<>();
     private long droppedRows;
     private long satelliteId = -1L;
     private long journalNext;
@@ -177,10 +184,45 @@ public final class TerminalReadout {
         return last;
     }
 
+    /**
+     * Hold the first probe's record beside the satellite's rows — {@code record} read off a flight recorder, or
+     * empty when the recorder is taken out — and what {@code pack} adds to it. Its rows replace the last
+     * record's and are placed under the probe on its own orbit.
+     */
+    public void holdRecord(Optional<ProbeRecord> record, ProbePack pack) {
+        probeRows.clear();
+        if (!record.isPresent() || !record.get().orbit().isPresent()) {
+            return;
+        }
+        SatelliteOrbit orbit = record.get().orbit().get();
+        GroundTrack track = GroundTrack.under(orbit, record.get().turn().get());
+        List<Row> held = new ArrayList<>();
+        // What a pack adds stands beside the core record as more readings of the same probe, never in place of one.
+        for (ProbePack.Reading r : pack.readings()) {
+            held.add(placed(track, r.tick, orbit.phaseAt(r.tick), Kind.DOSE_RATE, 0, -1, r.gyPerS, true));
+        }
+        for (FailureJournal.Entry e : record.get().journal().entries()) {
+            held.add(placed(track, e.tick, e.phaseRad, kindOf(e.kind), e.count, e.slot, Double.NaN, true));
+        }
+        for (DoseReadings.Reading r : record.get().readings().readings()) {
+            OptionalDouble rate = r.gyPerS();
+            held.add(placed(track, r.tick, r.phaseRad, Kind.DOSE_RATE, 0, -1,
+                    rate.isPresent() ? rate.getAsDouble() : Double.NaN, true));
+        }
+        held.sort(Comparator.comparingLong(row -> row.tick));
+        // Held whole: the record is already bounded, by its own journal's and readings' capacities.
+        probeRows.addAll(held);
+    }
+
     private static Row placed(GroundTrack track, long tick, double phaseRad, Kind kind, int count, int slot,
                               double gyPerS) {
+        return placed(track, tick, phaseRad, kind, count, slot, gyPerS, false);
+    }
+
+    private static Row placed(GroundTrack track, long tick, double phaseRad, Kind kind, int count, int slot,
+                              double gyPerS, boolean fromProbe) {
         Downlink.GroundPoint under = track.at(tick);
-        return new Row(tick, phaseRad, kind, count, slot, gyPerS, under.northRad, under.eastRad);
+        return new Row(tick, phaseRad, kind, count, slot, gyPerS, under.northRad, under.eastRad, fromProbe);
     }
 
     /**
@@ -193,7 +235,8 @@ public final class TerminalReadout {
             return Optional.empty();
         }
         List<HeldModel.Sample> others = new ArrayList<>();
-        for (Row held : rows) {
+        // A reading is expected from its own orbit's readings: the probe's and the satellite's flew different paths.
+        for (Row held : row.fromProbe ? probeRows : rows) {
             if (held != row && held.kind == Kind.DOSE_RATE && held.gyPerS().isPresent()) {
                 others.add(new HeldModel.Sample(held.region(), held.gyPerS().getAsDouble()));
             }
@@ -220,9 +263,17 @@ public final class TerminalReadout {
         rows.addLast(row);
     }
 
-    /** The rows held, oldest first. */
+    /** The rows held — the satellite's and the probe's, on one time axis — oldest first. */
     public List<Row> rows() {
-        return Collections.unmodifiableList(new ArrayList<>(rows));
+        return Collections.unmodifiableList(merged());
+    }
+
+    private List<Row> merged() {
+        List<Row> all = new ArrayList<>(rows.size() + probeRows.size());
+        all.addAll(probeRows);
+        all.addAll(rows);
+        all.sort(Comparator.comparingLong(row -> row.tick));
+        return all;
     }
 
     /**
@@ -234,7 +285,7 @@ public final class TerminalReadout {
         if (index < 0 || rowsPerPage < 1) {
             throw new IllegalArgumentException("page " + index + " of " + rowsPerPage + " rows");
         }
-        List<Row> held = new ArrayList<>(rows);
+        List<Row> held = merged();
         List<Row> out = new ArrayList<>(rowsPerPage);
         int newest = held.size() - 1 - index * rowsPerPage;
         for (int i = newest; i > newest - rowsPerPage && i >= 0; i--) {
@@ -248,6 +299,8 @@ public final class TerminalReadout {
         if (rowsPerPage < 1) {
             throw new IllegalArgumentException(rowsPerPage + " rows to a page");
         }
+        // Every row on the table counts: the satellite's and the probe's together.
+        List<Row> rows = merged();
         return Math.max(1, (rows.size() + rowsPerPage - 1) / rowsPerPage);
     }
 
@@ -266,8 +319,23 @@ public final class TerminalReadout {
         nbt.setLong("journalNext", journalNext);
         nbt.setLong("readingsNext", readingsNext);
         nbt.setLong("dropped", droppedRows);
+        nbt.setTag("rows", writeRows(rows));
+        nbt.setTag("probeRows", writeRows(probeRows));
+        NBTTagCompound contact = new NBTTagCompound();
+        contact.setInteger("received", last.received);
+        contact.setInteger("lost", last.lostAboard);
+        contact.setInteger("parts", last.partsFailed);
+        contact.setInteger("readings", last.readings);
+        contact.setLong("missed", last.missed);
+        contact.setInteger("power", last.powerPerTick);
+        contact.setInteger("aboard", last.aboard);
+        contact.setInteger("capacity", last.capacity);
+        nbt.setTag("last", contact);
+    }
+
+    private static NBTTagList writeRows(Deque<Row> from) {
         NBTTagList list = new NBTTagList();
-        for (Row r : rows) {
+        for (Row r : from) {
             NBTTagCompound tag = new NBTTagCompound();
             tag.setLong("tick", r.tick);
             tag.setDouble("phase", r.phaseRad);
@@ -281,17 +349,17 @@ public final class TerminalReadout {
             tag.setDouble("east", r.eastRad);
             list.appendTag(tag);
         }
-        nbt.setTag("rows", list);
-        NBTTagCompound contact = new NBTTagCompound();
-        contact.setInteger("received", last.received);
-        contact.setInteger("lost", last.lostAboard);
-        contact.setInteger("parts", last.partsFailed);
-        contact.setInteger("readings", last.readings);
-        contact.setLong("missed", last.missed);
-        contact.setInteger("power", last.powerPerTick);
-        contact.setInteger("aboard", last.aboard);
-        contact.setInteger("capacity", last.capacity);
-        nbt.setTag("last", contact);
+        return list;
+    }
+
+    private static void readRows(NBTTagList list, Deque<Row> into, boolean fromProbe) {
+        into.clear();
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound tag = list.getCompoundTagAt(i);
+            into.addLast(new Row(tag.getLong("tick"), tag.getDouble("phase"), Kind.values()[tag.getByte("kind")],
+                    tag.getInteger("count"), tag.getByte("slot"), tag.hasKey("rate") ? tag.getDouble("rate") : Double.NaN,
+                    tag.getDouble("north"), tag.getDouble("east"), fromProbe));
+        }
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
@@ -299,14 +367,8 @@ public final class TerminalReadout {
         journalNext = nbt.getLong("journalNext");
         readingsNext = nbt.getLong("readingsNext");
         droppedRows = nbt.getLong("dropped");
-        rows.clear();
-        NBTTagList list = nbt.getTagList("rows", 10);
-        for (int i = 0; i < list.tagCount(); i++) {
-            NBTTagCompound tag = list.getCompoundTagAt(i);
-            rows.addLast(new Row(tag.getLong("tick"), tag.getDouble("phase"), Kind.values()[tag.getByte("kind")],
-                    tag.getInteger("count"), tag.getByte("slot"), tag.hasKey("rate") ? tag.getDouble("rate") : Double.NaN,
-                    tag.getDouble("north"), tag.getDouble("east")));
-        }
+        readRows(nbt.getTagList("rows", 10), rows, false);
+        readRows(nbt.getTagList("probeRows", 10), probeRows, true);
         NBTTagCompound contact = nbt.getCompoundTag("last");
         last = new Contact(contact.getInteger("received"), contact.getInteger("lost"), contact.getInteger("parts"),
                 contact.getInteger("readings"), contact.getLong("missed"), contact.getInteger("power"),

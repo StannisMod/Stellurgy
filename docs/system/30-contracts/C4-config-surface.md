@@ -267,6 +267,7 @@ would silently redefine what every magnitude-stated threshold means.
 |---|---|---|---|---|---|
 | satelliteRadiationWear | boolean | satelliteRadiationWear | the dose's wear on a satellite's parts, its memory upsets and their journal entries (MECH-SAT-30) | `false` ⇒ no part takes dose, no point is lost, nothing of the kind is journalled; power, eclipses and dosimeter readings unaffected. Its description says this also removes part of the gameplay | |
 | satelliteRadiationWearScale | double | satelliteRadiationWearScale | multiplier on the dose a satellite's parts and memory take | identity `1.0` (the measured rate); tunable `0`–`1e6` | |
+| firstProbeDelayTicks | int | firstProbeDelayTicks | how long after the save's first login the first probe may fall, on the first night after it (first-probe MECH-PRB-03) | tunable `0`–`Integer.MAX_VALUE`; NOT a disable path — the probe is not switchable (maintainer 2026-10-26) | |
 
 ## Missions (`MISSION`; owned by mission MECH-MSN-*)
 

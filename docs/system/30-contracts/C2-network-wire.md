@@ -59,6 +59,8 @@ reordering renumbers the tail.**
 | 27 | `PacketBeamState` | S→C | see its own section below | the held-beam drawing channel |
 | 28 | `PacketKnownPlanets` | S→C | `int count`, `count × int dimId` | the save's globally known planets, added to the client galaxy's `knownPlanets` at every login, local too |
 | 29 | `PacketShipReadout` | S→C | see its own section below | a ship's readout to one player |
+| 30 | `PacketProbeFall` | S→C | `int dim`, `long entryTick`, `long landing` (packed `BlockPos`), `double heading, radius, gravity, atmosphere, line` | the first probe's fall, as inputs the client computes the trajectory from (first-probe MECH-PRB-05); dropped by a client no longer in `dim` |
+| 31 | `PacketTransmitters` | S→C | `int dim`, `unsigned short count` (≤ 4096), `count × long` (packed `BlockPos`) | a world's transmitters, whole, replacing the client's (first-probe MECH-PRB-06); dropped by a client no longer in `dim` |
 | — | `PacketMoveRocketInSpace` | dead | 3 doubles + hasWorld bool (+int) + hasStar bool (+int) | **UNREGISTERED** — CON-C2-01 |
 
 Every S→C packet has an `executeClient` body and an empty `executeServer`, so a spoofed inbound copy on

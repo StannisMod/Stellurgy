@@ -183,8 +183,17 @@ mass for may not be undone by a chunk reload).
 `sat_power_per_tick`, `randomblocks_per_tick`, `was_enabled_last_tick`. `TileSatelliteTerminal`: `data`,
 `outcome` (byte, the ordinal of its last try's outcome), `readout` {`satellite`, `journalNext`,
 `readingsNext`, `dropped`, `rows` [{`tick`, `phase`, `kind`, `count`, `slot`, `rate` — absent for a failure
-or "absent here", `north`, `east` — radians, the place under the satellite at `tick` (satellite INV-SAT-41)}], `last` {`received`, `lost`, `parts`, `readings`, `missed`, `power`, `aboard`,
-`capacity`}}; the same tag is its update packet.
+or "absent here", `north`, `east` — radians, the place under the satellite at `tick` (satellite INV-SAT-41)}], `probeRows` [the
+same row shape, the first probe's record from a flight recorder in the data slot], `last` {`received`, `lost`,
+`parts`, `readings`, `missed`, `power`, `aboard`, `capacity`}}; the same tag is its update packet.
+
+**first-probe** — the record (`ProbeRecord`): `orbit` {the satellite orbit's keys}, `sidereal`,
+`turnAtZero`, `journal`, `readings` (the satellite journal's and readings' keys), `diedAt` (absent while the
+probe outlived its record), and beside it `pack` {`notes` [string], `readings` [{`tick`, `rate`}]}. Held as
+`record` by `TileProbeWreck` and by a flight recorder's stack. `ProbeFall` (global storage, name
+`stellurgyFirstProbe`): `firstLogin`, `phase` (byte ordinal), `laid`, `fall` {`dim`, `entry`, `landing`
+(packed `BlockPos`), `heading`, `radius`, `gravity`, `atmosphere`, `line`, `player`, `record`}.
+`TransmitterRegistry` (per world, `stellurgyTransmitters`): `transmitters` [long, packed `BlockPos`].
 
 **api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons, a LONG — one nuclear core rates
 4.9e7 N, so an int saturated at a few dozen cores), `mass` (kg), `drillingPower`,

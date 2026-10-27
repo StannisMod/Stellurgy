@@ -286,7 +286,11 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   its tick, its phase on the orbit, its region under the satellite (INV-SAT-41) and its value, a reading
   with what the held readings expect of it (MECH-SAT-33) — newest first, ten to a page; and says how many rows the
   satellite no longer held when it was read. 256 rows are kept, older ones dropped. A chip of another
-  satellite starts the table afresh. Readings, never a conclusion. The client draws both pages from the
+  satellite starts the table afresh. A flight recorder in the data slot adds the first probe's record to the
+  same table, whole, on the same time axis, each of its rows marked as the probe's and placed under the
+  probe on its own orbit; a probe reading's expectation is drawn from the probe's readings only; taken
+  out, the recorder takes its rows with it (first-probe MECH-PRB-07; `TerminalReadout.java`, `holdRecord`).
+  Readings, never a conclusion. The client draws both pages from the
   terminal's own copy, which the server sends whenever the outcome changes or a contact brings anything;
   after each update the copy holds the outcome, the last contact and the rows the server's terminal held
   when it sent it (`TileSatelliteTerminal.java`, `getUpdatePacket` / `onDataPacket`; [T], pinned by

@@ -42,6 +42,10 @@ public class StellurgyItems {
     public static Item itemSatellite;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemSatelliteIdChip;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerItems. The first probe's record, out of its wreck. */
+    public static Item itemFlightRecorder;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerItems. Takes a bearing on a transmitter. */
+    public static Item itemRadio;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemPlanetIdChip;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.probe.client.ClientProbeFall;
+import dev.stannismod.stellurgy.probe.client.ClientTransmitters;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.util.EnumFacing;
@@ -16,7 +18,8 @@ import javax.annotation.Nullable;
 import java.util.function.Consumer;
 
 /**
- * What a client world is drawing of the war — its beams and its rounds in flight — held BY that world.
+ * What a client world is drawing of the war — its beams and its rounds in flight — and of the first probe —
+ * its fall, and the transmitters a radio hears — held BY that world.
  *
  * <p>Attached to every client world as it is built, so its lifetime is the world's: the drawings are
  * born empty with a world and go when the client lets that world go. Nothing clears them, and nothing
@@ -34,8 +37,20 @@ public final class ClientWorldDrawings implements ICapabilityProvider {
 
     private final ClientBeamTracker beams = new ClientBeamTracker();
     private final ClientShotTracker shots = new ClientShotTracker();
+    private final ClientProbeFall probeFall = new ClientProbeFall();
+    private final ClientTransmitters transmitters = new ClientTransmitters();
 
     private ClientWorldDrawings() {
+    }
+
+    /** The first probe's fall, when it comes down in this world. */
+    public ClientProbeFall probeFall() {
+        return probeFall;
+    }
+
+    /** The transmitters of this world, which a radio held here hears. */
+    public ClientTransmitters transmitters() {
+        return transmitters;
     }
 
     public ClientBeamTracker beams() {

@@ -249,39 +249,65 @@ public final class SatelliteLife {
     private static Optional<PlanetEnvironment> environmentOf(SatelliteBase satellite, DimensionProperties props,
                                                              SystemBody body, UniverseRegistry reg) {
         Progress progress = satellite.lifeProgress();
-        double distanceAu = props.getSolarOrbitalDistance() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
-        long seed = reg.worldSeed() * 0x9E3779B97F4A7C15L + props.getId();
-        String inputs = body.massEarths() + "/" + body.radiusEarths() + "/" + props.rotationalPeriod + "/"
-                + props.isGasGiant() + "/" + props.hasAtmosphere() + "/" + distanceAu + "/" + seed;
+        String inputs = environmentInputs(props, body, reg);
         if (inputs.equals(progress.environmentInputs)) {
             return Optional.of(progress.environment);
         }
-        if (!(body.massEarths() > 0d) || !(body.radiusEarths() > 0d) || props.rotationalPeriod <= 0 || !(distanceAu > 0d)) {
+        Optional<PlanetEnvironment> derived = bodyEnvironment(props, body, reg);
+        if (!derived.isPresent()) {
             if (!progress.refusalReported) {
                 progress.refusalReported = true;
                 Stellurgy.logger.warn("Satellite {}: no environment for world {} — mass {}, radius {}, rotation {}, "
                                 + "distance {} AU cannot describe a body; its parts take no dose and a dosimeter reads nothing",
                         satellite.getId(), props.getId(), body.massEarths(), body.radiusEarths(), props.rotationalPeriod,
-                        distanceAu);
+                        distanceAu(props));
             }
+            return Optional.empty();
+        }
+        progress.environment = derived.get();
+        progress.environmentInputs = inputs;
+        return derived;
+    }
+
+    /**
+     * The environment about {@code body}, the world {@code props} describes, derived from its bulk, spin,
+     * kind, distance from its star and the world's seed — the one every object on an orbit about it is
+     * exposed to. Empty when those cannot describe a body. Derived afresh on every call.
+     */
+    public static Optional<PlanetEnvironment> bodyEnvironment(DimensionProperties props, SystemBody body,
+                                                              UniverseRegistry reg) {
+        double distanceAu = distanceAu(props);
+        if (!(body.massEarths() > 0d) || !(body.radiusEarths() > 0d) || props.rotationalPeriod <= 0 || !(distanceAu > 0d)) {
             return Optional.empty();
         }
         BodyRotation rotation = SatellitePlacement.rotationOf(props);
         // The dynamo is driven by the body's turn against the stars, not by its day: the sidereal period.
         long spinTicks = Double.isInfinite(rotation.siderealTicks()) ? 0L : Math.round(Math.abs(rotation.siderealTicks()));
-        progress.environment = PlanetEnvironment.of(
+        return Optional.of(PlanetEnvironment.of(
                 MagnetosphereDerivation.derive(body.massEarths(), body.radiusEarths(), spinTicks,
-                        props.isGasGiant(), props.hasAtmosphere(), distanceAu, seed),
-                rotation.siderealTicks(), rotation.angleAt(0L));
-        progress.environmentInputs = inputs;
-        return Optional.of(progress.environment);
+                        props.isGasGiant(), props.hasAtmosphere(), distanceAu, environmentSeed(props, reg)),
+                rotation.siderealTicks(), rotation.angleAt(0L)));
+    }
+
+    private static double distanceAu(DimensionProperties props) {
+        return props.getSolarOrbitalDistance() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+    }
+
+    private static long environmentSeed(DimensionProperties props, UniverseRegistry reg) {
+        return reg.worldSeed() * 0x9E3779B97F4A7C15L + props.getId();
+    }
+
+    private static String environmentInputs(DimensionProperties props, SystemBody body, UniverseRegistry reg) {
+        return body.massEarths() + "/" + body.radiusEarths() + "/" + props.rotationalPeriod + "/"
+                + props.isGasGiant() + "/" + props.hasAtmosphere() + "/" + distanceAu(props) + "/"
+                + environmentSeed(props, reg);
     }
 
     /**
      * Toward the nearest star from {@code body}'s centre at {@code tick}, in the orbit's frame (z along
      * the spin axis): the cell's axes carried back — x stays x, the cell's Y is the spin axis, its Z is −y.
      */
-    static Optional<Vector3dc> starDirection(UniverseRegistry reg, SystemBody body, long tick) {
+    public static Optional<Vector3dc> starDirection(UniverseRegistry reg, SystemBody body, long tick) {
         AbsolutePos at = body.absoluteAt(tick);
         BlockDelta nearest = null;
         for (SystemBody b : reg.systemBodiesAt(body.name())) {

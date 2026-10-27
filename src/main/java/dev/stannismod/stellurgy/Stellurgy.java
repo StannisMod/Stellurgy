@@ -667,6 +667,7 @@ public class Stellurgy {
 
         //TileEntity Registration ---------------------------------------------------------------------------------------------
         GameRegistry.registerTileEntity(TileBrokenPart.class, "ARbrokenPart");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.probe.TileProbeWreck.class, "ARprobeWreck");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileWearable.class, "ARwearablePart");
         GameRegistry.registerTileEntity(TileRocketServiceStation.class, "ARserviceStation");
         GameRegistry.registerTileEntity(TileRocketAssemblingMachine.class, "ARrocketBuilder");
@@ -856,6 +857,8 @@ public class Stellurgy {
         StellurgyItems.itemQuartzCrucible = new ItemBlock(StellurgyBlocks.blockQuartzCrucible).setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellite = new ItemSatellite().setUnlocalizedName("satellite").setCreativeTab(tabAdvRocketry).setMaxStackSize(1);
         StellurgyItems.itemSatelliteIdChip = new ItemSatelliteIdentificationChip().setUnlocalizedName("satelliteIdChip").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemFlightRecorder = new dev.stannismod.stellurgy.probe.ItemFlightRecorder().setUnlocalizedName("flightRecorder").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemRadio = new dev.stannismod.stellurgy.probe.ItemRadio().setUnlocalizedName("radio").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemPlanetIdChip = new ItemPlanetIdentificationChip().setUnlocalizedName("planetIdChip").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemBiomeChanger = new ItemBiomeChanger().setUnlocalizedName("biomeChanger").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemWeatherController = new ItemWeatherController().setUnlocalizedName("weatherController").setCreativeTab(tabAdvRocketry);
@@ -905,6 +908,8 @@ public class Stellurgy {
         LibVulpesBlocks.registerItem(StellurgyItems.itemIC.setRegistryName("ic"));
         //Chips
         LibVulpesBlocks.registerItem(StellurgyItems.itemSatelliteIdChip.setRegistryName("satelliteIdChip"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemFlightRecorder.setRegistryName("flightRecorder"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemRadio.setRegistryName("radio"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemPlanetIdChip.setRegistryName("planetIdChip"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemAsteroidChip.setRegistryName("asteroidChip"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceElevatorChip.setRegistryName("elevatorChip"));
@@ -1119,6 +1124,7 @@ public class Stellurgy {
         StellurgyBlocks.blockIntake = new BlockIntake(Material.IRON).setUnlocalizedName("gasIntake").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockDrill = new BlockMiningDrill().setUnlocalizedName("drill").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockLandingFloat = new Block(Material.IRON).setUnlocalizedName("landingfloat").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
+        StellurgyBlocks.blockProbeWreck = new dev.stannismod.stellurgy.probe.BlockProbeWreck().setUnlocalizedName("probeWreck").setHardness(3f);
         StellurgyBlocks.blockServiceMonitor = new RotatableBlock(Material.IRON).setUnlocalizedName("servicemonitor").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
         StellurgyBlocks.blockInvHatch = new BlockInvHatch(Material.IRON).setUnlocalizedName("invhatch").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
         //Assembly machines
@@ -1334,6 +1340,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGravityDampener.setRegistryName("gravityDampener"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockIntake.setRegistryName("intake"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockDrill.setRegistryName("drill"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockProbeWreck.setRegistryName("probeWreck"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockLandingFloat.setRegistryName("landingfloat"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockServiceMonitor.setRegistryName("servicemonitor"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockInvHatch.setRegistryName("invhatch"));
@@ -1663,6 +1670,8 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.space.SpaceSubsystemEvents());
         // Satellites stand up in a live cell's chunks as they load; stateless, idle while no cell is live.
         MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.satellite.SatelliteMaterializer.class);
+        // The first probe's one fall: idle once it is down and laid.
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.probe.ProbeFallDriver.class);
         // Login restore (a returning player goes back to his ship, not to a stale pool slot) and the
         // cell-divergence hook. Independent of the controller so it stays quiet while it is down.
         // The two binding owners are KEPT, not just registered: returning a player to the plain

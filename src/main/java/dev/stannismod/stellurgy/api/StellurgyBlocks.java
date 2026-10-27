@@ -168,4 +168,6 @@ public class StellurgyBlocks {
     public static Block blockInvHatch;
     public static Block blockOrbitalRegistry;
     public static Block blockDataBusBig;
+    /** The first probe's wreck, a transmitter while it stands; see {@code BlockProbeWreck}. */
+    public static Block blockProbeWreck;
 }

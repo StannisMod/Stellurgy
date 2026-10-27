@@ -70,6 +70,7 @@ Legend — **split**: `1` single doc · `2L` two-level (overview + subs) ·
 | [backward-compat](./20-subsystems/backward-compat.md) | 1 | `backwardCompat/` |
 | [mission](./20-subsystems/mission.md) | 1 | `mission/` |
 | [environment](./20-subsystems/environment.md) | 1 | `environment/` — what is physically present at a point near a body, as a query: a planet's tilted, offset dipole, its trapped-radiation belts (Earth-calibrated) and the dose accrued along a path |
+| [first-probe](./20-subsystems/first-probe.md) | 1 | `probe/` — the one scripted find: the probe's orbit and the record the dose law wrote on it, its entry through the air, and (as built) its fall, wreck, radio and record reading |
 | [integration-dataloaders](./20-subsystems/integration-dataloaders.md) | 1 | `integration/dataloaders/` |
 | [integration-probe-waila](./20-subsystems/integration-probe-waila.md) | 1 | `integration/theoneprobe/`, `integration/waila/` |
 | [mixins-asm-coremod](./20-subsystems/mixins-asm-coremod.md) | 1 | `mixin/`, `asm/` |

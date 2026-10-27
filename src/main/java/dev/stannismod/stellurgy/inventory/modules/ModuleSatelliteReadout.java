@@ -120,6 +120,9 @@ public class ModuleSatelliteReadout extends ModuleBase implements IButtonInvento
         out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.columns")).append("\n");
         for (TerminalReadout.Row row : readout.page(page, ROWS_PER_PAGE)) {
             HeldModel.Region region = row.region();
+            if (row.fromProbe) {
+                out.append(LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.row.probe")).append(" ");
+            }
             out.append(row.tick).append("  ")
                     .append(Math.round(Math.toDegrees(row.phaseRad))).append("°  ")
                     .append(String.format(Locale.ROOT, "%+.0f° %+.0f°", region.centreNorthDeg(), region.centreEastDeg()))

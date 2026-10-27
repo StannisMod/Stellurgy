@@ -9,8 +9,8 @@ package dev.stannismod.stellurgy.environment;
 public final class TrappedDose {
 
     /**
-     * Nothing trapped: a reading of zero, not an absence. Effectively final, process lifetime: an immutable
-     * value, written only by the class initialiser.
+     * Nothing trapped: a reading of zero, not an absence; an immutable value. Effectively final, process
+     * lifetime: built once at class initialisation.
      */
     public static final TrappedDose ZERO = new TrappedDose(0d, 0d);
 

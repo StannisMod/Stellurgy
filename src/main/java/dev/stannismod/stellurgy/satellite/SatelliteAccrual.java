@@ -136,6 +136,10 @@ public final class SatelliteAccrual {
             this.star = star;
             this.radiusM = radiusM;
         }
+
+        public SatelliteOrbit orbit() {
+            return orbit;
+        }
     }
 
     /** What the primary function does, and what it costs: the instrument's own figures, not its panels'. */
