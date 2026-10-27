@@ -117,7 +117,9 @@
     "MixinEntityRocketClientGateEvents",
     "MixinPacketSenderReachEvents",
     "MixinTileOxygenVentScrubEvents",
-    "MixinTileSatelliteTerminalEvents"
+    "MixinTileSatelliteTerminalEvents",
+    "MixinProbeFallEvents",
+    "MixinProbeImpactEvents"
   ],
   "client": [
     "MixinClientCursorActs",

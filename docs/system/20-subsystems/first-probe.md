@@ -137,14 +137,19 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
   message, *"падение должно быть видно на протяжении всего маршрута - от входа в атмосферу до
   приземления. Чтобы было реалистичное падение"* (the fall must be visible the whole way, from atmospheric
   entry to landing — a realistic fall).
-- **INV-PRB-05 [V][BEH] Exactly one probe falls per save.** Once it has entered, nothing enters again
-  (`ProbeFall.java:157`), and the state is the save's, not a world's. Owed: a server mechanics test counting
-  the falls over two nights.
-- **INV-PRB-06 [V][BEH] It lands where its fall ends, in the band around the player, on dry land where any
+- **INV-PRB-05 [T][BEH] Exactly one probe falls per save.** Once it has entered, nothing enters again
+  (`ProbeFall.java:157`), and the state is the save's, not a world's. Pinned by
+  `FirstProbeFallTest#exactlyOneProbeFallsOverTwoNights` (client tier, own boot): over the night it falls in
+  and over a later night once it is down, the save due on both, one entry is admitted. Not visited: a second
+  planet, so the state being the save's rather than a world's rests on the global storage (`ProbeFall.java:48`).
+- **INV-PRB-06 [T][BEH] It lands where its fall ends, in the band around the player, on dry land where any
   is drawn.** The touchdown is at the landing point the trajectory was laid to end on
   (`ProbeFallDriver.java:102`, INV-PRB-13), and the point is drawn in the band (INV-PRB-12) and tried for dry
-  land (`ProbeFallDriver.java:171`). Owed: a server mechanics test of the wreck's place against the player's
-  at the entry.
+  land (`ProbeFallDriver.java:171`). Pinned by `FirstProbeFallTest#itLandsWhereItsFallEndsInTheBandAroundThePlayer`
+  (client tier, own boot): the crater is laid on the block the fall ended on, the wreck in that block's
+  column, the block in the band around where the player stood at the entry. Owed: the dry-land half — around
+  the test world's spawn every draw is dry, so preferring water still lands dry and the choice is not seen;
+  it needs a player standing where the band holds water and land both.
 - **INV-PRB-07 [V][BEH] A client in the fall's world draws it at every tick of the fall, whatever its chunks
   and render distance.** Its placement is by direction inside the far plane (`ClientProbeFall.java:67`). Owed:
   a client e2e on a test record of each sky point drawn.
@@ -215,8 +220,8 @@ past them (C4). The probe itself is not switchable — maintainer 2026-10-26, *"
 ## Test coverage
 
 INV-PRB-01, -03, -04, -11..-14 → `ProbeLawsTest` (unit); INV-PRB-02, -15 → `ProbeJointsTest` (integration,
-the joints with `environment` and with the terminal's table). INV-PRB-05..-10 are owed their server and
-client tests.
+the joints with `environment` and with the terminal's table); INV-PRB-05 and -06 (but its dry-land half) →
+`FirstProbeFallTest` (client, own boot). INV-PRB-07..-10 are owed their server and client tests.
 
 ## Open questions
 

@@ -253,6 +253,7 @@ enum ProbeVerbKind {
             case "event handlers":
             case "event tick-counter":
             case "event transitions":
+            case "first-probe fall":
             case "fluid stored":
             case "gamerule get":
             case "hatch read":

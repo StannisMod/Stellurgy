@@ -148,6 +148,9 @@ public class TestProbeCommand extends CommandBase {
                 case "planet":
                     handlePlanet(sender, tail(args));
                     break;
+                case "first-probe":
+                    handleFirstProbe(server, sender, tail(args));
+                    break;
                 case "weather":
                     handleWeather(server, sender, tail(args));
                     break;
@@ -9241,6 +9244,45 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown dim subcommand\"}");
     }
 
+    /**
+     * {@code first-probe fall} — the save's one fall as its global storage holds it: {@code phase}, the
+     * overworld time of the first login ({@code firstLoginTick}, negative while nobody has logged in), whether
+     * the crater is {@code laid}, and from the entry on the {@code fall}'s world, entry tick, landing block,
+     * player and length in ticks. Read through the storage's own load, never {@code ProbeFall.get}, which
+     * creates the data when it is absent; a save with none answers {@code stored:false}.
+     */
+    private void handleFirstProbe(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 1 || !"fall".equalsIgnoreCase(args[0])) {
+            send(sender, jsonError("usage: /stellurgytest first-probe fall"));
+            return;
+        }
+        net.minecraft.world.WorldServer overworld = server.getWorld(0);
+        dev.stannismod.stellurgy.probe.ProbeFall data = overworld == null ? null
+                : (dev.stannismod.stellurgy.probe.ProbeFall) overworld.getMapStorage().getOrLoadData(
+                        dev.stannismod.stellurgy.probe.ProbeFall.class, dev.stannismod.stellurgy.probe.ProbeFall.DATA_NAME);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("stored", data != null);
+        if (data != null) {
+            out.put("phase", data.phase().name());
+            out.put("firstLoginTick", data.firstLoginTick());
+            out.put("laid", data.laid());
+            if (data.fall().isPresent()) {
+                dev.stannismod.stellurgy.probe.ProbeFall.Fall fall = data.fall().get();
+                Map<String, Object> f = new LinkedHashMap<>();
+                f.put("dim", fall.dimension);
+                f.put("entryTick", fall.entryTick);
+                f.put("x", fall.landing.getX());
+                f.put("y", fall.landing.getY());
+                f.put("z", fall.landing.getZ());
+                f.put("player", fall.player);
+                f.put("ticks", fall.placement().ticks());
+                out.put("fall", f);
+            }
+        }
+        send(sender, jsonMap(out));
+    }
+
     // Planet/weather probes ----------------------------------------------
 
     private void handlePlanet(ICommandSender sender, String[] args) {
@@ -15385,6 +15427,9 @@ public class TestProbeCommand extends CommandBase {
                     // it remains, and puts back what it found.
                     "satelliteRadiationWear",
                     "satelliteRadiationWearScale",
+                    // How long after the save's first login the first probe may fall. A test sets it to
+                    // zero so the first night decides alone, on a server that runs no day of play.
+                    "firstProbeDelayTicks",
                     // Disableability-contract tests: toggle each opt-in
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",

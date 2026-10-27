@@ -89,7 +89,8 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinWorldClientShipManagerPickable", "MixinNetHandlerChunkDataPickable",
             "MixinPacketSatelliteEvents", "MixinTileSatelliteTerminalEvents",
             "MixinTileSatelliteTerminalCopyEvents", "MixinAtmosphereDetectorGateEvents",
-            "MixinServiceStationGateEvents")));
+            "MixinServiceStationGateEvents", "MixinProbeFallEvents",
+            "MixinProbeImpactEvents")));
 
     /**
      * Mixins that change what the game does — the declared ENVIRONMENT of a mechanics child, each with the
