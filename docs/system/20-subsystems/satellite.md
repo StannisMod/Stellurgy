@@ -118,7 +118,7 @@ packets (network-wire), `BiomeHandler`/`TerraformingHelper`/`WeightEngine`/
   position via `TerraformingHelper`. [V] `TileTerraformingTerminal.java:129,171`
 - **MECH-SAT-13 Data item transfer (terminal).** `loadData`/`storeData` move data between the
   terminal buffer and an `IDataItem` in slot 1, moving only what the receiver accepts.
-  [V] `TileSatelliteTerminal.java:352,388`
+  [V] `TileSatelliteTerminal.java:440,476`
 
 ### The satellite on its orbit
 
