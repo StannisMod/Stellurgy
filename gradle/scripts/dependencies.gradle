@@ -107,6 +107,12 @@ dependencies {
         runtimeOnly rfg.deobf("mcjty.theoneprobe:TheOneProbe-1.12:1.12-1.4.28-17")
     }
 
+    // Distant Horizons (LOD terrain past the render distance), for trying in a dev run only: opt in with
+    // -Prun_distant_horizons=true. Off by default, so no test run ever loads it.
+    if (project.findProperty('run_distant_horizons') == 'true') {
+        runtimeOnly rfg.deobf('maven.modrinth:distanthorizons:3.3.3-1.12.2')
+    }
+
     compileOnly rfg.deobf('curse.maven:hwyla-253449:2568751')
     if (run_hwyla) {
         runtimeOnly rfg.deobf('curse.maven:hwyla-253449:2568751')

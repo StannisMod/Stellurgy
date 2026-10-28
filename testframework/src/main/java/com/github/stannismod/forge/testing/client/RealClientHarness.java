@@ -863,30 +863,36 @@ public final class RealClientHarness implements AutoCloseable {
                 continue;
             }
 
+            // Each jar is named in the test JVM's own order, never as a `dir/*` wildcard: the order a
+            // wildcard expands in is unspecified (alphabetical on NTFS), and two jars that carry the
+            // same class resolve to whichever comes first. Measured 2026-10-28 with MixinBooter 11:
+            // asm-debug-all-5.2 sorted ahead of asm-tree-9.8, the child loaded ASM 5's ClassNode, and
+            // Mixin died at startup on `NoSuchFieldError: nestHostClass`.
             if (rawEntry.endsWith(".jar")) {
                 Path target = libDir.resolve(entryPath.getFileName());
                 Files.copy(entryPath, target, StandardCopyOption.REPLACE_EXISTING);
+                entries.add(target.toAbsolutePath().toString());
                 continue;
             }
 
             entries.add(entryPath.toAbsolutePath().toString());
         }
 
-        copyCachedJar(libDir, "lwjgl-2.9.4-nightly-20150209.jar");
-        copyCachedJar(libDir, "lwjgl_util-2.9.4-nightly-20150209.jar");
-        copyCachedJar(libDir, "jinput-2.0.5.jar");
-        copyCachedJar(libDir, "librarylwjglopenal-20100824.jar");
-        copyCachedJar(libDir, "lwjgl-platform-2.9.4-nightly-20150209-natives-windows.jar");
-        copyCachedJar(libDir, "jinput-platform-2.0.5-natives-windows.jar");
+        entries.add(copyCachedJar(libDir, "lwjgl-2.9.4-nightly-20150209.jar"));
+        entries.add(copyCachedJar(libDir, "lwjgl_util-2.9.4-nightly-20150209.jar"));
+        entries.add(copyCachedJar(libDir, "jinput-2.0.5.jar"));
+        entries.add(copyCachedJar(libDir, "librarylwjglopenal-20100824.jar"));
+        entries.add(copyCachedJar(libDir, "lwjgl-platform-2.9.4-nightly-20150209-natives-windows.jar"));
+        entries.add(copyCachedJar(libDir, "jinput-platform-2.0.5-natives-windows.jar"));
 
-        entries.add(libDir.toAbsolutePath() + java.io.File.separator + "*");
         return String.join(java.io.File.pathSeparator, entries);
     }
 
-    private static void copyCachedJar(Path libDir, String fileName) throws IOException {
+    private static String copyCachedJar(Path libDir, String fileName) throws IOException {
         Path source = findCachedJar(fileName);
         Path target = libDir.resolve(source.getFileName());
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        return target.toAbsolutePath().toString();
     }
 
     private static void deleteRecursively(Path root) throws IOException {
