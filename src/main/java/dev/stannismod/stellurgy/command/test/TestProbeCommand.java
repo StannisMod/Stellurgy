@@ -6261,14 +6261,14 @@ public class TestProbeCommand extends CommandBase {
             // cell. An empty cell has nothing to stand off from, so an arrival there cannot tell a
             // standoff from its absence; this is the target that can.
             if (args.length >= 8 && "body".equalsIgnoreCase(args[6])) {
-                dev.stannismod.stellurgy.space.GalacticCoord bodyAddress =
-                        dev.stannismod.stellurgy.space.SpaceSubsystem.launchBodyAddress(
+                dev.stannismod.stellurgy.universe.SystemBody body =
+                        dev.stannismod.stellurgy.space.SpaceSubsystem.launchBody(
                                 parseIntOr(args[7], Integer.MIN_VALUE));
-                if (bodyAddress == null) {
-                    send(sender, "{\"error\":\"no launch address for dim " + args[7] + "\"}");
+                if (body == null) {
+                    send(sender, "{\"error\":\"no launch body for dim " + args[7] + "\"}");
                     return;
                 }
-                transitTarget = bodyAddress;
+                transitTarget = body.addressAt(dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
             }
             // Depart under the fixture's own DURABLE id, so the crossing resolves the ship it was told
             // about instead of whatever craft is nearest an anchor every scenario here reuses. The
@@ -6977,9 +6977,10 @@ public class TestProbeCommand extends CommandBase {
         // zone-body refinement), so a test asserts the entry landed in the SAME cell the resolver
         // answers — gen-agnostic, no pinned coordinates.
         if (args.length >= 2 && "launch-cell".equalsIgnoreCase(args[0])) {
-            dev.stannismod.stellurgy.space.GalacticCoord c =
-                    dev.stannismod.stellurgy.space.SpaceSubsystem.launchBodyAddress(
-                            parseIntOr(args[1], 0));
+            dev.stannismod.stellurgy.universe.SystemBody launch =
+                    dev.stannismod.stellurgy.space.SpaceSubsystem.launchBody(parseIntOr(args[1], 0));
+            dev.stannismod.stellurgy.space.GalacticCoord c = launch == null ? null
+                    : launch.addressAt(dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
             if (c == null) {
                 send(sender, "{\"ok\":true,\"cellKey\":null}");
             } else {

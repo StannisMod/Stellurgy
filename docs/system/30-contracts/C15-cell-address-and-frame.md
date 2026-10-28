@@ -337,13 +337,12 @@ mass has no zone to be the owner of one anyway (ADDR-17).
 - **ADDR-16 (a PLACEMENT is measured against a position, never against a name)** `[V][BEH]` Aiming
   resolves to a name (ADDR-14) because the arrival CELL is what a jump needs. **Putting a craft
   somewhere is the other question**, and it takes the body's position at that tick: a standoff ring
-  drawn around a name stands where the body would be only if it never moved (a ship entering space from
-  Earth, ringed around Earth's name, arrived **5 657 554 chart blocks** from Earth — 1.41 M km, 26 h of
-  flight). `ShipEntryController.aimPoint` resolves the launch DIMENSION's body among those sharing
-  the address and rings `SystemBody.absoluteAt(tick)` (a POI still shares a cell it is not the
-  primary of, and an aim at a BODY is the honest thing to state). A body that cannot be resolved still
-  places the ship — an arrival is never refused — but says so in the log, because falling back to the
-  name IS the defect and a silent one reads as a working aim.
+  drawn around a name stands where the body would be only if it never moved. How FAR out the ring is drawn
+  is the other half of a placement, and it is the ring of that one body (INV-SPC-15).
+  The entry is handed the ONE body its launch dimension is (`SpaceSubsystem.launchBody`) and rings that
+  body's in-frame address at the tick (`ShipEntryController#resolveEntryCoord`). A world the registry
+  names a cell for whose cell does not hold it still places the ship — an arrival is never refused — at the
+  home anchor, and says so in the log, because a silent stand-in reads as a working aim.
   This clause is about placement only; **holding station once placed is C19's subject**, not this
   one's.
 

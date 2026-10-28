@@ -131,12 +131,12 @@ computer (`TileAdvancedFlightComputer.java:675-691`) [V]. `requestEntry` returns
 arms a 100-tick cooldown** (`ShipEntryController.java:238-277`) [V][T] `ShipEntryControllerTest.java:212`; a failed
 cut hands the cell back and re-seats the captured crew (`ShipEntryController.java:323-333`) [T]
 `ShipEntryControllerTest.java:244`. The entry coordinate is a ring around where the launch body **is** at this tick,
-named in the body's OWN cell — `aimPoint` answers `addressAt(tick)`, the body's named cell at the offset it stands
-at inside that cell's frame, never its absolute position re-read on the static grid, which names a cell no zone
-body stands in once the body has drifted past its static face (`ShipEntryController.java:386-402`) [V][T]
-(INV-SPC-19) — matched on the launch dimension, radius `max(2·512, 2·shell)`, saturating
-inside the cell (`ShipEntryController.java:60-70,344-415`; `StandoffRing.java:38-43,90-100`) [V][T]
-`ShipEntryControllerTest.java:172`. On settle the ledger takes the entry coordinate
+named in the body's OWN cell — the ring is drawn around `addressAt(tick)` of the ONE body the resolver hands over,
+the body's named cell at the offset it stands at inside that cell's frame, never its absolute position re-read on
+the static grid, which names a cell no zone body stands in once the body has drifted past its static face
+(`ShipEntryController.java:326-347`) [V][T] (INV-SPC-19) — radius `max(2·512, 2·shell)` of that body, saturating
+inside the cell (`ShipEntryController.java:60-70`; `StandoffRing.java:38-43,90-100`) [V][T]
+`ShipEntryControllerTest.java:500`. On settle the ledger takes the entry coordinate
 (`ShipEntryController.java:290`). After a descent the entry latch holds until the ship has been below the line
 (`DescentController.java:230`) [T] `DescentControllerTest.java:358`. Contract: C15 ADDR-16.
 
@@ -197,10 +197,16 @@ when blocked (`AutoTakeoffPlanner.java:18-95`) [T] `AutoTakeoffPlannerTest.java:
 - **INV-SPC-10** [V] A jump and a crossing act on the ship they **name**, or refuse (`VSShipCrosser.java:196-235`;
   `VSShipCrossingOps.java:131-140`; `ShipTransitManagerTest.java:543`).
 - **INV-SPC-15** [V][T] The entry ring is strictly outside the body's descent shell, so an entering ship never spawns
-  inside the descent trigger. The ring is decided by `ShipEntryController#entryRingAround(GalacticCoord)` — the
-  widest ring of the bodies at the address, never narrower than the flat `ENTRY_RING_BLOCKS`, which is twice
-  `DESCENT_RADIUS_BLOCKS` (`ShipEntryController.java:59-85`). Pinned by
-  `ShipEntryControllerTest#entryCrossesSettlesInLedgerOutsideTheDescentRadius`.
+  inside the descent trigger. The ring is decided in `ShipEntryController#resolveEntryCoord` — the
+  ring of the ONE body the ship left (`entryRingAround(body)`), the body the launch resolver hands over; with no
+  body, the flat `ENTRY_RING_BLOCKS` around the home anchor, twice `DESCENT_RADIUS_BLOCKS`
+  (`ShipEntryController.java:59-70,326-347`). It is never a widest-of-a-list: sized as the widest body of the
+  launch body's system, a ship leaving Earth spawned on the Sun's ring, 5 657 554 chart blocks (1.41 M km) away.
+  A JUMP arriving at a body lands on the same ring of that one body — the body the target names, whose address at
+  the tick is the target — and a target that names no body is arrived at exactly
+  (`SpaceSubsystem#arrivalAround`). Pinned by `ShipEntryControllerTest#theEntryRingIsTheRingOfTheBodyTheShipLeft`,
+  `ShipEntryControllerTest#anEntryFromAWorldThatIsNoBodyLandsOnTheFlatRingOutsideTheDescentRadius` and
+  `ArrivalAroundTest`.
 - **INV-SPC-16** [V] Settle order is pose → re-seat → unpark; a rider is never mounted onto a mount about to move
   (`ShipCrossingService.java:259-280`).
 - **INV-SPC-17** [V] "Stored" is derived from region data on disk, never remembered in memory — an in-memory flag is

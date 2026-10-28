@@ -73,8 +73,9 @@ MECH-SPC-21, the subsystem's composition and lifecycle, is below because both ha
 `onServerStarted` → `onServerStopping` (`Stellurgy.java:1720,1747,1852,1858`) [V][T]
 `SpaceSubsystemOwnershipTest.java:58,71,86`. There is **no enable flag** and no VS condition: the only stand-down is
 "already built in this JVM" (`SpaceSubsystem.java:237, 202-204`) [V]. Per-tick order is clock, transit, entry, descent,
-cell crossings, crew rebind, sky producer, GC (`SpaceSubsystemEvents.java:76-101`) [V]. `launchBodyAddress` resolves a
-launch dimension to the body's address now, else the configured home anchor (`SpaceSubsystem.java:359-380`) [V].
+cell crossings, crew rebind, sky producer, GC (`SpaceSubsystemEvents.java:76-101`) [V]. `launchBody` resolves a
+launch dimension to the ONE body a ship leaving it leaves, or `null` — then the entry uses the configured home
+anchor (`SpaceSubsystem.java:357-377`) [V].
 
 ## Integration seams
 

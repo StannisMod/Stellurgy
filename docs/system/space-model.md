@@ -35,12 +35,12 @@ mechanism quoted is the mechanism flown. What is lost is lost by construction: a
 transit hazard, cannot be intercepted in the lane, and is not a place the crew walks around in. The
 rule keys on DURATION, never on route: a fast enough drive makes an interstellar leg short too.
 
-**Both routes arrive OFF their destination** `[V]`: a jump aimed at a cell holding bodies comes out on
-the widest `ShipEntryController.entryRingAround(body)` of that cell's bodies —
-`max(ENTRY_RING_BLOCKS, 2 × DescentShell.radiusAround(body))` — so the arrival is strictly outside every
-body's descent shell (`SpaceSubsystem.arrivalStandoff`; wired into the hyperspace arrival in
-`ShipTransitManager#tickTransits` and into the direct crosser in the `SpaceSubsystem` constructor). A
-cell with no body is returned untouched. The direct route passes the standoff and never the raw target:
+**Both routes arrive OFF their destination** `[V]`: a jump aimed at a body comes out on THAT body's
+`ShipEntryController.entryRingAround(body)` — `max(ENTRY_RING_BLOCKS, 2 × DescentShell.radiusAround(body))` —
+so the arrival is strictly outside its descent shell (`SpaceSubsystem.arrivalStandoff`; wired into the
+hyperspace arrival in `ShipTransitManager#tickTransits` and into the direct crosser in the `SpaceSubsystem`
+constructor). The body is the one the target names, never the widest of the cell. A target that names no
+body is returned untouched. The direct route passes the standoff and never the raw target:
 a short jump at a body would land ON it, inside the descent radius, and be taken down on its first
 settled tick with nobody asking; pinned by
 `VSShortJumpCrossesDirectlyTest.aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace`. The ring is

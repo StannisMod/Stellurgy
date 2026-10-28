@@ -44,6 +44,27 @@ public class ShipEntryControllerTest {
         return GalacticCoord.ofSectorLocal(sector, 0L, 0L, 0L, 0L, 0L);
     }
 
+    /** The launch world's body: a sizeless planet of {@link #LAUNCH_DIM}, standing still at {@code name}. */
+    private static SystemBody launchBodyAt(GalacticCoord name) {
+        return SystemBody.fixedAt(name, SystemBodyKind.PLANET, LAUNCH_DIM, 0);
+    }
+
+    /** Run one whole entry of {@link #SHIP} from {@code launch} at {@code tick}; the coordinate it settled at. */
+    private static GalacticCoord settledEntryFrom(SystemBody launch, long tick) {
+        AtomicLong clock = new AtomicLong(tick);
+        SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
+        ShipEntryController ctl = new ShipEntryController(space, ledger, new FakeOps(), dim -> launch,
+                clock::get);
+        assertTrue("arrangement: the entry must start", ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
+        ctl.tick();
+        ctl.tick();
+        ctl.tick();
+        ShipLedger.Entry entry = ledger.get(SHIP);
+        assertNotNull("arrangement: the entry must settle the ship in the ledger", entry);
+        return entry.coord;
+    }
+
     /** Recording binder (mirrors SpaceManagerTest) so the entry tests drive a real SpaceManager. */
     private static final class FakeBinder implements SlotBinder {
         final int[] dims;
@@ -156,16 +177,61 @@ public class ShipEntryControllerTest {
         return new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0, 0);
     }
 
-    /** Pins INV-SPC-15 (the entry ring lies strictly outside the descent radius of a body with no size). */
+    /**
+     * This test fails if {@code ShipEntryController#resolveEntryCoord} stops deciding that the ring an
+     * entering ship spawns on is the ring of the ONE body it left, sized by that body.
+     */
+    @Pins("INV-SPC-15")
+    @RedWitness(member = "ShipEntryController#resolveEntryCoord",
+            at = "entryRingAround(launch),", replacedBy = "ENTRY_RING_BLOCKS,",
+            fails = "is the ring of the body it left", on = "2026-10-28")
+    @Test
+    public void theEntryRingIsTheRingOfTheBodyTheShipLeft() {
+        SystemBody earth = launchBodyAt(GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0)).withRadius(1d);
+        long ring = ShipEntryController.entryRingAround(earth);
+        assertTrue("arrangement: a sized body's ring must differ from the flat one, or the two could not be "
+                + "told apart", ring > ShipEntryController.ENTRY_RING_BLOCKS);
+
+        double distance = settledEntryFrom(earth, 0L).staticFrameDistanceTo(earth.name());
+        // StandoffRing rounds each component down, never out: the point is at most the ring away and
+        // short of it by under one block per axis.
+        assertEquals("the ring a ship leaving the planet spawns on is the ring of the body it left",
+                ring, distance, 2.0);
+    }
+
+    /**
+     * Pins INV-SPC-15 for a launch from a world that is no body of the universe: the ship is placed on
+     * the flat ring around the home anchor, strictly outside the descent radius.
+     */
     @Pins("INV-SPC-15")
     @RedWitness(verdict = "the entry ring lies outside the descent radius",
-            member = "ShipEntryController#entryRingAround(GalacticCoord)", at = "long widest = ENTRY_RING_BLOCKS;",
-            replacedBy = "long widest = DESCENT_RADIUS_BLOCKS / 2L;",
-            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
+            member = "ShipEntryController#resolveEntryCoord",
+            at = "StandoffRing.pointAround(homeAnchor(), ENTRY_RING_BLOCKS, shipId.hashCode())",
+            replacedBy = "StandoffRing.pointAround(homeAnchor(), DESCENT_RADIUS_BLOCKS / 2L, shipId.hashCode())",
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-28")
     @RedWitness(verdict = "the entry ring lies outside the descent radius",
             member = "ShipEntryController#ENTRY_RING_BLOCKS", at = "DESCENT_RADIUS_BLOCKS * 2L",
             replacedBy = "DESCENT_RADIUS_BLOCKS / 2L",
-            fails = "the entry ring must lie outside the descent radius", on = "2026-10-20")
+            fails = "the entry ring must lie outside the descent radius", on = "2026-10-28")
+    @Test
+    public void anEntryFromAWorldThatIsNoBodyLandsOnTheFlatRingOutsideTheDescentRadius() {
+        // The configuration's class initializer touches vanilla's block registry, which throws without
+        // the vanilla bootstrap -- and the home anchor is read from that configuration.
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+        // Arrangement: where the home anchor is, read as production reads it. The verdict is about the
+        // ring around it, not about which anchor the configuration names.
+        dev.stannismod.stellurgy.api.StellurgyConfiguration cfg =
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig();
+        GalacticCoord parsed = cfg == null ? null
+                : dev.stannismod.stellurgy.universe.UniverseRegistry.parseAnchor(cfg.spaceHomeSystemCoord);
+        GalacticCoord anchor = parsed == null ? GalacticCoord.ORIGIN : parsed;
+
+        double distance = settledEntryFrom(null, 0L).staticFrameDistanceTo(anchor);
+        assertTrue("the entry ring must lie outside the descent radius: ring distance " + distance,
+                distance > ShipEntryController.DESCENT_RADIUS_BLOCKS);
+    }
+
+    @Pins("INV-SPC-15")
     @Test
     public void entryCrossesSettlesInLedgerOutsideTheDescentRadius() {
         AtomicLong clock = new AtomicLong();
@@ -173,7 +239,7 @@ public class ShipEntryControllerTest {
         ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertTrue(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertTrue(ctl.isEntering(SHIP));
@@ -215,7 +281,7 @@ public class ShipEntryControllerTest {
         ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertFalse("entry is refused", ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertFalse(ctl.isEntering(SHIP));
@@ -246,7 +312,7 @@ public class ShipEntryControllerTest {
         FakeOps ops = new FakeOps();
         ops.failCross = true;
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertFalse(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertFalse(ctl.isEntering(SHIP));
@@ -274,7 +340,7 @@ public class ShipEntryControllerTest {
         ops.teleportFailCount = 2; // re-assembly queryable on the third tick
         ops.reseatFailCount = 1;   // seats resolve one tick after that
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertTrue(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         for (int i = 0; i < 4; i++) {
@@ -309,7 +375,7 @@ public class ShipEntryControllerTest {
         ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertTrue(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         ctl.tick(); // pose
@@ -333,7 +399,7 @@ public class ShipEntryControllerTest {
         ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
-                dim -> body(5), clock::get);
+                dim -> launchBodyAt(body(5)), clock::get);
 
         assertTrue(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertFalse("an in-flight entry is not restarted", ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
@@ -422,22 +488,23 @@ public class ShipEntryControllerTest {
     }
 
     /**
-     * This test fails if {@code ShipEntryController#aimPoint} stops deciding that an entering ship is
-     * aimed into its launch body's OWN named cell, at the point that — read through the frame that
-     * cell rides — is where the body stands at that tick, however far the body has carried its cell
-     * from the static cube its name occupies.
+     * This test fails if {@code ShipEntryController#resolveEntryCoord} stops deciding that an entering
+     * ship is placed in its launch body's OWN named cell, on the ring around the point that — read
+     * through the frame that cell rides — is where the body stands at that tick, however far the body
+     * has carried its cell from the static cube its name occupies.
      */
     @Pins("INV-SPC-19")
-    @RedWitness(member = "ShipEntryController#aimPoint", at = "return b.addressAt(tick);",
-            replacedBy = "AbsolutePos at = b.absoluteAt(tick); return GalacticCoord.ofSectorLocal(at.sectorX(),"
-                    + " at.sectorY(), at.sectorZ(), at.localX(), at.localY(), at.localZ());",
+    @RedWitness(member = "ShipEntryController#resolveEntryCoord", at = "launch.addressAt(clock.getAsLong())",
+            replacedBy = "GalacticCoord.ofSectorLocal(launch.absoluteAt(clock.getAsLong()).sectorX(),"
+                    + " launch.absoluteAt(clock.getAsLong()).sectorY(), launch.absoluteAt(clock.getAsLong()).sectorZ(),"
+                    + " launch.absoluteAt(clock.getAsLong()).localX(), launch.absoluteAt(clock.getAsLong()).localY(),"
+                    + " launch.absoluteAt(clock.getAsLong()).localZ())",
             fails = "must name the cell of", on = "2026-10-19")
     @Test
     public void anEntryIsAimedIntoTheLaunchBodysOwnCellWhereverItsOrbitHasCarriedIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);
         SystemBody planet = orbiting(name, LAUNCH_DIM);
-        List<SystemBody> atAddress = new ArrayList<>();
-        atAddress.add(planet);
+        long ring = ShipEntryController.entryRingAround(planet);
 
         // The arrangement must put the body outside the static cube its name occupies, or a static
         // reading of its position and its own cell would agree and the decision could not be seen.
@@ -453,39 +520,11 @@ public class ShipEntryControllerTest {
         assertTrue("arrangement: the body must have moved between the two ticks",
                 planet.absoluteAt(0L).distanceTo(planet.absoluteAt(later)) > 0d);
 
-        assertEquals("the aim lies in the body's own cell and lands ON the body, at tick 0",
-                0.0, gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name),
-                        planet, 0L, planet.absoluteAt(0L)), 1e-6);
-        assertEquals("and at a later tick, where the body has gone", 0.0,
-                gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, later, name),
-                        planet, later, planet.absoluteAt(later)), 1e-6);
-
-        // An address can hold more than one body; the one a ship is leaving is the one whose
-        // DIMENSION it launched from. The other here stands 5000 blocks off the cell's origin, so
-        // choosing it moves the aim by exactly that much.
-        List<SystemBody> family = new ArrayList<>();
-        family.add(new SystemBody(name, planet.frame(), BodyEphemeris.fixed(5000L, 0L, 0L),
-                SystemBodyKind.STATION_SLOT, LAUNCH_DIM + 1, 0));
-        family.add(planet);
-        assertEquals("the launch dimension picks which of the family is aimed at", 0.0,
-                gapTo(ShipEntryController.aimPoint(family, LAUNCH_DIM, later, name),
-                        planet, later, planet.absoluteAt(later)), 1e-6);
-
-        // An EMPTY address holds no body, so there is no position that beats the name: an unplaced
-        // launch or the config home anchor. This one is a real answer and not a degraded one.
-        assertEquals("with no body there, the name is the only place there is",
-                name, ShipEntryController.aimPoint(new ArrayList<SystemBody>(), LAUNCH_DIM, later, name));
-        assertEquals("and so does a missing list",
-                name, ShipEntryController.aimPoint(null, LAUNCH_DIM, later, name));
-
-        // A NON-empty address that does not hold the launch body is a different case entirely, and it
-        // must not be confused with the one above: bodies are there, the ship's own is not, and the
-        // name it falls back to is exactly the defect this method removes. It still places the ship —
-        // an arrival is never refused — but production REPORTS it, so it cannot pass for a working
-        // aim. The value is asserted here; that it is loud is the point of the branch.
-        List<SystemBody> strangers = new ArrayList<>();
-        strangers.add(orbiting(name, LAUNCH_DIM + 7));
-        assertEquals("a launch body missing from its own address still places the ship, at the name",
-                name, ShipEntryController.aimPoint(strangers, LAUNCH_DIM, later, name));
+        // The entry stands on the ring around the body, so the ship is the ring away from where the body
+        // is — under one block short of it per axis, as StandoffRing rounds down.
+        assertEquals("the entry lies in the body's own cell, on the ring around the body, at tick 0",
+                ring, gapTo(settledEntryFrom(planet, 0L), planet, 0L, planet.absoluteAt(0L)), 2.0);
+        assertEquals("and at a later tick, around where the body has gone", ring,
+                gapTo(settledEntryFrom(planet, later), planet, later, planet.absoluteAt(later)), 2.0);
     }
 }

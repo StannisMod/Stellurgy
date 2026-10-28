@@ -69,8 +69,8 @@ jump's only price ([hyperdrive](../hyperdrive.md) MECH-HYP-12) — and it lands 
 (`ShipTransitManager#tickTransits`) [T]
 `ShipTransitManagerTest#anArrivalIntoAFullPoolWaitsInItsLaneAndLandsOnceASlotFrees`. The jump gate warns of it before the burst (ADVISORY `msg.jumpgate.destinationfull`). On arrival:
 materialize the target **once**, paste **once**, resolve the arrival
-coordinate **once** (`SpaceSubsystem.arrivalStandoff`, a ring off every body of the cell; a cell with no body is
-left untouched, `SpaceSubsystem.java:398-426`), settle the pose, and *stay in the map* until `crewIsAboard`
+coordinate **once** (`SpaceSubsystem.arrivalStandoff`, the ring of the body the target names; a target naming no body is
+left untouched — INV-SPC-15), settle the pose, and *stay in the map* until `crewIsAboard`
 (`ShipTransitManager.java:627-703`) [V][T] `ShipTransitManagerTest.java:1057,679`. Finish: free the lane,
 `ledgerSettle` the **placed** coordinate, mark dirty, announce (`ShipTransitManager.java:704-730`) [T]
 `ShipTransitManagerTest.java:275,461`. Lanes: square spiral, 2048 blocks apart at Y 128

@@ -68,23 +68,6 @@ public final class ShipEntryController {
         return Math.max(ENTRY_RING_BLOCKS, shell * 2L);
     }
 
-    /**
-     * The same ring for a body known only by ADDRESS — the entry path holds a coordinate, not the
-     * body object, so the body is resolved through the registry and the flat ring is used when there
-     * is nothing there to resolve (an unplaced launch, the config home anchor).
-     */
-    public static long entryRingAround(GalacticCoord bodyAddress) {
-        if (bodyAddress == null) {
-            return ENTRY_RING_BLOCKS;
-        }
-        long widest = ENTRY_RING_BLOCKS;
-        for (dev.stannismod.stellurgy.universe.SystemBody b
-                : dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(bodyAddress)) {
-            widest = Math.max(widest, entryRingAround(b));
-        }
-        return widest;
-    }
-
     /** Ticks a ship waits after a refused/failed entry before the ceiling check may re-trigger. */
     private static final int RETRY_COOLDOWN_TICKS = 100;
 
@@ -95,12 +78,12 @@ public final class ShipEntryController {
     private static final int ENTRY_LANE_STRIDE = 64;
     private static final int ENTRY_LANE_COUNT = 8;
 
-    /** Resolves a launch dimension id to the launch BODY's full galactic address (cell + local
-     *  offset), or {@code null} for "no placement" (the config home anchor is used). Production
-     *  wires the universe registry's {@code coordForPlanet} + zone-body match. */
+    /** Resolves a launch dimension id to the ONE body a ship leaving it leaves, or {@code null} when
+     *  that world is no body of the universe (the config home anchor is used). Production wires the
+     *  universe registry's {@code coordForPlanet} + body match. */
     @FunctionalInterface
     public interface LaunchCoordResolver {
-        GalacticCoord launchBodyAddress(int dimId);
+        dev.stannismod.stellurgy.universe.SystemBody launchBody(int dimId);
     }
 
     private final SpaceManager space;
@@ -341,76 +324,26 @@ public final class ShipEntryController {
     /** The launch body's position + spawn ring, or the config home anchor when unplaced. The ring
      *  direction is derived from the ship id, so simultaneous entries at one body spread out. */
     private GalacticCoord resolveEntryCoord(int launchDimId, UUID shipId) {
-        GalacticCoord body = coordResolver.launchBodyAddress(launchDimId);
-        if (body == null) {
-            body = GalacticCoord.ORIGIN;
+        dev.stannismod.stellurgy.universe.SystemBody launch = coordResolver.launchBody(launchDimId);
+        if (launch == null) {
+            return StandoffRing.pointAround(homeAnchor(), ENTRY_RING_BLOCKS, shipId.hashCode());
         }
-        return StandoffRing.pointAround(aimAt(launchDimId, body), entryRingAround(body),
+        // The ring is the ring of the body the ship left and of nothing else: a widest-of-a-list sized
+        // it by the system's star once, and put a ship leaving Earth 1.41 million km out. It is drawn
+        // around the body's IN-FRAME address — its name plus where it stands in that cell — never its
+        // absolute position re-read on the static grid, which names whichever static cube the body is
+        // over and stops naming its own cell, whose frame the ship must ride, once it drifts out.
+        return StandoffRing.pointAround(launch.addressAt(clock.getAsLong()), entryRingAround(launch),
                 shipId.hashCode());
     }
 
-    /**
-     * Where the launch body actually IS at this tick, as the point the spawn ring is drawn around.
-     *
-     * <p><b>The address is a name, and a place only through the frame that name rides.</b> A body's
-     * cell rides the body, so a coordinate in that cell is a place relative to the body at every tick;
-     * the same numbers read on the static grid are where the cell would be if nothing moved. The aim is
-     * therefore the body's in-frame address — its name plus where it stands inside that cell — and
-     * never its absolute position re-expressed as a galactic coordinate, which names whichever static
-     * cube the body happens to be over and stops naming its own cell once it has drifted out of it.</p>
-     *
-     * <p><b>Matched on the launch DIMENSION, not on the address.</b> A moon shares its parent's name,
-     * so an address can hold several bodies that are in quite different places; the one a ship is
-     * leaving is the one whose dimension it launched from.</p>
-     *
-     * <p><b>When nothing resolves the address is used, and that is REPORTED, never silent.</b> The
-     * fallback places the ship relative to whatever the address's cell rides, which is not the launch
-     * body, and a ship placed there reads as a working arrival right up until the pilot looks out of a
-     * window. Two callers reach it legitimately — an unplaced launch and the config home anchor, where
-     * there is no body and so no position to prefer — but a LAUNCH BODY that failed to resolve is a
-     * broken universe, not a configuration, and it says so in the log.</p>
-     */
-    private GalacticCoord aimAt(int launchDimId, GalacticCoord address) {
-        return aimPoint(dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(address),
-                launchDimId, clock.getAsLong(), address);
-    }
-
-    /**
-     * The decision {@link #aimAt} makes, as arithmetic on a body list — so it can be driven by a test
-     * without a server standing behind the registry.
-     *
-     * <p>Kept separate deliberately: with no server the registry answers an EMPTY list, so a test
-     * exercising the whole method would take the fallback every time and pass while proving nothing
-     * about the case the change exists for.</p>
-     */
-    public static GalacticCoord aimPoint(
-            java.util.List<dev.stannismod.stellurgy.universe.SystemBody> atAddress,
-            int launchDimId, long tick, GalacticCoord address) {
-        if (atAddress == null) {
-            return address;
-        }
-        for (dev.stannismod.stellurgy.universe.SystemBody b : atAddress) {
-            if (b == null || b.dimId() != launchDimId) {
-                continue;
-            }
-            // The body's own NAMED cell, at the offset it stands at inside that cell's frame. Not its
-            // absolute position re-read on the static grid: that grid is where cells would be if
-            // nothing moved, so once the body has drifted past the face of the static cube its name
-            // occupies, the static reading names a different cell - one no zone body stands in and
-            // whose frame the ship would therefore never ride.
-            return b.addressAt(tick);
-        }
-        if (atAddress.isEmpty()) {
-            // Nothing stands at this address at all: an unplaced launch or the config home anchor.
-            // There is no body, so there is no position that would be better than the name.
-            return address;
-        }
-        LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
-                + "are there and none of them is it. Aiming the entry at the address as given, which "
-                + "is measured from whatever that cell rides and not from the launch body; the ship "
-                + "is being put somewhere other than beside the planet it left.",
-                launchDimId, address.cellKey(), atAddress.size());
-        return address;
+    /** The configured home-system anchor, or the galactic origin when no configuration names one. */
+    private static GalacticCoord homeAnchor() {
+        dev.stannismod.stellurgy.api.StellurgyConfiguration cfg =
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig();
+        GalacticCoord anchor = cfg == null ? null
+                : dev.stannismod.stellurgy.universe.UniverseRegistry.parseAnchor(cfg.spaceHomeSystemCoord);
+        return anchor == null ? GalacticCoord.ORIGIN : anchor;
     }
 
     /** Advance every in-flight entry one tick (the shared crossing settle loop). */

@@ -63,17 +63,21 @@ public final class WitnessReplay {
     private final Path root;
     private final List<String> tiers;
     private final boolean throughGradle;
+    /** {@code TestClass#method} of the records to replay, or null for every record of the tiers. */
+    private final List<String> methods;
 
-    private WitnessReplay(Path root, List<String> tiers, boolean throughGradle) {
+    private WitnessReplay(Path root, List<String> tiers, boolean throughGradle, List<String> methods) {
         this.root = root;
         this.tiers = tiers;
         this.throughGradle = throughGradle;
+        this.methods = methods;
     }
 
     public static void main(String[] args) throws Exception {
         Path root = Paths.get("").toAbsolutePath();
         List<String> tiers = new ArrayList<>();
         boolean gradle = false;
+        List<String> methods = null;
         for (int i = 0; i < args.length; i++) {
             if ("--tiers".equals(args[i])) {
                 tiers.addAll(Arrays.asList(args[++i].split(",")));
@@ -81,14 +85,17 @@ public final class WitnessReplay {
                 gradle = true;
             } else if ("--root".equals(args[i])) {
                 root = Paths.get(args[++i]).toAbsolutePath();
+            } else if ("--methods".equals(args[i])) {
+                methods = Arrays.asList(args[++i].split(","));
             } else {
-                throw new IllegalArgumentException("unknown argument `" + args[i] + "`: --tiers, --gradle, --root");
+                throw new IllegalArgumentException("unknown argument `" + args[i]
+                        + "`: --tiers, --gradle, --root, --methods");
             }
         }
         if (tiers.isEmpty()) {
             throw new IllegalArgumentException("--tiers unit,integration|server,client,milestone is required");
         }
-        System.exit(new WitnessReplay(root, tiers, gradle).run() ? 0 : 1);
+        System.exit(new WitnessReplay(root, tiers, gradle, methods).run() ? 0 : 1);
     }
 
     /**
@@ -98,7 +105,7 @@ public final class WitnessReplay {
      */
     static String locateAll(Path root, List<String> failures) throws IOException {
         WitnessReplay all = new WitnessReplay(root,
-                Arrays.asList("unit", "integration", "server", "client", "milestone"), false);
+                Arrays.asList("unit", "integration", "server", "client", "milestone"), false, null);
         List<Record> records = all.records();
         int stale = 0;
         for (Record r : records) {
@@ -121,7 +128,7 @@ public final class WitnessReplay {
      * no parameter list, a type name declared in several places).
      */
     public static String locate(Path root, String member, String at) throws IOException {
-        return new WitnessReplay(root, new ArrayList<>(), false).find(member, at).problem;
+        return new WitnessReplay(root, new ArrayList<>(), false, null).find(member, at).problem;
     }
 
     /** Null when the record's fragment occurs exactly once in its member; otherwise why not. */
@@ -231,7 +238,9 @@ public final class WitnessReplay {
             r.at = field(row, "at");
             r.replacedBy = field(row, "replacedBy");
             r.fails = field(row, "fails");
-            out.add(r);
+            if (methods == null || methods.contains(r.testClass + "#" + r.method)) {
+                out.add(r);
+            }
         }
         return out;
     }

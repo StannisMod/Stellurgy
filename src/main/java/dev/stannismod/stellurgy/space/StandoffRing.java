@@ -1,7 +1,5 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.List;
-
 /**
  * Where a craft is put down NEAR something rather than on top of it.
  *
@@ -21,9 +19,6 @@ import java.util.List;
  */
 public final class StandoffRing {
 
-    /** Evenly-spaced candidate bearings tried before the best-clearance one wins. {@code tunable}. */
-    public static final int RING_CANDIDATES = 8;
-
     private StandoffRing() {
     }
 
@@ -40,41 +35,6 @@ public final class StandoffRing {
             return anchor;
         }
         return atBearing(anchor, bearingOf(seed), ringBlocks);
-    }
-
-    /**
-     * A point {@code ringBlocks} from {@code aim} that clears every coordinate in {@code occupied} by
-     * at least {@code clearanceBlocks}.
-     *
-     * <p>Returns {@code aim} UNCHANGED when there is nothing to stand off from &mdash; a cell holding
-     * no body, or a coordinate the pilot typed by hand. Displacing those would move a destination
-     * that was CHOSEN rather than derived, and no proximity trigger can fire where no body is.</p>
-     *
-     * <p>When no bearing clears every occupant, the candidate with the largest minimum clearance
-     * wins. A placement is a best effort and never a refusal: a craft that cannot be placed well is
-     * still placed.</p>
-     */
-    public static GalacticCoord standoffFrom(GalacticCoord aim, List<GalacticCoord> occupied,
-                                             long ringBlocks, long clearanceBlocks, int seed) {
-        if (aim == null || occupied == null || occupied.isEmpty() || ringBlocks <= 0L) {
-            return aim;
-        }
-        GalacticCoord best = null;
-        double bestClearance = -1.0;
-        double base = bearingOf(seed);
-        for (int i = 0; i < RING_CANDIDATES; i++) {
-            GalacticCoord candidate = atBearing(aim,
-                    base + (i * 2.0 * Math.PI / RING_CANDIDATES), ringBlocks);
-            double clearance = minimumDistanceTo(candidate, occupied);
-            if (clearance >= clearanceBlocks) {
-                return candidate;
-            }
-            if (clearance > bestClearance) {
-                bestClearance = clearance;
-                best = candidate;
-            }
-        }
-        return best == null ? aim : best;
     }
 
     /** The bearing a seed selects, in radians — one of 256 evenly spaced directions. */
@@ -97,20 +57,5 @@ public final class StandoffRing {
             dz = (long) (dz * scale);
         }
         return anchor.plusLocalSaturating(dx, 0L, dz);
-    }
-
-    /** The distance from {@code point} to the nearest occupant, or {@link Double#MAX_VALUE} if none. */
-    private static double minimumDistanceTo(GalacticCoord point, List<GalacticCoord> occupied) {
-        double nearest = Double.MAX_VALUE;
-        for (GalacticCoord other : occupied) {
-            if (other == null) {
-                continue;
-            }
-            double distance = point.staticFrameDistanceTo(other);
-            if (distance < nearest) {
-                nearest = distance;
-            }
-        }
-        return nearest;
     }
 }

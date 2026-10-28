@@ -115,7 +115,7 @@ public final class SpaceSubsystem {
         this.transit.setArrivalPlacement(SpaceSubsystem::arrivalStandoff);
         this.transit.setFrames(SpaceSubsystem::cellFrameOriginAt);
         this.entry = new ShipEntryController(this.manager, this.ledger, new VSShipCrossingOps(),
-                SpaceSubsystem::launchBodyAddress, useClock);
+                SpaceSubsystem::launchBody, useClock);
         this.descent = new DescentController(this.manager, this.ledger, new VSShipCrossingOps(),
                 new VSDescentPasteResolver(), useClock);
         this.cellCrossings = new CellCrossingController(this.manager, this.ledger, new VSShipCrossingOps(),
@@ -348,38 +348,38 @@ public final class SpaceSubsystem {
     }
 
     /**
-     * The launch BODY's full galactic address for a planet dimension: its zone cell via the
-     * universe registry (the C-1 lookup), refined to the body's own local offset when the zone
-     * content lists it. {@code null} (no placement / registry unreachable) makes the entry fall
-     * back to the configured home-system anchor. Public: the production resolver is also what a
-     * probe-built entry stack wires, so tests exercise the real lookup chain.
+     * The ONE body a ship leaving planet dimension {@code dimId} leaves: the body of that dimension in
+     * the cell the universe registry names for it. {@code null} when the world is no body (the entry
+     * then uses the configured home-system anchor). A world the registry names a cell for but whose
+     * cell does not hold it is a broken universe and is REPORTED, not answered with the cell. Public:
+     * the production resolver is also what a probe-built entry stack wires.
      */
-    public static GalacticCoord launchBodyAddress(int dimId) {
+    public static dev.stannismod.stellurgy.universe.SystemBody launchBody(int dimId) {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         dev.stannismod.stellurgy.universe.UniverseRegistry reg =
                 dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
-        if (reg != null) {
-            java.util.Optional<GalacticCoord> cell = reg.coordForPlanet(dimId);
-            if (cell.isPresent()) {
-                for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(cell.get())) {
-                    if (body.dimId() == dimId) {
-                        // The body's own offset inside its zone cell, as of now: a moon is a live
-                        // point inside its parent's neighbourhood, and a ship leaving it has to be
-                        // put beside where the moon IS, not beside where its cell is named.
-                        return body.addressAt(spaceClock());
-                    }
-                }
-                return cell.get();
+        if (reg == null) {
+            return null;
+        }
+        java.util.Optional<GalacticCoord> cell = reg.coordForPlanet(dimId);
+        if (!cell.isPresent()) {
+            return null;
+        }
+        // The registry names the world; the body is the one that bears that name.
+        for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(cell.get())) {
+            if (body.name().equals(cell.get())) {
+                return body;
             }
         }
-        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
-        return cfg == null ? null
-                : dev.stannismod.stellurgy.universe.UniverseRegistry.parseAnchor(cfg.spaceHomeSystemCoord);
+        Stellurgy.logger.warn("[SPACE] dimension {} is named at cell {}, but no body of that cell is it; "
+                + "a ship leaving it is placed at the home anchor, not beside the world it left",
+                dimId, cell.get().cellKey());
+        return null;
     }
 
     /**
-     * Where a jump aimed at {@code target} actually ends: standing the ship off every descend-target
-     * body of the target's own cell, by the same ring an entry uses.
+     * Where a jump aimed at {@code target} actually ends: on the ring of the body the target names, the
+     * same ring an entry from that body uses ({@link #arrivalAround}).
      *
      * <p>Without this an arrival lands ON its destination. A planet's address IS its cell centre, and
      * the arrival settles the ship exactly onto the coordinate it aimed at, so the ship comes out of
@@ -388,10 +388,10 @@ public final class SpaceSubsystem {
      * path has said this for as long as it has existed ({@link ShipEntryController#ENTRY_RING_BLOCKS}
      * is twice the descent radius for exactly this reason); the arrival path never had a counterpart.
      *
-     * <p>A cell with no descend-target body — deep space, a hand-typed coordinate — is returned
+     * <p>A target that names no body — deep space, a hand-typed coordinate — is returned
      * UNTOUCHED. There is nothing to stand off from, and displacing a destination the pilot chose
      * rather than derived would be its own kind of wrong. Public for the same reason
-     * {@link #launchBodyAddress(int)} is: a probe-built stack wires the production resolver.
+     * {@link #launchBody(int)} is: a probe-built stack wires the production resolver.
      */
     public static GalacticCoord arrivalStandoff(String shipId, GalacticCoord target, long worldTick) {
         if (target == null) {
@@ -403,24 +403,31 @@ public final class SpaceSubsystem {
         if (reg == null) {
             return target;
         }
-        // EVERY body, not only the ones a ship can land on. The question here is "is something there",
-        // not "could I descend to it": arriving on top of a gas giant trips no descent trigger, but it
-        // does put the ship at zero distance from the body, and an observer→body vector of zero is
-        // dropped by the sky renderer — so the pilot spends a jump and arrives at a destination his
-        // own sky does not draw.
-        // The ring and the clearance come from the BODIES, as the entry path's do: each body's descent
-        // shell is where its atmosphere begins, so a flat ring sits inside any shell wider than itself —
-        // a moon's, a planet's.
-        java.util.List<GalacticCoord> occupied = new java.util.ArrayList<>();
-        long ring = ShipEntryController.ENTRY_RING_BLOCKS;
-        long clearance = ShipEntryController.DESCENT_RADIUS_BLOCKS;
-        for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(target)) {
-            occupied.add(body.addressAt(worldTick));
-            ring = Math.max(ring, ShipEntryController.entryRingAround(body));
-            clearance = Math.max(clearance, DescentShell.radiusAround(body));
+        return arrivalAround(reg.bodiesAt(target), target, worldTick, shipId == null ? 0 : shipId.hashCode());
+    }
+
+    /**
+     * The decision {@link #arrivalStandoff} makes, on the bodies of the target's cell: a jump aimed at a
+     * BODY arrives on that body's own ring, the same ring an entry from it spawns on; a jump aimed at a
+     * point that is no body arrives on the point.
+     *
+     * <p>The body is the one the target NAMES — whose address at the tick is the target: a jump is aimed
+     * at a body's address, and for every body that defines a frame that address is its name. Never the
+     * widest ring of the cell: that sized a ship leaving Earth by the Sun once, 1.41 million km out. Any
+     * body counts, not only the ones a ship can land on: arriving ON a gas giant trips no descent, but at
+     * zero distance the sky renderer drops the body, so the pilot would arrive at a destination his own
+     * sky does not draw.</p>
+     */
+    public static GalacticCoord arrivalAround(java.util.List<dev.stannismod.stellurgy.universe.SystemBody> cellBodies,
+                                              GalacticCoord target, long worldTick, int seed) {
+        if (cellBodies != null) {
+            for (dev.stannismod.stellurgy.universe.SystemBody body : cellBodies) {
+                if (body != null && body.addressAt(worldTick).equals(target)) {
+                    return StandoffRing.pointAround(target, ShipEntryController.entryRingAround(body), seed);
+                }
+            }
         }
-        return StandoffRing.standoffFrom(target, occupied, ring, clearance,
-                shipId == null ? 0 : shipId.hashCode());
+        return target;
     }
 
     /**
@@ -724,7 +731,7 @@ public final class SpaceSubsystem {
      * registry. Falls back to the static reading ({@code sector * CELL}) with no registry, which is
      * what a void cell really does anyway.
      *
-     * <p>Public and static for the same reason {@link #launchBodyAddress(int)} is: a probe-built
+     * <p>Public and static for the same reason {@link #launchBody(int)} is: a probe-built
      * stack wires the production resolver rather than a second one that could disagree with it.</p>
      */
     public static AbsolutePos cellFrameOriginAt(GalacticCoord name, long tick) {
