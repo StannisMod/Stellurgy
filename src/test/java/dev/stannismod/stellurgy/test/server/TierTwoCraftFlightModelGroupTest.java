@@ -126,8 +126,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /**
      * STIMULUS: game ticks a pilot's throttle is held before the window on it opens. The computer
      * publishes the push on its next server tick and the physics thread flies it from its next step, so
-     * a few ticks put the window's first step well inside the push; the window's first sample is
-     * checked for it.
+     * by the time the window opens the push is the command it flies. The solver need not have stepped
+     * in those ticks — measured 2026-10-28 under load: the first sample read 0 and the window's
+     * acceleration was still the readout's — so the craft's speed at the first sample says nothing about
+     * whether the push had begun, and is not read as a premise.
      */
     private static final int FA_OFF_PUSH_TICKS = 5;
 
@@ -439,8 +441,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * push is then the only thing acting on it, the prediction is the readout's live sustained heave
      * acceleration alone — what INV-SFM-19 says a held throttle asks for — and climbing keeps it in its
      * own chunk column, out of reach of terrain. The throttle is held for {@link #FA_OFF_PUSH_TICKS}
-     * before the window opens, so every step inside it is a step of the push; the window's first
-     * sample is read as that premise.</p>
+     * before the window opens, so every step inside it is a step of the push.</p>
      *
      * <p>One verdict, over the physics clock's own span: the mean acceleration across the window is the
      * readout's figure. A speed bound anywhere inside the window flattens it — a cap stops the push, and
@@ -517,8 +518,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 + record, Events.number(record, "steps") > 1 && seconds > 0.0);
         double[] first = {Events.number(record, "v0X"), Events.number(record, "v0Y"), Events.number(record, "v0Z")};
         double[] last = {Events.number(record, "v1X"), Events.number(record, "v1Y"), Events.number(record, "v1Z")};
-        requireArranged("the craft must already be climbing when the window opens, so every step in it"
-                + " pushes: " + record, first[1] > 0.0);
         requireArranged("nothing may touch the craft inside the window: " + record,
                 Events.number(record, "contacts") == 0);
 
