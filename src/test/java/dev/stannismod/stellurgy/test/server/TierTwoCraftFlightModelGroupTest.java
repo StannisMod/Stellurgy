@@ -123,6 +123,35 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final int PAD_CONTACT_TICKS = 5;
 
+    /**
+     * STIMULUS: game ticks a pilot's throttle is held before the window on it opens. The computer
+     * publishes the push on its next server tick and the physics thread flies it from its next step, so
+     * a few ticks put the window's first step well inside the push; the window's first sample is
+     * checked for it.
+     */
+    private static final int FA_OFF_PUSH_TICKS = 5;
+
+    /**
+     * EXPERIMENT dose of a held throttle with the assist off, in game ticks. Sized against
+     * {@link #FORMER_FREEZE_SPEED}: the decked craft's live sustained heave is 34.6 m/s² (9.72 MN on
+     * 281 250 kg, the fixture's measured readout), 112.7 blocks per engine second² in the solver's units,
+     * so the craft passes that speed from rest after 1.98 engine seconds. The solver steps at 60 Hz
+     * against the wall clock and the server ticks at most 20 times a second, so these ticks give at
+     * least 4 engine seconds whenever the solver keeps its rate — twice what is needed. A run that falls
+     * short reports its engine seconds beside its speed.
+     */
+    private static final int FA_OFF_DOSE_TICKS = 80;
+
+    /**
+     * A constant: a {@code final} double, computed once from a literal.
+     *
+     * <p>The speed at which the physics substrate used to freeze a craft and zero its velocity, in blocks
+     * per engine second: its sanity guard tested {@code |v|² > 50000} on the linear velocity as it still
+     * does on the angular one. A craft with the assist off must pass it, so a regression of that guard
+     * is seen here.</p>
+     */
+    private static final double FORMER_FREEZE_SPEED = Math.sqrt(50000.0);
+
     /** STIMULUS: ticks of a zero-velocity command after a drive, so the next drive starts near rest. */
     private static final int BRAKE_TICKS = 40;
 
@@ -398,6 +427,121 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                         + " live surge figure (" + predictedSi + " m/s²); it accelerated at "
                         + measuredSi + " m/s². Window: " + window,
                 1.0, measuredSi / predictedSi, ACCELERATION_BAND);
+    }
+
+    /**
+     * With Flight Assist off, a pilot's held throttle pushes the craft at its authority for as long as
+     * it is held, through speeds that used to stop it: the assist's cruise ceiling and the physics
+     * substrate's former freeze on linear speed.
+     *
+     * <p>The pilot holds full heave through the seat, so the throttle enters on the pilot's own
+     * channel and reaches the controller as a push. The craft stands in vacuum at zero gravity: the
+     * push is then the only thing acting on it, the prediction is the readout's live sustained heave
+     * acceleration alone — what INV-SFM-19 says a held throttle asks for — and climbing keeps it in its
+     * own chunk column, out of reach of terrain. The throttle is held for {@link #FA_OFF_PUSH_TICKS}
+     * before the window opens, so every step inside it is a step of the push; the window's first
+     * sample is read as that premise.</p>
+     *
+     * <p>One verdict, over the physics clock's own span: the mean acceleration across the window is the
+     * readout's figure. A speed bound anywhere inside the window flattens it — a cap stops the push, and
+     * the substrate's former freeze zeroed the velocity while the steps went on (measured 2026-10-27,
+     * the freeze witness: it reddened this verdict). So the window is required, as a premise, to span
+     * those speeds: from its first sample, the readout's acceleration over its engine seconds must carry
+     * an unbounded craft past {@link #FORMER_FREEZE_SPEED}, the speed the substrate used to freeze a craft
+     * at. The dose is sized for that with room to spare: {@link #FA_OFF_DOSE_TICKS}.</p>
+     *
+     * <p>Not visited: a craft with gravity or air acting on it, a throttle partly deflected, a held
+     * direction other than heave, and the client's key reaching the seat (the seat's input is set on
+     * the server here).</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that with Flight Assist off no speed
+     * bounds a craft, and a held throttle accelerates it at its sustained authority for as long as it
+     * is held.</p>
+     */
+    @Pins({"INV-SFM-19", "STAT-7a"})
+    @RedWitness(member = "TileAdvancedFlightComputer#onPhysicsTick",
+            at = "double[] thrustCmd = flying.thrust();",
+            replacedBy = "double[] thrustCmd = calc.getLinearVelocity().length() < SHIP_MAX_SPEED ? flying.thrust() : null;",
+            fails = "with the assist off, a held throttle must accelerate the craft", on = "2026-10-27")
+    @RedWitness(member = "PhysicsCalculations#isPhysicsBroken",
+            at = "if (getAngularVelocity().lengthSquared() > 50000 ||",
+            replacedBy = "if (getLinearVelocity().lengthSquared() > 50000 || getAngularVelocity().lengthSquared() > 50000 ||",
+            fails = "with the assist off, a held throttle must accelerate the craft", on = "2026-10-27")
+    @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), FA_OFF_PUSH_TICKS);",
+            why = "how long the throttle is held before the window opens, so the window holds only pushing steps.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), FA_OFF_DOSE_TICKS);",
+            why = "the push is the dose; the verdicts read a rate over the steps it produced and the speed they reached.")
+    public void withTheAssistOffAHeldThrottleAcceleratesAtItsAuthorityPastEveryFormerSpeedBound()
+            throws Exception {
+        standInVacuum();
+        arrange("ar planet set " + DIM + " gravitationalMultiplier 0");
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
+        requireArranged("the overworld must be weightless, so the push is all that acts on the craft: "
+                + planet, planet.number("gravity") == 0.0);
+        FixtureSite site = site();
+        AssembledCraft craft = assemble(site, "with-pilot-deck", "a decked craft flown with the assist off");
+        removePad(site, "a craft pushed in free air");
+
+        Reply heave = live(readout(craft, "the prediction"), "HEAVE_POSITIVE");
+        double predictedSi = heave.number("sustainedAccel");
+        requireArranged("the hull must have sustained authority upward: " + heave, predictedSi > 0.0);
+        double predicted = predictedSi * PhysicsUnits.ACCELERATION;
+
+        Reply assist = Reply.of(arrange("stellurgytest vs fa-by-id " + DIM + " " + craft.physicsId + " false")
+                .raw());
+        requireArranged("Flight Assist must be off on this craft's computer: " + assist,
+                assist.boolOr("afcResolved", false) && !assist.boolOr("flightAssist", true));
+        Reply seat = Reply.of(arrange("stellurgytest vs seat-input-by-id " + DIM + " " + craft.physicsId
+                + " 0 1 0 0 0 0").raw());
+        requireArranged("full heave must reach this craft's computer through its seat: " + seat,
+                seat.boolOr("seatFound", false) && seat.boolOr("afcResolved", false)
+                        && seat.integer("afcX") == craft.afcX && seat.integer("afcY") == craft.afcY
+                        && seat.integer("afcZ") == craft.afcZ);
+        GameTicks.advance(client(), GameTicks.server(), FA_OFF_PUSH_TICKS);
+
+        ServerWindow window = ServerWindow.open(c -> read(c).raw(),
+                "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
+                craft.afcX, craft.afcY, craft.afcZ);
+        GameTicks.advance(client(), GameTicks.server(), FA_OFF_DOSE_TICKS);
+        long closeMark = events.mark();
+        window.close();
+        String reply = events.since(closeMark, "physics_step_window");
+        List<String> records = Events.records(reply);
+        requireArranged("closing the window must write exactly its one record: " + reply, records.size() == 1);
+        Events.assertInstrumentRan(reply, "server_flight_controller_physics_step",
+                "the controller's own steps are what the window reads");
+        String record = records.get(0);
+        double seconds = Events.number(record, "engineSeconds");
+        requireArranged("the solver must have stepped this craft's controller while the window was open: "
+                + record, Events.number(record, "steps") > 1 && seconds > 0.0);
+        double[] first = {Events.number(record, "v0X"), Events.number(record, "v0Y"), Events.number(record, "v0Z")};
+        double[] last = {Events.number(record, "v1X"), Events.number(record, "v1Y"), Events.number(record, "v1Z")};
+        requireArranged("the craft must already be climbing when the window opens, so every step in it"
+                + " pushes: " + record, first[1] > 0.0);
+        requireArranged("nothing may touch the craft inside the window: " + record,
+                Events.number(record, "contacts") == 0);
+
+        double measured = Math.sqrt(sq(last[0] - first[0]) + sq(last[1] - first[1]) + sq(last[2] - first[2]))
+                / seconds;
+        double reached = Math.sqrt(sq(last[0]) + sq(last[1]) + sq(last[2]));
+        double spanned = first[1] + predicted * seconds;
+        requireArranged("the window must span the speeds the contract is about: an unbounded craft pushed for"
+                + " its " + seconds + " engine seconds from " + first[1] + " reaches " + spanned
+                + ", which must be past " + FORMER_FREEZE_SPEED + ": " + record, spanned > FORMER_FREEZE_SPEED);
+        measured("fa-off push", "predicted=" + predicted, "measured=" + measured,
+                "ratio=" + (measured / predicted), "reached=" + reached, "spanned=" + spanned, record);
+        assertEquals("with the assist off, a held throttle must accelerate the craft at its live sustained"
+                        + " heave figure (" + predicted + " blocks per engine second²) across a window from "
+                        + first[1] + " to past " + FORMER_FREEZE_SPEED + " blocks per engine second, the"
+                        + " assist's " + TileAdvancedFlightComputer.SHIP_MAX_SPEED + " and the substrate's former"
+                        + " freeze between; it accelerated at " + measured + " and reached " + reached
+                        + ". Window: " + record,
+                1.0, measured / predicted, ACCELERATION_BAND);
+    }
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     // ---- 2. cargo lowers acceleration, not force --------------------------------------------------

@@ -212,7 +212,12 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   FOR: maintainer 2026-08-15, *"полет без flight assist должен не иметь предела абсолютной скорости — мы
   имеем только максимальное ускорение, которое может выдать корабль"* (flight without flight assist must
   have no limit on absolute speed — we only have the maximum acceleration the ship can deliver).
-  Pinned by `test/unit/ShipMotionLawsTest#aHeldThrottleAsksForTheHullsAuthorityAndNoSpeed`.
+  Pinned by `test/unit/ShipMotionLawsTest#aHeldThrottleAsksForTheHullsAuthorityAndNoSpeed` (the law), and
+  in a running world by
+  `test/server/TierTwoCraftFlightModelGroupTest#withTheAssistOffAHeldThrottleAcceleratesAtItsAuthorityPastEveryFormerSpeedBound`
+  (the seat's full heave, held: the craft accelerates at the readout's sustained figure from 28 to 507
+  blocks per engine second, through the assist's ceiling and the substrate's former freeze; at zero
+  gravity, in vacuum, heave only).
 
 ## Failure modes & edge cases
 

@@ -98,13 +98,14 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
   combines geometric-thruster torque + additive wheel torque against pilot intent. **AMENDS C9
   SHIPCTL-2** ("motion corresponding to the input in axis and sign"): a hull is weak on an axis it
   cannot cleanly deliver and never forced to yaw when the pilot presses forward (STAT-7b). FOR: INV-SFM-10.
-- **STAT-7a** `[V][SYS]` No speed bounds a craft's flight but the Flight-Assist velocity SETPOINT cap
+- **STAT-7a** `[T][SYS]` No speed bounds a craft's flight but the Flight-Assist velocity SETPOINT cap
   (`SHIP_MAX_SPEED`, `TileAdvancedFlightComputer.java`), which bounds only what the assist may be asked
   to hold: with the assist off a craft accelerates by its authority for as long as it is commanded
   (ship-flight-model INV-SFM-19), and the physics substrate's own guard refuses only a non-finite motion
   or an angular speed past 223.6 rad/s — never a linear speed (`PhysicsCalculations#isPhysicsBroken`).
   FOR: INV-SFM-10; maintainer 2026-08-15, *"полет без flight assist должен не иметь предела абсолютной
-  скорости"*.
+  скорости"*. Pinned by
+  `TierTwoCraftFlightModelGroupTest#withTheAssistOffAHeldThrottleAcceleratesAtItsAuthorityPastEveryFormerSpeedBound`.
 - **STAT-7b** `[A][SYS]` Realising pilot intent is a **PER-AXIS AUTHORITY** model, signed, inertia-aware and
   solved under constraints (STAT-15..18), not a coupled wrench solve: for each of 6 axes the hull
   exposes a max CLEAN force/torque from geometry + the LIVE working-thruster state (fuel/power this
@@ -462,7 +463,7 @@ refused at the assembler instead of on the pad.
 | STAT-5 split | the substrate has no ship split | — |
 | STAT-6 mass | `[V][T]` | MECH-SFM-01/02 |
 | STAT-7 / 7b geometric, per-axis, clean | `[T]` LP per signed direction, weak-not-spinny | MECH-SFM-05, INV-SFM-01..03 |
-| STAT-7a no speed bound but the assist's setpoint | `[V]` the setpoint cap bounds Flight Assist only; FA off asks for authority (INV-SFM-19, `[T]`); the substrate refuses a non-finite motion or a spin past 223.6 rad/s, never a linear speed | INV-SFM-19, `PhysicsCalculations#isPhysicsBroken` |
+| STAT-7a no speed bound but the assist's setpoint | `[T]` the setpoint cap bounds Flight Assist only; FA off asks for authority (INV-SFM-19, `[T]`); the substrate refuses a non-finite motion or a spin past 223.6 rad/s, never a linear speed | INV-SFM-19, `PhysicsCalculations#isPhysicsBroken` |
 | STAT-8 / 9 shield, drive readouts | seam only: `FlightModelChangedEvent` carries the readout; no system contributes yet | C5 |
 | STAT-10 registration seam | `[V]` the event on the bus (an extension point) | C5 |
 | STAT-11 survives crossing/relog | `[A]` derived state rebuilds on the new tile; no e2e pins this yet | — |

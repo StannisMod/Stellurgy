@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.Window;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Regions;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import com.github.stannismod.forge.testing.server.StartFiles;
 import org.junit.Rule;
@@ -409,6 +410,7 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
 
     @Test
     @Pins("INV-PRB-10")
+    @Regions(of = "INV-PRB-10", value = {"pack"})
     @RedWitness(verdict = "a pack adds", member = "ProbeFallDriver#packAdditions",
             at = "return ProbePack.parse(in);", replacedBy = "return ProbePack.NONE;",
             fails = "the pack file's notes and readings ride with the record", on = "2026-10-27")
@@ -426,6 +428,11 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
 
     @Test
     @Pins("INV-PRB-10")
+    @Regions(of = "INV-PRB-10", value = {"no pack"})
+    @RedWitness(verdict = "no pack adds nothing", member = "ProbeFallDriver#packAdditions",
+            at = "if (!file.isFile()) { return ProbePack.NONE; }",
+            replacedBy = "if (!file.isFile()) { return ProbePack.parse(new java.io.StringReader(\"{\\\"notes\\\": [\\\"absent\\\"]}\")); }",
+            fails = "with no pack file, nothing is added", on = "2026-10-27")
     public void withNoPackTheRecordIsWholeAndCarriesNoAdditions() throws Exception {
         Events events = events(bothSides());
         long mark = events.markInstrumented();
@@ -439,6 +446,7 @@ public class FirstProbeFallTest extends AbstractOwnBootClientTest {
 
     @Test
     @Pins("INV-PRB-10")
+    @Regions(of = "INV-PRB-10", value = {"unreadable"})
     @RedWitness(verdict = "an unreadable pack leaves the record whole", member = "ProbeFallDriver#packAdditions",
             at = "file, unreadable.getMessage()); return ProbePack.NONE;",
             replacedBy = "file, unreadable.getMessage()); return ProbePack.parse(new java.io.StringReader(\"{\\\"notes\\\": [\\\"unread\\\"]}\"));",

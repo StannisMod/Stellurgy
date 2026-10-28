@@ -169,7 +169,8 @@ world's drawings holder (client-render, `ClientWorldDrawings`).
 - **INV-PRB-10 [T][BEH] A pack only adds, and the probe is whole without one.** A missing or unreadable pack
   file gives no additions (`ProbeFallDriver.java:251`, `:258`); what one adds is kept beside the core
   (INV-PRB-15). Pinned by `FirstProbeFallTest#aPackFileAddsItsNotesAndReadingsToTheRecord`,
-  `#withNoPackTheRecordIsWholeAndCarriesNoAdditions` and `#anUnreadablePackAddsNothingAndTheRecordIsWhole`
+  `FirstProbeFallTest#withNoPackTheRecordIsWholeAndCarriesNoAdditions` and
+  `FirstProbeFallTest#anUnreadablePackAddsNothingAndTheRecordIsWhole`
   (client tier, own boot; the world starts with the file as a pack ships it): a file's notes and readings all
   ride with the record beside its own readings; none, or one that does not parse, adds nothing and leaves the
   record its readings. REGIONS: `pack`, `no pack`, `unreadable`. That the core is the SAME with and without a
