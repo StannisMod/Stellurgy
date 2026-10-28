@@ -140,10 +140,16 @@ public class BoundarySky extends IRenderHandler {
 
         GlStateManager.enableTexture2D();
 
-        // One billboard per synced body.
+        // One billboard per synced body, the farthest first. The sky is drawn without depth, so whatever is
+        // drawn last covers what it overlaps: in the feed's own order a moon behind its planet was painted
+        // over it.
         if (bodies != null && !bodies.isEmpty()) {
             boolean labels = SkyLabels.enabled(world);
-            for (PacketSystemBodiesSync.RenderBody body : bodies) {
+            List<PacketSystemBodiesSync.RenderBody> farthestFirst = new java.util.ArrayList<>(bodies);
+            farthestFirst.sort(java.util.Comparator.comparingDouble(
+                    (PacketSystemBodiesSync.RenderBody b) -> (double) b.localX * b.localX
+                            + (double) b.localY * b.localY + (double) b.localZ * b.localZ).reversed());
+            for (PacketSystemBodiesSync.RenderBody body : farthestFirst) {
                 drawBody(buffer, body, labels);
             }
         }

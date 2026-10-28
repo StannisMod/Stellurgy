@@ -231,6 +231,11 @@ of CON-C14-09's vector.
   falsifiable: a billboard exists iff a body was fed, a boundary is drawn iff that body is a descend
   target. A clause whose example is a decoration (a camera-fixed band) cannot be enforced, and reads
   as coverage anyway.
+- **CON-C14-21 (a nearer body is drawn over a farther one)** `[V][BEH]` The cell sky has no depth, so
+  the billboards are drawn farthest first by their distance from the ship (`BoundarySky.render`): a body
+  that overlaps another on the screen covers it exactly when it is nearer. In the feed's own order a
+  moon behind its planet was painted over it. Unpinned: the order is visible only on screen, and no
+  client record carries it.
 
 ## Open — do not read as settled
 

@@ -4,6 +4,8 @@ import dev.stannismod.stellurgy.affs.world.FieldFrame;
 import dev.stannismod.stellurgy.affs.world.FieldFrames;
 import dev.stannismod.stellurgy.affs.world.FieldSource;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
+import dev.stannismod.stellurgy.affs.world.ShipFieldFrame;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -50,39 +52,99 @@ public final class ClientForceFieldRenderCache {
 
     private static final class RenderState {
         private final List<FieldSource> sources;
-        private volatile RenderMesh mesh;
-        private volatile boolean dirty = true;
+        /** The standalone fields' mesh, in world coordinates; built on the first draw. */
+        private RenderMesh standalone;
+        /**
+         * Each ship's fields meshed once in the ship's OWN frame (its subspace), where they never move,
+         * and carried to the world every draw by the ship's render pose. Meshed in the world instead,
+         * the grid was laid on the world lattice round a centre that moves every frame, so the triangles
+         * changed from frame to frame and the shell shimmered; and the tick pose it was placed by is not
+         * the interpolated pose the hull is drawn at, so it also lagged the hull.
+         */
+        private final java.util.Map<String, RenderMesh> shipMeshes = new java.util.HashMap<>();
 
         private RenderState(List<? extends FieldSource> sources) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
         }
 
         private RenderMesh getMesh(World world) {
-            // Resolve each source's frame here (the client world is only available at draw time), so a
-            // source on a VS ship reports its hull-transformed world centre and the mesh is built there.
-            List<FieldSource> resolved = new ArrayList<>(sources.size());
-            boolean anyShip = false;
+            // The frames are resolved here because the client world is only available at draw time.
+            List<FieldSource> worldSources = new ArrayList<>();
+            java.util.Map<String, List<FieldSource>> shipSources = new java.util.LinkedHashMap<>();
+            List<FieldSource> unnamed = new ArrayList<>();
             for (FieldSource s : sources) {
                 FieldFrame frame = FieldFrames.forBlock(world, s.getPos());
-                if (!(frame instanceof dev.stannismod.stellurgy.affs.world.WorldFieldFrame)) {
-                    anyShip = true;
+                if (frame instanceof ShipFieldFrame) {
+                    shipSources.computeIfAbsent(((ShipFieldFrame) frame).getShipId(), k -> new ArrayList<>()).add(s);
+                } else if (frame instanceof dev.stannismod.stellurgy.affs.world.WorldFieldFrame) {
+                    worldSources.add(s);
+                } else {
+                    unnamed.add(new FramedSource(s, frame));
                 }
-                resolved.add(new FramedSource(s, frame));
             }
 
-            // A standalone field is static, so its mesh is cached until the snapshot changes. A ship's
-            // field moves every frame, so it must be rebuilt each draw (never cached).
-            if (!anyShip) {
-                RenderMesh cached = mesh;
-                if (!dirty && cached != null) {
-                    return cached;
-                }
-                RenderMesh rebuilt = buildMesh(resolved);
-                mesh = rebuilt;
-                dirty = false;
-                return rebuilt;
+            if (standalone == null) {
+                standalone = buildMesh(worldSources);
             }
-            return buildMesh(resolved);
+            List<Triangle> triangles = new ArrayList<>(standalone.getTriangles());
+            for (java.util.Map.Entry<String, List<FieldSource>> ship : shipSources.entrySet()) {
+                // A snapshot source's own centre is its block centre — on a ship, the subspace one.
+                RenderMesh local = shipMeshes.computeIfAbsent(ship.getKey(), k -> buildMesh(ship.getValue()));
+                RenderPose pose = RenderPose.of(world, ship.getKey(), ship.getValue().get(0).getWorldCenter());
+                if (pose == null) {
+                    continue;
+                }
+                for (Triangle t : local.getTriangles()) {
+                    triangles.add(new Triangle(pose.apply(t.a), pose.apply(t.b), pose.apply(t.c)));
+                }
+            }
+            // A field on a ship that has no name yet has no pose to be carried by; it is meshed where it is.
+            triangles.addAll(buildMesh(unnamed).getTriangles());
+            return new RenderMesh(triangles);
+        }
+    }
+
+    /**
+     * A ship's render pose as an affine map from its subspace to the world, taken once per draw: the
+     * image of a reference point and of the three unit steps from it. Taken about a point among the
+     * fields rather than at the subspace origin, whose coordinates are millions of blocks out and would
+     * cost the steps their precision.
+     */
+    private static final class RenderPose {
+        private final Vec3d ref;
+        private final Vec3d at;
+        private final Vec3d ex;
+        private final Vec3d ey;
+        private final Vec3d ez;
+
+        private RenderPose(Vec3d ref, Vec3d at, Vec3d ex, Vec3d ey, Vec3d ez) {
+            this.ref = ref;
+            this.at = at;
+            this.ex = ex;
+            this.ey = ey;
+            this.ez = ez;
+        }
+
+        static RenderPose of(World world, String shipId, Vec3d ref) {
+            double[] o = VSIntegration.renderToWorldFrameFor(world, shipId, ref.x, ref.y, ref.z);
+            double[] x = VSIntegration.renderToWorldFrameFor(world, shipId, ref.x + 1.0D, ref.y, ref.z);
+            double[] y = VSIntegration.renderToWorldFrameFor(world, shipId, ref.x, ref.y + 1.0D, ref.z);
+            double[] z = VSIntegration.renderToWorldFrameFor(world, shipId, ref.x, ref.y, ref.z + 1.0D);
+            if (o == null || x == null || y == null || z == null) {
+                return null;
+            }
+            Vec3d at = new Vec3d(o[0], o[1], o[2]);
+            return new RenderPose(ref, at, new Vec3d(x[0], x[1], x[2]).subtract(at),
+                    new Vec3d(y[0], y[1], y[2]).subtract(at), new Vec3d(z[0], z[1], z[2]).subtract(at));
+        }
+
+        Vec3d apply(Vec3d p) {
+            double dx = p.x - ref.x;
+            double dy = p.y - ref.y;
+            double dz = p.z - ref.z;
+            return new Vec3d(at.x + ex.x * dx + ey.x * dy + ez.x * dz,
+                    at.y + ex.y * dx + ey.y * dy + ez.y * dz,
+                    at.z + ex.z * dx + ey.z * dy + ez.z * dz);
         }
     }
 
@@ -133,11 +195,13 @@ public final class ClientForceFieldRenderCache {
             int cx = (int) Math.floor(wc.x * 2.0D);
             int cy = (int) Math.floor(wc.y * 2.0D);
             int cz = (int) Math.floor(wc.z * 2.0D);
-            int radius = source.getRadius() + 2;
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dy = -radius; dy <= radius; dy++) {
-                    for (int dz = -radius; dz <= radius; dz++) {
-                        builder.add(new GridCell(cx + dx * 2, cy + dy * 2, cz + dz * 2));
+            // Every half-unit cell of the box, in half-units: a cell spans 0.5, so stepping by two of them
+            // sampled one cell in eight and left the shell full of holes.
+            int halfUnits = (source.getRadius() + 2) * 2;
+            for (int dx = -halfUnits; dx <= halfUnits; dx++) {
+                for (int dy = -halfUnits; dy <= halfUnits; dy++) {
+                    for (int dz = -halfUnits; dz <= halfUnits; dz++) {
+                        builder.add(new GridCell(cx + dx, cy + dy, cz + dz));
                     }
                 }
             }
