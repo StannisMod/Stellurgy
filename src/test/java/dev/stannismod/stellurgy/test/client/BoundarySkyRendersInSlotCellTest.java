@@ -162,27 +162,22 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
      * The cell's contents: {@code localX localY localZ kind dimId}. The ship settles at the cell CENTRE,
      * so each body's local offset IS the ship&rarr;body direction the producer sends.
      *
-     * <p>Distances and count are the live set (2 961 / 28 275 / 34 985 / 39 050 / 54 713 / 59 255 blocks);
-     * the bearings are spread so that the closest pair is 45 degrees apart and every body sits at least
-     * 20 degrees off the horizon, so no two billboards can overlap in one aimed frame. A gas giant with no dimension of
-     * its own is included because it is NOT a descend target and takes the other billboard size — the
-     * feed carries both kinds and so must the subject.</p>
+     * <p>The bearings are spread so that the closest pair is 45 degrees apart and every body sits at least
+     * 20 degrees off the horizon, and the ranges keep the two largest angular radii (20 and 14 degrees)
+     * under that 45, so no two spheres overlap in one aimed frame. A gas giant with no dimension of its own
+     * is included because it is NOT a descend target — the feed carries both kinds and so must the
+     * subject.</p>
      */
     private final String[][] cellBodies = {
-            {"768", "-1072", "-2652", "MOON", "0", "0.27"},           // ~2 961 - the nearest descend target
-            {"-23443", "11940", "10363", "MOON", "0", "0.27"},        // ~28 275
-            {"-30108", "-13988", "11037", "MOON", "0", "0.27"},       // ~34 985
-            {"7644", "34614", "-16382", "GAS_GIANT", "-1", "11.0"},   // ~39 050 - not a descend target
-            {"-42912", "-23517", "-24475", "MOON", "0", "0.27"},      // ~54 713
-            // Placed where the LAW can express a difference, not where a tidy system would put a
-            // moon. Apparent size is clamped to its maximum for every angular size at or above
-            // NEAR_RATIO (0.1), and a 0.27-Earth moon subtends that out to ~68 900 chart blocks —
-            // so at the ~59 255 this used to sit at it was drawn at exactly the same size as the
-            // body twenty times nearer, and the size leg below could not tell them apart however
-            // correct the renderer was. The DIRECTION is unchanged, so every bearing-aimed leg
-            // still works; only the range is, chosen so the ratio lands mid-band and the drawn
-            // half-size is about half the maximum instead of exactly it.
-            {"-14601261", "10429681", "-12254381", "MOON", "0", "0.27"}, // ~21 729 000
+            // Every body stands OUTSIDE its own radius: a body is drawn at the angle it truly subtends, so
+            // one placed inside itself would fill the sky and blind every other leg. The ranges are chosen
+            // for the angles they give — the bearings are what the legs aim by and are unchanged.
+            {"5187", "-7240", "-17912", "MOON", "0", "0.27"},         // ~20 000 - nearest descend target, 20.1 deg
+            {"-23443", "11940", "10363", "MOON", "0", "0.27"},        // ~28 275, 14.1 deg
+            {"-30108", "-13988", "11037", "MOON", "0", "0.27"},       // ~34 985, 11.4 deg
+            {"315960", "1430700", "-677110", "GAS_GIANT", "-1", "11.0"}, // ~1 614 000 - not a descend target, 10 deg
+            {"-42912", "-23517", "-24475", "MOON", "0", "0.27"},      // ~54 713, 7.2 deg
+            {"-14601261", "10429681", "-12254381", "MOON", "0", "0.27"}, // ~21 729 000 - truly 0.02 deg: at the floor
     };
 
     /** A body's radius in Earth radii, as the fixture states it — the sixth column above. */
@@ -522,12 +517,9 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         // Same camera, same starfield, same ring - only the body data changed, so any pixel that differs
         // is a billboard. The bottom rows stay excluded as belt-and-braces against any HUD element that
         // outlives the hide (they are all anchored to the bottom of the screen).
-        // The billboard's angular radius is half/BODY_DISTANCE, i.e. 6.3 degrees for a descend target
-        // (half 10) and 3.8 for a plain body (half 6); on a 70-degree vertical FOV that is 9.1% and 5.4%
-        // of the frame height. Each aim therefore has its own expected disc and its own sample box.
-        // The billboard's angular radius is halfSizeFor(distance)/BODY_DISTANCE, and since the sky
-        // draws a body at a half-size that falls with its distance, the expected disc is derived
-        // from that law rather than from a constant. It is used only to SIZE the sample box - the
+        // A body's angular radius is the true one, ApparentSize.halfAngleFor, so each aim has its own
+        // expected disc and its own sample box, derived from that law rather than from a constant. It
+        // is used only to SIZE the sample box - the
         // assertion is still "a disc was drawn at the bearing the server reported", which a build
         // that drew nothing fails whatever the box is.
         assertBodyDrawn(NEAREST, before[NEAREST], after[NEAREST], emptyAfter);
@@ -550,14 +542,11 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         // distinction the law does not make. Both bodies used to sit above NEAR_RATIO, where every
         // angular size is drawn at the maximum — so the leg asserted a difference that could not
         // exist, and its red read as a render regression when nothing was rendering wrongly.
-        float nearHalf = ApparentSize.halfSizeFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
-        float farHalf = ApparentSize.halfSizeFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
+        double nearAngle = ApparentSize.halfAngleFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
+        double farAngle = ApparentSize.halfAngleFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
         scenario().requireArranged("the law must draw these two at clearly different sizes before their"
-                + " pixels can be compared — nearHalf=" + nearHalf + " farHalf=" + farHalf
-                + " (angular sizes " + (radiusBlocks(NEAREST) / distanceOf(NEAREST)) + " and "
-                + (radiusBlocks(FARTHEST) / distanceOf(FARTHEST)) + " against NEAR_RATIO "
-                + ApparentSize.NEAR_RATIO + ", above which everything is drawn at the maximum)",
-                nearHalf > farHalf * 1.2f);
+                + " pixels can be compared — nearAngle=" + nearAngle + " farAngle=" + farAngle + " rad",
+                nearAngle > farAngle * 1.2d);
 
         int sizeBox = (int) Math.ceil(discRadiusOf(NEAREST) * h);
         long nearArea = diffCount(before[NEAREST], after[NEAREST],
@@ -915,14 +904,12 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
     }
 
     /**
-     * The billboard's expected radius as a fraction of the frame HEIGHT: its half-size (which falls
-     * with the body's own distance, clamped at both ends) subtends {@code atan(half / BODY_DISTANCE)}
-     * on a 70-degree vertical FOV. Used only to SIZE sample boxes; every assertion is still about what
+     * The sphere's expected radius as a fraction of the frame HEIGHT: its true angular radius on a
+     * 70-degree vertical FOV. Used only to SIZE sample boxes; every assertion is still about what
      * the client actually drew, so a build that drew nothing fails whatever the box is.
      */
     private double discRadiusOf(int index) {
-        return Math.toDegrees(Math.atan(
-                ApparentSize.halfSizeFor(radiusBlocks(index), distanceOf(index)) / 90.0)) / 70.0;
+        return Math.toDegrees(ApparentSize.halfAngleFor(radiusBlocks(index), distanceOf(index))) / 70.0;
     }
 
     /** How far the configured body {@code index} is from the settled ship, in blocks. */

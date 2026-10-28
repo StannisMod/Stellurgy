@@ -172,8 +172,8 @@ implementations (→ satellite); space-station objects (→ space-stations); the
   BUILT (`DimensionManager`), with their gravity marked authored: Earth `(1.0, 1.0)` by definition, Luna
   `(0.0123, 0.2727)` measured. A body left at `BULK_UNSET = 0` would make `DescentShell.radiusAround`
   take its no-radius branch (the flat 512-block proximity sphere meant for belts, 1/50 of an Earth) and
-  put `radiusBlocks = 0` on the render channel, which pins a planet at `ApparentSize.MIN_HALF_SIZE` —
-  1.9° of sky at any range. Their orbits are stated: Earth at one AU (`DimensionManager.java:142-143`), Luna at the Moon's real distance (`:1083-1087`).
+  put `radiusBlocks = 0` on the render channel, and the cell sky draws no sphere for a world with no
+  radius — only its label (C14 CON-C14-16). Their orbits are stated: Earth at one AU (`DimensionManager.java:142-143`), Luna at the Moon's real distance (`:1083-1087`).
   **There is no teardown of Earth's state:**
   each server lifetime builds a new manager, seeded by `seedEarthDefaults` in the constructor
   (`DimensionManager.java:99`). `[T]` `ServerLifetimeStartsFreshTest`.

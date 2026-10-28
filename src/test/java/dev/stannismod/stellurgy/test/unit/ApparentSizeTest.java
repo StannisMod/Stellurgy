@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.client.render.planet.ApparentSize;
+import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
@@ -9,107 +11,87 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * A fed body is drawn at an apparent size that RISES with the angle it subtends — its own radius over
- * the distance to it — and is CLAMPED at both ends.
- *
- * <p>Neither half is polish. Radii run from a small moon to a star and distances from a few thousand
- * blocks to ~10<sup>9</sup>, so an unclamped inverse law draws the star at a fraction of a pixel; and
- * the renderer drops a body whose direction vector is shorter than 10<sup>-6</sup>, i.e. a body
- * vanishes exactly when it is closest, which the maximum is what stops being the only cue. The
- * particular curve and the four numbers are {@code tunable} and are deliberately not pinned here.</p>
- *
- * <p>What IS pinned is the shape the sky was missing until 2026-08-16: size used to be a function of
- * distance alone, so a moon and a gas giant beside each other drew the same disc.</p>
+ * A fed body is drawn at the angle it truly subtends, {@code asin(r / d)}, and never smaller than a
+ * visible marker.
  */
 public class ApparentSizeTest {
 
-    /** Earth-ish and Jupiter-ish, in the chart blocks the feed sends. */
-    private static final double MOON_R = 6_800d;
-    private static final double EARTH_R = 25_512d;
-    private static final double GIANT_R = 280_000d;
+    /** A constant: a primitive. An Earth's radius in the chart blocks the feed sends. */
+    private static final double EARTH_R = AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
 
-    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    /**
+     * This test fails if {@code ApparentSize#halfAngleFor} stops deciding that a body near enough to
+     * show its size is drawn at the angle it truly subtends: an Earth seen from twice its descent shell —
+     * where an entering ship spawns — is ~29.5 degrees in radius, and one seen from its own shell nearly
+     * fills half the sky.
+     */
     @Pins("CON-C14-16")
+    @RedWitness(member = "ApparentSize#halfAngleFor", at = "Math.asin(ratio)",
+            replacedBy = "Math.min(Math.asin(ratio), Math.atan(16.0d / 90.0d))",
+            fails = "a body near enough to show its size is drawn at the angle it truly subtends",
+            on = "2026-10-28")
     @Test
-    public void sizeFallsAsTheSameBodyRecedes() {
-        double[] distances = {200_000d, 1_000_000d, 10_000_000d, 100_000_000d, 1_000_000_000d};
-        float previous = ApparentSize.halfSizeFor(EARTH_R, distances[0]);
-        for (int i = 1; i < distances.length; i++) {
-            float now = ApparentSize.halfSizeFor(EARTH_R, distances[i]);
-            assertTrue("size must fall from " + distances[i - 1] + " to " + distances[i]
-                    + " (" + previous + " -> " + now + ")", now < previous);
-            previous = now;
+    public void aBodyNearEnoughToShowItsSizeIsDrawnAtItsTrueAngle() {
+        double shell = EARTH_R * (1d + DescentShell.ATMOSPHERE_FRACTION);
+        for (double d : new double[] {2d * shell, shell, 10d * shell, 50d * shell}) {
+            double truth = Math.asin(EARTH_R / d);
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("the true angle at " + d
+                    + " blocks must be above the floor", truth > ApparentSize.MIN_HALF_ANGLE);
+            assertEquals("a body near enough to show its size is drawn at the angle it truly subtends (at "
+                    + d + " blocks)", truth, ApparentSize.halfAngleFor(EARTH_R, d), 1e-9);
         }
     }
 
-    @Test
-    public void aBiggerBodyOutdrawsASmallerOneAtTheSameRange() {
-        // THE defect this file exists for: with size keyed on distance alone these three were equal.
-        double range = 5_000_000d;
-        float moon = ApparentSize.halfSizeFor(MOON_R, range);
-        float earth = ApparentSize.halfSizeFor(EARTH_R, range);
-        float giant = ApparentSize.halfSizeFor(GIANT_R, range);
-        assertTrue("an Earth must outdraw a moon at the same range (" + moon + " vs " + earth + ")",
-                earth > moon);
-        assertTrue("a giant must outdraw an Earth at the same range (" + earth + " vs " + giant + ")",
-                giant > earth);
-    }
-
-    // `twoBodiesOfEqualRadiusAtEqualRangeAreDrawnEqual` stood here and called halfSizeFor twice
-    // with identical arguments, comparing the results. For a pure function of (radius, distance)
-    // that is true by construction whatever the body does, so it could not fail; and "nothing but
-    // the pair may enter" is a statement about the SIGNATURE, which no call can test. onlyTheRATIOMatters
-    // below carries the claim that is actually about the function.
-
-    @Test
-    public void onlyTheRATIOMatters() {
-        // A body twice as big, twice as far, subtends the same angle — so it draws the same. This is
-        // what makes the argument an angular size rather than two loosely-related numbers.
-        assertEquals(ApparentSize.halfSizeFor(EARTH_R, 4_000_000d),
-                ApparentSize.halfSizeFor(2d * EARTH_R, 8_000_000d), 1e-4);
-        assertEquals(ApparentSize.halfSizeFor(MOON_R, 900_000d),
-                ApparentSize.halfSizeFor(MOON_R / 10d, 90_000d), 1e-4);
-    }
-
-    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    /**
+     * This test fails if {@code ApparentSize#halfAngleFor} stops deciding that a body too far to see is
+     * still drawn, at the floor, rather than at its true sub-pixel angle.
+     */
     @Pins("CON-C14-16")
+    @RedWitness(member = "ApparentSize#halfAngleFor",
+            at = "Math.max(MIN_HALF_ANGLE, Math.min(MAX_HALF_ANGLE, angle))",
+            replacedBy = "Math.min(MAX_HALF_ANGLE, angle)",
+            fails = "a body too far to see is still drawn at the floor", on = "2026-10-28")
     @Test
-    public void sizeIsClampedAtBothEnds() {
-        assertEquals("a body on top of you does not fill the sky", ApparentSize.MAX_HALF_SIZE,
-                ApparentSize.halfSizeFor(EARTH_R, 1d), 1e-6);
-        assertEquals("a body at the neighbourhood bound is still drawn",
-                ApparentSize.MIN_HALF_SIZE, ApparentSize.halfSizeFor(EARTH_R, 1.0e15), 1e-6);
-        assertTrue("nothing is ever drawn at zero size", ApparentSize.MIN_HALF_SIZE > 0f);
+    public void aBodyTooFarToSeeIsStillDrawnAtTheFloor() {
+        double far = 1.0e15d;
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the true angle there must be below the floor", Math.asin(EARTH_R / far) < ApparentSize.MIN_HALF_ANGLE);
+        assertEquals("a body too far to see is still drawn at the floor", ApparentSize.MIN_HALF_ANGLE,
+                ApparentSize.halfAngleFor(EARTH_R, far), 1e-12);
     }
 
-    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    /**
+     * This test fails if {@code ApparentSize#halfAngleFor} stops refusing a body with no radius — giving it
+     * a size instead, a marker that would pass for a distant world.
+     */
     @Pins("CON-C14-16")
+    @RedWitness(member = "ApparentSize#halfAngleFor",
+            at = "throw new IllegalArgumentException(\"a body with no radius (\" + radiusBlocks"
+                    + " + \") has no angular size; it is not drawn as a sphere\");",
+            replacedBy = "return MIN_HALF_ANGLE;", fails = "a body with no radius", on = "2026-10-28")
     @Test
-    public void everyFedPairStaysInsideTheClamps() {
-        for (double r : new double[] {1d, MOON_R, EARTH_R, GIANT_R, 2.8e6}) {
-            for (double d = 1d; d < 1.0e10; d *= 3d) {
-                float half = ApparentSize.halfSizeFor(r, d);
-                assertTrue("size left the clamps at r=" + r + " d=" + d + ": " + half,
-                        half >= ApparentSize.MIN_HALF_SIZE && half <= ApparentSize.MAX_HALF_SIZE);
+    public void aBodyWithNoRadiusHasNoAngularSize() {
+        for (double r : new double[] {0d, -3d, Double.NaN}) {
+            try {
+                ApparentSize.halfAngleFor(r, 100_000d);
+                org.junit.Assert.fail("a body with no radius (" + r + ") was given an angular size");
+            } catch (IllegalArgumentException refused) {
+                // the decision under test
             }
         }
     }
 
-    @Test
-    public void aBodyWithNoRadiusIsAMarkerNotAGuess() {
-        // A belt or a station slot is not a sphere. It gets the marker size rather than a size
-        // invented for it — the guessing that made every body the same disc in the first place.
-        assertEquals(ApparentSize.MIN_HALF_SIZE, ApparentSize.halfSizeFor(0d, 100_000d), 1e-6);
-        assertEquals(ApparentSize.MIN_HALF_SIZE, ApparentSize.halfSizeFor(-3d, 100_000d), 1e-6);
-        assertEquals(ApparentSize.MIN_HALF_SIZE, ApparentSize.halfSizeFor(Double.NaN, 100_000d), 1e-6);
-    }
-
+    /**
+     * This test fails if {@code ApparentSize#halfAngleFor} stops deciding that a distance that could not
+     * be measured — or an observer at or inside the surface — is drawn as near as the representation
+     * allows, rather than silently vanishing from the sky.
+     */
     @Test
     public void aNonsenseDistanceIsTreatedAsNearRatherThanInvisible() {
-        // A body whose vector could not be measured must not silently disappear from the sky.
-        assertEquals(ApparentSize.MAX_HALF_SIZE, ApparentSize.halfSizeFor(EARTH_R, Double.NaN), 1e-6);
-        assertEquals(ApparentSize.MAX_HALF_SIZE, ApparentSize.halfSizeFor(EARTH_R, -5d), 1e-6);
-        assertEquals(ApparentSize.MAX_HALF_SIZE, ApparentSize.halfSizeFor(EARTH_R, 0d), 1e-6);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, Double.NaN), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, -5d), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, 0d), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, EARTH_R / 2d), 1e-12);
     }
 
     @Test

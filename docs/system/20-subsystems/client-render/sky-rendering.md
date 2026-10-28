@@ -50,9 +50,9 @@ angles `tunable`; the geometry contract is `DimensionProperties` (dimension-plan
 
 **MECH-CLR-32 — A body is drawn at the ANGLE it subtends, not at its distance.** Both sky families size a body from its own radius over the distance to it:
 
-- the cell sky feeds `ApparentSize.halfSizeFor(radiusBlocks, distance)` — the RATIO is compressed
-  logarithmically and clamped to `[MIN_HALF_SIZE, MAX_HALF_SIZE]`, so a giant outdraws a moon beside
-  it while a star still does not collapse to a pixel `ApparentSize.java`, `BoundarySky.java:431`;
+- the cell sky draws a SPHERE at the true angle, `ApparentSize.halfAngleFor` = `asin(r / d)`, with only
+  a floor so a distant world stays visible; a belt is its ring, a station its label (C14 CON-C14-16)
+  `ApparentSize.java`, `BoundarySky.java`;
 - the planet-surface skies pass the drawn body's radius (not `gravitationalMultiplier^0.4`) — so a one-Earth-radius body draws
   at the scale constant `RenderPlanetarySky.java:1104`, `RenderAsteroidSky.java`.
 

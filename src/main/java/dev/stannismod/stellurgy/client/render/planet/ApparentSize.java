@@ -5,27 +5,14 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 /**
  * How big a fed body is drawn in the cell sky, given how far away it is <b>and how big it is</b>.
  *
- * <p>The rule is one sentence: <b>strictly increasing in the body's angular size, clamped at both
- * ends.</b> All three parts are contract, not polish.</p>
+ * <p>The rule is one sentence: <b>a body is drawn at the angle it truly subtends, {@code asin(r/d)},
+ * and never smaller than a visible marker.</b> A world you orbit fills half the sky, because it does.</p>
  *
- * <p><b>Why the argument is a RATIO and not a distance.</b> Until 2026-08-16 this took a distance
- * alone, so every body at the same range drew the same disc: a moon and a gas giant beside each other
- * were indistinguishable, and the only cue a sky gave was "near" versus "far". The honest quantity is
- * the angle a body subtends, {@code r/d} — that is what makes a giant outdraw a moon at the same
- * range and what makes flying closer grow a world.</p>
- *
- * <p><b>Why the compression stays.</b> The fed range runs from a few thousand blocks (a moon in the
- * observer's own cell) to ~10<sup>9</sup> (the far side of a system's neighbourhood), and radii span
- * from a small moon to a star, so an unclamped inverse law draws the star at a fraction of a pixel and
- * the near body across the whole sky. The renderer also drops a body whose direction vector is shorter
- * than 10<sup>-6</sup>, i.e. a body vanishes exactly when it is closest — a maximum is what stops that
- * being the only cue. So the ratio replaces the distance as the thing being compressed; it does not
- * replace the compression. An unclamped angular size is <i>correct</i> and <i>unreadable</i>, and this
- * renderer chose readable once, on purpose, with the reason written down.</p>
- *
- * <p>The mapping is logarithmic because the range spans many decades. Which function it is, and the
- * four numbers below, are {@code tunable} — what is contract is that it RISES with {@code r/d} and
- * cannot leave {@code [MIN_HALF_SIZE, MAX_HALF_SIZE]}.</p>
+ * <p>There is no ceiling below the truth. A logarithmic compression clamped at about ten degrees stood
+ * here before, defended as "correct and unreadable"; it drew an Earth seen from twice its shell — 59
+ * degrees across — at 20, and an Earth a pilot was about to land on no bigger. The maintainer had asked
+ * for the real size, and the compression overrode the request. The floor stays, because a star at a
+ * fraction of a pixel is not drawn at all; that is the only departure from the truth.</p>
  *
  * <p>Pure arithmetic — no GL, no client state — so the rule can be checked without a client.</p>
  *
@@ -33,58 +20,47 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  */
 public final class ApparentSize {
 
-    /** Half-size (in sky units) of a body at or below {@link #FAR_RATIO}. Never zero. {@code tunable}. */
-    public static final float MIN_HALF_SIZE = 1.5F;
-    /** Half-size of a body at or above {@link #NEAR_RATIO}. {@code tunable}. */
-    public static final float MAX_HALF_SIZE = 16.0F;
-
     /**
-     * The angular size ({@code radius / distance}) at or above which a body is drawn at
-     * {@link #MAX_HALF_SIZE} — 0.1 rad, about 11 degrees of sky.
-     *
-     * <p>It replaces a NEAR_BLOCKS of 2 000, which was a distance and therefore meant something
-     * different for every body: 2 000 blocks is deep inside an Earth (25 512 blocks of radius on the
-     * shipped chart metric) and a long way outside a small moon. {@code tunable}.</p>
+     * The smallest angular radius a body is drawn at, in radians — about 0.95 degrees. A body that truly
+     * subtends less is still drawn this big: the floor keeps a distant world a visible marker instead of
+     * a sub-pixel speck. The only place the drawn size departs from the truth. {@code tunable}.
      */
-    public static final double NEAR_RATIO = 0.1d;
+    public static final double MIN_HALF_ANGLE = Math.atan(1.5d / 90.0d);
     /**
-     * The angular size at or below which a body is drawn at {@link #MIN_HALF_SIZE} — 10<sup>-6</sup>
-     * rad, roughly an Earth seen from a tenth of a light-hour. Below this a body is a point either
-     * way, and the floor is what keeps it visible at all. {@code tunable}.
+     * The largest angular radius drawn, 89 degrees. Not a choice about how big a world may LOOK — the true
+     * angle tends to 90 degrees as the observer reaches the surface, and a world you orbit fills half the
+     * sky — but the representation's limit: at 90 the drawn sphere degenerates. A ship never gets there in
+     * space; the descent fires at the shell, outside the surface.
      */
-    public static final double FAR_RATIO = 1.0e-6d;
-
-    private static final double LOG_FAR = Math.log(FAR_RATIO);
-    private static final double LOG_SPAN = Math.log(NEAR_RATIO) - LOG_FAR;
+    public static final double MAX_HALF_ANGLE = Math.toRadians(89.0d);
 
     private ApparentSize() {
     }
 
     /**
-     * The half-size to draw a body of {@code radiusBlocks} seen from {@code distanceBlocks}.
+     * The angular radius, in radians, to draw a body of {@code radiusBlocks} seen from
+     * {@code distanceBlocks}: the TRUE one, {@code asin(r / d)}, raised to {@link #MIN_HALF_ANGLE} for a
+     * body too far to see.
      *
-     * <p>A body with no radius of its own ({@code radiusBlocks <= 0} — a belt, a station slot) is not
-     * a sphere and has no angular size; it takes {@link #MIN_HALF_SIZE}, the marker size, rather than
-     * being guessed at. A non-finite or non-positive DISTANCE is the nearest thing there is, so it
-     * takes the maximum rather than becoming invisible.</p>
+     * <p>Asked only of a SPHERE with a radius. A body with none is not drawn as a sphere at all — a belt
+     * is a ring, a station a label, and a sphere that arrived without its radius is a broken feed the
+     * caller reports — so a non-positive radius here is a caller's error and is refused, never given a
+     * marker that would pass for a distant world. A non-finite or non-positive DISTANCE is the nearest
+     * thing there is, so it takes the maximum rather than becoming invisible.</p>
      */
-    public static float halfSizeFor(double radiusBlocks, double distanceBlocks) {
+    public static double halfAngleFor(double radiusBlocks, double distanceBlocks) {
         if (Double.isNaN(radiusBlocks) || radiusBlocks <= 0d) {
-            return MIN_HALF_SIZE;
+            throw new IllegalArgumentException("a body with no radius (" + radiusBlocks
+                    + ") has no angular size; it is not drawn as a sphere");
         }
         if (Double.isNaN(distanceBlocks) || distanceBlocks <= 0d) {
-            return MAX_HALF_SIZE;
+            return MAX_HALF_ANGLE;
         }
         double ratio = radiusBlocks / distanceBlocks;
-        if (ratio >= NEAR_RATIO) {
-            return MAX_HALF_SIZE;
-        }
-        if (ratio <= FAR_RATIO) {
-            return MIN_HALF_SIZE;
-        }
-        double t = (Math.log(ratio) - LOG_FAR) / LOG_SPAN;
-        return (float) (MIN_HALF_SIZE + (MAX_HALF_SIZE - MIN_HALF_SIZE) * t);
+        double angle = ratio >= 1d ? Math.PI / 2d : Math.asin(ratio);
+        return Math.max(MIN_HALF_ANGLE, Math.min(MAX_HALF_ANGLE, angle));
     }
+
 
     /**
      * A distance in CHART BLOCKS, rendered the way a pilot reads it.

@@ -94,7 +94,9 @@ public final class PacketSystemBodiesSync extends BasePacket {
          * dimension until somebody lands on it.</p>
          *
          * <p>Resolved server-side from the moon's name: a moon is named in its parent's ZONE, whose
-         * key is the parent's cell key, so the parent is the non-moon body of that cell.</p>
+         * key is the parent's cell key, so the parent is the non-moon body of that cell. A BELT points at
+         * the star it rings (the star of its system with its star id), which is the centre the client
+         * draws it around.</p>
          */
         public final int parentIndex;
 

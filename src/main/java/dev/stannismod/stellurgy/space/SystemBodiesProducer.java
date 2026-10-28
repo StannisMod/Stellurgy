@@ -299,7 +299,8 @@ public final class SystemBodiesProducer {
     }
 
     /**
-     * Re-emit {@code bodies} with each MOON pointing at the body it belongs to.
+     * Re-emit {@code bodies} with each MOON pointing at the body it belongs to, and each BELT at the star
+     * it rings.
      *
      * <p>Resolved from the moon's NAME: a moon is named in its parent's zone, and the zone's key IS
      * the parent's cell key, so the parent is the non-moon body whose cell that key names. A moon of a
@@ -314,18 +315,24 @@ public final class SystemBodiesProducer {
             return bodies;
         }
         Map<String, Integer> primaryByCell = new LinkedHashMap<>();
+        Map<Integer, Integer> starById = new LinkedHashMap<>();
         for (int i = 0; i < source.size(); i++) {
             SystemBody b = source.get(i);
             if (b.kind() != SystemBodyKind.MOON) {
                 primaryByCell.put(b.name().cellKey(), i);
+            }
+            if (b.kind() == SystemBodyKind.STAR) {
+                starById.putIfAbsent(b.starId(), i);
             }
         }
         List<RenderBody> linked = new ArrayList<>(bodies.size());
         for (int i = 0; i < bodies.size(); i++) {
             SystemBody b = source.get(i);
             RenderBody r = bodies.get(i);
+            // A belt rings its star: the client draws it as that ring, centred on the star it names here.
             Integer parent = b.kind() == SystemBodyKind.MOON
-                    ? primaryByCell.get(parentCellKeyOf(b.name())) : null;
+                    ? primaryByCell.get(parentCellKeyOf(b.name()))
+                    : b.kind() == SystemBodyKind.ASTEROID_BELT ? starById.get(b.starId()) : null;
             linked.add(parent == null ? r
                     : new RenderBody(r.kindOrdinal, r.localX, r.localY, r.localZ, r.dimId,
                             r.descendTarget, r.boundaryRadius, r.radiusBlocks, parent, r.texture, r.tint));

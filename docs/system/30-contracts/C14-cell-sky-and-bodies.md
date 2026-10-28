@@ -23,7 +23,8 @@ says which provider may answer with which sky.
 
 Layer-1 terms (**cell**, **slot dimension**) keep their C13 meanings and are not redefined.
 
-- **cell sky** — `BoundarySky`: a starfield and one billboard per fed body. It replaces the ENTIRE
+- **cell sky** — `BoundarySky`: a starfield and every fed body drawn as what it is — a sphere, a belt's
+  ring, a station's label (CON-C14-16). "Billboard" below means that drawn body. It replaces the ENTIRE
   sky `[V]`, so nothing it omits is drawn.
 - **slot world** — a world whose CLIENT-side provider is `WorldProviderSpaceSlot`.
 - **sky owner** — the `WorldProvider` instance the CLIENT holds for a dimension. Forge consults
@@ -147,24 +148,20 @@ of CON-C14-09's vector.
   (C15 ADDR-9), so its magnitude is the true distance at that moment. The wire needs no change: the
   payload is three `long`s per body (`PacketSystemBodiesSync`, C2) `[V]`.
   CON-C14-09's vector is therefore never computed over the static grid. Pinned by `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`, `SystemBodiesProducerTest#aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. FOR: CON-C14-14.
-- **CON-C14-16 (apparent size falls with distance, clamped both ends)** `[A][BEH]` Built as
-  `client/render/planet/ApparentSize` - a pure, GL-free function, so the RULE is checkable without a
-  client; pinned by `ApparentSizeTest` (falls, clamped both ends, and nothing in the fed range
-  leaves the clamps) and, in PIXELS off the real client, by
-  `BoundarySkyRendersInSlotCellTest`'s size leg - which compares two bodies of the SAME kind,
-  because a textured billboard and an untextured quad differ in FILL and an area comparison across
-  those two reports the size relation backwards. The curve and its four numbers are `tunable` and
-  deliberately unpinned. A
-  body is drawn at an apparent size that is a **strictly decreasing** function of distance and is
-  **clamped to a minimum and a maximum**, so that no fed body becomes invisible and none fills the
-  sky. (A fixed screen distance and half-size — `BoundarySky.java`: `BODY_DISTANCE=90`,
-  `BODY_HALF_SIZE=6`, `TARGET_HALF_SIZE=10` — would make a moon at 3 000 blocks and one at 59 000
-  indistinguishable.)
-  *Why the clamps are contract and not polish:* under CON-C14-14 the fed range runs from the nearest
-  moon to the neighbourhood bound (10⁹ blocks and more), so an unclamped 1/d law draws the star at a
-  fraction of a pixel; and at the near end `BoundarySky.drawBody` already bails at `|dir| < 1e-6`
-  (`:141-142`) `[V]`, i.e. a body vanishes exactly when it is closest. Without this clause
-  CON-C14-13 and C15 ADDR-13 have no rendering and "the planet crawls away" is unobservable. Pinned by `ApparentSizeTest#sizeFallsAsTheSameBodyRecedes`, `ApparentSizeTest#sizeIsClampedAtBothEnds`, `ApparentSizeTest#everyFedPairStaysInsideTheClamps`.
+- **CON-C14-16 (a world is a sphere at the angle it truly subtends)** `[V][BEH]` A body with a radius
+  is drawn as a SPHERE whose silhouette subtends `asin(r / d)` — the true angle, with no ceiling below
+  the truth: a world a ship orbits fills half its sky, because it does. The one departure is a FLOOR
+  (`ApparentSize.MIN_HALF_ANGLE`, ~0.95°), so a real body too far to resolve is still a visible marker;
+  and the representation stops at 89°, where the sphere degenerates — a ship never gets there, the
+  descent fires at the shell. No body is drawn as a flat quad: a BELT is drawn as its ring round the
+  star it rings (the feed's `parentIndex` names that star), a STATION as its label alone, and a sphere
+  that arrived WITHOUT its radius as its label alone plus a client log line — never as a marker that
+  would pass for a distant world (`ApparentSize#halfAngleFor` refuses a non-positive radius). The rule
+  lives in `client/render/planet/ApparentSize`, a pure GL-free function; `BoundarySky.drawBody` draws
+  the camera-facing hemisphere with the body's picture projected onto it. Pinned by
+  `ApparentSizeTest#aBodyNearEnoughToShowItsSizeIsDrawnAtItsTrueAngle`,
+  `ApparentSizeTest#aBodyTooFarToSeeIsStillDrawnAtTheFloor` and, in PIXELS off the real client, by
+  `BoundarySkyRendersInSlotCellTest`'s size leg, which compares two bodies of the SAME kind.
 - **CON-C14-17 (a body says what it is and how far)** `[V][BEH]` `BoundarySky` writes
   the name + `ApparentSize.formatDistance` under each billboard, gated on
   `client/render/planet/SkyLabels` = the `skyBodyLabels` CONFIG flag AND the navigation computer's

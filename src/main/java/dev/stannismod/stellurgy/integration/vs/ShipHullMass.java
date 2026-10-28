@@ -194,7 +194,11 @@ final class ShipHullMass {
         if (stay == null) {
             return; // no loaded ship to be aboard of; carrying nobody is the honest answer
         }
-        for (Entity body : world.loadedEntityList) {
+        // A snapshot, not the live list: something this loop calls adds to the world's entity list while
+        // it runs, and the live iterator then threw ConcurrentModificationException out of the mass round
+        // (measured in play 2026-10-28; which call adds was not identified). A body added mid-round is
+        // weighed by the next round.
+        for (Entity body : new java.util.ArrayList<>(world.loadedEntityList)) {
             if (body.isDead || !isCarried(body)) {
                 continue;
             }

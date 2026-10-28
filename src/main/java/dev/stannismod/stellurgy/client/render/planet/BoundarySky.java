@@ -23,8 +23,9 @@ import org.lwjgl.opengl.GL11;
 import java.util.List;
 
 /**
- * Slot-world sky renderer for a settled tier-2 ship: draws a billboard for every nearby system body
- * the server has synced for THIS slot dimension.
+ * Slot-world sky renderer for a settled tier-2 ship: draws every system body the server has synced for
+ * THIS slot dimension as what it is — a world as a sphere at its true angle, a belt as its ring, a station
+ * as its label. Nothing is drawn as a flat quad.
  *
  * <p><b>There is no fixed horizon band here, and there must not be one.</b> This renderer used to
  * draw a "descent boundary ring" at a constant radius in the CAMERA's frame — a band the viewpoint
@@ -40,16 +41,14 @@ import java.util.List;
  * body the ship will descend into once inside its proximity radius.</p>
  *
  * <p>This provider replaces the ENTIRE sky rather than adding to one, so whatever is not drawn here is
- * not drawn at all -- hence the starfield alongside the billboards.</p>
+ * not drawn at all -- hence the starfield alongside the bodies.</p>
  *
  * <p>Everything emitted here is wound to face the camera and drawn with vanilla's back-face culling
  * left on, matching {@link RenderPlanetarySky}. That is a hard requirement, not a style choice: the sky
  * pass runs immediately after {@code EntityRenderer.renderWorldPass} enables {@code GL_CULL_FACE} with
  * {@code GL_BACK}, so a primitive wound the other way is silently discarded and the pilot sees an empty
  * sky with no error anywhere. The static geometry is baked into display lists in the constructor -- it
- * is never rebuilt per frame.
- * Body billboards are cheap (a handful of quads) and are streamed inline, exactly as
- * {@link RenderSpaceSky} streams its planet quads.</p>
+ * is never rebuilt per frame. Bodies are streamed inline.</p>
  */
 @SideOnly(Side.CLIENT)
 public class BoundarySky extends IRenderHandler {
@@ -135,6 +134,13 @@ public class BoundarySky extends IRenderHandler {
             GlStateManager.color(0.35F, 0.65F, 1.0F, 0.55F);
             for (PacketSystemBodiesSync.RenderBody body : bodies) {
                 drawBoundary(buffer, body);
+            }
+            GlStateManager.color(0.72F, 0.62F, 0.48F, 0.6F);
+            for (PacketSystemBodiesSync.RenderBody body : bodies) {
+                if (kindOf(body) == SystemBodyKind.ASTEROID_BELT && body.parentIndex >= 0
+                        && body.parentIndex < bodies.size()) {
+                    drawBeltRing(buffer, body, bodies.get(body.parentIndex));
+                }
             }
         }
 
@@ -378,7 +384,50 @@ public class BoundarySky extends IRenderHandler {
         GlStateManager.popMatrix();
     }
 
-    /** Draw one body; returns whether a label was written for it. */
+    /** Samples around one belt ring. A belt can span the whole sky, so it needs more than a boundary. */
+    private static final int BELT_SEGMENTS = 128;
+
+    /** Spheres that arrived with no radius, reported once each: the feed is broken for them. */
+    private final java.util.Set<String> reportedSizeless = new java.util.HashSet<>();
+
+    private static SystemBodyKind kindOf(PacketSystemBodiesSync.RenderBody body) {
+        SystemBodyKind[] kinds = SystemBodyKind.values();
+        return body.kindOrdinal >= 0 && body.kindOrdinal < kinds.length ? kinds[body.kindOrdinal] : null;
+    }
+
+    /**
+     * A belt as what it is: the ring it lies on, round the star it rings. An orbit in this model is a
+     * horizontal circle — its inclination lifts it, it does not tilt it — and the belt's marker stands
+     * ON its ring, so the ring is the horizontal circle through the marker centred above the star.
+     * Every point is carried to the sky by its own direction, so the ring is seen as it would be from
+     * where the observer is: a band across the sky from inside it, an ellipse from outside.
+     */
+    private static void drawBeltRing(BufferBuilder buffer, PacketSystemBodiesSync.RenderBody belt,
+                                     PacketSystemBodiesSync.RenderBody star) {
+        double cx = star.localX, cy = belt.localY, cz = star.localZ;
+        double radius = Math.sqrt((belt.localX - cx) * (belt.localX - cx) + (belt.localZ - cz) * (belt.localZ - cz));
+        if (radius < 1.0D) {
+            return;
+        }
+        buffer.begin(GL11.GL_LINE_LOOP, DefaultVertexFormats.POSITION);
+        for (int i = 0; i < BELT_SEGMENTS; i++) {
+            double a = 2.0D * Math.PI * i / BELT_SEGMENTS;
+            double px = cx + radius * Math.cos(a), pz = cz + radius * Math.sin(a);
+            double len = Math.sqrt(px * px + cy * cy + pz * pz);
+            if (len < 1.0E-6D) {
+                continue;
+            }
+            double k = BOUNDARY_SKY_RADIUS / len;
+            buffer.pos(px * k, cy * k, pz * k).endVertex();
+        }
+        Tessellator.getInstance().draw();
+    }
+
+    /**
+     * Draw one body; returns whether a label was written for it. A sphere with a radius is drawn as a
+     * sphere at its true angle; a station and a belt are not spheres and get their label only (the belt
+     * its ring, drawn earlier); a sphere that arrived without its radius gets its label and a report.
+     */
     private boolean drawBody(BufferBuilder buffer, PacketSystemBodiesSync.RenderBody body,
                              boolean labels) {
         double dx = body.localX;
@@ -394,11 +443,31 @@ public class BoundarySky extends IRenderHandler {
 
         float yaw = (float) Math.toDegrees(Math.atan2(nx, nz));
         float pitch = (float) Math.toDegrees(Math.asin(Math.max(-1.0F, Math.min(1.0F, ny))));
-        // Apparent size follows the ANGLE the body subtends — its own radius over the true distance
-        // at the broadcast tick. Distance alone made a moon at 3 km and one at 59 km
-        // indistinguishable; radius alone would not move as a ship approaches. Both, and a giant
-        // beside a moon finally looks like one.
-        float half = ApparentSize.halfSizeFor(body.radiusBlocks, len);
+
+        SystemBodyKind kind = kindOf(body);
+        boolean sphere = kind != SystemBodyKind.STATION_SLOT && kind != SystemBodyKind.ASTEROID_BELT;
+        if (sphere && body.radiusBlocks <= 0L && reportedSizeless.add(nameOf(body))) {
+            dev.stannismod.stellurgy.Stellurgy.logger.warn("[SKY] {} ({}) arrived with no radius; it is"
+                    + " labelled, not drawn — a world must not be drawn at a size nobody stated", nameOf(body), kind);
+        }
+        if (!sphere || body.radiusBlocks <= 0L) {
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(yaw, 0.0F, 1.0F, 0.0F);
+            GlStateManager.rotate(-pitch, 1.0F, 0.0F, 0.0F);
+            GlStateManager.translate(0.0F, 0.0F, BODY_DISTANCE);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            boolean drewLabel = labels && drawLabel(body, 0.0F, 1.0F, len);
+            GlStateManager.popMatrix();
+            return drewLabel;
+        }
+        // A SPHERE that subtends the body's true angle: centred at `centre`, radius `centre * sin(angle)`,
+        // its silhouette is seen at exactly `angle`. The centre moves out as the angle nears 90 degrees so
+        // the near side never comes closer than one unit to the camera; the tangent circle then stays
+        // within ~115 units, inside the sky pass's far plane.
+        double angle = ApparentSize.halfAngleFor(body.radiusBlocks, len);
+        double sin = Math.sin(angle);
+        double centre = Math.max(BODY_DISTANCE, 1.0D / (1.0D - sin));
+        double sphereRadius = centre * sin;
 
         // The picture and its colour are the server's: it alone knows every body, a star's light and
         // the profile of a world nobody has landed on. Looking them up here through a dimension found
@@ -415,24 +484,52 @@ public class BoundarySky extends IRenderHandler {
         GlStateManager.pushMatrix();
         GlStateManager.rotate(yaw, 0.0F, 1.0F, 0.0F);
         GlStateManager.rotate(-pitch, 1.0F, 0.0F, 0.0F);
-        GlStateManager.translate(0.0F, 0.0F, BODY_DISTANCE);
+        GlStateManager.translate(0.0F, 0.0F, (float) centre);
+        emitFacingHemisphere(buffer, sphereRadius);
 
-        // The billboard is pushed out to +Z and must face back down -Z, at the camera. The four corners
-        // and their UVs are unchanged; only the traversal order is reversed, which flips the winding
-        // without touching the texture mapping. Emitting them the other way round points the normal
-        // along +Z, away from the viewer, and vanilla's back-face culling drops the quad -- the same
-        // defect the ring had. RenderPlanetarySky.renderPlanetPubHelper draws its planet quads
-        // viewer-facing with culling on for exactly this reason; this now matches it.
-        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-        buffer.pos(-half, half, 0.0D).tex(0.0D, 0.0D).endVertex();
-        buffer.pos(half, half, 0.0D).tex(1.0D, 0.0D).endVertex();
-        buffer.pos(half, -half, 0.0D).tex(1.0D, 1.0D).endVertex();
-        buffer.pos(-half, -half, 0.0D).tex(0.0D, 1.0D).endVertex();
-        Tessellator.getInstance().draw();
-
-        boolean drewLabel = labels && drawLabel(body, half, len);
+        // The label sits just under the silhouette, at a size that reads the same at any centre distance.
+        float scale = (float) (centre / BODY_DISTANCE);
+        boolean drewLabel = labels && drawLabel(body, (float) (centre * Math.tan(angle)), scale, len);
         GlStateManager.popMatrix();
         return drewLabel;
+    }
+
+    /** Rings from the pole facing the camera to the equator; the cap behind the silhouette is culled. */
+    private static final int SPHERE_RINGS = 12;
+    /** Segments around one ring: enough that a world filling half the sky does not read as a polygon. */
+    private static final int SPHERE_SEGMENTS = 48;
+
+    /**
+     * The hemisphere of a sphere of {@code radius}, centred at the origin, that faces the camera down -Z,
+     * with the body's picture projected onto it from the front — so the face a pilot sees is the picture
+     * he saw before, now bounded by a true sphere's silhouette.
+     *
+     * <p>Each cell is emitted in the same screen winding the flat billboard had (vanilla culls back
+     * faces in this pass), so the facets past the silhouette, which turn away, are the ones dropped.</p>
+     */
+    private static void emitFacingHemisphere(BufferBuilder buffer, double radius) {
+        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        for (int ring = 0; ring < SPHERE_RINGS; ring++) {
+            double inner = (Math.PI / 2.0D) * ring / SPHERE_RINGS;
+            double outer = (Math.PI / 2.0D) * (ring + 1) / SPHERE_RINGS;
+            for (int seg = 0; seg < SPHERE_SEGMENTS; seg++) {
+                double from = 2.0D * Math.PI * seg / SPHERE_SEGMENTS;
+                double to = 2.0D * Math.PI * (seg + 1) / SPHERE_SEGMENTS;
+                sphereVertex(buffer, radius, inner, from);
+                sphereVertex(buffer, radius, inner, to);
+                sphereVertex(buffer, radius, outer, to);
+                sphereVertex(buffer, radius, outer, from);
+            }
+        }
+        Tessellator.getInstance().draw();
+    }
+
+    /** One point at polar angle {@code polar} from the camera-facing pole, around it at {@code around}. */
+    private static void sphereVertex(BufferBuilder buffer, double radius, double polar, double around) {
+        double x = Math.sin(polar) * Math.cos(around);
+        double y = Math.sin(polar) * Math.sin(around);
+        buffer.pos(radius * x, radius * y, -radius * Math.cos(polar))
+                .tex(0.5D + 0.5D * x, 0.5D - 0.5D * y).endVertex();
     }
 
     /**
@@ -447,13 +544,13 @@ public class BoundarySky extends IRenderHandler {
      * therefore labelled with its plain distance by the same arithmetic, with no special case
      * here.</p>
      *
-     * <p>The billboard's SIZE keeps using the distance to the body itself
-     * ({@link ApparentSize#halfSizeFor}, at the call site): how big a thing looks is a property of
+     * <p>The sphere's SIZE keeps using the distance to the body itself
+     * ({@link ApparentSize#halfAngleFor}, at the call site): how big a thing looks is a property of
      * the thing, how far there is left to fly is a property of the approach. They are easy to
      * conflate because both are "distance to that body", and conflating them would shrink a planet
      * to nothing exactly as you arrive.</p>
      */
-    private boolean drawLabel(PacketSystemBodiesSync.RenderBody body, float half, double distance) {
+    private boolean drawLabel(PacketSystemBodiesSync.RenderBody body, float edge, float scale, double distance) {
         if (mc.fontRenderer == null)
             return false;
         String text = nameOf(body) + "  "
@@ -463,8 +560,8 @@ public class BoundarySky extends IRenderHandler {
         GlStateManager.pushMatrix();
         // The sky frame's +Y is up while the font renders DOWN its own +Y, so both axes are negated
         // here; without it every label reads upside down and mirrored.
-        GlStateManager.translate(0.0F, -half - 2.0F, 0.0F);
-        GlStateManager.scale(-LABEL_SCALE, -LABEL_SCALE, LABEL_SCALE);
+        GlStateManager.translate(0.0F, -edge - 2.0F * scale, 0.0F);
+        GlStateManager.scale(-LABEL_SCALE * scale, -LABEL_SCALE * scale, LABEL_SCALE * scale);
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         mc.fontRenderer.drawString(text, -mc.fontRenderer.getStringWidth(text) / 2, 0,
                 0xFFFFFFFF, false);
