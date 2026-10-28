@@ -102,15 +102,19 @@ they only *drive* other subsystems' seams.
   persisted whitelist; `setGravity` drives `gravityManager`; `fillData` writes item
   `DataStorage`; `reloadRecipes` refreshes machine + XML recipes (NOT auto-genned — frozen
   registry). `AddSealantCommand.java:33-46`, `SetGravityCommand.java:31-49`, `FillDataCommand.java:46-100`, `ReloadRecipesCommand.java:34-60`. [V]
-- **MECH-CMD-12 ship fixture.** `/stellurgy fixture ship-1` clears a box ahead of the operator, lays a
-  pad, a structure tower, a creative-powered assembler and Ship 1 on the pad — lift and aft motors,
+- **MECH-CMD-12 ship fixture.** `/stellurgy fixture ship-1` clears a box ahead of the operator and lays
+  Ship 1 in the air in it, its flight computer told to hold where it stands (Flight Assist on, a zero
+  cruise, `TileAdvancedFlightComputer#commandCruise`: an unmanned craft never flown holds nothing and
+  falls) — lift and aft motors,
   omnidirectional thrusters at every deck corner, a reaction wheel, a glazed cockpit with pilot seat,
   flight and navigation computers, two beam guns joined by a weapon console, a shield generator with two
   emitters and its console, and a jump drive with its bank, sinks and hull emitter, every consumer fed by
-  a creative source — then presses the assembler through `TileRocketAssemblingMachine#assembleImmediately`
-  (the player's scan and assembly, without the build's progress or energy) and puts the operator on the
-  cockpit floor. A press the assembler refuses is reported as a `CommandException`, never as success.
-  An operator's tool: it destroys whatever stood in the box. `FixtureCommand.java:63-87`. [V] What it
+  a creative source — then makes it a craft where it stands through `ShipAssembly#assemble` (rocket-assembly
+  MECH-RASM-16: no pad, no assembler), and puts the operator on the cockpit floor. Both shield emitters are
+  laid with access code `1` and the operator is handed a code device holding it (a shield with no code
+  admits nobody, and the emitters' shells cut through the cabin). An assembly the function refuses is
+  reported as a `CommandException`, never as success. `FixtureCommand#execute`, `Ship1#region` [V]
+  An operator's tool: it destroys whatever stood in the box. What it
   promises is INV-CMD-09..11; where its parts stand, relative to its flight computer, it publishes itself
   (`FixtureCommand.Ship1#partsFromComputer`), so a reader of the assembled ship asks the fixture rather
   than re-deriving its layout.

@@ -130,7 +130,8 @@ tiles, events, GUI, commands). **ship id** = the substrate's ship identity as a 
   builder and plug with the ship. Pinned by `TierTwoCraftFlightModelGroupTest#aShipAssembledOnASnowedOnPadLeavesTheLaunchSiteBehind`
   `[T]`, red-witnessed with the bound disabled.
   **There is no assembly lift, no cut and no snapshot copy:** the
-  assembler hands its scanned region to `VSIntegration.assembleBuiltTier2Ship`, which FITS it to the
+  assembly (`ShipAssembly#assemble`, which the assembler calls with its scanned region) hands that region
+  to `VSIntegration.assembleBuiltTier2Ship`, which FITS it to the
   non-air blocks itself (`fittedToBlocks`) and leaves the world as built for the substrate to relocate,
   so the caller does no extent arithmetic and nothing is copied. The snapshot entry
   (`assembleTier2Ship`/`pasteTier2Ship`, footprint from the snapshot's size) stays for crossings and

@@ -263,7 +263,8 @@ Which test pins which clause, and what is still violated.
   would be steered, commanded and camera-locked. Pinned by `VSUnassembledCraftTakesNoOrdersTest`
   (client), whose leg 1 is a REAL ship.
 - **SHIPCTL-9's R10/R11 door** `[T]`: multi-AFC / multi-pilot-seat builds are REJECTED at scan
-  (`MULTIPLEFLIGHTCOMPUTERS` / `MULTIPLEPILOTSEATS`, VS-gated). Pinned by
+  (`MULTIPLEFLIGHTCOMPUTERS` / `MULTIPLEPILOTSEATS`, VS-gated) and again by the assembly itself, for
+  every caller (`ShipAssembly#componentRefusal`, one rule). Pinned by
   `VSShipMultiControlScanTest` (server).
 - **SHIPCTL-19(a) — VIOLATED**: nothing rejects a second AFC's/seat's PLACEMENT onto an
   already-assembled ship (the R20/R21 repair-or-refuse door). Whether VS accepts placement onto an

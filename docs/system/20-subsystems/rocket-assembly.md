@@ -1,6 +1,6 @@
 ---
 id: rocket-assembly
-owns: [tile/TileRocketAssemblingMachine.java, tile/TileUnmannedVehicleAssembler.java, util/StorageChunk.java]
+owns: [tile/TileRocketAssemblingMachine.java, tile/TileUnmannedVehicleAssembler.java, util/StorageChunk.java, ship/ShipAssembly.java]
 entrypoints: [TileRocketAssemblingMachine#performFunction, TileRocketAssemblingMachine#scanRocket, TileRocketAssemblingMachine#assembleRocket, StorageChunk#cutWorldBB, StorageChunk#readFromNetwork]
 depends-on: [rocket-entity, dimension-planets, api-public, network-wire, infrastructure-tiles, util-core]
 depended-by: [rocket-entity, client-render, multiblock-machines]
@@ -145,6 +145,20 @@ clears that box in the source world, so a stage is never in both places; the lay
 layer. A lifted rocket keeps its battle damage, and landing it on a damaged pad does not inherit the
 pad's. `StorageChunk#copyWorldBB` / `#cutWorldBB` / `#readFromNBT` / `#pasteInWorld`;
 `damage/DamageLayer.java` `[V]`.
+
+**MECH-RASM-16 — A ship is assembled by a function of code, which the assembler only calls.**
+`ShipAssembly#assemble(world, region)` turns the blocks standing in a region (corners inclusive) into
+one tier-2 craft where they stand, with no pad and no assembler: it refuses a region with no flight
+computer, two of them, or two pilot seats (`componentRefusal`, which the assembler's Scan asks too), or
+one the physics substrate would drop (`VSIntegration.builtTier2ShipRefusal`), changing nothing in the
+world when it refuses; otherwise it binds every pilot seat, navigation computer and ship machine in the
+region to the computer by offset, mints the craft's durable name on the computer, records the hull's
+extent there (MECH-HYP-08), hands the region to `VSIntegration.assembleBuiltTier2Ship`, and queues the
+rebind of a pilot already seated. It answers the craft's name or the refusal. The assembler keeps what is
+the pad's — its scan box, the rocket checks, the low-thrust warning, the clean-up of replaceable blocks —
+and maps a refusal to its status. Code that builds a craft itself (the `ship-1` fixture, a craft met in
+space) calls the same function. `ship/ShipAssembly.java`, `TileRocketAssemblingMachine#assembleRocket`
+`[V]`.
 
 ## State & persistence
 

@@ -25,6 +25,7 @@ import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
+import dev.stannismod.stellurgy.ship.ShipAssembly;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.util.NuclearEngineLimit;
 import dev.stannismod.stellurgy.util.StorageChunk;
@@ -85,26 +86,6 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
      * one tick): its presence makes the build a tier-2 ship instead of a rocket.
      */
     private BlockPos scannedFlightComputerPos;
-    /**
-     * World position of a pilot seat found in the most recent scan, or {@code null} if none.
-     * On a tier-2 build it is linked to {@link #scannedFlightComputerPos} at assembly so the
-     * seat can route pilot input to the flight computer once the craft becomes a ship.
-     */
-    private BlockPos scannedPilotSeatPos;
-
-    /**
-     * The navigation computer found in the build, if any. A ship without one flies perfectly well —
-     * it simply cannot jump — so this is recorded, never required.
-     */
-    private BlockPos scannedNavComputerPos;
-
-    /**
-     * Every ship machine in the build that has to know which ship it belongs to — the field
-     * generator, its capacitors, the hull emitters, the dampeners. They are collected as one list
-     * rather than one field each because they are all linked the same way and for the same reason:
-     * a machine that cannot name its own ship is a machine another ship can borrow.
-     */
-    private final java.util.List<BlockPos> scannedShipMachines = new java.util.ArrayList<>();
 
     /**
      * The readout of the ship on the pad at the last scan, or {@code null} when the build is not a
@@ -448,9 +429,6 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
         stats = new StatsRocket(); // reset stats
         scannedFlightComputerPos = null; // reset tier-2 routing state each scan
-        scannedPilotSeatPos = null;
-        scannedNavComputerPos = null;
-        scannedShipMachines.clear();
         tier2Readout = null;
 
         //if already a rocket exists, output their stats
@@ -525,12 +503,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         boolean hasSatellite = false;
         boolean hasGuidance = false;
         boolean invalidBlock = false;
-        // Tier-2 control blocks are counted, not just located: a craft may carry at most ONE
-        // Advanced Flight Computer and ONE pilot seat (the "last scanned wins" slot assignment
-        // below would otherwise silently pick one and leave the others as live hazards — a second
-        // computer ticks and fights the linked one for the ship, a second seat is silently dead).
-        int flightComputerCount = 0;
-        int pilotSeatCount = 0;
+        ShipAssembly.Refusal craftRefusal;
         float mass = 0;
 
         if (verifyScan(bb, world)) {
@@ -619,14 +592,6 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                                 hasGuidance = true;
                             } else if (tile instanceof TileAdvancedFlightComputer) {
                                 scannedFlightComputerPos = currBlockPos;
-                                flightComputerCount++;
-                            } else if (tile instanceof TilePilotSeat) {
-                                scannedPilotSeatPos = currBlockPos;
-                                pilotSeatCount++;
-                            } else if (tile instanceof TileNavigationComputer) {
-                                scannedNavComputerPos = currBlockPos;
-                            } else if (tile instanceof TileShipComponent) {
-                                scannedShipMachines.add(currBlockPos);
                             }
                         }
                     }
@@ -691,17 +656,11 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse)))) {
                 status = ErrorCodes.COMBINEDTHRUST;
 
-            } else if (flightComputerCount > 1) {
-                // One craft — one command authority. A second Advanced Flight Computer would tick
-                // and steer against the linked one (both are physics force controllers), so a
-                // multi-computer build is rejected at the scan, before anything can assemble.
-                status = ErrorCodes.MULTIPLEFLIGHTCOMPUTERS;
-
-            } else if (scannedFlightComputerPos != null && pilotSeatCount > 1) {
-                // One craft — one command seat. Only the last-scanned pilot seat would be linked;
-                // a pilot in any other seat would have silently dead controls. Passenger seats
-                // (the plain seat block) are unrestricted — this counts only pilot seats.
-                status = ErrorCodes.MULTIPLEPILOTSEATS;
+            } else if (scannedFlightComputerPos != null
+                    && (craftRefusal = ShipAssembly.componentRefusal(world, bb)) != null) {
+                // The craft's own rule, asked here so the Scan shows it before anything can assemble.
+                status = craftRefusal == ShipAssembly.Refusal.MULTIPLE_PILOT_SEATS
+                        ? ErrorCodes.MULTIPLEPILOTSEATS : ErrorCodes.MULTIPLEFLIGHTCOMPUTERS;
 
             } else if (scannedFlightComputerPos != null) {
                 // A SHIP is not gated by a rocket's thrust and fuel checks. Its engines consume
@@ -806,25 +765,6 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return new AxisAlignedBB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
-
-    /**
-     * Assemble what stands on the pad now, for {@code requester}, skipping the build's progress and
-     * its energy: the press of an operator's fixture, not a player's. Answers whether a craft was built;
-     * false when there is no pad, the scan refuses, or the low-thrust warning held the press back.
-     */
-    public boolean assembleImmediately(EntityPlayer requester) {
-        if (world.isRemote) {
-            return false;
-        }
-        scanRequester = requester == null ? null : requester.getUniqueID();
-        bbCache = getRocketPadBounds(world, pos);
-        if (bbCache == null) {
-            return false;
-        }
-        assembleRocket();
-        return status == ErrorCodes.FINISHED;
-    }
-
     public void assembleRocket() {
         // server only + need a pad cache
         if (world.isRemote || bbCache == null) return;
@@ -872,15 +812,18 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // pasted a block higher, because that air gap was then the only separation from the pad; the
             // round trip killed every item lying near the pad and rebuilt every tile from NBT.
             //
-            // Asked BEFORE the craft is handed over, because after that the substrate decides a tick
-            // later and, refusing, drops it silently: the press read "finished" and there was no ship.
-            // Nothing has been moved, so a refusal leaves the world exactly as it was.
-            VSIntegration.AssemblyRefusal refusal = VSIntegration.builtTier2ShipRefusal(world, rocketBB);
-            if (refusal != null) {
-                switch (refusal) {
+            ShipAssembly.Result assembled = ShipAssembly.assemble(world, rocketBB);
+            if (assembled.refusal() != null) {
+                switch (assembled.refusal()) {
                     case TOO_LARGE:
                     case REACH_EXCEEDED:
                         status = ErrorCodes.SHIP_TOO_LARGE;
+                        break;
+                    case MULTIPLE_FLIGHT_COMPUTERS:
+                        status = ErrorCodes.MULTIPLEFLIGHTCOMPUTERS;
+                        break;
+                    case MULTIPLE_PILOT_SEATS:
+                        status = ErrorCodes.MULTIPLEPILOTSEATS;
                         break;
                     case NO_FLIGHT_COMPUTER:
                         // Not a player's situation: this branch runs only after the scan above found the
@@ -890,98 +833,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                         throw new IllegalStateException("the scan found a flight computer at "
                                 + scannedFlightComputerPos + " but the assembly found none in " + rocketBB);
                     default:
-                        throw new IllegalStateException("an assembly refusal with no status: " + refusal);
+                        throw new IllegalStateException("an assembly refusal with no status: " + assembled.refusal());
                 }
                 return;
-            }
-            BlockPos shipAnchor = scannedFlightComputerPos;
-            // Link a pilot seat (if the build has one) to the flight computer, before the
-            // physics mod relocates the craft: the seat stores the computer's offset, which the
-            // rigid relocation preserves, so the seated pilot's input reaches the computer.
-            if (scannedPilotSeatPos != null) {
-                TileEntity seatTe = world.getTileEntity(scannedPilotSeatPos);
-                if (seatTe instanceof TilePilotSeat) {
-                    ((TilePilotSeat) seatTe).linkToFlightComputer(shipAnchor);
-                }
-            }
-            // Same relative-offset link for the navigation computer: the jump gate finds it from the
-            // flight computer, and the offset is what survives the ship's relocation into subspace.
-            if (scannedNavComputerPos != null) {
-                TileEntity navTe = world.getTileEntity(scannedNavComputerPos);
-                if (navTe instanceof TileNavigationComputer) {
-                    ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);
-                }
-            }
-            // Same link again for every hyperdrive-family machine in the build. Without it a
-            // generator or a capacitor is just a block standing in space: the jump gate finds a
-            // ship's machines by asking each one which flight computer it answers to, so an
-            // unlinked one is invisible to its own ship and available to none.
-            for (BlockPos machinePos : scannedShipMachines) {
-                TileEntity machineTe = world.getTileEntity(machinePos);
-                if (machineTe instanceof TileShipComponent) {
-                    ((TileShipComponent) machineTe).linkToFlightComputer(shipAnchor);
-                }
-            }
-            // Mint the ship's durable identity at assembly (before the physics mod relocates the
-            // craft): tile NBT rides the relocation and every later crossing verbatim, so this id
-            // is the one stable key for the ship (the physics mod's own UUID is re-minted per
-            // re-assembly and must never key durable state).
-            TileEntity afcTe = world.getTileEntity(shipAnchor);
-            java.util.UUID durableShipId = null;
-            if (afcTe instanceof TileAdvancedFlightComputer) {
-                durableShipId = ((TileAdvancedFlightComputer) afcTe).getOrCreateShipId();
-                // Record how big the craft is, while something still knows. After this the blocks
-                // are a physics body and its extent is only recoverable by walking it; the jump
-                // window has to be checked against the hull, and the assembler is the one place
-                // that measured the hull in the first place. Offsets from the computer, so they
-                // survive every relocation the ship will make.
-                ((TileAdvancedFlightComputer) afcTe).setHullExtent(
-                        (int) rocketBB.minX - scannedFlightComputerPos.getX(),
-                        (int) rocketBB.minY - scannedFlightComputerPos.getY(),
-                        (int) rocketBB.minZ - scannedFlightComputerPos.getZ(),
-                        (int) rocketBB.maxX - scannedFlightComputerPos.getX(),
-                        (int) rocketBB.maxY - scannedFlightComputerPos.getY(),
-                        (int) rocketBB.maxZ - scannedFlightComputerPos.getZ());
-            }
-            // The name is NOT handed in, and that is the point. This assembly is anchored on the very
-            // flight computer that carries the durable id, so the ship is asked what it is called
-            // rather than told — one source of truth, the tile's own NBT, and no call site that can
-            // forget. It went unbound here for exactly that reason: the id above was minted and the
-            // value dropped, so a craft that had not yet crossed could not be found by its own name.
-            // The REGION of the craft, not a point: the assembly fits it to the blocks, finds the flight
-            // computer inside and takes the ship's identity off that tile. `shipAnchor` above is still
-            // this build's computer and is still what the seat links to; it is not handed to the
-            // assembly, because a caller that can pass an anchor can pass the wrong one. Nor is an
-            // extent computed here: the fit is the assembly's, so there is no arithmetic of ours for the
-            // flight computer's layer to fall outside of (measured once: a width derived here from
-            // `rocketBB` reded all five ground-flight scenarios — no ship was ever spawned).
-            VSIntegration.assembleBuiltTier2Ship(world, rocketBB);
-            // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
-            // build-time position, which the relocation is about to vacate - once the blocks relocate
-            // into the ship's subspace nothing in his control chain resolves and the ship ignores
-            // him. Queue the rebind that re-expresses his boarding on the relocated seat; queued,
-            // not done inline, because the relocation is asynchronous.
-            if (scannedPilotSeatPos != null) {
-                for (dev.stannismod.stellurgy.entity.EntityDummy mount :
-                        world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityDummy.class,
-                                rocketBB.grow(2.0))) {
-                    BlockPos bound = mount.getSeatPos();
-                    if (bound == null || !bound.equals(scannedPilotSeatPos)) {
-                        continue; // an ordinary (passenger) seat mount, or someone else's seat
-                    }
-                    for (net.minecraft.entity.Entity passenger : mount.getPassengers()) {
-                        if (passenger instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                            dev.stannismod.stellurgy.Stellurgy.spaceSubsystem().crewRebind.enqueue(
-                                    (net.minecraft.world.WorldServer) world,
-                                    (net.minecraft.entity.player.EntityPlayerMP) passenger,
-                                    mount.getEntityId(), shipAnchor,
-                                    shipAnchor.getX() - scannedPilotSeatPos.getX(),
-                                    shipAnchor.getY() - scannedPilotSeatPos.getY(),
-                                    shipAnchor.getZ() - scannedPilotSeatPos.getZ(),
-                                    durableShipId);
-                        }
-                    }
-                }
             }
             stats.reset();
             this.status = ErrorCodes.FINISHED;

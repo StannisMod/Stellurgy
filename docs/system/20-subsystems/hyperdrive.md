@@ -118,11 +118,11 @@ would read "does not fit". Measured 2026-10-05 on assembled craft (`HyperdriveTe
 2); the mast craft `with-jump-drive-and-mast` 50 outside bare, 25 with one emitter built on, 0 with its own.
 
 ### MECH-HYP-08 — The hull's extent is recorded at assembly
-`TileRocketAssemblingMachine` writes the craft's bounding box onto the flight computer as OFFSETS
-(`TileAdvancedFlightComputer#setHullExtent`) while the whole craft is still on the pad — the one
-moment anything knows its full extent. Offsets survive every relocation; positions survive none. A
-craft whose extent was never recorded raises no coverage objection (an unmeasured hull is not a
-faulty one). [V] `TileRocketAssemblingMachine.java` (tier-2 branch), `ShipNavigation#hullOutsideWindow`.
+The assembly (`ShipAssembly#assemble`, whoever calls it) writes the craft's region onto the flight
+computer as OFFSETS (`TileAdvancedFlightComputer#setHullExtent`) while the whole craft still stands in
+the world — the one moment anything knows its full extent. Offsets survive every relocation; positions
+survive none. A craft whose extent was never recorded raises no coverage objection (an unmeasured hull
+is not a faulty one). [V] `ship/ShipAssembly.java`, `ShipNavigation#hullOutsideWindow`.
 
 ### MECH-HYP-09 — Speed is drive power against hull mass, times the drive's GENERATION
 `JumpSpeed.blocksPerTick(drivePower, mass, tier)`, floored at 1 (the transit integrator refuses a zero

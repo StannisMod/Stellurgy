@@ -1,20 +1,24 @@
 package dev.stannismod.stellurgy.command.sub;
 
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
+import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.affs.util.CodeUtils;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.block.BlockOmniThruster;
 import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
-import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
+import dev.stannismod.stellurgy.ship.ShipAssembly;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -27,9 +31,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code /stellurgy fixture ship-1}: builds a finished tier-2 ship in front of the operator and assembles
- * it through the rocket assembler, the way a player's build becomes a ship. An operator's shortcut for
- * trying the ship systems, not a gameplay path — it clears the ground it builds on.
+ * {@code /stellurgy fixture ship-1}: builds a finished tier-2 ship in the air in front of the operator and
+ * makes it a craft where it stands ({@link ShipAssembly}) — no pad and no assembler, as code builds a craft.
+ * An operator's shortcut for trying the ship systems, not a gameplay path — it clears the box it builds in.
+ *
+ * <p>Its shield carries access code {@code 1}, and the operator is handed a code device holding it: a
+ * shield with no code admits nobody, and its shells cut through the cabin.</p>
  *
  * <p>Ship 1 is fed by creative sources and carries every system a ship can have: lift and aft motors,
  * omnidirectional thrusters on every corner, a reaction wheel, a jump drive, a shield and two beam guns,
@@ -39,6 +46,9 @@ import java.util.Map;
 public class FixtureCommand extends StellurgyCommand {
 
     private static final String SHIP_1 = "ship-1";
+
+    /** The access code ship 1's shield is laid with, and the code on the device the operator is handed. */
+    private static final String SHIELD_CODE = "1";
 
     /** How far ahead of the operator the pad's near edge is laid, blocks. */
     private static final int STANDOFF = 3;
@@ -71,15 +81,24 @@ public class FixtureCommand extends StellurgyCommand {
         World world = player.world;
         EnumFacing ahead = player.getHorizontalFacing();
         BlockPos feet = new BlockPos(player);
-        // The pad's centre, far enough ahead that the operator stands outside its cleared box.
-        BlockPos centre = feet.offset(ahead, STANDOFF + Ship1.PAD_DEPTH / 2 + 2);
-        BlockPos origin = centre.add(-Ship1.PAD_WIDTH / 2, 0, -Ship1.PAD_DEPTH / 2);
+        // The site's centre, far enough ahead that the operator stands outside its cleared box.
+        BlockPos centre = feet.offset(ahead, STANDOFF + Ship1.SITE_DEPTH / 2 + 2);
+        BlockPos origin = centre.add(-Ship1.SITE_WIDTH / 2, 0, -Ship1.SITE_DEPTH / 2);
 
-        BlockPos builder = Ship1.lay(world, origin);
-        TileEntity tile = world.getTileEntity(builder);
-        if (!(tile instanceof TileRocketAssemblingMachine)
-                || !((TileRocketAssemblingMachine) tile).assembleImmediately(player)) {
+        Ship1.lay(world, origin);
+        // Laid in the air, it is handed over holding where it stands — Flight Assist on, a zero cruise —
+        // as a ship its pilot stood up from would: a craft nobody has flown yet holds nothing and falls.
+        TileEntity computer = world.getTileEntity(origin.add(Ship1.parts().get("computer")));
+        if (computer instanceof TileAdvancedFlightComputer) {
+            ((TileAdvancedFlightComputer) computer).commandCruise(0, 0, 0);
+        }
+        if (ShipAssembly.assemble(world, Ship1.region(origin)).refusal() != null) {
             throw new CommandException("commands.stellurgy.fixture.failed", SHIP_1);
+        }
+        ItemStack codeDevice = new ItemStack(AdvancedForceFieldSystem.ITEM_CODE_DEVICE);
+        CodeUtils.setCode(codeDevice, SHIELD_CODE);
+        if (!player.inventory.addItemStackToInventory(codeDevice)) {
+            player.dropItem(codeDevice, false);
         }
         BlockPos cabin = origin.add(Ship1.CABIN_X, Ship1.CABIN_Y, Ship1.CABIN_Z);
         player.connection.setPlayerLocation(cabin.getX() + 0.5D, cabin.getY(), cabin.getZ() + 0.5D, 180F, 0F);
@@ -87,15 +106,15 @@ public class FixtureCommand extends StellurgyCommand {
     }
 
     /**
-     * Ship 1's layout, in pad coordinates: x across the pad, y up from the pad, z from the bow (north,
-     * z = 0) to the stern. The pad spans x 0..8 and z 0..10; the assembler stands north of it.
+     * Ship 1's layout, in site coordinates: x across the site, y up from its floor, z from the bow (north,
+     * z = 0) to the stern. The site spans x 0..8 and z 0..10.
      */
     public static final class Ship1 {
 
-        static final int PAD_WIDTH = 9;
-        static final int PAD_DEPTH = 11;
-        /** The assembly scan's ceiling is the tower's top, so it rises a course past the highest block. */
-        static final int TOWER_HEIGHT = 10;
+        static final int SITE_WIDTH = 9;
+        static final int SITE_DEPTH = 11;
+        /** How high the site is cleared and the craft's region reaches: a course past the highest block. */
+        static final int SITE_HEIGHT = 10;
         /** Where the operator is put: on the cockpit floor, behind the pilot seat. */
         static final int CABIN_X = 4;
         static final int CABIN_Y = 4;
@@ -138,35 +157,25 @@ public class FixtureCommand extends StellurgyCommand {
             return parts;
         }
 
-        /** Clear the site, lay pad, tower, powered assembler and the ship; answer the assembler's position. */
-        static BlockPos lay(World world, BlockPos o) {
-            for (int x = -2; x <= PAD_WIDTH + 1; x++) {
-                for (int z = -2; z <= PAD_DEPTH + 1; z++) {
-                    for (int y = 0; y <= TOWER_HEIGHT + 1; y++) {
+        /** Clear the site and lay the ship in it, its lowest blocks a block above the site's floor. */
+        static void lay(World world, BlockPos o) {
+            for (int x = -2; x <= SITE_WIDTH + 1; x++) {
+                for (int z = -2; z <= SITE_DEPTH + 1; z++) {
+                    for (int y = 0; y <= SITE_HEIGHT + 1; y++) {
                         world.setBlockToAir(o.add(x, y, z));
                     }
                 }
             }
-            for (int x = 0; x < PAD_WIDTH; x++) {
-                for (int z = 0; z < PAD_DEPTH; z++) {
-                    set(world, o, x, 0, z, StellurgyBlocks.blockLaunchpad.getDefaultState());
-                }
-            }
-            for (int y = 0; y < TOWER_HEIGHT; y++) {
-                set(world, o, -1, y, PAD_DEPTH / 2, StellurgyBlocks.blockStructureTower.getDefaultState());
-            }
-            // The assembler finds its pad on the side opposite the way it faces.
-            BlockPos builder = o.add(PAD_WIDTH / 2, 1, -1);
-            world.setBlockState(builder, StellurgyBlocks.blockRocketBuilder.getDefaultState()
-                    .withProperty(RotatableBlock.FACING, EnumFacing.NORTH));
-            world.setBlockState(builder.up(), LibVulpesBlocks.blockCreativeInputPlug.getDefaultState());
-
             hull(world, o);
             propulsion(world, o);
             cockpit(world, o);
             roof(world, o);
             jumpBay(world, o);
-            return builder;
+        }
+
+        /** The box the ship is laid in, both corners inclusive: above the site's floor, so no ground joins it. */
+        static AxisAlignedBB region(BlockPos o) {
+            return new AxisAlignedBB(o.add(0, 1, 0), o.add(SITE_WIDTH - 1, SITE_HEIGHT, SITE_DEPTH - 1));
         }
 
         /** The deck every other part hangs from, so the assembly's flood fill reaches all of it. */
@@ -249,7 +258,12 @@ public class FixtureCommand extends StellurgyCommand {
             world.setBlockState(generator.up(), AdvancedForceFieldSystem.BLOCK_ADMIN_ENERGY_SOURCE.getDefaultState());
             world.setBlockState(o.add(parts.get("shieldConsole")), AdvancedForceFieldSystem.BLOCK_SHIELD_CONSOLE.getDefaultState());
             for (String emitter : new String[]{"shieldEmitterFore", "shieldEmitterStarboard"}) {
-                world.setBlockState(o.add(parts.get(emitter)), AdvancedForceFieldSystem.BLOCK_FIELD_GENERATOR.getDefaultState());
+                BlockPos at = o.add(parts.get(emitter));
+                world.setBlockState(at, AdvancedForceFieldSystem.BLOCK_FIELD_GENERATOR.getDefaultState());
+                TileEntity tile = world.getTileEntity(at);
+                if (tile instanceof TileEntityFieldGenerator) {
+                    ((TileEntityFieldGenerator) tile).applyAccessCode(SHIELD_CODE);
+                }
             }
         }
 
