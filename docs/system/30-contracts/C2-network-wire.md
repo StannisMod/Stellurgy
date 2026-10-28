@@ -140,7 +140,7 @@ is not gated on the seat entity's jump phase, so standing up does not empty the 
 
 | class | dir | payload shape (wire) |
 |---|---|---|
-| `PacketSystemBodiesSync` | S→C | `int dimCount`, then per dim: `int slotDimId`, `int bodyCount`, then per body: `int kindOrdinal`, `long localX`, `long localY`, `long localZ`, `int dimId`, `boolean descendTarget`, `long boundaryRadius`, `long radiusBlocks`, `int parentIndex`; **then the NEBULA half** — `int dimCount`, then per dim: `int slotDimId`, `int nebulaCount`, then per cloud: `float dirX`, `float dirY`, `float dirZ`, `float angularRadius`, `int appearanceOrdinal`, `float opacity` |
+| `PacketSystemBodiesSync` | S→C | `int dimCount`, then per dim: `int slotDimId`, `int bodyCount`, then per body: `int kindOrdinal`, `long localX`, `long localY`, `long localZ`, `int dimId`, `boolean descendTarget`, `long boundaryRadius`, `long radiusBlocks`, `int parentIndex`, `String texture`, `int tint`; **then the NEBULA half** — `int dimCount`, then per dim: `int slotDimId`, `int nebulaCount`, then per cloud: `float dirX`, `float dirY`, `float dirZ`, `float angularRadius`, `int appearanceOrdinal`, `float opacity` |
 
 **`kindOrdinal` is an ordinal, so `SystemBodyKind` is APPEND-ONLY** (`GAS_GIANT` and `ROGUE_PLANET` are
 appended last for this reason): every kind keeps the number it has, so a client and a server one commit

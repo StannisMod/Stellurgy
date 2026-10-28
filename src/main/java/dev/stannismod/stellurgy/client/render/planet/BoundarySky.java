@@ -400,22 +400,17 @@ public class BoundarySky extends IRenderHandler {
         // beside a moon finally looks like one.
         float half = ApparentSize.halfSizeFor(body.radiusBlocks, len);
 
-        // The STRICT dimension lookup: the lenient one answers an unknown dimension with the
-        // OVERWORLD's properties, so the star -- which has no dimension of its own -- was drawn
-        // wearing Earth's texture. A body with nothing to bind is drawn as a tinted quad instead,
-        // which is honest.
-        DimensionProperties props =
-                DimensionManager.getInstance().getDimensionPropertiesOrNull(body.dimId);
-        ResourceLocation icon = props != null ? props.getPlanetIcon() : null;
-        if (icon != null)
-            mc.renderEngine.bindTexture(icon);
-        else
-            GlStateManager.disableTexture2D();
-
+        // The picture and its colour are the server's: it alone knows every body, a star's light and
+        // the profile of a world nobody has landed on. Looking them up here through a dimension found
+        // none for a star or an unvisited world and drew a bare quad for almost every body there is.
+        mc.renderEngine.bindTexture(new ResourceLocation(body.texture));
+        float r = ((body.tint >> 16) & 0xFF) / 255.0F;
+        float g = ((body.tint >> 8) & 0xFF) / 255.0F;
+        float b = (body.tint & 0xFF) / 255.0F;
         if (body.descendTarget)
-            GlStateManager.color(0.6F, 1.0F, 0.6F, 1.0F);
+            GlStateManager.color(r * 0.6F, g, b * 0.6F, 1.0F);
         else
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.color(r, g, b, 1.0F);
 
         GlStateManager.pushMatrix();
         GlStateManager.rotate(yaw, 0.0F, 1.0F, 0.0F);
@@ -434,9 +429,6 @@ public class BoundarySky extends IRenderHandler {
         buffer.pos(half, -half, 0.0D).tex(1.0D, 1.0D).endVertex();
         buffer.pos(-half, -half, 0.0D).tex(0.0D, 1.0D).endVertex();
         Tessellator.getInstance().draw();
-
-        if (icon == null)
-            GlStateManager.enableTexture2D();
 
         boolean drewLabel = labels && drawLabel(body, half, len);
         GlStateManager.popMatrix();

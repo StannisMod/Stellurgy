@@ -84,7 +84,18 @@ public class MoonParentInTheSkyFeedTest {
         for (GalacticCoord anchor : systems.keySet()) {
             List<SystemBody> bodies = g.bodiesFor(SEED, anchor);
             List<RenderBody> feed = SystemBodiesProducer.buildByDim(
-                    Collections.singletonMap(anchor, SLOT_DIM), null, cell -> bodies).get(SLOT_DIM);
+                    Collections.singletonMap(anchor, SLOT_DIM), null,
+                    new SystemBodiesProducer.BodyLookup() {
+                        @Override
+                        public List<SystemBody> skyBodiesAt(GalacticCoord cell) {
+                            return bodies;
+                        }
+
+                        @Override
+                        public dev.stannismod.stellurgy.space.BodyAppearance appearanceOf(SystemBody body) {
+                            return dev.stannismod.stellurgy.space.BodyAppearance.unknownWorld();
+                        }
+                    }).get(SLOT_DIM);
             assertEquals("the feed must carry every body of the system, in order", bodies.size(),
                     feed.size());
             for (int i = 0; i < bodies.size(); i++) {

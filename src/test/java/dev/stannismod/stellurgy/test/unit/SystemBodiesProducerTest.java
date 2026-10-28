@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderBody;
 import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.space.BodyAppearance;
 import dev.stannismod.stellurgy.space.SystemBodiesProducer.BodyLookup;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
@@ -42,6 +43,11 @@ public class SystemBodiesProducerTest {
             public List<SystemBody> skyBodiesAt(GalacticCoord asked) {
                 return asked != null && asked.sameCell(cell)
                         ? Arrays.asList(bodies) : Collections.<SystemBody>emptyList();
+            }
+
+            @Override
+            public BodyAppearance appearanceOf(SystemBody body) {
+                return BodyAppearance.unknownWorld();
             }
         };
     }
@@ -157,6 +163,11 @@ public class SystemBodiesProducerTest {
             public List<SystemBody> skyBodiesAt(GalacticCoord cell) {
                 return Collections.singletonList(body);
             }
+
+            @Override
+            public BodyAppearance appearanceOf(SystemBody body) {
+                return BodyAppearance.unknownWorld();
+            }
         };
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -215,6 +226,11 @@ public class SystemBodiesProducerTest {
             public List<SystemBody> skyBodiesAt(GalacticCoord cell) {
                 return new ArrayList<>();
             }
+
+            @Override
+            public BodyAppearance appearanceOf(SystemBody body) {
+                return BodyAppearance.unknownWorld();
+            }
         };
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -245,6 +261,11 @@ public class SystemBodiesProducerTest {
                 }
                 return cell.sameCell(planetB.name())
                         ? Collections.singletonList(planetB) : Collections.<SystemBody>emptyList();
+            }
+
+            @Override
+            public BodyAppearance appearanceOf(SystemBody body) {
+                return BodyAppearance.unknownWorld();
             }
         };
 

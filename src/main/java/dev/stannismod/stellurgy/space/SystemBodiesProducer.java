@@ -58,6 +58,9 @@ public final class SystemBodiesProducer {
     public interface BodyLookup {
         /** What the sky of {@code cell} shows: the system's bodies unioned with that cell's own. */
         List<SystemBody> skyBodiesAt(GalacticCoord cell);
+
+        /** What {@code body} looks like there ({@link BodyAppearance#of} in production). */
+        BodyAppearance appearanceOf(SystemBody body);
     }
 
     /**
@@ -138,9 +141,10 @@ public final class SystemBodiesProducer {
                     // belt, a station slot) sends zero, which is what says "not a sphere".
                     long radiusBlocks = Math.round(b.radiusEarths()
                             * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS);
+                    BodyAppearance looks = lookup.appearanceOf(b);
                     bodies.add(new RenderBody(b.kind().ordinal(), dir.dx(), dir.dy(), dir.dz(),
                             renderDimIdOf(b), descendable, shell, radiusBlocks,
-                            RenderBody.NO_PARENT));
+                            RenderBody.NO_PARENT, looks.texture().toString(), looks.tint()));
                 }
             }
             byDim.put(slotDim, linkMoonsToTheirParents(found, bodies));
@@ -200,8 +204,19 @@ public final class SystemBodiesProducer {
         if (reg == null || stack == null) {
             return new LinkedHashMap<>();
         }
-        return buildByDim(stack.manager.loadedCells(), stack.ledger.snapshot(),
-                reg::skyBodiesAt, reg, SpaceSubsystem.spaceClock());
+        BodyLookup lookup = new BodyLookup() {
+            @Override
+            public List<SystemBody> skyBodiesAt(GalacticCoord cell) {
+                return reg.skyBodiesAt(cell);
+            }
+
+            @Override
+            public BodyAppearance appearanceOf(SystemBody body) {
+                return BodyAppearance.of(body, reg);
+            }
+        };
+        return buildByDim(stack.manager.loadedCells(), stack.ledger.snapshot(), lookup, reg,
+                SpaceSubsystem.spaceClock());
     }
 
     /** Build the live packet from the production cell bindings + universe registry, or an empty packet. */
@@ -313,7 +328,7 @@ public final class SystemBodiesProducer {
                     ? primaryByCell.get(parentCellKeyOf(b.name())) : null;
             linked.add(parent == null ? r
                     : new RenderBody(r.kindOrdinal, r.localX, r.localY, r.localZ, r.dimId,
-                            r.descendTarget, r.boundaryRadius, r.radiusBlocks, parent));
+                            r.descendTarget, r.boundaryRadius, r.radiusBlocks, parent, r.texture, r.tint));
         }
         return linked;
     }

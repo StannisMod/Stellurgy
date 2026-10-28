@@ -236,6 +236,16 @@ of CON-C14-09's vector.
   that overlaps another on the screen covers it exactly when it is nearer. In the feed's own order a
   moon behind its planet was painted over it. Unpinned: the order is visible only on screen, and no
   client record carries it.
+- **CON-C14-22 (every body is drawn as what it is)** `[V][BEH]` The server chooses each fed body's
+  picture and tint (`space/BodyAppearance#of`, carried as `RenderBody.texture` / `tint`), because it alone
+  knows every body: a star is the sun picture in its own colour (`StellarBody#getColor`), a black hole its
+  own picture; a realized world its properties' icon (`DimensionProperties#getPlanetIcon`); a belt the
+  asteroid picture; and a world nobody has landed on the icon of the profile a descent would materialize
+  (`UniverseRegistry#profileOf`), by the same rule (`PlanetIcons#forClimate`), so it looks in the sky as it
+  will once somebody has. A body its system cannot place is drawn with the unknown-world picture and the
+  server log says which. The client draws what it is sent; it no longer looks a picture up through a
+  dimension, which found none for a star or an unvisited world and drew a bare quad for almost every body.
+  Unpinned: no test reads the pictures the feed carries.
 
 ## Open — do not read as settled
 

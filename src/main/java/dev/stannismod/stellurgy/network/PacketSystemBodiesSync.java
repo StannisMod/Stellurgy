@@ -16,8 +16,8 @@ import java.util.Map;
 /**
  * Server&rarr;client render channel telling the client, PER SLOT DIM, which bodies to render around a
  * settled ship: the descent boundary and any nearby descend targets. This is the shared render feed for
- * the space-subsystem sky &mdash; the client draws a billboard per body (looked up from the already-synced
- * {@code DimensionProperties} via {@code dimId}) and highlights the ones flagged {@code descendTarget}.
+ * the space-subsystem sky &mdash; the client draws a billboard per body with the picture and tint the
+ * server chose for it, and highlights the ones flagged {@code descendTarget}.
  *
  * <p>Presence is the gate: a body only appears here if the server chose to send it, so there is NO
  * discovery / {@code isSystemKnown} check on this channel &mdash; every field is render-facing. The
@@ -30,7 +30,8 @@ import java.util.Map;
  * {@code writeInt(slotDimId)}, {@code writeInt(bodyCount)} and, per body,
  * {@code writeInt(kindOrdinal)}, {@code writeLong(localX)}, {@code writeLong(localY)},
  * {@code writeLong(localZ)}, {@code writeInt(dimId)}, {@code writeBoolean(descendTarget)},
- * {@code writeLong(boundaryRadius)}, {@code writeLong(radiusBlocks)}, {@code writeInt(parentIndex)};
+ * {@code writeLong(boundaryRadius)}, {@code writeLong(radiusBlocks)}, {@code writeInt(parentIndex)},
+ * {@code writeString(texture)}, {@code writeInt(tint)};
  * then the NEBULA half, {@code writeInt(dimCount)} and, per dim,
  * {@code writeInt(slotDimId)}, {@code writeInt(nebulaCount)} and, per cloud,
  * {@code writeFloat(dirX/dirY/dirZ)}, {@code writeFloat(angularRadius)},
@@ -97,9 +98,21 @@ public final class PacketSystemBodiesSync extends BasePacket {
          */
         public final int parentIndex;
 
+        /**
+         * The picture to draw the body with, as a resource location — chosen by the server
+         * ({@code space.BodyAppearance}), which alone knows every body: a star by its own light, a world
+         * nobody has landed on by the profile a descent would materialize. The client has neither.
+         */
+        public final String texture;
+
+        /** The colour {@link #texture} is multiplied by, {@code 0xRRGGBB} — a star's own colour. */
+        public final int tint;
+
         public RenderBody(int kindOrdinal, long localX, long localY, long localZ, int dimId,
                           boolean descendTarget, long boundaryRadius, long radiusBlocks,
-                          int parentIndex) {
+                          int parentIndex, String texture, int tint) {
+            this.texture = texture;
+            this.tint = tint;
             this.kindOrdinal = kindOrdinal;
             this.localX = localX;
             this.localY = localY;
@@ -115,7 +128,8 @@ public final class PacketSystemBodiesSync extends BasePacket {
         public String toString() {
             return "RenderBody{kind=" + kindOrdinal + ",dir=" + localX + "," + localY + "," + localZ
                     + ",dim=" + dimId + ",descend=" + descendTarget + ",shell=" + boundaryRadius
-                    + ",r=" + radiusBlocks + ",parent=" + parentIndex + "}";
+                    + ",r=" + radiusBlocks + ",parent=" + parentIndex + ",texture=" + texture
+                    + ",tint=" + Integer.toHexString(tint) + "}";
         }
     }
 
@@ -236,6 +250,8 @@ public final class PacketSystemBodiesSync extends BasePacket {
                 buffer.writeLong(b.boundaryRadius);
                 buffer.writeLong(b.radiusBlocks);
                 buffer.writeInt(b.parentIndex);
+                buffer.writeString(b.texture);
+                buffer.writeInt(b.tint);
             }
         }
         buffer.writeInt(nebulaeByDim.size());
@@ -273,8 +289,10 @@ public final class PacketSystemBodiesSync extends BasePacket {
                 long boundaryRadius = buffer.readLong();
                 long radiusBlocks = buffer.readLong();
                 int parentIndex = buffer.readInt();
+                String texture = buffer.readString(Short.MAX_VALUE);
+                int tint = buffer.readInt();
                 bodies.add(new RenderBody(kindOrdinal, localX, localY, localZ, dimId, descendTarget,
-                        boundaryRadius, radiusBlocks, parentIndex));
+                        boundaryRadius, radiusBlocks, parentIndex, texture, tint));
             }
             decoded.put(slotDimId, bodies);
         }

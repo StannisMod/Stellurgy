@@ -31,7 +31,9 @@ reused here verbatim over the wire.
 
 The packet inventory (class, direction, payload shape) is `C2-network-wire`'s consolidated packet table; this doc owns
 what the dispatch does with them (MECH-NW-*). On a REMOTE client the `PacketDimInfo` delete signal also withdraws the Forge
-registration (`DimensionManager#withdrawDimension`; dimension-planets).
+registration (`DimensionManager#withdrawDimension`; dimension-planets). `PacketSystemBodiesSync` carries each sky
+body's picture and tint as the SERVER chose them (`BodyAppearance#of`, `CON-C14-22`): the client resolves no appearance
+of its own, because only the server knows a body nobody has landed on. `[V]`
 
 ## Mechanics
 

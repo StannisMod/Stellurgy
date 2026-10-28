@@ -894,35 +894,10 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         }
 
-        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
-        Temps tempType = Temps.getTempFromValue(getAverageTemp());
-
         if (isStar() && getStarData().isBlackHole())
             return TextureResources.locationBlackHole_icon;
 
-        if (isGasGiant())
-            return PlanetIcons.GASGIANTBLUE.resource;
-
-        if (isAsteroid())
-            return PlanetIcons.ASTEROID.resource;
-
-        if (tempType == Temps.TOOHOT)
-            return PlanetIcons.MARSLIKE.resource;
-        if (atmType != AtmosphereTypes.NONE && VulpineMath.isBetween(tempType.ordinal(), Temps.COLD.ordinal(), Temps.TOOHOT.ordinal()))
-            return PlanetIcons.EARTHLIKE.resource;//TODO: humidity
-        else if (tempType.compareTo(Temps.COLD) > 0)
-            if (atmType.compareTo(AtmosphereTypes.LOW) > 0)
-                return PlanetIcons.MOON.resource;
-            else
-                return PlanetIcons.ICEWORLD.resource;
-        else if (atmType.compareTo(AtmosphereTypes.LOW) > 0) {
-
-            if (tempType.compareTo(Temps.COLD) < 0)
-                return PlanetIcons.MARSLIKE.resource;
-            else
-                return PlanetIcons.MOON.resource;
-        } else
-            return PlanetIcons.LAVA.resource;
+        return PlanetIcons.forClimate(isGasGiant(), isAsteroid(), getAtmosphereDensity(), getAverageTemp()).resource;
     }
 
     /**
@@ -3141,6 +3116,40 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         private ResourceLocation resource;
         private ResourceLocation resourceLEO;
+
+        /**
+         * The picture of a world from its kind and climate — the one rule for it, asked of a realized world's
+         * properties and of a procedural body's derived profile alike, so a world nobody has landed on looks
+         * in the sky as it will once somebody has.
+         *
+         * @param atmosphereDensity the air's total pressure, in the units {@link #getAtmosphereDensity} reads
+         * @param averageTemp       the average temperature, in the units {@link #getAverageTemp} reads
+         */
+        public static PlanetIcons forClimate(boolean gasGiant, boolean asteroid, int atmosphereDensity,
+                                             int averageTemp) {
+            if (gasGiant)
+                return GASGIANTBLUE;
+            if (asteroid)
+                return ASTEROID;
+            AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+            Temps tempType = Temps.getTempFromValue(averageTemp);
+            if (tempType == Temps.TOOHOT)
+                return MARSLIKE;
+            if (atmType != AtmosphereTypes.NONE && VulpineMath.isBetween(tempType.ordinal(), Temps.COLD.ordinal(), Temps.TOOHOT.ordinal()))
+                return EARTHLIKE;//TODO: humidity
+            else if (tempType.compareTo(Temps.COLD) > 0)
+                if (atmType.compareTo(AtmosphereTypes.LOW) > 0)
+                    return MOON;
+                else
+                    return ICEWORLD;
+            else if (atmType.compareTo(AtmosphereTypes.LOW) > 0) {
+                if (tempType.compareTo(Temps.COLD) < 0)
+                    return MARSLIKE;
+                else
+                    return MOON;
+            } else
+                return LAVA;
+        }
 
         PlanetIcons(ResourceLocation resource) {
             this.resource = resource;

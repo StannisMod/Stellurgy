@@ -1179,6 +1179,21 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /**
+     * What {@code body} IS as a descent would materialize it — {@link #derivedProfileOf} with its anchor,
+     * variant and star resolved from the body itself; empty when its system cannot place it (no anchor,
+     * no star, or a family the body's identity does not single out).
+     */
+    public Optional<BodyProfile> profileOf(SystemBody body) {
+        OptionalInt variant = variantOf(body);
+        Optional<GalacticCoord> anchor = anchorForCell(body.name());
+        Optional<StellarBody> star = starAt(body.name());
+        if (!variant.isPresent() || !anchor.isPresent() || !star.isPresent()) {
+            return Optional.empty();
+        }
+        return Optional.of(derivedProfileOf(anchor.get(), body, variant.getAsInt(), star.get()));
+    }
+
+    /**
      * The realized dimension of a PARTICULAR body of {@code bodyCell}, named by its variant.
      *
      * <p>It used to answer for the first realized body of the cell, whatever was asked - so once a
