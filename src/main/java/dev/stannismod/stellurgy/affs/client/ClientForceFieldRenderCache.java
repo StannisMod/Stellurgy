@@ -87,14 +87,20 @@ public final class ClientForceFieldRenderCache {
     }
 
     /** A client-side source that reports its world centre through a resolved frame (identity standalone,
-     *  ship-transformed on a VS hull), so the render mesh follows the flying hull. */
+     *  ship-transformed on a VS hull), so the render mesh follows the flying hull.
+     *
+     *  <p>The centre is resolved once, when the source is built for a draw: the mesh asks for it at every
+     *  corner of every grid cell, and through a ship's frame each ask is a lookup of the ship and a pose
+     *  transform — measured 2026-10-28 at about 70 000 a frame for Ship 1's two emitters, 6 FPS aboard.</p> */
     private static final class FramedSource implements FieldSource {
         private final FieldSource delegate;
-        private final FieldFrame frame;
+        private final Vec3d center;
 
         private FramedSource(FieldSource delegate, FieldFrame frame) {
             this.delegate = delegate;
-            this.frame = frame;
+            net.minecraft.util.math.BlockPos pos = delegate.getPos();
+            Vec3d c = frame.fieldToWorld(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D);
+            this.center = c != null ? c : new Vec3d(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D);
         }
 
         @Override
@@ -109,8 +115,7 @@ public final class ClientForceFieldRenderCache {
 
         @Override
         public Vec3d getWorldCenter() {
-            Vec3d c = frame.fieldToWorld(getPos().getX() + 0.5D, getPos().getY() + 0.5D, getPos().getZ() + 0.5D);
-            return c != null ? c : new Vec3d(getPos().getX() + 0.5D, getPos().getY() + 0.5D, getPos().getZ() + 0.5D);
+            return center;
         }
     }
 
