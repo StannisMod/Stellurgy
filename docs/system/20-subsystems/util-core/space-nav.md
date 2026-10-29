@@ -35,11 +35,11 @@ small state carriers.
 - **MECH-NAV-02 — distance & vectors.** `distanceToSpacePosition2` (squared Euclid),
   `getNormalVectorTo` (unit vector), `getFromSpherical(radius,theta)` (polar offset in the
   x/z plane, y preserved, context carried). `SpacePosition.java:16-96`.
-- **MECH-NAV-03 — orbital formulas.** `getBodySizeMultiplier` (AU/dist),
-  `getMoonSizeMultiplier` (100/`moonViewUnits`) — and `moonViewUnits(d) = 150 × d /
-  MOON_REFERENCE_UNITS`, the ONE reference every moon-level view reads a moon's distance through, so
-  Luna shows as she did at 150 and other moons in proportion (ruling 2026-09-30;
-  `AstronomicalBodyHelper.java:239-304`) `[T]` `AstronomicalBodyHelperTest`,
+- **MECH-NAV-03 — orbital formulas.** `moonViewUnits(d) = 150 × d / MOON_REFERENCE_UNITS`, the ONE
+  reference every moon-level map and selector view reads a moon's distance through, so Luna stands where
+  she stood at 150 and other moons in proportion (`AstronomicalBodyHelper.java`); `stationAltitudeKm`, a
+  station's altitude in km from its orbital distance, read by its controller and its sky (no sky sizes a
+  body by a multiplier any more — client-render MECH-CLR-32),
   `getOrbitalPeriod`/`getMoonOrbitalPeriod` (Kepler-ish `∝ dist^1.5`),
   `getOrbitalTheta`/`getMoonOrbitalTheta` (current angle from universal world time),
   `getParentPlanetThetaFromMoon` (render-side apparent angle). `AstronomicalBodyHelper.java:13-88`.

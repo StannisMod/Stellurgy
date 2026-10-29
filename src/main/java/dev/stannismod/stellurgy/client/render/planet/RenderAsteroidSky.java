@@ -146,38 +146,72 @@ public class RenderAsteroidSky extends IRenderHandler {
                 d0 *= d4;
                 d1 *= d4;
                 d2 *= d4;
-                double d5 = d0 * 100.0D;
-                double d6 = d1 * 100.0D;
-                double d7 = d2 * 100.0D;
-                double d8 = Math.atan2(d0, d2);
-                double d9 = Math.sin(d8);
-                double d10 = Math.cos(d8);
-                double d11 = Math.atan2(Math.sqrt(d0 * d0 + d2 * d2), d1);
-                double d12 = Math.sin(d11);
-                double d13 = Math.cos(d11);
-                double d14 = random.nextDouble() * Math.PI * 2.0D;
-                double d15 = Math.sin(d14);
-                double d16 = Math.cos(d14);
+                double[] centre = {d0 * 100.0D, d1 * 100.0D, d2 * 100.0D};
+                double spin = random.nextDouble() * Math.PI * 2.0D;
 
                 float r = random.nextFloat() * 0.05f + .95f;
                 float g = random.nextFloat() * 0.1f + .9f;
                 float b = random.nextFloat() * 0.1f + .9f;
 
-                for (int j = 0; j < 4; ++j) {
-                    double d17 = 0.0D;
-                    double d18 = (double) ((j & 2) - 1) * size;
-                    double d19 = (double) ((j + 1 & 2) - 1) * size;
-                    double d20 = d18 * d16 - d19 * d15;
-                    double d21 = d19 * d16 + d18 * d15;
-                    double d22 = d20 * d12 + d17 * d13;
-                    double d23 = d17 * d12 - d20 * d13;
-                    double d24 = d23 * d9 - d21 * d10;
-                    double d25 = d21 * d9 + d23 * d10;
-                    buffer.pos(d5 + d24, d6 + d22, d7 + d25).tex(d18 / (size * 2) + .5, d19 / (size * 2) + .5).color(r, g, b, 1f).endVertex();
-                }
+                emitAsteroid(buffer, centre, size, spin, r, g, b);
             }
         }
         Tessellator.getInstance().draw();
+    }
+
+    /** Rings and segments of one asteroid's hemisphere: coarse, because two hundred are baked at once. */
+    private static final int ASTEROID_RINGS = 3;
+    private static final int ASTEROID_SEGMENTS = 8;
+
+    /**
+     * One asteroid as the camera-facing hemisphere of a sphere of {@code radius} at {@code centre}, its
+     * sprite projected onto it and turned by {@code spin}. Wound as {@link SkySphere#emitFacingHemisphere}
+     * is, with the frame (u, v, -n) right-handed, so it is front-facing to the camera at the origin.
+     */
+    private static void emitAsteroid(BufferBuilder buffer, double[] centre, double radius, double spin,
+                                     float r, float g, float b) {
+        double len = Math.sqrt(centre[0] * centre[0] + centre[1] * centre[1] + centre[2] * centre[2]);
+        double[] n = {-centre[0] / len, -centre[1] / len, -centre[2] / len};
+        double[] up = Math.abs(n[1]) > 0.9D ? new double[] {1, 0, 0} : new double[] {0, 1, 0};
+        double[] u0 = normalize(cross(n, up));
+        double[] v0 = cross(u0, n);
+        double[] u = new double[3];
+        for (int k = 0; k < 3; k++) {
+            u[k] = Math.cos(spin) * u0[k] + Math.sin(spin) * v0[k];
+        }
+        double[] v = cross(u, n);
+        for (int ring = 0; ring < ASTEROID_RINGS; ring++) {
+            double inner = (Math.PI / 2.0D) * ring / ASTEROID_RINGS;
+            double outer = (Math.PI / 2.0D) * (ring + 1) / ASTEROID_RINGS;
+            for (int seg = 0; seg < ASTEROID_SEGMENTS; seg++) {
+                double from = 2.0D * Math.PI * seg / ASTEROID_SEGMENTS;
+                double to = 2.0D * Math.PI * (seg + 1) / ASTEROID_SEGMENTS;
+                asteroidVertex(buffer, centre, radius, u, v, n, inner, from, r, g, b);
+                asteroidVertex(buffer, centre, radius, u, v, n, inner, to, r, g, b);
+                asteroidVertex(buffer, centre, radius, u, v, n, outer, to, r, g, b);
+                asteroidVertex(buffer, centre, radius, u, v, n, outer, from, r, g, b);
+            }
+        }
+    }
+
+    private static void asteroidVertex(BufferBuilder buffer, double[] c, double radius, double[] u, double[] v,
+                                       double[] n, double polar, double around, float r, float g, float b) {
+        double x = Math.sin(polar) * Math.cos(around);
+        double y = Math.sin(polar) * Math.sin(around);
+        double z = Math.cos(polar);
+        buffer.pos(c[0] + radius * (x * u[0] + y * v[0] + z * n[0]),
+                        c[1] + radius * (x * u[1] + y * v[1] + z * n[1]),
+                        c[2] + radius * (x * u[2] + y * v[2] + z * n[2]))
+                .tex(0.5D + 0.5D * x, 0.5D + 0.5D * y).color(r, g, b, 1f).endVertex();
+    }
+
+    private static double[] cross(double[] a, double[] b) {
+        return new double[] {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
+    }
+
+    private static double[] normalize(double[] a) {
+        double len = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+        return new double[] {a[0] / len, a[1] / len, a[2] / len};
     }
 
     private void renderStars() {
@@ -482,12 +516,8 @@ public class RenderAsteroidSky extends IRenderHandler {
             GL11.glTranslated(0, -10, 0);
 
             GlStateManager.color(ringColor[0], ringColor[1], ringColor[2], multiplier);
-            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-            buffer.pos(f10, ringDist, -f10).tex(1.0D, 0.0D).endVertex();
-            buffer.pos(-f10, ringDist, -f10).tex(0.0D, 0.0D).endVertex();
-            buffer.pos(-f10, ringDist, f10).tex(0.0D, 1.0D).endVertex();
-            buffer.pos(f10, ringDist, f10).tex(1.0D, 1.0D).endVertex();
-            Tessellator.getInstance().draw();
+            GL11.glTranslated(0, ringDist, 0);
+            SkySphere.emitDisc(buffer, f10);
             GL11.glPopMatrix();
 
             // (Shadowed ring quad code left as in original)
@@ -690,29 +720,25 @@ public class RenderAsteroidSky extends IRenderHandler {
      * sky draws across a moon's orbit — at {@code moonOrbitalDistance} apart, in distance units.
      */
     protected void renderPlanet(BufferBuilder buffer, DimensionProperties properties, long moonOrbitalDistance, float alphaMultiplier, double shadowAngle, boolean hasAtmosphere, boolean hasRing, float radiusEarths, float[] shadowColorMultiplier, float alphaMultiplier2) {
-        // Size is the body's OWN radius over the distance to it. It used to be its surface GRAVITY
-        // over that distance, which drew two worlds of equal size at different sizes and two worlds
-        // of different size at the same one whenever their densities happened to agree. The scale
-        // constant is unchanged, so a body of one Earth radius draws exactly as it always did.
-        renderPlanet2(buffer, properties, 20f * AstronomicalBodyHelper.getMoonSizeMultiplier(moonOrbitalDistance) * radiusEarths, alphaMultiplier, shadowAngle, hasRing, shadowColorMultiplier, alphaMultiplier2);
+        if (radiusEarths <= 0f) {
+            String name = properties == null ? "?" : properties.getName();
+            if (reportedSizeless.add(name)) {
+                dev.stannismod.stellurgy.Stellurgy.logger.warn("[SKY] {} has no stated radius; the sky does"
+                        + " not draw it — a world must not be drawn at a size nobody stated", name);
+            }
+            return;
+        }
+        RenderPlanetarySky.renderPlanetPubHelper(buffer, getTextureForPlanet(properties),
+                ApparentSize.halfAngleFor(radiusEarths * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS,
+                        moonOrbitalDistance * (double) AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT,
+                        SkySphere.markerHalfAngle()),
+                alphaMultiplier, shadowAngle, properties.hasAtmosphere(), properties.skyColor,
+                properties.ringColor, hasRing, properties.ringAngle, properties.hasDecorators(),
+                shadowColorMultiplier, alphaMultiplier2, currentplanetphi, xrotangle);
     }
 
-    protected void renderPlanet2(BufferBuilder buffer, DimensionProperties properties, float size, float alphaMultiplier, double shadowAngle, boolean hasRing, float[] shadowColorMultiplier, float alphaMultiplier2) {
-        ResourceLocation icon = getTextureForPlanet(properties);
-        boolean hasAtmosphere = properties.hasAtmosphere();
-        boolean hasDecorators = properties.hasDecorators();
-        boolean gasGiant = properties.isGasGiant();
-        float[] skyColor = properties.skyColor;
-        float[] ringColor = properties.ringColor;
-
-        RenderPlanetarySky.renderPlanetPubHelper(
-                buffer, icon, 0, 0, -20,
-                size * 0.2f, alphaMultiplier, shadowAngle,
-                hasAtmosphere, skyColor, ringColor, gasGiant, hasRing, properties.ringAngle,
-                hasDecorators, shadowColorMultiplier, alphaMultiplier2,
-                currentplanetphi, xrotangle
-        );
-    }
+    /** Worlds this sky could not draw because nobody stated their radius, reported once each. */
+    private final java.util.Set<String> reportedSizeless = new java.util.HashSet<>();
 
     protected Vector3F<Float> getRotateAxis() {
         return axis;
@@ -744,21 +770,23 @@ public class RenderAsteroidSky extends IRenderHandler {
         if (sun != null && sun.isBlackHole()) {
             GlStateManager.enableAlpha();
             GlStateManager.alphaFunc(GL11.GL_GREATER, 0.01f);
-            float f10;
             GL11.glPushMatrix();
             GL11.glTranslatef(0, 30, 0);
 
             GL11.glDisable(GL11.GL_BLEND);
             GlStateManager.depthMask(true);
 
-            // Black hole sphere
+            // The hole at its TRUE angle, and its disks in proportion to it.
+            double coreAngle = RenderPlanetarySky.starHalfAngle(sun, solarOrbitalDistance);
+            double holeCentre = SkySphere.centreDistance(coreAngle, 130.0D) - 30.0D;
+            double core = (holeCentre + 30.0D) * Math.sin(coreAngle);
+
             GL11.glPushMatrix();
-            GL11.glTranslatef(0, 100, 0);
-            f10 = sunSize * 2f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
+            GL11.glTranslated(0, holeCentre, 0);
             bind(TextureResources.locationWhitePng);
             GlStateManager.disableCull();
             GlStateManager.color(skycolor[0], skycolor[1], skycolor[2]);
-            renderSphere(0, 0, 0, f10, 16, 16);
+            renderSphere(0, 0, 0, (float) core, 16, 16);
             GlStateManager.enableCull();
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glDepthMask(false);
@@ -775,18 +803,11 @@ public class RenderAsteroidSky extends IRenderHandler {
             GlStateManager.disableCull();
 
             GL11.glPushMatrix();
-            GL11.glTranslatef(0, 100, 0);
+            GL11.glTranslated(0, holeCentre, 0);
             GL11.glRotatef(90, 0f, 1f, 0f);
-            // Original rotation with speedMult = 5
             GL11.glRotatef((System.currentTimeMillis() % (int) (360 * 360 * 5)) / (360f * 5), 0, 1, 0);
             GlStateManager.color(1f, .7f, .55f, 1f);
-            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-            f10 = sunSize * 6.5f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
-            buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
-            buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
-            buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
-            buffer.pos(-f10, 0.0D, f10).tex(0.0D, 1.0D).endVertex();
-            Tessellator.getInstance().draw();
+            SkySphere.emitDisc(buffer, core * 3.25D);
             GL11.glPopMatrix();
 
             // Outer translucent disks - COMPLEX ORIGINAL LOGIC
@@ -796,8 +817,7 @@ public class RenderAsteroidSky extends IRenderHandler {
 
                 // First layer - 100.01f
                 GL11.glPushMatrix();
-                GL11.glTranslatef(0, 100.01f, 0);
-                // RESTORE ALL ORIGINAL ROTATIONS:
+                GL11.glTranslated(0, holeCentre + 0.01D, 0);
                 GL11.glRotatef((float) currentplanetphi, 0f, 1f, 0f);
                 GL11.glRotatef(m, 1f, 0f, 0f);
                 GL11.glRotatef(diskangle, 0, 0, 1);
@@ -806,18 +826,12 @@ public class RenderAsteroidSky extends IRenderHandler {
                 GL11.glRotatef(0.5f, 1, 0, 0);
 
                 GlStateManager.color(1f, .5f, .4f, 0.3f);
-                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 40f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
-                buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
-                buffer.pos(-f10, 0.0D, f10).tex(0.0D, 1.0D).endVertex();
-                Tessellator.getInstance().draw();
+                SkySphere.emitDisc(buffer, core * 20.0D);
                 GL11.glPopMatrix();
 
-                // Second layer - 100f
+                // Second layer
                 GL11.glPushMatrix();
-                GL11.glTranslatef(0, 100f, 0);
+                GL11.glTranslated(0, holeCentre, 0);
                 GL11.glRotatef((float) currentplanetphi, 0f, 1f, 0f);
                 GL11.glRotatef(m, 1f, 0f, 0f);
                 GL11.glRotatef(diskangle, 0, 0, 1);
@@ -826,18 +840,12 @@ public class RenderAsteroidSky extends IRenderHandler {
                 GL11.glRotatef(0.5f, 1, 0, 0);
 
                 GlStateManager.color(0.8f, .7f, .4f, 0.3f);
-                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 30f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
-                buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
-                buffer.pos(-f10, 0.0D, f10).tex(0.0D, 1.0D).endVertex();
-                Tessellator.getInstance().draw();
+                SkySphere.emitDisc(buffer, core * 15.0D);
                 GL11.glPopMatrix();
 
-                // Third layer - 99.99f  
+                // Third layer
                 GL11.glPushMatrix();
-                GL11.glTranslatef(0, 99.99f, 0);
+                GL11.glTranslated(0, holeCentre - 0.01D, 0);
                 GL11.glRotatef((float) currentplanetphi, 0f, 1f, 0f);
                 GL11.glRotatef(m, 1f, 0f, 0f);
                 GL11.glRotatef(diskangle, 0, 0, 1);
@@ -846,13 +854,7 @@ public class RenderAsteroidSky extends IRenderHandler {
                 GL11.glRotatef(0.5f, 1, 0, 0);
 
                 GlStateManager.color(0.2f, .4f, 1f, 0.3f);
-                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 15f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
-                buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
-                buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
-                buffer.pos(-f10, 0.0D, f10).tex(0.0D, 1.0D).endVertex();
-                Tessellator.getInstance().draw();
+                SkySphere.emitDisc(buffer, core * 7.5D);
                 GL11.glPopMatrix();
             }
 
@@ -864,34 +866,16 @@ public class RenderAsteroidSky extends IRenderHandler {
             GL11.glPopMatrix();
             GlStateManager.enableCull();
             //GlStateManager.depthMask(true); // keep ?
-        } else {
-            // Regular star (quad) path
+        } else if (sun != null) {
             bind(TextureResources.locationSunPng);
             GlStateManager.color((float) sunColor.x, (float) sunColor.y, (float) sunColor.z, Math.min((multiplier) * 2f, 1f));
-            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-            float f10 = sunSize * 15f * AstronomicalBodyHelper.getBodySizeMultiplier(solarOrbitalDistance);
-            buffer.pos(-f10, 120.0D, -f10).tex(0.0D, 0.0D).endVertex();
-            buffer.pos(f10, 120.0D, -f10).tex(1.0D, 0.0D).endVertex();
-            buffer.pos(f10, 120.0D, f10).tex(1.0D, 1.0D).endVertex();
-            buffer.pos(-f10, 120.0D, f10).tex(0.0D, 1.0D).endVertex();
-            Tessellator.getInstance().draw();
+            RenderPlanetarySky.drawStarSphere(buffer, RenderPlanetarySky.starHalfAngle(sun, solarOrbitalDistance),
+                    120.0D, sun.getColor());
         }
     }
 
-    /**
-     * The radius a SKY draws this body at, in Earth radii — its stated radius, or one Earth radius
-     * when nobody has stated one.
-     *
-     * <p>The fallback is the same reading the orbital maths already takes ({@code getMoonOrbitalPeriod}:
-     * a body with no stated bulk is a body assumed to be one Earth radius across), and it is what keeps
-     * every authored planet looking exactly as it did before bodies had sizes. The alternative —
-     * treating an unset radius as zero — would make every un-edited world vanish from every sky.</p>
-     */
+    /** As {@link RenderPlanetarySky#skyRadiusEarths}: a stated radius, or zero, which is not drawn. */
     protected static float skyRadiusEarths(DimensionProperties properties) {
-        if (properties == null) {
-            return 1f;
-        }
-        double r = properties.getRadius();
-        return r > 0d ? (float) r : 1f;
+        return RenderPlanetarySky.skyRadiusEarths(properties);
     }
 }

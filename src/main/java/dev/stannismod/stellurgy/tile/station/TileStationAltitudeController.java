@@ -111,8 +111,10 @@ public class TileStationAltitudeController extends TileEntity implements IModula
                 }
 
                 // Compute display keys (Km as ints)
-                int curAltKm = (int)Math.round(cached.getOrbitalDistance() * 200.0 + 100.0);
-                int tgtAltKm = cached.targetOrbitalDistance * 200 + 100;
+                int curAltKm = (int) Math.round(dev.stannismod.stellurgy.util.AstronomicalBodyHelper
+                        .stationAltitudeKm(cached.getOrbitalDistance()));
+                int tgtAltKm = (int) Math.round(dev.stannismod.stellurgy.util.AstronomicalBodyHelper
+                        .stationAltitudeKm(cached.targetOrbitalDistance));
 
                 // Update only when the visible value changes
                 if (curAltKm != lastAltKm) {

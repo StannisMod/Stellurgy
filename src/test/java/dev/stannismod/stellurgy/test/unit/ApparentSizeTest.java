@@ -19,6 +19,27 @@ public class ApparentSizeTest {
     /** A constant: a primitive. An Earth's radius in the chart blocks the feed sends. */
     private static final double EARTH_R = AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
 
+    /** A constant: a primitive. The floor on a 1377-pixel-tall frame showing Minecraft's default 70 degrees. */
+    private static final double FLOOR = ApparentSize.markerHalfAngle(70.0d, 1377);
+
+    /**
+     * This test fails if {@code ApparentSize#markerHalfAngle} stops deciding that the floor is a couple of
+     * PIXELS of the screen — and grows into a size that swallows a real disc: the Sun seen from Earth, half
+     * a degree across, about ten pixels, must be drawn at its true angle and not at the floor.
+     */
+    @Pins("CON-C14-16")
+    @RedWitness(member = "ApparentSize#markerHalfAngle", at = "(MARKER_DIAMETER_PIXELS / 2.0d)",
+            replacedBy = "(MARKER_DIAMETER_PIXELS * 20.0d)",
+            fails = "the Sun seen from Earth is drawn at its true angle", on = "2026-10-29")
+    @Test
+    public void theSunSeenFromEarthIsADiscAtItsTrueAngleNotAMarker() {
+        double sunRadius = AstronomicalBodyHelper.EARTH_RADII_PER_SOLAR_RADIUS * EARTH_R;
+        double oneAu = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * (double) AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
+        double truth = Math.asin(sunRadius / oneAu);
+        assertEquals("the Sun seen from Earth is drawn at its true angle", truth,
+                ApparentSize.halfAngleFor(sunRadius, oneAu, FLOOR), 1e-12);
+    }
+
     /**
      * This test fails if {@code ApparentSize#halfAngleFor} stops deciding that a body near enough to
      * show its size is drawn at the angle it truly subtends: an Earth seen from twice its descent shell —
@@ -36,9 +57,9 @@ public class ApparentSizeTest {
         for (double d : new double[] {2d * shell, shell, 10d * shell, 50d * shell}) {
             double truth = Math.asin(EARTH_R / d);
             dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("the true angle at " + d
-                    + " blocks must be above the floor", truth > ApparentSize.MIN_HALF_ANGLE);
+                    + " blocks must be above the floor", truth > FLOOR);
             assertEquals("a body near enough to show its size is drawn at the angle it truly subtends (at "
-                    + d + " blocks)", truth, ApparentSize.halfAngleFor(EARTH_R, d), 1e-9);
+                    + d + " blocks)", truth, ApparentSize.halfAngleFor(EARTH_R, d, FLOOR), 1e-9);
         }
     }
 
@@ -48,16 +69,16 @@ public class ApparentSizeTest {
      */
     @Pins("CON-C14-16")
     @RedWitness(member = "ApparentSize#halfAngleFor",
-            at = "Math.max(MIN_HALF_ANGLE, Math.min(MAX_HALF_ANGLE, angle))",
+            at = "Math.max(floorHalfAngle, Math.min(MAX_HALF_ANGLE, angle))",
             replacedBy = "Math.min(MAX_HALF_ANGLE, angle)",
             fails = "a body too far to see is still drawn at the floor", on = "2026-10-28")
     @Test
     public void aBodyTooFarToSeeIsStillDrawnAtTheFloor() {
         double far = 1.0e15d;
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
-                "the true angle there must be below the floor", Math.asin(EARTH_R / far) < ApparentSize.MIN_HALF_ANGLE);
-        assertEquals("a body too far to see is still drawn at the floor", ApparentSize.MIN_HALF_ANGLE,
-                ApparentSize.halfAngleFor(EARTH_R, far), 1e-12);
+                "the true angle there must be below the floor", Math.asin(EARTH_R / far) < FLOOR);
+        assertEquals("a body too far to see is still drawn at the floor", FLOOR,
+                ApparentSize.halfAngleFor(EARTH_R, far, FLOOR), 1e-12);
     }
 
     /**
@@ -68,12 +89,12 @@ public class ApparentSizeTest {
     @RedWitness(member = "ApparentSize#halfAngleFor",
             at = "throw new IllegalArgumentException(\"a body with no radius (\" + radiusBlocks"
                     + " + \") has no angular size; it is not drawn as a sphere\");",
-            replacedBy = "return MIN_HALF_ANGLE;", fails = "a body with no radius", on = "2026-10-28")
+            replacedBy = "return floorHalfAngle;", fails = "a body with no radius", on = "2026-10-28")
     @Test
     public void aBodyWithNoRadiusHasNoAngularSize() {
         for (double r : new double[] {0d, -3d, Double.NaN}) {
             try {
-                ApparentSize.halfAngleFor(r, 100_000d);
+                ApparentSize.halfAngleFor(r, 100_000d, FLOOR);
                 org.junit.Assert.fail("a body with no radius (" + r + ") was given an angular size");
             } catch (IllegalArgumentException refused) {
                 // the decision under test
@@ -88,10 +109,10 @@ public class ApparentSizeTest {
      */
     @Test
     public void aNonsenseDistanceIsTreatedAsNearRatherThanInvisible() {
-        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, Double.NaN), 1e-12);
-        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, -5d), 1e-12);
-        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, 0d), 1e-12);
-        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, EARTH_R / 2d), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, Double.NaN, FLOOR), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, -5d, FLOOR), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, 0d, FLOOR), 1e-12);
+        assertEquals(ApparentSize.MAX_HALF_ANGLE, ApparentSize.halfAngleFor(EARTH_R, EARTH_R / 2d, FLOOR), 1e-12);
     }
 
     @Test

@@ -464,10 +464,9 @@ public class BoundarySky extends IRenderHandler {
         // its silhouette is seen at exactly `angle`. The centre moves out as the angle nears 90 degrees so
         // the near side never comes closer than one unit to the camera; the tangent circle then stays
         // within ~115 units, inside the sky pass's far plane.
-        double angle = ApparentSize.halfAngleFor(body.radiusBlocks, len);
-        double sin = Math.sin(angle);
-        double centre = Math.max(BODY_DISTANCE, 1.0D / (1.0D - sin));
-        double sphereRadius = centre * sin;
+        double angle = ApparentSize.halfAngleFor(body.radiusBlocks, len, SkySphere.markerHalfAngle());
+        double centre = SkySphere.centreDistance(angle, BODY_DISTANCE);
+        double sphereRadius = centre * Math.sin(angle);
 
         // The picture and its colour are the server's: it alone knows every body, a star's light and
         // the profile of a world nobody has landed on. Looking them up here through a dimension found
@@ -485,7 +484,13 @@ public class BoundarySky extends IRenderHandler {
         GlStateManager.rotate(yaw, 0.0F, 1.0F, 0.0F);
         GlStateManager.rotate(-pitch, 1.0F, 0.0F, 0.0F);
         GlStateManager.translate(0.0F, 0.0F, (float) centre);
-        emitFacingHemisphere(buffer, sphereRadius);
+        SkySphere.emitFacingHemisphere(buffer, sphereRadius, -1.0D);
+        if (kind == SystemBodyKind.STAR) {
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            SkySphere.emitRays(buffer, centre * Math.tan(angle), SkySphere.unitsPerPixelAt(centre), r, g, b);
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        }
 
         // The label sits just under the silhouette, at a size that reads the same at any centre distance.
         float scale = (float) (centre / BODY_DISTANCE);
@@ -494,43 +499,6 @@ public class BoundarySky extends IRenderHandler {
         return drewLabel;
     }
 
-    /** Rings from the pole facing the camera to the equator; the cap behind the silhouette is culled. */
-    private static final int SPHERE_RINGS = 12;
-    /** Segments around one ring: enough that a world filling half the sky does not read as a polygon. */
-    private static final int SPHERE_SEGMENTS = 48;
-
-    /**
-     * The hemisphere of a sphere of {@code radius}, centred at the origin, that faces the camera down -Z,
-     * with the body's picture projected onto it from the front — so the face a pilot sees is the picture
-     * he saw before, now bounded by a true sphere's silhouette.
-     *
-     * <p>Each cell is emitted in the same screen winding the flat billboard had (vanilla culls back
-     * faces in this pass), so the facets past the silhouette, which turn away, are the ones dropped.</p>
-     */
-    private static void emitFacingHemisphere(BufferBuilder buffer, double radius) {
-        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-        for (int ring = 0; ring < SPHERE_RINGS; ring++) {
-            double inner = (Math.PI / 2.0D) * ring / SPHERE_RINGS;
-            double outer = (Math.PI / 2.0D) * (ring + 1) / SPHERE_RINGS;
-            for (int seg = 0; seg < SPHERE_SEGMENTS; seg++) {
-                double from = 2.0D * Math.PI * seg / SPHERE_SEGMENTS;
-                double to = 2.0D * Math.PI * (seg + 1) / SPHERE_SEGMENTS;
-                sphereVertex(buffer, radius, inner, from);
-                sphereVertex(buffer, radius, inner, to);
-                sphereVertex(buffer, radius, outer, to);
-                sphereVertex(buffer, radius, outer, from);
-            }
-        }
-        Tessellator.getInstance().draw();
-    }
-
-    /** One point at polar angle {@code polar} from the camera-facing pole, around it at {@code around}. */
-    private static void sphereVertex(BufferBuilder buffer, double radius, double polar, double around) {
-        double x = Math.sin(polar) * Math.cos(around);
-        double y = Math.sin(polar) * Math.sin(around);
-        buffer.pos(radius * x, radius * y, -radius * Math.cos(polar))
-                .tex(0.5D + 0.5D * x, 0.5D - 0.5D * y).endVertex();
-    }
 
     /**
      * Write the body's name and the range still to fly under the billboard, inside the

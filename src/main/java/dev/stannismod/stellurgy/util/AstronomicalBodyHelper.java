@@ -282,51 +282,12 @@ public class AstronomicalBodyHelper {
     public static final double SECONDS_PER_TICK = 86_400d / TICKS_PER_DAY;
 
     /**
-     * The size multiplier for a body seen from {@code orbitalDistance} away, relative to one AU: 1 at
-     * one AU, 2 at half an AU. A moon and its planet, seen from each other, are sized by
-     * {@link #getMoonSizeMultiplier} instead.
-     *
-     * @param orbitalDistance the distance, in distance units ({@link #DISTANCE_UNITS_PER_AU} to the AU)
-     * @return the float multiplier for size
+     * A station's altitude above the body it orbits, in kilometres, from its {@code orbitalDistance} — the
+     * one reading of that number: the altitude controller shows it to the player, and the station's sky
+     * draws the world below at the angle that altitude gives.
      */
-    public static float getBodySizeMultiplier(float orbitalDistance) {
-        return (float) DISTANCE_UNITS_PER_AU / orbitalDistance;
-    }
-
-    /**
-     * The moon-view distance at which the sky draws a moon, or a planet seen from its moon, at its
-     * base size. It is the numerator {@link #getBodySizeMultiplier} had while a distance unit was a
-     * hundredth of an AU and a moon's distance was read through it.
-     */
-    private static final float MOON_VIEW_UNITS_AT_BASE_SKY_SIZE = 100f;
-
-    /**
-     * The size multiplier the sky draws a moon by from its planet, and the planet by from its moon:
-     * {@code 100 / moonViewUnits}, so two thirds for Luna, as before her distance was corrected, and
-     * inversely with any other moon's distance. See {@link #MOON_VIEW_UNITS_AT_LUNA}.
-     *
-     * @param moonOrbitalDistance the moon's distance from its planet, in distance units
-     */
-    public static float getMoonSizeMultiplier(long moonOrbitalDistance) {
-        return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance);
-    }
-
-    /** The height at which {@link #getSizeMultiplierAtHeight} draws a body at its base size. */
-    private static final float REFERENCE_VIEW_HEIGHT = 100f;
-
-    /**
-     * The size multiplier the low-orbit views draw a body by, from a HEIGHT rather than an orbital
-     * distance: a station's altitude, the fixed height a station sky puts its sun at, or the player's
-     * height above the horizon. {@code 100 / height}.
-     *
-     * <p>Those views used to call {@link #getBodySizeMultiplier}, whose numerator was
-     * {@link #DISTANCE_UNITS_PER_AU} and happened to be 100 while a distance unit was a hundredth of
-     * an AU. A height was never in that unit. When the unit became a length of 100 km the numerator
-     * became 1 495 979, and every body these views draw grew 14 960 times with nothing about the
-     * height having changed.</p>
-     */
-    public static float getSizeMultiplierAtHeight(float height) {
-        return REFERENCE_VIEW_HEIGHT / height;
+    public static double stationAltitudeKm(double orbitalDistance) {
+        return orbitalDistance * 200.0D + 100.0D;
     }
 
     /**

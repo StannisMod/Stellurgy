@@ -150,15 +150,19 @@ of CON-C14-09's vector.
   CON-C14-09's vector is therefore never computed over the static grid. Pinned by `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`, `SystemBodiesProducerTest#aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. FOR: CON-C14-14.
 - **CON-C14-16 (a world is a sphere at the angle it truly subtends)** `[V][BEH]` A body with a radius
   is drawn as a SPHERE whose silhouette subtends `asin(r / d)` — the true angle, with no ceiling below
-  the truth: a world a ship orbits fills half its sky, because it does. The one departure is a FLOOR
-  (`ApparentSize.MIN_HALF_ANGLE`, ~0.95°), so a real body too far to resolve is still a visible marker;
+  the truth: a world a ship orbits fills half its sky, because it does. The one departure is a FLOOR of
+  `ApparentSize.MARKER_DIAMETER_PIXELS` (2) screen pixels, computed each frame from the player's vertical
+  field of view over the frame's height, so a real body too far to resolve is still a visible marker
+  while anything a few pixels wide — the Sun seen from Earth is about ten — is drawn at its truth;
   and the representation stops at 89°, where the sphere degenerates — a ship never gets there, the
   descent fires at the shell. No body is drawn as a flat quad: a BELT is drawn as its ring round the
   star it rings (the feed's `parentIndex` names that star), a STATION as its label alone, and a sphere
   that arrived WITHOUT its radius as its label alone plus a client log line — never as a marker that
   would pass for a distant world (`ApparentSize#halfAngleFor` refuses a non-positive radius). The rule
   lives in `client/render/planet/ApparentSize`, a pure GL-free function; `BoundarySky.drawBody` draws
-  the camera-facing hemisphere with the body's picture projected onto it. Pinned by
+  the camera-facing hemisphere with the body's picture projected onto it, and a STAR also carries short
+  rays in its own colour, alternately long and short and at least six pixels long, which is what tells it
+  from a planet at any size. Pinned by `ApparentSizeTest#theSunSeenFromEarthIsADiscAtItsTrueAngleNotAMarker`,
   `ApparentSizeTest#aBodyNearEnoughToShowItsSizeIsDrawnAtItsTrueAngle`,
   `ApparentSizeTest#aBodyTooFarToSeeIsStillDrawnAtTheFloor` and, in PIXELS off the real client, by
   `BoundarySkyRendersInSlotCellTest`'s size leg, which compares two bodies of the SAME kind.

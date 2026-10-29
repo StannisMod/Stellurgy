@@ -55,68 +55,6 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * A body's apparent size falls inversely with its distance, in AU.
-     */
-    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the"
-            + " old distance unit ({@code 100 / d}, \"1 AU = 100\"), this fails at its first sample with"
-            + " \"expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;\".")
-    @Test
-    public void bodySizeMultiplierIsInverselyProportionalToDistance() {
-        // At 100 distance (1 AU equivalent) the multiplier is 1.
-        assertEquals(1.0f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU)), 1e-6);
-        // Doubling the orbital distance halves the apparent size.
-        assertEquals(0.5f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU * 2)), 1e-6);
-        // Quartering the apparent size at four times the distance — the same inverse law from the
-        // other side. Sampled at a WHOLE number of AU, because a distance unit is 100 km and an AU
-        // is an odd number of them: half an AU is not expressible, and a pin written there measures
-        // the rounding rather than the law (it came back 2.0000014 against a bar of 1e-6).
-        assertEquals(0.25f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU * 4)), 1e-6);
-    }
-
-    /**
-     * The sky draws our Moon, and Earth from the Moon, at the size it drew them while Luna stood at
-     * 150 — {@code 100 / 150} — though her distance is now her real one.
-     *
-     * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS} reads 2/3 within
-     * float rounding (1e-6). Through the planet law it reads 389; through the law as it stood before
-     * Luna's distance was corrected, 100 / 7 688.</p>
-     */
-    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at"
-            + " {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}"
-            + " replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)} (the planet law the sky used),"
-            + " this fails with \"a moon at Luna's distance must draw at 100/150"
-            + " expected:&lt;0.6666666865348816&gt; but was:&lt;389.1724853515625&gt;\".")
-    @Test
-    public void theSkyDrawsLunaAtTheSizeItDrewHerWhenSheStoodAt150() {
-        assertEquals("a moon at Luna's distance must draw at 100/150", 100f / 150f,
-                AstronomicalBodyHelper.getMoonSizeMultiplier(AstronomicalBodyHelper.MOON_REFERENCE_UNITS),
-                1e-6);
-    }
-
-    /**
-     * Any other moon is drawn in proportion to its own distance, on the same reference: a moon at
-     * half Luna's distance stands at 75 on the moon-view scale and draws at {@code 100 / 75}.
-     *
-     * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS / 2} (1 922 units,
-     * exact) reads 4/3 within 1e-6. A law that ignored the distance and drew every moon as Luna would
-     * read 2/3.</p>
-     */
-    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at"
-            + " {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}"
-            + " replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon read as Luna), this fails with"
-            + " \"a moon at half Luna's distance must draw at 100/75 expected:&lt;1.3333333730697632&gt; but"
-            + " was:&lt;0.6666666865348816&gt;\"; and with {@code AstronomicalBodyHelper#getMoonSizeMultiplier}"
-            + " at {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}"
-            + " replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)}, with \"expected:&lt;1.3333333730697632&gt;"
-            + " but was:&lt;778.344970703125&gt;\".")
-    @Test
-    public void aMoonAtHalfLunasDistanceDrawsTwiceHerSize() {
-        assertEquals("a moon at half Luna's distance must draw at 100/75", 100f / 75f,
-                AstronomicalBodyHelper.getMoonSizeMultiplier(AstronomicalBodyHelper.MOON_REFERENCE_UNITS / 2),
-                1e-6);
-    }
-
-    /**
      * One AU around one solar mass is the 48-day year.
      *
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
@@ -593,36 +531,4 @@ public class AstronomicalBodyHelperTest {
                 AstronomicalBodyHelper.getMoonOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
         assertEquals(0.0, AstronomicalBodyHelper.getMoonOrbitalThetaAt(AU, 0f, 12345L), 1e-9);
     }
-
-    /**
-     * The low-orbit views size a body by a HEIGHT — a station's altitude, the 190 a station sky puts
-     * its sun at, the player's height above the horizon — and draw it as they did before the
-     * distance unit became a length: base size at a height of 100, inversely with height.
-     *
-     * <p>Acceptance, stated before the code: 1 at 100, 100/190 at the station sky's sun height, and
-     * 0.5 at 200. The numbers are the pre-change law {@code 100 / h}, which is what these views drew
-     * while {@code getBodySizeMultiplier}'s numerator was 100; that numerator is now
-     * {@link AstronomicalBodyHelper#DISTANCE_UNITS_PER_AU}, which no height is in.</p>
-     *
-     * <p>What this does not see: that the renderers call this law. They are client GL code and no
-     * tier here reads a drawn size.</p>
-     */
-    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}"
-            + " returning {@code getBodySizeMultiplier(height)} — the form the views used before this change:"
-            + " \"size at heights 100, 190, 200: [14959.79, 7873.5737, 7479.895]: arrays first differed at"
-            + " element [0]; expected:&lt;1.0&gt; but was:&lt;14959.79&gt;\" — all three samples wrong, one"
-            + " verdict.")
-    @Test
-    public void aLowOrbitViewSizesABodyByHeightNotByTheDistanceUnit() {
-        // One verdict over the three samples. The slack is ZERO: the law is one float division,
-        // 100f / h, and each expected value is that same division (or exact in float).
-        float[] expected = {1.0f, 100f / 190f, 0.5f};
-        float[] actual = {
-                AstronomicalBodyHelper.getSizeMultiplierAtHeight(100f),
-                AstronomicalBodyHelper.getSizeMultiplierAtHeight(190f),
-                AstronomicalBodyHelper.getSizeMultiplierAtHeight(200f)};
-        org.junit.Assert.assertArrayEquals("size at heights 100, 190, 200: "
-                + java.util.Arrays.toString(actual), expected, actual, 0f);
-    }
-
 }

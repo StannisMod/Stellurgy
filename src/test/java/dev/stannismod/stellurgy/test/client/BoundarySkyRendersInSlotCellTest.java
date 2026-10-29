@@ -542,8 +542,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         // distinction the law does not make. Both bodies used to sit above NEAR_RATIO, where every
         // angular size is drawn at the maximum — so the leg asserted a difference that could not
         // exist, and its red read as a render regression when nothing was rendering wrongly.
-        double nearAngle = ApparentSize.halfAngleFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
-        double farAngle = ApparentSize.halfAngleFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
+        double nearAngle = ApparentSize.halfAngleFor(radiusBlocks(NEAREST), distanceOf(NEAREST), largestFloor());
+        double farAngle = ApparentSize.halfAngleFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST), largestFloor());
         scenario().requireArranged("the law must draw these two at clearly different sizes before their"
                 + " pixels can be compared — nearAngle=" + nearAngle + " farAngle=" + farAngle + " rad",
                 nearAngle > farAngle * 1.2d);
@@ -909,7 +909,16 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
      * the client actually drew, so a build that drew nothing fails whatever the box is.
      */
     private double discRadiusOf(int index) {
-        return Math.toDegrees(ApparentSize.halfAngleFor(radiusBlocks(index), distanceOf(index))) / 70.0;
+        return Math.toDegrees(ApparentSize.halfAngleFor(radiusBlocks(index), distanceOf(index), largestFloor())) / 70.0;
+    }
+
+    /**
+     * The largest floor the renderer can apply on a frame this test accepts: the marker size on the
+     * smallest frame it admits, at the default 70-degree view. A law comparison made at this floor holds at
+     * every frame the run can produce.
+     */
+    private static double largestFloor() {
+        return ApparentSize.markerHalfAngle(70.0d, MIN_FRAME_HEIGHT);
     }
 
     /** How far the configured body {@code index} is from the settled ship, in blocks. */

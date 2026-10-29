@@ -21,11 +21,12 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 public final class ApparentSize {
 
     /**
-     * The smallest angular radius a body is drawn at, in radians — about 0.95 degrees. A body that truly
-     * subtends less is still drawn this big: the floor keeps a distant world a visible marker instead of
-     * a sub-pixel speck. The only place the drawn size departs from the truth. {@code tunable}.
+     * The smallest a body is drawn, in screen PIXELS across. A body that truly subtends less is still drawn
+     * this big, so a distant world is a visible marker instead of a sub-pixel speck that blinks out; it is
+     * the only place the drawn size departs from the truth, and it is measured in pixels because that is
+     * the thing it protects. {@code tunable}.
      */
-    public static final double MIN_HALF_ANGLE = Math.atan(1.5d / 90.0d);
+    public static final double MARKER_DIAMETER_PIXELS = 2.0d;
     /**
      * The largest angular radius drawn, 89 degrees. Not a choice about how big a world may LOOK — the true
      * angle tends to 90 degrees as the observer reaches the surface, and a world you orbit fills half the
@@ -38,9 +39,17 @@ public final class ApparentSize {
     }
 
     /**
+     * The angular radius, in radians, of a body {@link #MARKER_DIAMETER_PIXELS} across on a screen
+     * {@code heightPixels} tall that shows {@code verticalFovDegrees} of sky from top to bottom.
+     */
+    public static double markerHalfAngle(double verticalFovDegrees, int heightPixels) {
+        return Math.toRadians(verticalFovDegrees) / Math.max(1, heightPixels) * (MARKER_DIAMETER_PIXELS / 2.0d);
+    }
+
+    /**
      * The angular radius, in radians, to draw a body of {@code radiusBlocks} seen from
-     * {@code distanceBlocks}: the TRUE one, {@code asin(r / d)}, raised to {@link #MIN_HALF_ANGLE} for a
-     * body too far to see.
+     * {@code distanceBlocks}: the TRUE one, {@code asin(r / d)}, raised to {@code floorHalfAngle} — the
+     * screen's {@link #markerHalfAngle} — for a body too small to see.
      *
      * <p>Asked only of a SPHERE with a radius. A body with none is not drawn as a sphere at all — a belt
      * is a ring, a station a label, and a sphere that arrived without its radius is a broken feed the
@@ -48,7 +57,7 @@ public final class ApparentSize {
      * marker that would pass for a distant world. A non-finite or non-positive DISTANCE is the nearest
      * thing there is, so it takes the maximum rather than becoming invisible.</p>
      */
-    public static double halfAngleFor(double radiusBlocks, double distanceBlocks) {
+    public static double halfAngleFor(double radiusBlocks, double distanceBlocks, double floorHalfAngle) {
         if (Double.isNaN(radiusBlocks) || radiusBlocks <= 0d) {
             throw new IllegalArgumentException("a body with no radius (" + radiusBlocks
                     + ") has no angular size; it is not drawn as a sphere");
@@ -58,7 +67,7 @@ public final class ApparentSize {
         }
         double ratio = radiusBlocks / distanceBlocks;
         double angle = ratio >= 1d ? Math.PI / 2d : Math.asin(ratio);
-        return Math.max(MIN_HALF_ANGLE, Math.min(MAX_HALF_ANGLE, angle));
+        return Math.max(floorHalfAngle, Math.min(MAX_HALF_ANGLE, angle));
     }
 
 
