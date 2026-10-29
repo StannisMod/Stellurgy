@@ -418,6 +418,7 @@ sweeps within one interval, which is the only honest state to reload into.
 | `graceUntil` | inside the capability's compound | a PLAYER's rocket-transfer suit grace deadline (`PlayerBindings.java:35`); written only when non-zero `[V]`. `stellurgyRocketTransferGrace` (the rocket-entity row above) survives only on NON-player entities' ForgeData (`RocketTransferGrace.java:39`) `[V]`. |
 | `zone`, `cw` | `galacticCoord` sub-tag | the zone a coordinate is counted in and that zone's cell width in blocks; written only for a zoned coordinate (a moon's cell), so a galactic coordinate's tag is byte-identical to before; absent `cw` reads back as `WIDTH_UNKNOWN` (`space/GalacticCoord.java`) `[V]`. |
 | `massEarths` | `SystemBody` sub-tag (pinned-system store) | the body's mass in Earth masses; written only when known, absent reads as `MASS_UNKNOWN` (`universe/SystemBody.java:354-373`) `[V]`. Every zone in a system is sized against its primary's mass. |
+| `atmosphereLineY` | `SystemBody` sub-tag (pinned-system store) | the atmosphere line the body's world file states (`<orbitHeight>`, world Y); written only when stated, absent reads as `ATMOSPHERE_LINE_UNSTATED`, and it sets the body's descent shell (`universe/SystemBody.java`, `space/DescentShell.java`) `[V]`. |
 
 ## Ship flight model keys
 

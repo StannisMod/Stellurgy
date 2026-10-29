@@ -187,4 +187,53 @@ public class DescentShellTest {
         assertEquals(dev.stannismod.stellurgy.space.ShipEntryController.DESCENT_RADIUS_BLOCKS,
                 dev.stannismod.stellurgy.space.DescentShell.radiusAround(null));
     }
+
+    /**
+     * This test fails if {@code DescentShell#radiusAround} stops deciding that a world whose file states
+     * its atmosphere line ({@code <orbitHeight>}) has its shell at that line — the depth read in the other
+     * metric — so the line a ship leaves the world at and the shell it crosses to come back stay one
+     * surface.
+     */
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-SPC-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "DescentShell#radiusAround(SystemBody,OptionalInt)",
+            at = "statedLineY.isPresent()", replacedBy = "false",
+            fails = "a stated atmosphere line sets the shell", on = "2026-10-29")
+    @Test
+    public void aStatedAtmosphereLineSetsTheShell() {
+        dev.stannismod.stellurgy.universe.SystemBody earth = sized(1d);
+        int lineY = 5000;
+        long surface = Math.round(dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS);
+        long expected = Math.round(dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS
+                + lineY / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.METRES_PER_CHART_BLOCK);
+        assertTrue("arrangement: a 5 km line must give a shell other than the derived 100 km one",
+                expected != DescentShell.radiusAround(earth, java.util.OptionalInt.empty()));
+        assertEquals("a stated atmosphere line sets the shell, " + (expected - surface) + " blocks deep",
+                expected, DescentShell.radiusAround(earth, java.util.OptionalInt.of(lineY)));
+        // And the line a world's file states travels on its body, so the shell is read off the body itself.
+        dev.stannismod.stellurgy.universe.SystemBody stated = new dev.stannismod.stellurgy.universe.SystemBody(
+                dev.stannismod.stellurgy.space.GalacticCoord.ORIGIN, null, null,
+                dev.stannismod.stellurgy.universe.SystemBodyKind.PLANET,
+                dev.stannismod.stellurgy.api.Constants.INVALID_PLANET, 0, 0L, 1d, 0d, lineY);
+        assertEquals("a stated atmosphere line sets the shell of the body that carries it",
+                expected, DescentShell.radiusAround(stated));
+    }
+
+    /**
+     * This test fails if {@code ShipEntryController#entryRingAround} stops deciding that a ship entering
+     * from a world stands just outside its shell — within one atmosphere depth of it — and not a whole
+     * planet's radius out, where an entry from 5 km up once arrived 6 580 km up.
+     */
+    @dev.stannismod.stellurgy.test.contract.Pins("INV-SPC-15")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(member = "ShipEntryController#entryRingAround",
+            at = "shell + margin", replacedBy = "shell * 2L",
+            fails = "an entry stands just outside the shell", on = "2026-10-29")
+    @Test
+    public void anEntryStandsJustOutsideTheShellNotAPlanetsRadiusOut() {
+        dev.stannismod.stellurgy.universe.SystemBody earth = sized(1d);
+        long shell = DescentShell.radiusAround(earth);
+        long ring = ShipEntryController.entryRingAround(earth);
+        long reach = Math.max(ShipEntryController.ENTRY_MARGIN_BLOCKS, DescentShell.depthAround(earth));
+        assertTrue("an entry stands just outside the shell: ring " + ring + ", shell " + shell
+                + ", allowed reach past it " + reach, ring > shell && ring - shell <= reach);
+    }
 }

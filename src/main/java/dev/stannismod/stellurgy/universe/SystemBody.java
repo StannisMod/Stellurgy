@@ -60,6 +60,12 @@ public final class SystemBody {
      */
     public static final double MASS_UNKNOWN = 0d;
 
+    /**
+     * Sentinel for {@link #statedAtmosphereLine()}: this body's world file states no atmosphere line, so
+     * its atmosphere is the one its radius gives.
+     */
+    public static final int ATMOSPHERE_LINE_UNSTATED = -1;
+
     private final GalacticCoord name;
     private final CellFrame frame;
     private final BodyEphemeris offsetLaw;
@@ -71,6 +77,8 @@ public final class SystemBody {
     private final double radiusEarths;
     /** This body's own mass in EARTH masses, or {@link #MASS_UNKNOWN}. See {@link #massEarths()}. */
     private final double massEarths;
+    /** The atmosphere line its world file states, or {@link #ATMOSPHERE_LINE_UNSTATED}. */
+    private final int atmosphereLineY;
 
     /**
      * A body at rest in a STATIC frame — the reading for a POI, a fixture, or anything derived
@@ -122,6 +130,17 @@ public final class SystemBody {
     public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
                       SystemBodyKind kind, int dimId, int starId, long orbitalDistance,
                       double radiusEarths, double massEarths) {
+        this(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance, radiusEarths, massEarths,
+                ATMOSPHERE_LINE_UNSTATED);
+    }
+
+    /**
+     * The full statement of a body, including the atmosphere line its world file states — world Y, a
+     * metre a block — or {@link #ATMOSPHERE_LINE_UNSTATED}.
+     */
+    public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
+                      SystemBodyKind kind, int dimId, int starId, long orbitalDistance,
+                      double radiusEarths, double massEarths, int atmosphereLineY) {
         if (name == null) {
             throw new NullPointerException("name");
         }
@@ -139,7 +158,19 @@ public final class SystemBody {
                 ? RADIUS_UNKNOWN : radiusEarths;
         this.massEarths = Double.isNaN(massEarths) || massEarths < 0d
                 ? MASS_UNKNOWN : massEarths;
+        this.atmosphereLineY = atmosphereLineY < 0 ? ATMOSPHERE_LINE_UNSTATED : atmosphereLineY;
         requireInsideOwnCell();
+    }
+
+    /**
+     * The atmosphere line this body's world file states ({@code <orbitHeight>}, world Y), or empty when it
+     * states none. It travels with the body for the same reason its radius does: the shell a ship crosses
+     * to come down is computed where no world's file can be read — a fast test, a producer — and a line
+     * that moved only the takeoff would leave the two directions of one crossing at two heights.
+     */
+    public java.util.OptionalInt statedAtmosphereLine() {
+        return atmosphereLineY == ATMOSPHERE_LINE_UNSTATED ? java.util.OptionalInt.empty()
+                : java.util.OptionalInt.of(atmosphereLineY);
     }
 
     /**
@@ -187,7 +218,7 @@ public final class SystemBody {
     /** The same body, carrying {@code radiusEarths}. The generators' way of stating a body's size. */
     public SystemBody withRadius(double newRadiusEarths) {
         return new SystemBody(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance,
-                newRadiusEarths, massEarths);
+                newRadiusEarths, massEarths, atmosphereLineY);
     }
 
     /**
@@ -218,7 +249,7 @@ public final class SystemBody {
      */
     public SystemBody withBulk(double newMassEarths, double newRadiusEarths) {
         return new SystemBody(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance,
-                newRadiusEarths, newMassEarths);
+                newRadiusEarths, newMassEarths, atmosphereLineY);
     }
 
     private static GalacticCoord requireAddress(GalacticCoord address) {
@@ -313,7 +344,7 @@ public final class SystemBody {
     public SystemBody withDimId(int newDimId) {
         return newDimId == dimId ? this
                 : new SystemBody(name, frame, offsetLaw, kind, newDimId, starId, orbitalDistance,
-                        radiusEarths, massEarths);
+                        radiusEarths, massEarths, atmosphereLineY);
     }
 
     /** {@code true} iff this body can be descended into as a walkable dimension. */
@@ -347,7 +378,7 @@ public final class SystemBody {
         return newFrame == null || newFrame.equals(frame)
                 ? this
                 : new SystemBody(name, newFrame, offsetLaw, kind, dimId, starId, orbitalDistance,
-                        radiusEarths, massEarths);
+                        radiusEarths, massEarths, atmosphereLineY);
     }
 
     public void writeToNBT(NBTTagCompound nbt) {
@@ -366,6 +397,9 @@ public final class SystemBody {
         if (massEarths != MASS_UNKNOWN) {
             nbt.setDouble("massEarths", massEarths);
         }
+        if (atmosphereLineY != ATMOSPHERE_LINE_UNSTATED) {
+            nbt.setInteger("atmosphereLineY", atmosphereLineY);
+        }
     }
 
     public static SystemBody readFromNBT(NBTTagCompound nbt) {
@@ -382,7 +416,8 @@ public final class SystemBody {
                 nbt.getInteger("starId"),
                 nbt.getLong("orbitalDist"),
                 nbt.getDouble("radiusEarths"),
-                nbt.getDouble("massEarths"));
+                nbt.getDouble("massEarths"),
+                nbt.hasKey("atmosphereLineY") ? nbt.getInteger("atmosphereLineY") : ATMOSPHERE_LINE_UNSTATED);
     }
 
     @Override
@@ -398,6 +433,7 @@ public final class SystemBody {
                 && orbitalDistance == other.orbitalDistance
                 && Double.compare(radiusEarths, other.radiusEarths) == 0
                 && Double.compare(massEarths, other.massEarths) == 0
+                && atmosphereLineY == other.atmosphereLineY
                 && name.equals(other.name) && offsetLaw.equals(other.offsetLaw)
                 && frame.equals(other.frame);
     }
@@ -411,6 +447,7 @@ public final class SystemBody {
         result = 31 * result + Long.hashCode(orbitalDistance);
         result = 31 * result + Double.hashCode(radiusEarths);
         result = 31 * result + Double.hashCode(massEarths);
+        result = 31 * result + atmosphereLineY;
         result = 31 * result + offsetLaw.hashCode();
         return result;
     }

@@ -46,15 +46,41 @@ public final class DescentShell {
      * is then a proximity radius rather than an atmosphere.</p>
      */
     public static long radiusAround(SystemBody body) {
+        return radiusAround(body, body == null ? java.util.OptionalInt.empty() : body.statedAtmosphereLine());
+    }
+
+    /**
+     * {@link #radiusAround(SystemBody)} for a body whose world's file states its atmosphere line
+     * ({@code <orbitHeight>}, world Y) as {@code statedLineY} — or states none. A stated line IS the
+     * atmosphere's depth, read in the other metric: the line a ship leaves the world at and the shell it
+     * crosses to come back are one surface, so the planet file that moves one moves the other.
+     */
+    public static long radiusAround(SystemBody body, java.util.OptionalInt statedLineY) {
         double radiusEarths = (body == null) ? 0d : body.radiusEarths();
         if (!(radiusEarths > 0d)) {
             return ShipEntryController.DESCENT_RADIUS_BLOCKS;
         }
         double surfaceBlocks = radiusEarths * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
-        long shell = Math.round(surfaceBlocks * (1d + ATMOSPHERE_FRACTION));
+        double depthBlocks = statedLineY.isPresent()
+                ? statedLineY.getAsInt() / (double) AstronomicalBodyHelper.METRES_PER_CHART_BLOCK
+                : surfaceBlocks * ATMOSPHERE_FRACTION;
+        long shell = Math.round(surfaceBlocks + depthBlocks);
         // Never below the flat radius: a body small enough that its atmosphere is thinner than the old
         // proximity sphere still has to be approachable at the scale a ship manoeuvres in.
         return Math.max(ShipEntryController.DESCENT_RADIUS_BLOCKS, shell);
+    }
+
+    /**
+     * How deep {@code body}'s atmosphere is, in chart blocks: its shell less its surface, or zero for a
+     * body with no surface.
+     */
+    public static long depthAround(SystemBody body) {
+        double radiusEarths = (body == null) ? 0d : body.radiusEarths();
+        if (!(radiusEarths > 0d)) {
+            return 0L;
+        }
+        return Math.max(0L, radiusAround(body)
+                - Math.round(radiusEarths * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS));
     }
 
     /**

@@ -36,7 +36,8 @@ transit hazard, cannot be intercepted in the lane, and is not a place the crew w
 rule keys on DURATION, never on route: a fast enough drive makes an interstellar leg short too.
 
 **Both routes arrive OFF their destination** `[V]`: a jump aimed at a body comes out on THAT body's
-`ShipEntryController.entryRingAround(body)` — `max(ENTRY_RING_BLOCKS, 2 × DescentShell.radiusAround(body))` —
+`ShipEntryController.entryRingAround(body)` — the body's shell plus `max(ENTRY_MARGIN_BLOCKS, 10 % of its
+atmosphere's depth)`, never under `ENTRY_RING_BLOCKS` —
 so the arrival is strictly outside its descent shell (`SpaceSubsystem.arrivalStandoff`; wired into the
 hyperspace arrival in `ShipTransitManager#tickTransits` and into the direct crosser in the `SpaceSubsystem`
 constructor). The body is the one the target names, never the widest of the cell. A target that names no

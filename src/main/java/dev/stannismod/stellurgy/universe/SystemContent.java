@@ -192,7 +192,8 @@ public final class SystemContent {
             // only when it was procedural would be a field that lies for half the galaxy.
             SystemBody planetBody = new SystemBody(planetName, planetFrame, BodyEphemeris.STATIC,
                     kindOf(planet, SystemBodyKind.PLANET), planet.getId(), starId,
-                    planet.getOrbitalDist(), planet.getRadius(), planet.getOrbitalMass());
+                    planet.getOrbitalDist(), planet.getRadius(), planet.getOrbitalMass(),
+                    statedAtmosphereLineOf(planet));
             bodies.add(planetBody);
 
             // The lattice of a planet's zone is decided by its INNERMOST moon, so it is settled
@@ -219,11 +220,17 @@ public final class SystemContent {
                                 minSpacingCells, starId, names, reports),
                         CellFrame.within(planetFrame, moonLaw), BodyEphemeris.STATIC,
                         kindOf(moon, SystemBodyKind.MOON), moon.getId(), starId,
-                        planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass()));
+                        planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass(),
+                        statedAtmosphereLineOf(moon)));
             }
         }
         auditOneRealBodyPerCell(bodies, starId, reports);
         return bodies;
+    }
+
+    /** The {@code <orbitHeight>} a world's file states, or {@link SystemBody#ATMOSPHERE_LINE_UNSTATED}. */
+    private static int statedAtmosphereLineOf(DimensionProperties world) {
+        return world.hasCustomOrbitHeight() ? world.orbitLine().getAsInt() : SystemBody.ATMOSPHERE_LINE_UNSTATED;
     }
 
     /**

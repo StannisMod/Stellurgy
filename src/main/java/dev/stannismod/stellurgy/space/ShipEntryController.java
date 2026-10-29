@@ -64,9 +64,24 @@ public final class ShipEntryController {
      * to fly towards.
      */
     public static long entryRingAround(dev.stannismod.stellurgy.universe.SystemBody body) {
-        long shell = dev.stannismod.stellurgy.space.DescentShell.radiusAround(body);
-        return Math.max(ENTRY_RING_BLOCKS, shell * 2L);
+        long shell = DescentShell.radiusAround(body);
+        long margin = Math.max(ENTRY_MARGIN_BLOCKS,
+                Math.round(DescentShell.depthAround(body) * ENTRY_MARGIN_FRACTION));
+        return Math.max(ENTRY_RING_BLOCKS, shell + margin);
     }
+
+    /**
+     * The least an entry stands above a body's shell, in chart blocks — 16 km. Far past any hull, and at
+     * the Flight-Assist ceiling of 3 blocks a tick a craft needs 21 ticks to cover it, so a ship that has
+     * just entered cannot drift back across the shell in the ticks its crossing settles in. {@code tunable}.
+     */
+    public static final long ENTRY_MARGIN_BLOCKS = 64L;
+
+    /**
+     * How far above its shell an entry stands, as a fraction of the atmosphere's depth — 10 km over
+     * Earth's 100. Just outside the air, not a planet's radius out. {@code tunable}.
+     */
+    public static final double ENTRY_MARGIN_FRACTION = 0.1D;
 
     /** Ticks a ship waits after a refused/failed entry before the ceiling check may re-trigger. */
     private static final int RETRY_COOLDOWN_TICKS = 100;

@@ -181,8 +181,9 @@ one instant whose time term is zero for every period — snapped to a cell centr
 
 ### MECH-UNI-08 — A body is a NAME plus a FRAME plus a LAW
 A `SystemBody` carries an immutable **name** (the sector triple of its cell, at cell centre), a `CellFrame` (its cell's origin as
-a function of tick), a `BodyEphemeris` (offset inside that cell) and bulk (radius, mass in Earth units; unknown is a sentinel,
-not a guess). `addressAt(tick)` = name + in-cell offset — the canonical stored/aimed form; `absoluteAt(tick)` is an
+a function of tick), a `BodyEphemeris` (offset inside that cell), bulk (radius, mass in Earth units; unknown is a sentinel,
+not a guess) and the atmosphere line its world file states (`<orbitHeight>`, filled by `SystemContent` for authored worlds;
+unstated is a sentinel), which sets its descent shell (`statedAtmosphereLine`, `DescentShell.radiusAround`). `addressAt(tick)` = name + in-cell offset — the canonical stored/aimed form; `absoluteAt(tick)` is an
 intermediate only, never stored (`SystemBody.java:268, 277`). A cell's PRIMARY (star, planet, giant, belt, rogue **and moon**)
 is at its own frame's origin (`SystemBody.java:336`); a POI persists as name + offset and is re-bound to its cell's frame when
 served (`SystemBody.java:347`, `UniverseRegistry.java:666`). `CellFrame` nests: `within(parent, law)` takes the parent's origin

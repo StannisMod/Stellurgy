@@ -54,11 +54,15 @@ each body its own shell, never one flat radius). From inside, a ship's takeoff f
 `DimensionProperties.orbitLine()` world Y, which is the planet file's `<orbitHeight>` when stated and
 otherwise `DescentShell.orbitLineWorldY(radius)`: the shell's depth above the surface
 (`ATMOSPHERE_FRACTION` of the radius) times `METRES_PER_CHART_BLOCK`, counted from Y 0 and never inside
-the block band (floor `TerrainHeightFinder.MAX_BUILD_Y`). Earth 100 000, Luna about 27 300. There is no
+the block band (floor `TerrainHeightFinder.MAX_BUILD_Y`). Earth 100 000, Luna about 27 300. A STATED
+line moves the shell with it: its depth is that line read in the other metric, line Y over
+`METRES_PER_CHART_BLOCK` (`DescentShell.radiusAround(SystemBody, OptionalInt)`), so Earth with
+`<orbitHeight>5000</orbitHeight>` is left at 5 km and entered at 5 km — one surface either way. There is no
 global orbit-height config key: tier-1 rockets, the elevator capsule and the HUD read the same line
 through `DimensionManager.transferLineOf` (the station dimension answers its clearance). A world with no
 radius and no stated line has NO line — takeoff and launch refuse there and say so. Pinned by
 `DescentShellTest.theTakeoffLineIsTheDescentShellSeenFromInsideTheWorld`,
+`DescentShellTest.aStatedAtmosphereLineSetsTheShell`,
 `DescentControllerTest.eachBodyIsEnteredAtItsOwnShell` and
 `VSShipEntryTest.aWorldsTakeoffLineIsItsBodysAtmosphereUnlessItsFileStatesOne`.
 
